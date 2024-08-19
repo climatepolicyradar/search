@@ -8,8 +8,8 @@ We could store private key pairs in grafana to poll vespa. This was deemed sub-o
 
 - [Pulling Metrics from Vespa](https://docs.vespa.ai/en/operations-selfhosted/monitoring.html#pulling-metrics-from-vespa).
 - [Lambda Deployment Flow](https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch)
-  
------
+
+---
 
 We've taken this and pulumi-fied it into a pulumi stack.
 

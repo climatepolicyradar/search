@@ -1,8 +1,8 @@
 import json
+
 import pulumi
 import pulumi_aws as aws
 from pulumi import Config
-
 
 pulumi_config = Config()
 
@@ -38,18 +38,18 @@ pulumi.export("ssm_parameter_vespa_private_key", ssm_parameter_vespa_private_key
 
 lambda_role = aws.iam.Role(
     f"lambda_role-{project}",
-    assume_role_policy=json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "lambda.amazonaws.com"
-                },
-                "Action": "sts:AssumeRole"
-            }
-        ]
-    })
+    assume_role_policy=json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"Service": "lambda.amazonaws.com"},
+                    "Action": "sts:AssumeRole",
+                }
+            ],
+        }
+    ),
 )
 pulumi.export("lambda_role", lambda_role.arn)
 
@@ -60,27 +60,27 @@ lambda_role_policy = aws.iam.RolePolicy(
         ssm_parameter_vespa_public_cert=ssm_parameter_vespa_public_cert.arn,
         ssm_parameter_vespa_private_key=ssm_parameter_vespa_private_key.arn,
     ).apply(
-        lambda args: json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": "cloudwatch:PutMetricData",
-                    "Resource": "*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "ssm:GetParameters"
-                    ],
-                    "Resource": [
-                        args["ssm_parameter_vespa_private_key"],
-                        args["ssm_parameter_vespa_public_cert"]
-                    ]
-                }
-            ]
-        })
-    )
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": "cloudwatch:PutMetricData",
+                        "Resource": "*",
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": ["ssm:GetParameters"],
+                        "Resource": [
+                            args["ssm_parameter_vespa_private_key"],
+                            args["ssm_parameter_vespa_public_cert"],
+                        ],
+                    },
+                ],
+            }
+        )
+    ),
 )
 pulumi.export("lambda_role_policy_name", lambda_role_policy.name)
 
@@ -115,9 +115,7 @@ pulumi.export("event_rule_arn", rule.arn)
 
 
 target = aws.cloudwatch.EventTarget(
-    f"event-target-{project}",
-    rule=rule.name,
-    arn=lambda_function.arn
+    f"event-target-{project}", rule=rule.name, arn=lambda_function.arn
 )
 pulumi.export("event_target_arn", target.arn)
 
