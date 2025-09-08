@@ -1,6 +1,6 @@
 # Metrics Infra
 
-This directory contains infrastructure to support the retrieval of metrics from vespa. This is so we can load them into Grafana which is our centralised of our entire infrastructure. This also allows us to set alerts that seemlessly integrate with slack and other channels of communication.
+This directory contains infrastructure to support the retrieval of metrics from vespa. This is so we can load them into Grafana which is our centralised of our entire infrastructure. This also allows us to set alerts that seamlessly integrate with slack and other channels of communication.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ We could store private key pairs in grafana to poll vespa. This was deemed sub-o
 
 ---
 
-We've taken this and pulumi-fied it into a pulumi stack.
+We've taken this and pulumi-field it into a pulumi stack.
 
 - Private key pair stored in secrets manager.
 - Lambda instance that polls vespa on the `/metrics/v2` endpoint.
