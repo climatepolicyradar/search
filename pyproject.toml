@@ -1,0 +1,54 @@
+[project]
+name = "search"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.12.4",
+    "pytest>=9.0.1",
+    "typer>=0.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=3.5.0",
+    "ruff>=0.12.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["search"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+lint.select = ["E", "F", "D", "I"]
+lint.ignore = [
+    "D100",
+    "D103",
+    "D104",
+    "D107",
+    "D202",
+    "D203",
+    "D212",
+    "D400",
+    "D401",
+    "D406",
+    "D407",
+    "D413",
+    "D415",
+    "E501",
+    "G201",
+]
+line-length = 88
+
+# Ignore `F401` (unused imports) in all `__init__.py` files, and `E501` (line too long) in all files in the `tests` directory
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["E501"]
+
