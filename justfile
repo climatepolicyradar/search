@@ -10,7 +10,7 @@ install +OPTS="":
 
 # test the project
 test +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes {{OPTS}}
+    uv run pytest --disable-pytest-warnings --color=yes --verbose {{OPTS}}
 
 # run linters and code formatters on relevant files
 lint:
