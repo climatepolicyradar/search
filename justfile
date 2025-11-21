@@ -12,6 +12,14 @@ install +OPTS="":
 test +OPTS="":
     uv run pytest --disable-pytest-warnings --color=yes --verbose {{OPTS}}
 
+# test only the functional behavior of the code (not relevance)
+test-functional +OPTS="":
+    uv run pytest --disable-pytest-warnings --color=yes --verbose --ignore=tests/relevance {{OPTS}}
+
+# test only the relevance of search results
+test-relevance +OPTS="":
+    uv run pytest --disable-pytest-warnings --color=yes --verbose -s --tb=short tests/relevance {{OPTS}}
+
 # run linters and code formatters on relevant files
 lint:
     uv run pre-commit run --show-diff-on-failure
