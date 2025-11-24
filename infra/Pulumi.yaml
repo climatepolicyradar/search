@@ -1,0 +1,10 @@
+name: search
+description: Tests for measuring the relevance of our search results
+runtime:
+  name: python
+  options:
+    toolchain: uv
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-python
