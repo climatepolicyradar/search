@@ -8,7 +8,7 @@ class Passage(BaseModel):
     """Base class for a passage"""
 
     text: str
-    document_id: str
+    document_id: Identifier
     labels: list[Label]
 
     @computed_field

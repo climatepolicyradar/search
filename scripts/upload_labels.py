@@ -15,10 +15,13 @@ from pathlib import Path
 
 import boto3
 import duckdb
+from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
 from rich.logging import RichHandler
 
 from search.label import Label
+
+load_dotenv()
 
 data_dir = Path("data")
 data_dir.mkdir(parents=True, exist_ok=True)
@@ -77,7 +80,7 @@ for concept in all_concepts:
 logger.info(f"Created a set of {len(labels)} labels from concepts")
 
 jsonl_path = data_dir / "labels.jsonl"
-with open(jsonl_path, "w") as f:
+with open(jsonl_path, "w", encoding="utf-8") as f:
     for label in labels:
         f.write(label.model_dump_json() + "\n")
 
