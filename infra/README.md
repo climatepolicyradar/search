@@ -33,3 +33,24 @@ To cleanup the infrastructure, run:
 cd infra
 pulumi destroy
 ```
+
+# Getting environment variables out of the Pulumi stack
+
+To get the bucket name out of the Pulumi stack, run:
+
+```bash
+cd infra
+pulumi stack output bucket_name
+```
+
+This will output the bucket name, which you can then use to set the `BUCKET_NAME` environment variable in your local environment:
+
+```bash
+export BUCKET_NAME=$(cd infra && pulumi stack output bucket_name)
+```
+
+or add it to your `.env` file:
+
+```bash
+echo "BUCKET_NAME=$(cd infra && pulumi stack output bucket_name)" >> .env
+```
