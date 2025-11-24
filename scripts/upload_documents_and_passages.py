@@ -6,7 +6,14 @@ import duckdb
 from datasets import load_dataset
 from dotenv import load_dotenv
 from rich.logging import RichHandler
-from rich.progress import track
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from search.config import DATA_DIR
 from search.document import Document
@@ -20,7 +27,9 @@ logger.addHandler(RichHandler())
 
 DATASET_NAME = "climatepolicyradar/all-document-text-data"
 
+logger.info(f"Loading dataset '{DATASET_NAME}'")
 dataset = load_dataset(DATASET_NAME, split="train")
+logger.info(f"Loaded {len(dataset)} rows")
 
 
 # Track documents by document_id to avoid duplicates
@@ -29,44 +38,64 @@ documents_dict: dict[str, Document] = {}
 skipped_document_ids: set[str] = set()
 passages: list[Passage] = []
 
-for row in track(dataset, description="Creating documents and passages"):
-    document_id = row["document_id"]
-    # Skip if we've already seen this document_id and it was skipped
-    if document_id in skipped_document_ids:
-        continue
+progress_bar = Progress(
+    TextColumn("[progress.description]{task.description}"),
+    BarColumn(),
+    MofNCompleteColumn(),
+    TimeElapsedColumn(),
+    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+    TimeRemainingColumn(),
+)
 
-    # If we haven't seen this document_id before, create a new Document object
-    if document_id not in documents_dict:
-        title = row.get("document_metadata.document_title") or document_id
-        source_url = row.get("document_metadata.source_url")
-        description = row.get("document_metadata.description") or ""
 
-        # Skip the document if its source_url is missing
-        if not source_url:
-            logger.warning(
-                f"Skipping document '{document_id}' (title: '{title}') - missing source_url",
+with progress_bar:
+    task = progress_bar.add_task("Creating documents and passages", total=len(dataset))
+    for idx, row in enumerate(dataset):
+        update_kwargs = {"advance": 1}
+        if idx % 10_000 == 0:
+            update_kwargs["description"] = (
+                f"Found {len(documents_dict)} documents and {len(passages)} passages"
             )
-            skipped_document_ids.add(document_id)
+        progress_bar.update(task, **update_kwargs)
+
+        document_id = row["document_id"]
+
+        # Skip if we've already seen this document_id and it was skipped
+        if document_id in skipped_document_ids:
             continue
 
-        documents_dict[document_id] = Document(
-            title=title,
-            source_url=source_url,
-            description=description,
-            labels=[],  # deliberately leaving this empty for now
-        )
+        # If we haven't seen this document_id before, create a new Document object
+        if document_id not in documents_dict:
+            title = row.get("document_metadata.document_title") or document_id
+            source_url = row.get("document_metadata.source_url")
+            description = row.get("document_metadata.description") or ""
 
-    document = documents_dict[document_id]
+            # Skip the document if its source_url is missing
+            if not source_url:
+                logger.warning(
+                    f"Skipping document '{document_id}' (title: '{title}') - missing source_url",
+                )
+                skipped_document_ids.add(document_id)
+                continue
 
-    # Only create a passage if it has text content
-    if text := row.get("text_block.text"):
-        passages.append(
-            Passage(
-                text=text,
-                document_id=document.id,
+            documents_dict[document_id] = Document(
+                title=title,
+                source_url=source_url,
+                description=description,
                 labels=[],  # deliberately leaving this empty for now
             )
-        )
+
+        document = documents_dict[document_id]
+
+        # Only create a passage if it has text content
+        if text := row.get("text_block.text"):
+            passages.append(
+                Passage(
+                    text=text,
+                    document_id=document.id,
+                    labels=[],  # deliberately leaving this empty for now
+                )
+            )
 
 
 logger.info("Created %d unique documents", len(documents_dict))
