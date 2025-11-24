@@ -29,7 +29,7 @@ documents_dict: dict[str, Document] = {}
 skipped_document_ids: set[str] = set()
 passages: list[Passage] = []
 
-for row in track(dataset.select(range(10_000)), description="Parsing passages"):
+for row in track(dataset, description="Creating documents and passages"):
     document_id = row["document_id"]
     # Skip if we've already seen this document_id and it was skipped
     if document_id in skipped_document_ids:
