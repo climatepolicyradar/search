@@ -1,8 +1,6 @@
 from pydantic import AnyHttpUrl, BaseModel, computed_field
 
 from search.identifier import Identifier
-from search.label import Label
-from search.passage import Passage
 
 
 class Document(BaseModel):
@@ -10,8 +8,9 @@ class Document(BaseModel):
 
     title: str
     source_url: AnyHttpUrl
-    labels: list[Label]
-    passages: list[Passage]
+    description: str = ""
+    labels: list[Identifier] = []
+    passages: list[Identifier] = []
 
     @computed_field
     @property
