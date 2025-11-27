@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**/*.md" # Run on all pull requests, regardless of target branch but don't run for a Markdown file change
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md" #don't trigger CI for a Markdown file change
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: "Lint"
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install just
+        run: pipx install rust-just
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: pyproject.toml
+
+      - name: Install dependencies
+        run: just install
+
+      - name: Run linting
+        run: just lint-all
+
+  test:
+    runs-on: ubuntu-latest
+    name: "Test"
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+        with:
+          lfs: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install just
+        run: pipx install rust-just
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: pyproject.toml
+
+      - name: Install dependencies
+        run: just install
+
+      - name: Run tests
+        run: just test
