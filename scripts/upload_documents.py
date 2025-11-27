@@ -24,7 +24,7 @@ from rich.progress import (
 
 from scripts import serialise_pydantic_list_as_jsonl
 from search.aws import upload_file_to_s3
-from search.config import DATA_DIR
+from search.config import DATA_DIR, DATASET_NAME
 from search.document import Document
 from search.engines.duckdb import create_documents_duckdb_table
 
@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(RichHandler())
 
-DATASET_NAME = "climatepolicyradar/all-document-text-data"
 
 logger.info(f"Loading dataset '{DATASET_NAME}'")
 dataset = load_dataset(DATASET_NAME, split="train")
