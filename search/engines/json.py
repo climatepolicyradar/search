@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from search.document import Document
 from search.engines import DocumentSearchEngine, LabelSearchEngine, PassageSearchEngine
 from search.identifier import Identifier
@@ -8,7 +10,7 @@ from search.passage import Passage
 class JSONLabelSearchEngine(LabelSearchEngine):
     """A search engine that searches for labels in a JSONL file."""
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str | Path):
         """Initialize the JSON label search engine."""
         with open(file_path, "r", encoding="utf-8") as f:
             self.labels = [
@@ -47,7 +49,7 @@ class JSONLabelSearchEngine(LabelSearchEngine):
 class JSONPassageSearchEngine(PassageSearchEngine):
     """A search engine that searches for passages in a JSONL file."""
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str | Path):
         """Initialize the JSON passage search engine."""
         with open(file_path, "r", encoding="utf-8") as f:
             self.passages = [
@@ -67,7 +69,7 @@ class JSONPassageSearchEngine(PassageSearchEngine):
 class JSONDocumentSearchEngine(DocumentSearchEngine):
     """A search engine that searches for documents in a JSONL file."""
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str | Path):
         """Initialize the JSON document search engine."""
         with open(file_path, "r", encoding="utf-8") as f:
             self.documents = [

@@ -27,3 +27,6 @@ lint:
 # run linters and code formatters on all files
 lint-all:
     uv run pre-commit run --all-files --show-diff-on-failure
+
+serve-api:
+    uv run uvicorn api.main:app --reload
