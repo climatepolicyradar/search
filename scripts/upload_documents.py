@@ -72,28 +72,21 @@ with progress_bar:
 
         # If we haven't seen this document_id before, create a new Document object
         if document_id not in documents_dict:
-            title = row.get("document_metadata.document_title") or document_id
-            source_url = row.get("document_metadata.source_url")
-            description = row.get("document_metadata.description") or ""
+            documents_dict[document_id] = Document.from_huggingface_row(row)
 
-            documents_dict[document_id] = Document(
-                title=title,
-                source_url=source_url,
-                description=description,
-                labels=[],  # deliberately leaving this empty for now
-            )
 
-logger.info("Created %d unique documents", len(documents_dict))
+documents: list[Document] = list(documents_dict.values())
+logger.info("Created %d unique documents", len(documents))
 
 documents_jsonl_path = DATA_DIR / "documents.jsonl"
 with open(documents_jsonl_path, "w", encoding="utf-8") as f:
-    f.write(serialise_pydantic_list_as_jsonl(list(documents_dict.values())))
-logger.info(f"Saved {len(documents_dict)} documents to 'data/documents.jsonl'")
+    f.write(serialise_pydantic_list_as_jsonl(documents))
+logger.info(f"Saved {len(documents)} documents to 'data/documents.jsonl'")
 
 # duckdb
 documents_duckdb_path = DATA_DIR / "documents.duckdb"
-create_documents_duckdb_table(documents_duckdb_path, list(documents_dict.values()))
-logger.info(f"Saved {len(documents_dict)} documents to '{documents_duckdb_path}'")
+create_documents_duckdb_table(documents_duckdb_path, documents)
+logger.info(f"Saved {len(documents)} documents to '{documents_duckdb_path}'")
 
 logger.info("Uploading files to S3")
 upload_file_to_s3(documents_jsonl_path)

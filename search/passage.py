@@ -1,6 +1,7 @@
 from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, Field, computed_field
 
+from search.document import Document
 from search.label import Label
 
 
@@ -29,3 +30,17 @@ class Passage(BaseModel):
     def id(self) -> Identifier:
         """A canonical identifier for the passage"""
         return Identifier.generate(self.text, self.document_id)
+
+    @classmethod
+    def from_huggingface_row(cls, row: dict) -> "Passage":
+        """Create a Passage object from a row of a HuggingFace dataset"""
+        text = row["text_block.text"]
+        document_id = Document.from_huggingface_row(row).id
+        original_passage_id = row.get("text_block.text_block_id", "")
+        labels = []  # deliberately leaving this empty for now
+        return cls(
+            text=text,
+            document_id=document_id,
+            original_passage_id=original_passage_id,
+            labels=labels,
+        )

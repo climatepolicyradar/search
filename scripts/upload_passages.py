@@ -16,11 +16,11 @@ import logging
 from datasets import load_dataset
 from dotenv import load_dotenv
 from rich.logging import RichHandler
+from rich.progress import track
 
 from scripts import serialise_pydantic_list_as_jsonl
 from search.aws import upload_file_to_s3
 from search.config import DATA_DIR
-from search.document import Document
 from search.engines.duckdb import create_passages_duckdb_table
 from search.passage import Passage
 
@@ -42,26 +42,15 @@ dataset = dataset.filter(
 )
 logger.info(f"Filtered to {len(dataset)} rows with source_url")
 
-passages_dataset = dataset.filter(
-    lambda row: row.get("text_block.text") is not None,
-    desc="Filtering rows without text",
-).map(
-    lambda row: {
-        "passage": Passage(
-            text=row["text_block.text"],
-            document_id=Document(
-                title=row.get("document_metadata.document_title") or row["document_id"],
-                source_url=row["document_metadata.source_url"],
-                description=row.get("document_metadata.description") or "",
-                labels=[],
-            ).id,
-            labels=[],  # deliberately leaving this empty for now
-        )
-    },
-    desc="Creating passages",
-)
 
-passages = [item["passage"] for item in passages_dataset]
+passages: list[Passage] = []
+for row in track(dataset, description="Creating passages"):
+    if (
+        row.get("text_block.text") is None
+        or row.get("document_metadata.source_url") is None
+    ):
+        continue
+    passages.append(Passage.from_huggingface_row(row))
 
 logger.info("Created %d passages", len(passages))
 

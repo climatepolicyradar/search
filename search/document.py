@@ -28,3 +28,18 @@ class Document(BaseModel):
     def id(self) -> Identifier:
         """A canonical identifier for the document"""
         return Identifier.generate(self.title, self.source_url)
+
+    @classmethod
+    def from_huggingface_row(cls, row: dict) -> "Document":
+        """Create a Document object from a row of a HuggingFace dataset"""
+        title = row.get("document_metadata.document_title", row.get("document_id", ""))
+        source_url = row["document_metadata.source_url"]
+        description = row.get("document_metadata.description", "")
+        original_document_id = row.get("document_id", "")
+        return cls(
+            title=title,
+            source_url=source_url,
+            description=description,
+            original_document_id=original_document_id,
+            labels=[],  # deliberately leaving this empty for now
+        )

@@ -45,14 +45,15 @@ def create_documents_duckdb_table(db_path: Path, documents: list[Document]) -> N
     """
     _create_duckdb_table(
         db_path=db_path,
-        create_table_sql="CREATE TABLE documents (id TEXT, title TEXT, source_url TEXT, description TEXT)",
-        insert_sql="INSERT INTO documents VALUES (?, ?, ?, ?)",
+        create_table_sql="CREATE TABLE documents (id TEXT, title TEXT, source_url TEXT, description TEXT, original_document_id TEXT)",
+        insert_sql="INSERT INTO documents VALUES (?, ?, ?, ?, ?)",
         items=documents,
         row_extractor=lambda doc: (
             doc.id,
             doc.title,
             str(doc.source_url),
             doc.description,
+            doc.original_document_id,
         ),
     )
 
@@ -67,14 +68,15 @@ def create_passages_duckdb_table(db_path: Path, passages: list[Passage]) -> None
     """
     _create_duckdb_table(
         db_path=db_path,
-        create_table_sql="CREATE TABLE passages (id TEXT, text TEXT, document_id TEXT, labels TEXT[])",
-        insert_sql="INSERT INTO passages VALUES (?, ?, ?, ?)",
+        create_table_sql="CREATE TABLE passages (id TEXT, text TEXT, document_id TEXT, labels TEXT[], original_passage_id TEXT)",
+        insert_sql="INSERT INTO passages VALUES (?, ?, ?, ?, ?)",
         items=passages,
         row_extractor=lambda passage: (
             passage.id,
             passage.text,
             passage.document_id,
             passage.labels,
+            passage.original_passage_id,
         ),
     )
 
