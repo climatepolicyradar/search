@@ -18,7 +18,7 @@ The pulumi stack in `__main__.py` will create the following resources:
 - **Application Load Balancer**: Routes HTTP traffic to the containers
 - **Security Group**: Controls network access (HTTP on port 80)
 - **CloudWatch Log Group**: Centralized logging with 14-day retention
-- **IAM Roles**: Task execution role with necessary permissions
+- **IAM Roles**: Task execution role and task role with S3 and CloudWatch permissions
 
 ## Deployment
 
