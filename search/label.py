@@ -9,7 +9,7 @@ class Label(BaseModel):
     preferred_label: str
     alternative_labels: list[str]
     negative_labels: list[str]
-    description: str
+    description: str | None = None
 
     @computed_field
     @property
@@ -17,7 +17,7 @@ class Label(BaseModel):
         """Return a unique ID for the concept"""
         return Identifier.generate(
             self.preferred_label,
-            self.description,
+            self.description or "",
             *sorted(self.alternative_labels),  # Sort for deterministic ordering
             *sorted(self.negative_labels),  # Sort for deterministic ordering
         )
