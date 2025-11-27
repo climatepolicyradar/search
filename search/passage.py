@@ -1,15 +1,14 @@
 from pydantic import BaseModel, computed_field
 
 from search.identifier import Identifier
-from search.label import Label
 
 
 class Passage(BaseModel):
     """Base class for a passage"""
 
     text: str
-    document_id: str
-    labels: list[Label]
+    document_id: Identifier
+    labels: list[Identifier]
 
     @computed_field
     @property
