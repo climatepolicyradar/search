@@ -1,3 +1,13 @@
+"""
+Upload a canonical set of Documents to S3 as jsonl and duckdb.
+
+This script loads documents from a HuggingFace dataset, creates Document objects,
+saves them to jsonl and duckdb files, and uploads them to S3.
+
+Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
+environment variable.
+"""
+
 import logging
 
 import duckdb
@@ -17,8 +27,6 @@ from scripts import serialise_pydantic_list_as_jsonl
 from search.aws import upload_file_to_s3
 from search.config import DATA_DIR
 from search.document import Document
-from search.identifier import Identifier
-from search.passage import Passage
 
 load_dotenv()
 
@@ -75,41 +83,12 @@ with progress_bar:
                 labels=[],  # deliberately leaving this empty for now
             )
 
-# Create a mapping from row document_id to document.id for passage creation
-document_id_to_doc_id: dict[str, Identifier] = {
-    row_doc_id: doc.id for row_doc_id, doc in documents_dict.items()
-}
-
-passages_dataset = dataset.filter(
-    lambda row: row.get("text_block.text") is not None,
-    desc="Filtering rows without text",
-).map(
-    lambda row: {
-        "passage": Passage(
-            text=row["text_block.text"],
-            document_id=document_id_to_doc_id[row["document_id"]],
-            labels=[],
-        )
-    },
-    desc="Creating passages",
-)
-
-passages = [item["passage"] for item in passages_dataset]
-
-
 logger.info("Created %d unique documents", len(documents_dict))
-logger.info("Created %d passages", len(passages))
 
 documents_jsonl_path = DATA_DIR / "documents.jsonl"
 with open(documents_jsonl_path, "w", encoding="utf-8") as f:
     f.write(serialise_pydantic_list_as_jsonl(list(documents_dict.values())))
 logger.info(f"Saved {len(documents_dict)} documents to 'data/documents.jsonl'")
-
-passages_jsonl_path = DATA_DIR / "passages.jsonl"
-with open(passages_jsonl_path, "w", encoding="utf-8") as f:
-    f.write(serialise_pydantic_list_as_jsonl(passages))
-
-logger.info(f"Saved {len(passages)} passages to 'data/passages.jsonl'")
 
 # duckdb
 documents_duckdb_path = DATA_DIR / "documents.duckdb"
@@ -128,29 +107,7 @@ conn.executemany(
 conn.close()
 logger.info(f"Saved {len(documents_dict)} documents to '{documents_duckdb_path}'")
 
-# duckdb
-passages_duckdb_path = DATA_DIR / "passages.duckdb"
-passages_duckdb_path.unlink(missing_ok=True)
-conn = duckdb.connect(passages_duckdb_path)
-conn.execute(
-    "CREATE TABLE passages (id TEXT, text TEXT, document_id TEXT, labels TEXT[])"
-)
-conn.executemany(
-    "INSERT INTO passages VALUES (?, ?, ?, ?)",
-    [
-        (passage.id, passage.text, passage.document_id, passage.labels)
-        for passage in passages
-    ],
-)
-conn.close()
-logger.info(f"Saved {len(passages)} passages to '{passages_duckdb_path}'")
-
 logger.info("Uploading files to S3")
-
-for file_path in [
-    documents_jsonl_path,
-    passages_jsonl_path,
-    documents_duckdb_path,
-    passages_duckdb_path,
-]:
-    upload_file_to_s3(file_path)
+upload_file_to_s3(documents_jsonl_path)
+upload_file_to_s3(documents_duckdb_path)
+logger.info("Done")
