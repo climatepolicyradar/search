@@ -4,9 +4,9 @@ default:
 
 # install dependencies and set up the project
 install +OPTS="":
-    uv lock
     uv sync --locked --extra dev {{OPTS}}
     uv run pre-commit install --install-hooks
+    uv run ipython kernel install --user
 
 # test the project
 test +OPTS="":
