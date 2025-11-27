@@ -17,6 +17,7 @@ from rich.progress import (
 
 from search.config import DATA_DIR
 from search.document import Document
+from search.identifier import Identifier
 from search.passage import Passage
 
 load_dotenv()
@@ -39,7 +40,6 @@ logger.info(f"Filtered to {len(dataset)} rows with source_url")
 
 # Track documents by document_id to avoid duplicates
 documents_dict: dict[str, Document] = {}
-passages: list[Passage] = []
 
 progress_bar = Progress(
     TextColumn("[progress.description]{task.description}"),
@@ -50,14 +50,13 @@ progress_bar = Progress(
     TimeRemainingColumn(),
 )
 
-
 with progress_bar:
-    task = progress_bar.add_task("Creating documents and passages", total=len(dataset))
+    task = progress_bar.add_task("Creating documents", total=len(dataset))
     for idx, row in enumerate(dataset):
         progress_bar_kwargs: dict[str, int | str] = {"advance": 1}
         if idx % 10_000 == 0:
             progress_bar_kwargs["description"] = (
-                f"Found {len(documents_dict)} documents and {len(passages)} passages"
+                f"Found {len(documents_dict)} documents"
             )
         progress_bar.update(task, **progress_bar_kwargs)
 
@@ -76,17 +75,26 @@ with progress_bar:
                 labels=[],  # deliberately leaving this empty for now
             )
 
-        document = documents_dict[document_id]
+# Create a mapping from row document_id to document.id for passage creation
+document_id_to_doc_id: dict[str, Identifier] = {
+    row_doc_id: doc.id for row_doc_id, doc in documents_dict.items()
+}
 
-        # Only create a passage if it has text content
-        if text := row.get("text_block.text"):
-            passages.append(
-                Passage(
-                    text=text,
-                    document_id=document.id,
-                    labels=[],  # deliberately leaving this empty for now
-                )
-            )
+passages_dataset = dataset.filter(
+    lambda row: row.get("text_block.text") is not None,
+    desc="Filtering rows without text",
+).map(
+    lambda row: {
+        "passage": Passage(
+            text=row["text_block.text"],
+            document_id=document_id_to_doc_id[row["document_id"]],
+            labels=[],
+        )
+    },
+    desc="Creating passages",
+)
+
+passages = [item["passage"] for item in passages_dataset]
 
 
 logger.info("Created %d unique documents", len(documents_dict))
