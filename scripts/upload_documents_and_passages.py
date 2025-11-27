@@ -31,11 +31,14 @@ logger.info(f"Loading dataset '{DATASET_NAME}'")
 dataset = load_dataset(DATASET_NAME, split="train")
 logger.info(f"Loaded {len(dataset)} rows")
 
+dataset = dataset.filter(
+    lambda row: row.get("document_metadata.source_url") is not None,
+    desc="Filtering rows without source_url",
+)
+logger.info(f"Filtered to {len(dataset)} rows with source_url")
 
 # Track documents by document_id to avoid duplicates
 documents_dict: dict[str, Document] = {}
-# Track document IDs that were skipped due to missing URL
-skipped_document_ids: set[str] = set()
 passages: list[Passage] = []
 
 progress_bar = Progress(
@@ -60,23 +63,11 @@ with progress_bar:
 
         document_id = row["document_id"]
 
-        # Skip if we've already seen this document_id and it was skipped
-        if document_id in skipped_document_ids:
-            continue
-
         # If we haven't seen this document_id before, create a new Document object
         if document_id not in documents_dict:
             title = row.get("document_metadata.document_title") or document_id
             source_url = row.get("document_metadata.source_url")
             description = row.get("document_metadata.description") or ""
-
-            # Skip the document if its source_url is missing
-            if not source_url:
-                logger.warning(
-                    f"Skipping document '{document_id}' (title: '{title}') - missing source_url",
-                )
-                skipped_document_ids.add(document_id)
-                continue
 
             documents_dict[document_id] = Document(
                 title=title,
@@ -100,10 +91,6 @@ with progress_bar:
 
 logger.info("Created %d unique documents", len(documents_dict))
 logger.info("Created %d passages", len(passages))
-if skipped_document_ids:
-    logger.info(
-        "Skipped %d documents due to missing source_url", len(skipped_document_ids)
-    )
 
 documents_jsonl_path = DATA_DIR / "documents.jsonl"
 with open(documents_jsonl_path, "w", encoding="utf-8") as f:
