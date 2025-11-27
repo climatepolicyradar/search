@@ -13,11 +13,14 @@ RUN uv sync --locked
 # Copy the application code
 COPY api/ api/
 COPY search/ search/
-COPY data/ data/
+
+# Create data directory (will be populated from S3 at runtime)
+RUN mkdir -p /app/data
 
 # Expose the FastAPI server on port 8000
 EXPOSE 8000
 
 # Run the FastAPI server with uvicorn
+# The lifespan event will download data from S3 before starting
 CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 

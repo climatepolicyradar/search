@@ -36,7 +36,7 @@ REPO_ROOT_DIR = get_git_root()
 DATA_DIR = REPO_ROOT_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-AWS_PROFILE_NAME = os.getenv("AWS_PROFILE_NAME", "labs")
-AWS_REGION_NAME = os.getenv("AWS_REGION_NAME", "eu-west-1")
+AWS_PROFILE = os.getenv("AWS_PROFILE", "labs")
+AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 
 DATASET_NAME = "climatepolicyradar/all-document-text-data"

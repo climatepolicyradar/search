@@ -5099,6 +5099,7 @@ name = "search"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "boto3" },
     { name = "duckdb" },
     { name = "fastapi" },
     { name = "knowledge-graph" },
@@ -5121,6 +5122,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "boto3", specifier = ">=1.35.0" },
     { name = "duckdb", specifier = ">=1.4.2" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "knowledge-graph", git = "https://github.com/climatepolicyradar/knowledge-graph?rev=268d1baa221b8da51f88bc7affa31b4860da8dd0" },
