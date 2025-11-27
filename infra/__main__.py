@@ -6,7 +6,10 @@ import pulumi
 import pulumi_docker as docker
 from pulumi_aws import cloudwatch, ec2, ecr, ecs, iam, lb, s3
 
-from search.config import AWS_REGION, GIT_COMMIT_HASH, REPO_ROOT_DIR
+from search.config import AWS_REGION, REPO_ROOT_DIR, get_git_commit_hash
+
+# Get the git commit hash for tagging the image
+GIT_COMMIT_HASH = get_git_commit_hash()
 
 bucket = s3.Bucket("search")
 

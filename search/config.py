@@ -21,17 +21,30 @@ def get_git_root() -> Path:
 
 
 def get_git_commit_hash() -> str:
-    """Get the short hash of the current git commit."""
+    """
+    Get the short hash of the current git commit.
+
+    Priority:
+    1. GIT_COMMIT_HASH environment variable (set by CI/CD or deployment)
+    2. git rev-parse command (if in a git repository)
+    3. Fallback to "unknown" if neither is available
+    """
+    # First, check whether the git commit hash is provided via environment variable
+    if env_hash := os.getenv("GIT_COMMIT_HASH"):
+        return env_hash
+
+    # If not, try to get it from git
     try:
         git_commit_hash = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], text=True
         ).strip()
         return git_commit_hash
-    except Exception as e:
-        raise RuntimeError("Could not determine the current git commit hash") from e
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # If we can't determine the git hash, return a fallback value
+        # This should be acceptable in containerized environments.
+        return "unknown"
 
 
-GIT_COMMIT_HASH = get_git_commit_hash()
 REPO_ROOT_DIR = get_git_root()
 DATA_DIR = REPO_ROOT_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
