@@ -51,12 +51,12 @@ progress_bar = Progress(
 with progress_bar:
     task = progress_bar.add_task("Creating documents and passages", total=len(dataset))
     for idx, row in enumerate(dataset):
-        update_kwargs: dict[str, int | str] = {"advance": 1}
+        progress_bar_kwargs: dict[str, int | str] = {"advance": 1}
         if idx % 10_000 == 0:
-            update_kwargs["description"] = (
+            progress_bar_kwargs["description"] = (
                 f"Found {len(documents_dict)} documents and {len(passages)} passages"
             )
-        progress_bar.update(task, **update_kwargs)
+        progress_bar.update(task, **progress_bar_kwargs)
 
         document_id = row["document_id"]
 
