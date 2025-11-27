@@ -19,7 +19,7 @@ from knowledge_graph.wikibase import WikibaseSession
 from rich.logging import RichHandler
 
 from scripts import serialise_pydantic_list_as_jsonl
-from search.config import DATA_DIR
+from search.config import AWS_PROFILE_NAME, AWS_REGION_NAME, DATA_DIR
 from search.label import Label
 
 load_dotenv()
@@ -30,7 +30,7 @@ logger.setLevel(logging.INFO)
 logger.addHandler(RichHandler())
 
 
-session = boto3.Session(profile_name="labs", region_name="eu-west-1")
+session = boto3.Session(profile_name=AWS_PROFILE_NAME, region_name=AWS_REGION_NAME)
 logger.info("Connected to AWS")
 
 s3 = session.client("s3")

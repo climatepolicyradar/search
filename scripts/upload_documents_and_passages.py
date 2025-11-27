@@ -16,7 +16,7 @@ from rich.progress import (
 )
 
 from scripts import serialise_pydantic_list_as_jsonl
-from search.config import DATA_DIR
+from search.config import AWS_PROFILE_NAME, AWS_REGION_NAME, DATA_DIR
 from search.document import Document
 from search.identifier import Identifier
 from search.passage import Passage
@@ -147,7 +147,7 @@ conn.close()
 logger.info(f"Saved {len(passages)} passages to '{passages_duckdb_path}'")
 
 logger.info("Connecting to AWS")
-session = boto3.Session(profile_name="labs", region_name="eu-west-1")
+session = boto3.Session(profile_name=AWS_PROFILE_NAME, region_name=AWS_REGION_NAME)
 s3 = session.client("s3")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 if BUCKET_NAME is None:
