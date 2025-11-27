@@ -6,7 +6,7 @@ import pulumi
 import pulumi_docker as docker
 from pulumi_aws import cloudwatch, ec2, ecr, ecs, iam, lb, s3
 
-from search.config import AWS_REGION_NAME, GIT_COMMIT_HASH, REPO_ROOT_DIR
+from search.config import AWS_REGION, GIT_COMMIT_HASH, REPO_ROOT_DIR
 
 bucket = s3.Bucket("search")
 
@@ -141,6 +141,49 @@ iam.RolePolicyAttachment(
     policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
 )
 
+# Create an IAM role for the ECS task (used by the application running in the container)
+ecs_task_role = iam.Role(
+    f"{application_name}-ecs-task-role",
+    assume_role_policy=json.dumps(
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRole",
+                    "Effect": "Allow",
+                    "Principal": {"Service": "ecs-tasks.amazonaws.com"},
+                }
+            ],
+        }
+    ),
+)
+
+# Add S3 read permissions for the task role
+s3_policy = iam.Policy(
+    f"{application_name}-s3-policy",
+    description="Policy to allow reading data files from S3",
+    policy=pulumi.Output.all(bucket.arn).apply(
+        lambda arns: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["s3:GetObject", "s3:ListBucket"],
+                        "Resource": [f"{arns[0]}/*", arns[0]],
+                    }
+                ],
+            }
+        )
+    ),
+)
+
+iam.RolePolicyAttachment(
+    f"{application_name}-s3-policy-attachment",
+    role=ecs_task_role.name,
+    policy_arn=s3_policy.arn,
+)
+
 # Create a CloudWatch log group for the application logs
 log_group = cloudwatch.LogGroup(
     f"{application_name}-logs",
@@ -156,9 +199,11 @@ task_definition = ecs.TaskDefinition(
     network_mode="awsvpc",
     requires_compatibilities=["FARGATE"],
     execution_role_arn=ecs_task_execution_role.arn,
+    task_role_arn=ecs_task_role.arn,
     container_definitions=pulumi.Output.all(
         image.image_name,
         log_group.name,
+        bucket.id,
     ).apply(
         lambda args: json.dumps(
             [
@@ -168,11 +213,15 @@ task_definition = ecs.TaskDefinition(
                     "portMappings": [
                         {"containerPort": 8000, "hostPort": 8000, "protocol": "tcp"}
                     ],
+                    "environment": [
+                        {"name": "BUCKET_NAME", "value": args[2]},
+                        {"name": "AWS_REGION", "value": AWS_REGION},
+                    ],
                     "logConfiguration": {
                         "logDriver": "awslogs",
                         "options": {
                             "awslogs-group": args[1],
-                            "awslogs-region": AWS_REGION_NAME,
+                            "awslogs-region": AWS_REGION,
                             "awslogs-stream-prefix": "ecs",
                         },
                     },
