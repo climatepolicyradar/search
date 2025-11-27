@@ -46,10 +46,14 @@ def get_git_commit_hash() -> str:
 
 
 REPO_ROOT_DIR = get_git_root()
-DATA_DIR = REPO_ROOT_DIR / "data"
+
+# DATA_DIR depends on the environment:
+# - In deployed containers (ECS), use the DATA_DIR environment variable
+# - In local development, use REPO_ROOT_DIR/data
+DATA_DIR = Path(os.getenv("DATA_DIR", REPO_ROOT_DIR / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# AWS_PROFILE is only used in local development. In containerized environments (ECS),
+# AWS_PROFILE is only used in local development. In deployed containers (ECS),
 # boto3 automatically uses the task IAM role, so the value should be None.
 AWS_PROFILE = os.getenv("AWS_PROFILE", None)
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")

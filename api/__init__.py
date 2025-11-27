@@ -1,9 +1,9 @@
 """API initialization and search engine factories."""
 
 import logging
-from pathlib import Path
 
 from search.aws import download_file_from_s3, get_bucket_name
+from search.config import DATA_DIR
 from search.engines.json import (
     JSONDocumentSearchEngine,
     JSONLabelSearchEngine,
@@ -11,8 +11,6 @@ from search.engines.json import (
 )
 
 logger = logging.getLogger(__name__)
-
-DATA_DIR = Path("/app/data")
 
 # Preferred search engine configuration
 PREFERRED_ENGINES = {
@@ -33,7 +31,7 @@ async def download_required_datasets_from_s3():
 
         try:
             logger.info(f"Downloading {name}: {filename}")
-            download_file_from_s3(bucket_name, f"data/{filename}")
+            download_file_from_s3(bucket_name, filename)
         except Exception as e:
             logger.error(f"Failed to download {name}: {e}")
             raise

@@ -220,6 +220,7 @@ task_definition = ecs.TaskDefinition(
                         {"name": "BUCKET_NAME", "value": args[2]},
                         {"name": "AWS_REGION", "value": AWS_REGION},
                         {"name": "GIT_COMMIT_HASH", "value": GIT_COMMIT_HASH},
+                        {"name": "DATA_DIR", "value": "/app/data"},
                     ],
                     "logConfiguration": {
                         "logDriver": "awslogs",
