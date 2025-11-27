@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import TypeVar
 
 import duckdb
@@ -14,10 +15,9 @@ T = TypeVar("T", bound=BaseModel)
 class DuckDBSearchEngine:
     """Base class for DuckDB search engines."""
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str | Path):
         """Initialize the DuckDB search engine with a read-only connection."""
-        self.db_path = db_path
-        self.conn = duckdb.connect(db_path, read_only=True)
+        self.conn = duckdb.connect(str(db_path), read_only=True)
 
     def _escape_terms(self, terms: str) -> str:
         """Escape single quotes in search terms for SQL safety."""
