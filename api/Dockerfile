@@ -2,8 +2,8 @@ FROM python:3.13-slim-bookworm
 
 WORKDIR /app
 
-# Install build essentials and curl for health checks
-RUN apt-get update && apt-get install -y build-essential curl && rm -rf /var/lib/apt/lists/*
+# Install build essentials, curl for health checks, and git for git dependencies
+RUN apt-get update && apt-get install -y build-essential curl git && rm -rf /var/lib/apt/lists/*
 
 # Install uv and dependencies
 RUN pip install uv
