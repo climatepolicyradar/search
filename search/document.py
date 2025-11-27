@@ -1,6 +1,6 @@
+from knowledge_graph.identifiers import Identifier
 from pydantic import AnyHttpUrl, BaseModel, computed_field
 
-from search.identifier import Identifier
 from search.label import Label
 
 
