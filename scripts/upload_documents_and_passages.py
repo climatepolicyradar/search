@@ -15,6 +15,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
+from scripts import serialise_pydantic_list_as_jsonl
 from search.config import DATA_DIR
 from search.document import Document
 from search.identifier import Identifier
@@ -102,14 +103,12 @@ logger.info("Created %d passages", len(passages))
 
 documents_jsonl_path = DATA_DIR / "documents.jsonl"
 with open(documents_jsonl_path, "w", encoding="utf-8") as f:
-    for document in documents_dict.values():
-        f.write(document.model_dump_json() + "\n")
+    f.write(serialise_pydantic_list_as_jsonl(list(documents_dict.values())))
 logger.info(f"Saved {len(documents_dict)} documents to 'data/documents.jsonl'")
 
 passages_jsonl_path = DATA_DIR / "passages.jsonl"
 with open(passages_jsonl_path, "w", encoding="utf-8") as f:
-    for passage in passages:
-        f.write(passage.model_dump_json() + "\n")
+    f.write(serialise_pydantic_list_as_jsonl(passages))
 
 logger.info(f"Saved {len(passages)} passages to 'data/passages.jsonl'")
 

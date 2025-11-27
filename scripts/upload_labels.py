@@ -11,7 +11,6 @@ environment variable.
 
 import logging
 import os
-from pathlib import Path
 
 import boto3
 import duckdb
@@ -19,12 +18,11 @@ from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
 from rich.logging import RichHandler
 
+from scripts import serialise_pydantic_list_as_jsonl
+from search.config import DATA_DIR
 from search.label import Label
 
 load_dotenv()
-
-data_dir = Path("data")
-data_dir.mkdir(parents=True, exist_ok=True)
 
 
 logger = logging.getLogger(__name__)
@@ -78,14 +76,13 @@ for concept in all_concepts:
 
 logger.info(f"Created a set of {len(labels)} labels from concepts")
 
-jsonl_path = data_dir / "labels.jsonl"
+jsonl_path = DATA_DIR / "labels.jsonl"
 with open(jsonl_path, "w", encoding="utf-8") as f:
-    for label in labels:
-        f.write(label.model_dump_json() + "\n")
+    f.write(serialise_pydantic_list_as_jsonl(labels))
 
 logger.info(f"Saved {len(labels)} labels to '{jsonl_path}'")
 
-duckdb_path = data_dir / "labels.duckdb"
+duckdb_path = DATA_DIR / "labels.duckdb"
 duckdb_path.unlink(missing_ok=True)
 conn = duckdb.connect(duckdb_path)
 conn.execute(
