@@ -34,7 +34,7 @@ cd infra
 pulumi destroy
 ```
 
-# Getting environment variables out of the Pulumi stack
+## Getting environment variables out of the Pulumi stack
 
 To get the bucket name out of the Pulumi stack, run:
 
