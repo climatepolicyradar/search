@@ -10,16 +10,15 @@ environment variable.
 """
 
 import logging
-import os
 
-import boto3
 import duckdb
 from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
 from rich.logging import RichHandler
 
 from scripts import serialise_pydantic_list_as_jsonl
-from search.config import AWS_PROFILE_NAME, AWS_REGION_NAME, DATA_DIR
+from search.aws import get_ssm_parameter, upload_file_to_s3
+from search.config import DATA_DIR
 from search.label import Label
 
 load_dotenv()
@@ -29,32 +28,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.addHandler(RichHandler())
 
-
-session = boto3.Session(profile_name=AWS_PROFILE_NAME, region_name=AWS_REGION_NAME)
-logger.info("Connected to AWS")
-
-s3 = session.client("s3")
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-if BUCKET_NAME is None:
-    raise ValueError("BUCKET_NAME is not set")
-logger.info(f"Using bucket '{BUCKET_NAME}'")
-
-
-ssm = session.client("ssm")
-logger.info("Connected to AWS SSM")
-
-
-def get_parameter(name: str) -> str:
-    response = ssm.get_parameter(
-        Name=name,
-        WithDecryption=True,
-    )
-    return response["Parameter"]["Value"]
-
-
-username = get_parameter("/Wikibase/Cloud/ServiceAccount/Username")
-password = get_parameter("/Wikibase/Cloud/ServiceAccount/Password")
-url = get_parameter("/Wikibase/Cloud/URL")
+username = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Username")
+password = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Password")
+url = get_ssm_parameter("/Wikibase/Cloud/URL")
 logger.info("Fetched wikibase credentials from AWS SSM")
 
 wikibase = WikibaseSession(url=url, username=username, password=password)
@@ -106,9 +82,6 @@ logger.info(f"Saved {len(labels)} labels to '{duckdb_path}'")
 
 
 logger.info("Uploading datasets to S3")
-s3.upload_file(jsonl_path, BUCKET_NAME, "labels.jsonl")
-logger.info(f"Uploaded '{jsonl_path}' to 's3://{BUCKET_NAME}/labels.jsonl'")
-
-s3.upload_file(duckdb_path, BUCKET_NAME, "labels.duckdb")
-logger.info(f"Uploaded '{duckdb_path}' to 's3://{BUCKET_NAME}/labels.duckdb'")
+upload_file_to_s3(jsonl_path)
+upload_file_to_s3(duckdb_path)
 logger.info("Done")

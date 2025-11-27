@@ -1,7 +1,5 @@
 import logging
-import os
 
-import boto3
 import duckdb
 from datasets import load_dataset
 from dotenv import load_dotenv
@@ -16,7 +14,8 @@ from rich.progress import (
 )
 
 from scripts import serialise_pydantic_list_as_jsonl
-from search.config import AWS_PROFILE_NAME, AWS_REGION_NAME, DATA_DIR
+from search.aws import upload_file_to_s3
+from search.config import DATA_DIR
 from search.document import Document
 from search.identifier import Identifier
 from search.passage import Passage
@@ -146,13 +145,7 @@ conn.executemany(
 conn.close()
 logger.info(f"Saved {len(passages)} passages to '{passages_duckdb_path}'")
 
-logger.info("Connecting to AWS")
-session = boto3.Session(profile_name=AWS_PROFILE_NAME, region_name=AWS_REGION_NAME)
-s3 = session.client("s3")
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-if BUCKET_NAME is None:
-    raise ValueError("BUCKET_NAME is not set")
-logger.info(f"Using bucket '{BUCKET_NAME}'")
+logger.info("Uploading files to S3")
 
 for file_path in [
     documents_jsonl_path,
@@ -160,6 +153,4 @@ for file_path in [
     documents_duckdb_path,
     passages_duckdb_path,
 ]:
-    s3_key = file_path.name
-    s3.upload_file(str(file_path), BUCKET_NAME, s3_key)
-    logger.info(f"Uploaded '{file_path}' to 's3://{BUCKET_NAME}/{s3_key}'")
+    upload_file_to_s3(file_path)
