@@ -13,7 +13,6 @@ environment variable.
 
 import logging
 
-import duckdb
 from datasets import load_dataset
 from dotenv import load_dotenv
 from rich.logging import RichHandler
@@ -22,6 +21,7 @@ from scripts import serialise_pydantic_list_as_jsonl
 from search.aws import upload_file_to_s3
 from search.config import DATA_DIR
 from search.document import Document
+from search.engines.duckdb import create_passages_duckdb_table
 from search.passage import Passage
 
 load_dotenv()
@@ -73,19 +73,7 @@ logger.info(f"Saved {len(passages)} passages to 'data/passages.jsonl'")
 
 # duckdb
 passages_duckdb_path = DATA_DIR / "passages.duckdb"
-passages_duckdb_path.unlink(missing_ok=True)
-conn = duckdb.connect(passages_duckdb_path)
-conn.execute(
-    "CREATE TABLE passages (id TEXT, text TEXT, document_id TEXT, labels TEXT[])"
-)
-conn.executemany(
-    "INSERT INTO passages VALUES (?, ?, ?, ?)",
-    [
-        (passage.id, passage.text, passage.document_id, passage.labels)
-        for passage in passages
-    ],
-)
-conn.close()
+create_passages_duckdb_table(passages_duckdb_path, passages)
 logger.info(f"Saved {len(passages)} passages to '{passages_duckdb_path}'")
 
 logger.info("Uploading files to S3")

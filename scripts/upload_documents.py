@@ -10,7 +10,6 @@ environment variable.
 
 import logging
 
-import duckdb
 from datasets import load_dataset
 from dotenv import load_dotenv
 from rich.logging import RichHandler
@@ -27,6 +26,7 @@ from scripts import serialise_pydantic_list_as_jsonl
 from search.aws import upload_file_to_s3
 from search.config import DATA_DIR
 from search.document import Document
+from search.engines.duckdb import create_documents_duckdb_table
 
 load_dotenv()
 
@@ -92,19 +92,7 @@ logger.info(f"Saved {len(documents_dict)} documents to 'data/documents.jsonl'")
 
 # duckdb
 documents_duckdb_path = DATA_DIR / "documents.duckdb"
-documents_duckdb_path.unlink(missing_ok=True)
-conn = duckdb.connect(documents_duckdb_path)
-conn.execute(
-    "CREATE TABLE documents (id TEXT, title TEXT, source_url TEXT, description TEXT)"
-)
-conn.executemany(
-    "INSERT INTO documents VALUES (?, ?, ?, ?)",
-    [
-        (document.id, document.title, str(document.source_url), document.description)
-        for document in documents_dict.values()
-    ],
-)
-conn.close()
+create_documents_duckdb_table(documents_duckdb_path, list(documents_dict.values()))
 logger.info(f"Saved {len(documents_dict)} documents to '{documents_duckdb_path}'")
 
 logger.info("Uploading files to S3")

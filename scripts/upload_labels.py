@@ -11,7 +11,6 @@ environment variable.
 
 import logging
 
-import duckdb
 from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
 from rich.logging import RichHandler
@@ -19,6 +18,7 @@ from rich.logging import RichHandler
 from scripts import serialise_pydantic_list_as_jsonl
 from search.aws import get_ssm_parameter, upload_file_to_s3
 from search.config import DATA_DIR
+from search.engines.duckdb import create_labels_duckdb_table
 from search.label import Label
 
 load_dotenv()
@@ -59,25 +59,7 @@ with open(jsonl_path, "w", encoding="utf-8") as f:
 logger.info(f"Saved {len(labels)} labels to '{jsonl_path}'")
 
 duckdb_path = DATA_DIR / "labels.duckdb"
-duckdb_path.unlink(missing_ok=True)
-conn = duckdb.connect(duckdb_path)
-conn.execute(
-    "CREATE TABLE labels (id TEXT, preferred_label TEXT, alternative_labels TEXT[], negative_labels TEXT[], description TEXT)"
-)
-conn.executemany(
-    "INSERT INTO labels VALUES (?, ?, ?, ?, ?)",
-    [
-        (
-            label.id,
-            label.preferred_label,
-            label.alternative_labels,
-            label.negative_labels,
-            label.description,
-        )
-        for label in labels
-    ],
-)
-conn.close()
+create_labels_duckdb_table(duckdb_path, labels)
 logger.info(f"Saved {len(labels)} labels to '{duckdb_path}'")
 
 
