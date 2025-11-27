@@ -3965,6 +3965,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pulumi-docker"
+version = "4.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parver" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/be/bd/79e56ec5ab69cb2d3d03718c54e2b71adc384c3aa0cc6c09cc7e6e3f9bdd/pulumi_docker-4.10.0.tar.gz", hash = "sha256:2f1e97842189e7e26dfc7eff0bd22e86690c57a67c1635afae9feaee56072538", size = 115579, upload-time = "2025-11-13T20:40:37.279Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/09/09f511246822d27440e5fd2e146a8fba9089c536936d9230becdf11f3968/pulumi_docker-4.10.0-py3-none-any.whl", hash = "sha256:6c9ebde223aa1b49a8c4447c742bc7e7f0abafeadc9e9f80b4f461a57c5e2b17", size = 137182, upload-time = "2025-11-13T20:40:35.436Z" },
+]
+
+[[package]]
 name = "pure-eval"
 version = "0.2.3"
 source = { registry = "https://pypi.org/simple" }
@@ -5087,6 +5101,7 @@ source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
     { name = "fastapi" },
+    { name = "knowledge-graph" },
     { name = "pydantic" },
     { name = "pytest" },
     { name = "python-dotenv" },
@@ -5097,10 +5112,10 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "knowledge-graph" },
     { name = "pre-commit" },
     { name = "pulumi" },
     { name = "pulumi-aws" },
+    { name = "pulumi-docker" },
     { name = "ruff" },
 ]
 
@@ -5108,10 +5123,11 @@ dev = [
 requires-dist = [
     { name = "duckdb", specifier = ">=1.4.2" },
     { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "knowledge-graph", marker = "extra == 'dev'", git = "https://github.com/climatepolicyradar/knowledge-graph?rev=268d1baa221b8da51f88bc7affa31b4860da8dd0" },
+    { name = "knowledge-graph", git = "https://github.com/climatepolicyradar/knowledge-graph?rev=268d1baa221b8da51f88bc7affa31b4860da8dd0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.5.0" },
     { name = "pulumi", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
     { name = "pulumi-aws", marker = "extra == 'dev'", specifier = ">=7.0.0,<8.0.0" },
+    { name = "pulumi-docker", marker = "extra == 'dev'", specifier = ">=4.0.0,<5.0.0" },
     { name = "pydantic", specifier = ">=2.12.4" },
     { name = "pytest", specifier = ">=9.0.1" },
     { name = "python-dotenv", specifier = ">=1.0.0" },

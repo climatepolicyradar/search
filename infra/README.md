@@ -1,46 +1,56 @@
 # Infrastructure
 
-This directory contains the infrastructure for the search project.
+Pulumi stack for deploying the Search API to AWS using ECS Fargate.
 
 ## Prerequisites
 
-Make sure you have all of the dependencies installed:
+- Project dependencies installed by running `just install` from the project root.
+- AWS account and [credentials configured for Pulumi](https://www.pulumi.com/docs/clouds/aws/get-started/begin/). Run `aws sso login --profile labs` to authenticate.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) running locally.
 
-```bash
-just install
-```
+## Architecture
 
-and that you're logged in to AWS:
+The pulumi stack in `__main__.py` will create the following resources:
 
-```bash
-aws sso login --profile labs
-```
+- **ECR Repository**: Private container registry for the Docker image
+- **ECS Cluster**: Fargate cluster to run the containerized API
+- **ECS Service**: Manages the running tasks with desired count
+- **Application Load Balancer**: Routes HTTP traffic to the containers
+- **Security Group**: Controls network access (HTTP on port 80)
+- **CloudWatch Log Group**: Centralized logging with 14-day retention
+- **IAM Roles**: Task execution role with necessary permissions
 
-## Usage
+## Deployment
 
-To deploy the infrastructure, run:
+### Deploy the infrastructure
 
-```bash
-cd infra
-pulumi up
-```
-
-## Cleanup
-
-To cleanup the infrastructure, run:
+Deploy the infrastructure:
 
 ```bash
 cd infra
-pulumi destroy
+uv run pulumi up --stack labs
+```
+
+Pulumi will build the Docker image, push it to a private ECR repository, and deploy the service to ECS Fargate. The output will include the public URL of the load balancer.
+
+**Note for MacBook (ARM-based) users:** The Docker image is built for the `linux/amd64` platform to ensure compatibility with AWS Fargate. Docker Desktop handles this cross-platform build automatically.
+
+### Destroy the infrastructure
+
+To tear down all the created AWS resources:
+
+```bash
+uv run pulumi destroy --stack labs
 ```
 
 ## Getting environment variables out of the Pulumi stack
 
-To get the bucket name out of the Pulumi stack, run:
+The most useful outputs are probably the S3 bucket name and the CloudWatch log group name. To get these out of the Pulumi stack, run:
 
 ```bash
 cd infra
 pulumi stack output bucket_name
+pulumi stack output log_group_name
 ```
 
 This will output the bucket name, which you can then use to set the `BUCKET_NAME` environment variable in your local environment:
@@ -49,8 +59,14 @@ This will output the bucket name, which you can then use to set the `BUCKET_NAME
 export BUCKET_NAME=$(cd infra && pulumi stack output bucket_name)
 ```
 
-or add it to your `.env` file:
+## Viewing logs
+
+To view the application logs in CloudWatch:
 
 ```bash
-echo "BUCKET_NAME=$(cd infra && pulumi stack output bucket_name)" >> .env
+# Get the log group name
+LOG_GROUP=$(pulumi stack output log_group_name)
+
+# View recent logs using AWS CLI
+aws logs tail $LOG_GROUP --follow
 ```

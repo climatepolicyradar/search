@@ -115,11 +115,6 @@ async def root():
     return {
         "name": "Climate Policy Radar Search API",
         "version": "0.1.0",
-        "endpoints": {
-            "documents": "/documents",
-            "passages": "/passages",
-            "labels": "/labels",
-        },
     }
 
 
