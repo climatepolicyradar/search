@@ -32,7 +32,6 @@ logger.setLevel(logging.INFO)
 logger.addHandler(RichHandler())
 
 
-logger.info("Connecting to AWS")
 session = boto3.Session(profile_name="labs", region_name="eu-west-1")
 logger.info("Connected to AWS")
 
