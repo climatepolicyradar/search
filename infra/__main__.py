@@ -219,6 +219,7 @@ task_definition = ecs.TaskDefinition(
                     "environment": [
                         {"name": "BUCKET_NAME", "value": args[2]},
                         {"name": "AWS_REGION", "value": AWS_REGION},
+                        {"name": "GIT_COMMIT_HASH", "value": GIT_COMMIT_HASH},
                     ],
                     "logConfiguration": {
                         "logDriver": "awslogs",
@@ -270,3 +271,5 @@ service = ecs.Service(
 pulumi.export("bucket_name", bucket.id)
 pulumi.export("log_group_name", log_group.name)
 pulumi.export("api_endpoint", pulumi.Output.concat("http://", alb.dns_name))
+pulumi.export("cluster_name", cluster.name)
+pulumi.export("service_name", service.name)
