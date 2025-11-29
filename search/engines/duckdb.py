@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Callable, TypeVar
 
@@ -10,40 +11,69 @@ from search.passage import Passage
 
 T = TypeVar("T")
 
+DEFAULT_BATCH_SIZE = 10_000
+
 
 def _create_duckdb_table(
     db_path: Path,
     create_table_sql: str,
     insert_sql: str,
-    items: list[T],
+    items: Iterable[T],
     row_extractor: Callable[[T], tuple],
-) -> None:
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> int:
     """
     Generic function to create a DuckDB table and insert data.
+
+    Processes items in batches to avoid memory issues with large datasets.
 
     Args:
         db_path: Path to the DuckDB database file
         create_table_sql: SQL statement to create the table
         insert_sql: SQL statement to insert rows (with ? placeholders)
-        items: List of items to insert
+        items: Iterable of items to insert (can be a generator)
         row_extractor: Function that extracts a tuple of values from each item
+        batch_size: Number of items to insert per batch
+
+    Returns:
+        Total number of items inserted
     """
     db_path.unlink(missing_ok=True)
     conn = duckdb.connect(db_path)
     conn.execute(create_table_sql)
-    conn.executemany(insert_sql, [row_extractor(item) for item in items])
+
+    total_count = 0
+    batch: list[tuple] = []
+
+    for item in items:
+        batch.append(row_extractor(item))
+
+        if len(batch) >= batch_size:
+            conn.executemany(insert_sql, batch)
+            total_count += len(batch)
+            batch.clear()
+
+    # Insert remaining items
+    if batch:
+        conn.executemany(insert_sql, batch)
+        total_count += len(batch)
+
     conn.close()
+    return total_count
 
 
-def create_documents_duckdb_table(db_path: Path, documents: list[Document]) -> None:
+def create_documents_duckdb_table(db_path: Path, documents: Iterable[Document]) -> int:
     """
     Create a DuckDB table for documents and insert the provided documents.
 
     Args:
         db_path: Path to the DuckDB database file
-        documents: List of Document objects to insert
+        documents: Iterable of Document objects to insert
+
+    Returns:
+        Total number of documents inserted
     """
-    _create_duckdb_table(
+    return _create_duckdb_table(
         db_path=db_path,
         create_table_sql="CREATE TABLE documents (id TEXT, title TEXT, source_url TEXT, description TEXT, original_document_id TEXT)",
         insert_sql="INSERT INTO documents VALUES (?, ?, ?, ?, ?)",
@@ -58,15 +88,18 @@ def create_documents_duckdb_table(db_path: Path, documents: list[Document]) -> N
     )
 
 
-def create_passages_duckdb_table(db_path: Path, passages: list[Passage]) -> None:
+def create_passages_duckdb_table(db_path: Path, passages: Iterable[Passage]) -> int:
     """
     Create a DuckDB table for passages and insert the provided passages.
 
     Args:
         db_path: Path to the DuckDB database file
-        passages: List of Passage objects to insert
+        passages: Iterable of Passage objects to insert
+
+    Returns:
+        Total number of passages inserted
     """
-    _create_duckdb_table(
+    return _create_duckdb_table(
         db_path=db_path,
         create_table_sql="CREATE TABLE passages (id TEXT, text TEXT, document_id TEXT, labels TEXT[], original_passage_id TEXT)",
         insert_sql="INSERT INTO passages VALUES (?, ?, ?, ?, ?)",
@@ -81,15 +114,18 @@ def create_passages_duckdb_table(db_path: Path, passages: list[Passage]) -> None
     )
 
 
-def create_labels_duckdb_table(db_path: Path, labels: list[Label]) -> None:
+def create_labels_duckdb_table(db_path: Path, labels: Iterable[Label]) -> int:
     """
     Create a DuckDB table for labels and insert the provided labels.
 
     Args:
         db_path: Path to the DuckDB database file
-        labels: List of Label objects to insert
+        labels: Iterable of Label objects to insert
+
+    Returns:
+        Total number of labels inserted
     """
-    _create_duckdb_table(
+    return _create_duckdb_table(
         db_path=db_path,
         create_table_sql="CREATE TABLE labels (id TEXT, preferred_label TEXT, alternative_labels TEXT[], negative_labels TEXT[], description TEXT)",
         insert_sql="INSERT INTO labels VALUES (?, ?, ?, ?, ?)",
