@@ -1,8 +1,9 @@
 from pathlib import Path
 
+from knowledge_graph.identifiers import Identifier
+
 from search.document import Document
 from search.engines import DocumentSearchEngine, LabelSearchEngine, PassageSearchEngine
-from search.identifier import Identifier
 from search.label import Label
 from search.passage import Passage
 

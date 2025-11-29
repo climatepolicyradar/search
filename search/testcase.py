@@ -1,7 +1,7 @@
+from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel
 
 from search.engines import SearchEngine
-from search.identifier import Identifier
 
 
 class TestCase(BaseModel):

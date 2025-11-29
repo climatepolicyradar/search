@@ -1,9 +1,11 @@
+from contextlib import asynccontextmanager
 from typing import Annotated, Callable, Generic, TypeVar
 
 from fastapi import Depends, FastAPI, Query, Request
 from pydantic import AnyHttpUrl, BaseModel
 
 from api import (
+    download_required_datasets_from_s3,
     get_document_search_engine,
     get_label_search_engine,
     get_passage_search_engine,
@@ -13,10 +15,21 @@ from search.engines import SearchEngine
 from search.label import Label
 from search.passage import Passage
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup: Download data files from S3
+    await download_required_datasets_from_s3()
+    yield
+    # Shutdown: Cleanup (if needed)
+
+
 app = FastAPI(
     title="Climate Policy Radar Search API",
     description="API for searching climate policy documents, passages, and labels",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -115,11 +128,6 @@ async def root():
     return {
         "name": "Climate Policy Radar Search API",
         "version": "0.1.0",
-        "endpoints": {
-            "documents": "/documents",
-            "passages": "/passages",
-            "labels": "/labels",
-        },
     }
 
 
