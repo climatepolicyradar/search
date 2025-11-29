@@ -4,19 +4,19 @@ import logging
 
 from search.aws import download_file_from_s3, get_bucket_name
 from search.config import DATA_DIR
-from search.engines.json import (
-    JSONDocumentSearchEngine,
-    JSONLabelSearchEngine,
-    JSONPassageSearchEngine,
+from search.engines.duckdb import (
+    DuckDBDocumentSearchEngine,
+    DuckDBLabelSearchEngine,
+    DuckDBPassageSearchEngine,
 )
 
 logger = logging.getLogger(__name__)
 
 # Preferred search engine configuration
 PREFERRED_ENGINES = {
-    "documents": (JSONDocumentSearchEngine, "documents.jsonl"),
-    "labels": (JSONLabelSearchEngine, "labels.jsonl"),
-    "passages": (JSONPassageSearchEngine, "passages.jsonl"),
+    "documents": (DuckDBDocumentSearchEngine, "documents.duckdb"),
+    "labels": (DuckDBLabelSearchEngine, "labels.duckdb"),
+    "passages": (DuckDBPassageSearchEngine, "passages.duckdb"),
 }
 
 

@@ -213,7 +213,8 @@ class DuckDBPassageSearchEngine(DuckDBSearchEngine, PassageSearchEngine):
             SELECT DISTINCT
                 text,
                 document_id,
-                labels
+                labels,
+                original_passage_id
             FROM passages
             WHERE text ILIKE '%{escaped_terms}%'
         """
@@ -225,6 +226,7 @@ class DuckDBPassageSearchEngine(DuckDBSearchEngine, PassageSearchEngine):
                 text=row[0],
                 document_id=row[1],
                 labels=row[2],
+                original_passage_id=row[3],
             )
             for row in results
         ]
