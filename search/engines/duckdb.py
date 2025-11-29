@@ -251,8 +251,7 @@ class DuckDBDocumentSearchEngine(DuckDBSearchEngine, DocumentSearchEngine):
                 title,
                 source_url,
                 description,
-                labels,
-                passages
+                original_document_id
             FROM documents
             WHERE title ILIKE '%{escaped_terms}%'
                 OR description ILIKE '%{escaped_terms}%'
@@ -265,8 +264,8 @@ class DuckDBDocumentSearchEngine(DuckDBSearchEngine, DocumentSearchEngine):
                 title=row[0],
                 source_url=row[1],
                 description=row[2],
-                labels=row[3],
-                passages=row[4],
+                original_document_id=row[3],
+                labels=[],  # labels not stored in database
             )
             for row in results
         ]

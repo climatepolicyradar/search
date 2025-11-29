@@ -198,7 +198,7 @@ task_definition = ecs.TaskDefinition(
     f"{application_name}-task",
     family=f"{application_name}-task-family",
     cpu="1024",
-    memory="4096",
+    memory="8192",
     network_mode="awsvpc",
     requires_compatibilities=["FARGATE"],
     execution_role_arn=ecs_task_execution_role.arn,
