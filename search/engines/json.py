@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Sequence, TypeVar
+from typing import Any, Generic, Sequence, TypeVar
 
 from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel
@@ -44,8 +44,7 @@ def deserialise_pydantic_list_from_jsonl[T: BaseModel](
     return models
 
 
-class JSONSearchEngine(SearchEngine, 
-                       [TModel]):
+class JSONSearchEngine(SearchEngine, Generic[TModel]):
     """
     A search engine that searches for primitives in a JSONL file.
 
