@@ -49,11 +49,6 @@ def generate_passages() -> Iterator[Passage]:
     """Generate Passage objects from the dataset, writing to JSONL as we go."""
     with open(passages_jsonl_path, "w", encoding="utf-8") as jsonl_file:
         for row in track(dataset, description="Creating passages"):
-            if (
-                row.get("text_block.text") is None
-                or row.get("document_metadata.source_url") is None
-            ):
-                continue
             passage = Passage.from_huggingface_row(row)
             jsonl_file.write(passage.model_dump_json() + "\n")
             yield passage
