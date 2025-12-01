@@ -3,11 +3,14 @@ from pathlib import Path
 from typing import Callable, TypeVar
 
 import duckdb
+from pydantic import BaseModel
 
 from search.document import Document
 from search.engines import DocumentSearchEngine, LabelSearchEngine, PassageSearchEngine
 from search.label import Label
 from search.passage import Passage
+
+T = TypeVar("T", bound=BaseModel)
 
 T = TypeVar("T")
 
@@ -147,7 +150,7 @@ class DuckDBSearchEngine:
         """Initialize the DuckDB search engine with a read-only connection."""
         self.conn = duckdb.connect(str(db_path), read_only=True)
 
-    def _escape_terms(self, terms: str) -> str:
+    def _escape_single_quotes_for_sql_safety(self, terms: str) -> str:
         """Escape single quotes in search terms for SQL safety."""
         return terms.replace("'", "''")
 
@@ -168,7 +171,7 @@ class DuckDBLabelSearchEngine(DuckDBSearchEngine, LabelSearchEngine):
         :param str terms: The search terms
         :return list[Label]: A list of matching labels
         """
-        escaped_terms = self._escape_terms(terms)
+        escaped_terms = self._escape_single_quotes_for_sql_safety(terms)
 
         query = f"""
             SELECT DISTINCT
@@ -207,7 +210,7 @@ class DuckDBPassageSearchEngine(DuckDBSearchEngine, PassageSearchEngine):
         :param str terms: The search terms
         :return list[Passage]: A list of matching passages
         """
-        escaped_terms = self._escape_terms(terms)
+        escaped_terms = self._escape_single_quotes_for_sql_safety(terms)
 
         query = f"""
             SELECT DISTINCT
@@ -244,7 +247,7 @@ class DuckDBDocumentSearchEngine(DuckDBSearchEngine, DocumentSearchEngine):
         :param str terms: The search terms
         :return list[Document]: A list of matching documents
         """
-        escaped_terms = self._escape_terms(terms)
+        escaped_terms = self._escape_single_quotes_for_sql_safety(terms)
 
         query = f"""
             SELECT DISTINCT
