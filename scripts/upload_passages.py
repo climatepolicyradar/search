@@ -18,10 +18,10 @@ from dotenv import load_dotenv
 from rich.logging import RichHandler
 from rich.progress import track
 
-from scripts import serialise_pydantic_list_as_jsonl
 from search.aws import upload_file_to_s3
 from search.config import DATA_DIR, DATASET_NAME
 from search.engines.duckdb import create_passages_duckdb_table
+from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.passage import Passage
 
 load_dotenv()
