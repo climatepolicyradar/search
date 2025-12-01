@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Sequence, TypeVar
 
 from knowledge_graph.identifiers import Identifier
@@ -48,7 +49,7 @@ class JSONSearchEngine(SearchEngine):
 
     model_class: type[BaseModel] | None = None
 
-    def __init__(self, file_path: str, model_class: type[TModel] | None = None):
+    def __init__(self, file_path: str | Path, model_class: type[TModel] | None = None):
         """Initialize the JSON search engine."""
         if model_class is None:
             if self.model_class is None:
@@ -87,7 +88,7 @@ class JSONLabelSearchEngine(JSONSearchEngine, LabelSearchEngine):
 
     model_class = Label
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str | Path):
         """Initialize the JSON label search engine."""
         super().__init__(file_path)
 
@@ -132,7 +133,7 @@ class JSONDocumentSearchEngine(JSONSearchEngine, DocumentSearchEngine):
 
     model_class = Document
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str | Path):
         """Initialize the JSON document search engine."""
         super().__init__(file_path)
         self.id_to_searchable_strings: dict[Identifier, str] = {

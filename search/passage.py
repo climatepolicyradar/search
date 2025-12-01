@@ -2,7 +2,6 @@ from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, Field, computed_field
 
 from search.document import Document
-from search.label import Label
 
 
 class Passage(BaseModel):
@@ -12,7 +11,7 @@ class Passage(BaseModel):
     document_id: Identifier = Field(
         description="Canonical ID for the document this passage belongs to"
     )
-    labels: list[Label] = Field(
+    labels: list[Identifier] = Field(
         description=(
             "List of which are associated with this passage, "
             "eg topics identified by our classifiers"
