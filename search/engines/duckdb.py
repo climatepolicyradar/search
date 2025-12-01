@@ -19,7 +19,7 @@ class DuckDBSearchEngine:
         self.db_path = db_path
         self.conn = duckdb.connect(db_path, read_only=True)
 
-    def _escape_terms(self, terms: str) -> str:
+    def _escape_single_quotes_for_sql_safety(self, terms: str) -> str:
         """Escape single quotes in search terms for SQL safety."""
         return terms.replace("'", "''")
 
