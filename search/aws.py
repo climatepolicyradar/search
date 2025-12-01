@@ -7,14 +7,19 @@ from pathlib import Path
 import boto3
 from botocore.client import BaseClient
 
-from search.config import AWS_PROFILE_NAME, AWS_REGION_NAME
+from search.config import AWS_PROFILE, AWS_REGION, DATA_DIR
 
 logger = logging.getLogger(__name__)
 
 
 def get_aws_session() -> boto3.Session:
-    """Get a boto3 session configured with the AWS profile and region from config."""
-    return boto3.Session(profile_name=AWS_PROFILE_NAME, region_name=AWS_REGION_NAME)
+    """
+    Get a boto3 session configured with the AWS profile and region from config.
+
+    In local development, uses the AWS_PROFILE (default: "labs").
+    In containerized environments (ECS), uses the task IAM role (profile_name=None).
+    """
+    return boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
 
 
 def get_s3_client() -> BaseClient:
@@ -72,3 +77,30 @@ def upload_file_to_s3(
 
     s3.upload_file(str(file_path), bucket_name, s3_key)
     logger.info(f"Uploaded '{file_path}' to 's3://{bucket_name}/{s3_key}'")
+
+
+def download_file_from_s3(
+    bucket_name: str, s3_key: str, local_path: Path | None = None
+) -> None:
+    """
+    Download a file from S3.
+
+    Args:
+        bucket_name: S3 bucket name
+        s3_key: S3 key/object name (e.g. 'data/documents.jsonl')
+        local_path: Path to the local file to download.
+            If None, mirrors the S3 key structure under DATA_DIR
+    """
+    if local_path is None:
+        local_path = DATA_DIR / s3_key
+
+    # Create parent directories if needed
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+
+    s3 = get_s3_client()
+    try:
+        s3.download_file(bucket_name, s3_key, str(local_path))
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to download '{s3_key}' from 's3://{bucket_name}'"
+        ) from e

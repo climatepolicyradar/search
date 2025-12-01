@@ -1,8 +1,6 @@
 from knowledge_graph.identifiers import Identifier
 from pydantic import AnyHttpUrl, BaseModel, Field, computed_field
 
-from search.label import Label
-
 
 class Document(BaseModel):
     """Base class for a CPR document"""
@@ -18,9 +16,12 @@ class Document(BaseModel):
             "e.g. a document's ID in the main CPR apps"
         )
     )
-    labels: list[Label] = Field(
+    labels: list[Identifier] = Field(
         default=[],
-        description="List of which are associated with this document, eg metadata like geography, sector, etc.",
+        description=(
+            "List of identifiers of labels which are associated with this "
+            "document, eg metadata like geography, sector, etc."
+        ),
     )
 
     @computed_field
@@ -32,7 +33,9 @@ class Document(BaseModel):
     @classmethod
     def from_huggingface_row(cls, row: dict) -> "Document":
         """Create a Document object from a row of a HuggingFace dataset"""
-        title = row.get("document_metadata.document_title", row.get("document_id", ""))
+        title = (
+            row.get("document_metadata.document_title") or row.get("document_id") or ""
+        )
         source_url = row["document_metadata.source_url"]
         description = row.get("document_metadata.description", "")
         original_document_id = row.get("document_id", "")

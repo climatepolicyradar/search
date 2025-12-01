@@ -1,4 +1,5 @@
-from typing import Any, Generic, Sequence, TypeVar
+from pathlib import Path
+from typing import Any, Sequence, TypeVar
 
 from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel
@@ -43,7 +44,8 @@ def deserialise_pydantic_list_from_jsonl[T: BaseModel](
     return models
 
 
-class JSONSearchEngine(SearchEngine, Generic[TModel]):
+class JSONSearchEngine(SearchEngine, 
+                       [TModel]):
     """
     A search engine that searches for primitives in a JSONL file.
 
@@ -53,7 +55,7 @@ class JSONSearchEngine(SearchEngine, Generic[TModel]):
     model_class: type[TModel] | None = None
     items: list[TModel]
 
-    def __init__(self, file_path: str, model_class: type[TModel] | None = None):
+    def __init__(self, file_path: str | Path, model_class: type[TModel] | None = None):
         """Initialize the JSON search engine."""
         if model_class is None:
             if self.model_class is None:
@@ -92,7 +94,7 @@ class JSONLabelSearchEngine(JSONSearchEngine[Label], LabelSearchEngine):
 
     model_class = Label
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str | Path):
         """Initialize the JSON label search engine."""
         super().__init__(file_path)
 
@@ -137,7 +139,7 @@ class JSONDocumentSearchEngine(JSONSearchEngine[Document], DocumentSearchEngine)
 
     model_class = Document
 
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str | Path):
         """Initialize the JSON document search engine."""
         super().__init__(file_path)
         self.id_to_searchable_strings: dict[Identifier, str] = {

@@ -12,6 +12,7 @@ environment variable.
 """
 
 import logging
+from collections.abc import Iterator
 
 from datasets import load_dataset
 from dotenv import load_dotenv
@@ -21,7 +22,6 @@ from rich.progress import track
 from search.aws import upload_file_to_s3
 from search.config import DATA_DIR, DATASET_NAME
 from search.engines.duckdb import create_passages_duckdb_table
-from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.passage import Passage
 
 load_dotenv()
@@ -35,33 +35,29 @@ dataset = load_dataset(DATASET_NAME, split="train")
 logger.info(f"Loaded {len(dataset)} rows")
 
 dataset = dataset.filter(
-    lambda row: row.get("document_metadata.source_url") is not None,
-    desc="Filtering rows without source_url",
+    lambda row: row.get("document_metadata.source_url") is not None
+    and row.get("text_block.text") is not None,
+    desc="Filtering rows without source_url or text",
 )
-logger.info(f"Filtered to {len(dataset)} rows with source_url")
-
-
-passages: list[Passage] = []
-for row in track(dataset, description="Creating passages"):
-    if (
-        row.get("text_block.text") is None
-        or row.get("document_metadata.source_url") is None
-    ):
-        continue
-    passages.append(Passage.from_huggingface_row(row))
-
-logger.info("Created %d passages", len(passages))
+logger.info(f"Filtered to {len(dataset)} rows with source_url and text")
 
 passages_jsonl_path = DATA_DIR / "passages.jsonl"
-with open(passages_jsonl_path, "w", encoding="utf-8") as f:
-    f.write(serialise_pydantic_list_as_jsonl(passages))
-
-logger.info(f"Saved {len(passages)} passages to 'data/passages.jsonl'")
-
-# duckdb
 passages_duckdb_path = DATA_DIR / "passages.duckdb"
-create_passages_duckdb_table(passages_duckdb_path, passages)
-logger.info(f"Saved {len(passages)} passages to '{passages_duckdb_path}'")
+
+
+def generate_passages() -> Iterator[Passage]:
+    """Generate Passage objects from the dataset, writing to JSONL as we go."""
+    with open(passages_jsonl_path, "w", encoding="utf-8") as jsonl_file:
+        for row in track(dataset, description="Creating passages"):
+            passage = Passage.from_huggingface_row(row)
+            jsonl_file.write(passage.model_dump_json() + "\n")
+            yield passage
+
+
+passage_count = create_passages_duckdb_table(passages_duckdb_path, generate_passages())
+
+logger.info(f"Saved {passage_count} passages to '{passages_jsonl_path}'")
+logger.info(f"Saved {passage_count} passages to '{passages_duckdb_path}'")
 
 logger.info("Uploading files to S3")
 upload_file_to_s3(passages_jsonl_path)
