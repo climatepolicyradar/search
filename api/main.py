@@ -65,7 +65,7 @@ def create_search_endpoint(
         search_terms: Annotated[
             str, Query(..., description="What are you looking for?", min_length=1)
         ],
-        page: Annotated[int, Query(description="Page number", ge=1)] = 1,
+        page: Annotated[int, Query(description="Page number (1 indexed)", ge=1)] = 1,
         page_size: Annotated[int, Query(description="Page size", ge=1, le=100)] = 10,
         engine: SearchEngine = Depends(engine_dependency),
     ) -> SearchResponse[T]:
