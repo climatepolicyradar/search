@@ -15,10 +15,10 @@ from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
 from rich.logging import RichHandler
 
-from scripts import serialise_pydantic_list_as_jsonl
 from search.aws import get_ssm_parameter, upload_file_to_s3
 from search.config import DATA_DIR
 from search.engines.duckdb import create_labels_duckdb_table
+from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
 
 load_dotenv()

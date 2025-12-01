@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from search import SearchResult
+from search import Primitive
 from search.document import Document
 from search.label import Label
 from search.passage import Passage
@@ -10,7 +10,7 @@ class SearchEngine(ABC):
     """Base class for a search engine"""
 
     @abstractmethod
-    def search(self, terms: str) -> list[SearchResult]:
+    def search(self, terms: str) -> list[Primitive]:
         """Fetch a list of relevant search results"""
 
 
