@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Callable, TypeVar
+from typing import Callable, Generic, TypeVar
 
 import duckdb
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ from search.engines import (
     LabelSearchEngine,
     PassageSearchEngine,
     SearchEngine,
+    TModel,
 )
 from search.label import Label
 from search.passage import Passage
@@ -146,7 +147,7 @@ def create_labels_duckdb_table(db_path: Path, labels: Iterable[Label]) -> int:
     )
 
 
-class DuckDBSearchEngine(SearchEngine):
+class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
     """Base class for DuckDB search engines."""
 
     def __init__(self, db_path: str | Path):
@@ -162,7 +163,7 @@ class DuckDBSearchEngine(SearchEngine):
         return self.conn.execute(query).fetchall()
 
 
-class DuckDBLabelSearchEngine(DuckDBSearchEngine, LabelSearchEngine):
+class DuckDBLabelSearchEngine(DuckDBSearchEngine[Label], LabelSearchEngine):
     """A search engine that searches for labels in a DuckDB database."""
 
     def search(self, terms: str) -> list[Label]:
@@ -201,7 +202,7 @@ class DuckDBLabelSearchEngine(DuckDBSearchEngine, LabelSearchEngine):
         ]
 
 
-class DuckDBPassageSearchEngine(DuckDBSearchEngine, PassageSearchEngine):
+class DuckDBPassageSearchEngine(DuckDBSearchEngine[Passage], PassageSearchEngine):
     """A search engine that searches for passages in a DuckDB database."""
 
     def search(self, terms: str) -> list[Passage]:
@@ -238,7 +239,7 @@ class DuckDBPassageSearchEngine(DuckDBSearchEngine, PassageSearchEngine):
         ]
 
 
-class DuckDBDocumentSearchEngine(DuckDBSearchEngine, DocumentSearchEngine):
+class DuckDBDocumentSearchEngine(DuckDBSearchEngine[Document], DocumentSearchEngine):
     """A search engine that searches for documents in a DuckDB database."""
 
     def search(self, terms: str) -> list[Document]:
