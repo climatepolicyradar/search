@@ -2,9 +2,11 @@
 
 from hypothesis import provisional
 from hypothesis import strategies as st
+from knowledge_graph.identifiers import Identifier
 
 from search.document import Document
 from search.label import Label
+from search.passage import Passage
 
 text_strategy = st.text(min_size=1, max_size=400)
 
@@ -52,6 +54,7 @@ document_description_strategy = st.one_of(
 @st.composite
 def huggingface_row_strategy(
     draw,
+    include_source_url=True,
     include_title=True,
     include_description=True,
     include_document_id=True,
@@ -64,9 +67,10 @@ def huggingface_row_strategy(
     The format of the row matches the structure of the HuggingFace dataset:
     https://huggingface.co/datasets/climatepolicyradar/all-document-text-data
     """
-    row = {
-        "document_metadata.source_url": draw(url_strategy),
-    }
+    row = {}
+
+    if include_source_url:
+        row["document_metadata.source_url"] = draw(url_strategy)
 
     if include_title:
         row["document_metadata.document_title"] = draw(text_strategy)
@@ -118,3 +122,22 @@ def document_data_strategy(draw) -> dict:
 def document_strategy(draw) -> Document:
     """Generate a Document instance for testing."""
     return Document(**draw(document_data_strategy()))
+
+
+@st.composite
+def passage_data_strategy(draw) -> dict:
+    """Generate input data for Passage model."""
+    document_id = Identifier.generate(draw(text_strategy), draw(url_strategy))
+
+    return {
+        "text": draw(text_strategy),
+        "document_id": document_id,
+        "original_passage_id": draw(text_block_id_strategy),
+        "labels": [],
+    }
+
+
+@st.composite
+def passage_strategy(draw) -> Passage:
+    """Generate a Passage instance for testing."""
+    return Passage(**draw(passage_data_strategy()))
