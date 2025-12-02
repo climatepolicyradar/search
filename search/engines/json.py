@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Sequence, TypeVar
+from typing import Any, Generic, Sequence, TypeVar
 
 from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from search.engines import (
 from search.label import Label
 from search.passage import Passage
 
-TModel = TypeVar("TModel", bound=BaseModel)
+TModel = TypeVar("TModel", Label, Passage, Document)
 
 
 def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:
@@ -44,7 +44,7 @@ def deserialise_pydantic_list_from_jsonl[T: BaseModel](
     return models
 
 
-class JSONSearchEngine(SearchEngine):
+class JSONSearchEngine(SearchEngine, Generic[TModel]):
     """A search engine that searches for primitives in a JSONL file."""
 
     model_class: type[BaseModel] | None = None
@@ -83,7 +83,7 @@ class JSONSearchEngine(SearchEngine):
         return split_token.join(str(component) for component in components).lower()
 
 
-class JSONLabelSearchEngine(JSONSearchEngine, LabelSearchEngine):
+class JSONLabelSearchEngine(JSONSearchEngine[Label], LabelSearchEngine):
     """A search engine that searches for labels in a JSONL file."""
 
     model_class = Label
@@ -113,7 +113,7 @@ class JSONLabelSearchEngine(JSONSearchEngine, LabelSearchEngine):
         ]
 
 
-class JSONPassageSearchEngine(JSONSearchEngine, PassageSearchEngine):
+class JSONPassageSearchEngine(JSONSearchEngine[Passage], PassageSearchEngine):
     """A search engine that searches for passages in a JSONL file."""
 
     model_class = Passage
@@ -128,7 +128,7 @@ class JSONPassageSearchEngine(JSONSearchEngine, PassageSearchEngine):
         ]
 
 
-class JSONDocumentSearchEngine(JSONSearchEngine, DocumentSearchEngine):
+class JSONDocumentSearchEngine(JSONSearchEngine[Document], DocumentSearchEngine):
     """A search engine that searches for documents in a JSONL file."""
 
     model_class = Document

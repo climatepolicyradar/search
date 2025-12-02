@@ -6,15 +6,18 @@ import duckdb
 from pydantic import BaseModel
 
 from search.document import Document
-from search.engines import DocumentSearchEngine, LabelSearchEngine, PassageSearchEngine
+from search.engines import (
+    DocumentSearchEngine,
+    LabelSearchEngine,
+    PassageSearchEngine,
+    SearchEngine,
+)
 from search.label import Label
 from search.passage import Passage
 
-T = TypeVar("T", bound=BaseModel)
-
-T = TypeVar("T")
-
 DEFAULT_BATCH_SIZE = 10_000
+
+T = TypeVar("T", bound=BaseModel)
 
 
 def _create_duckdb_table(
@@ -143,7 +146,7 @@ def create_labels_duckdb_table(db_path: Path, labels: Iterable[Label]) -> int:
     )
 
 
-class DuckDBSearchEngine:
+class DuckDBSearchEngine(SearchEngine):
     """Base class for DuckDB search engines."""
 
     def __init__(self, db_path: str | Path):
