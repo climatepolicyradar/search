@@ -66,10 +66,16 @@ line-length = 88
     "F401",  # unused imports are common in __init__.py for public API exposure
 ]
 "tests/*" = [
-    "E501",   # test code may require longer lines for readability
-    "F811",   # pytest fixtures with dependency injection may redefine names
-    "ARG001", # pytest fixtures may receive unused injected dependencies
+    "E501",         # test code may require longer lines for readability
+    "F811",         # pytest fixtures with dependency injection may redefine names
+    "ARG001",       # pytest fixtures may receive unused injected dependencies
+    "D101", "D102", # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
 ]
 
 [tool.pylint."messages control"]
 disable = ["logging-fstring-interpolation"]  # W1203: allow f-strings in logging
+
+[tool.pylint.'tests/*']
+disable = [
+    "C0115", "C0116",  # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
+]
