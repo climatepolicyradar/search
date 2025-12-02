@@ -380,7 +380,6 @@ def test_whether_engine_initializes_with_single_item(
     assert json_engine is not None
     search_term = get_valid_search_term(json_engine, [], [test_labels[0]], [])
     results = json_engine.search(search_term)
-    print(results)
     assert isinstance(results, list)
     assert len(results) == 1
     assert all(isinstance(result, Label) for result in results)
