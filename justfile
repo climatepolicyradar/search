@@ -2,7 +2,7 @@
 default:
     @just --list
 
-# clean up caches, virtual environment, and test artifacts
+# Useful when you want to clear your local caches, your virtual environment, or the test artifacts and start from scratch. Should be followed by `just install` to get your repo back to a clean state.
 clean:
     uv cache clean
     uv cache prune
