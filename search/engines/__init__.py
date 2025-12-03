@@ -12,7 +12,7 @@ TModel = TypeVar("TModel", Label, Passage, Document)
 class SearchEngine(ABC, Generic[TModel]):
     """Base class for a search engine"""
 
-    model_class: type[TModel] | None = None
+    model_class: type[TModel]
 
     @abstractmethod
     def search(self, terms: str) -> list[TModel]:
