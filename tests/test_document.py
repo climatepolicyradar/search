@@ -60,48 +60,9 @@ def test_whether_document_from_huggingface_row_creates_valid_document_with_corre
     assert isinstance(doc, Document)
     assert isinstance(doc.id, Identifier)
     assert str(doc.source_url).lower() == row["document_metadata.source_url"].lower()
-    assert doc.description == row.get("document_metadata.description", "")
-    assert doc.original_document_id == row.get("document_id", "")
+    assert doc.description == row["document_metadata.description"]
+    assert doc.original_document_id == row["document_id"]
     assert doc.labels == []
-
-
-@given(row=huggingface_row_strategy())
-def test_whether_document_from_huggingface_row_uses_document_title_when_available(row):
-    if "document_metadata.document_title" in row:
-        doc = Document.from_huggingface_row(row)
-        assert doc.title == row["document_metadata.document_title"]
-
-
-@given(row=huggingface_row_strategy(include_title=False, include_document_id=True))
-def test_whether_document_from_huggingface_row_falls_back_to_document_id_when_title_missing(
-    row,
-):
-    doc = Document.from_huggingface_row(row)
-    assert doc.title == row.get("document_id", "")
-
-
-@given(row=huggingface_row_strategy(include_title=False, include_document_id=False))
-def test_whether_document_from_huggingface_row_falls_back_to_empty_string_when_title_and_id_missing(
-    row,
-):
-    doc = Document.from_huggingface_row(row)
-    assert doc.title == ""
-
-
-@given(row=huggingface_row_strategy(include_description=False))
-def test_whether_document_from_huggingface_row_uses_empty_string_when_description_missing(
-    row,
-):
-    doc = Document.from_huggingface_row(row)
-    assert doc.description == ""
-
-
-@given(row=huggingface_row_strategy(include_document_id=False))
-def test_whether_document_from_huggingface_row_uses_empty_string_when_document_id_missing(
-    row,
-):
-    doc = Document.from_huggingface_row(row)
-    assert doc.original_document_id == ""
 
 
 def test_whether_document_from_huggingface_row_raises_key_error_when_source_url_missing():
