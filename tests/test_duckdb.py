@@ -130,7 +130,7 @@ def test_whether_labels_table_inserts_data_correctly(tmp_path, test_labels):
         (create_labels_duckdb_table, "labels"),
     ],
 )
-def test_whether_table_handles_empty_list(tmp_path, create_func, table_name):
+def test_whether_table_handles_zero_rows(tmp_path, create_func, table_name):
     db_path = tmp_path / f"test_{table_name}.duckdb"
     count = create_func(db_path, [])
 
