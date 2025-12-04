@@ -24,6 +24,7 @@ dev = [
     "pulumi-docker>=4.0.0,<5.0.0",
     "pulumi>=3.0.0,<4.0.0",
     "ruff>=0.12.9",
+    "hypothesis>=6.0.0",
 ]
 
 [build-system]
@@ -40,7 +41,7 @@ packages = ["search"]
 testpaths = ["tests"]
 
 [tool.ruff]
-lint.select = ["E", "F", "D", "I"]
+lint.select = ["E", "F", "D", "I", "ARG"]
 lint.ignore = [
     "D100",
     "D103",
@@ -60,10 +61,21 @@ lint.ignore = [
 ]
 line-length = 88
 
-# Ignore `F401` (unused imports) in all `__init__.py` files, and `E501` (line too long) in all files in the `tests` directory
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
-"tests/*" = ["E501"]
+"__init__.py" = [
+    "F401",  # unused imports are common in __init__.py for public API exposure
+]
+"tests/*" = [
+    "E501",         # test code may require longer lines for readability
+    "F811",         # pytest fixtures with dependency injection may redefine names
+    "ARG001",       # pytest fixtures may receive unused injected dependencies
+    "D101", "D102", # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
+]
 
 [tool.pylint."messages control"]
 disable = ["logging-fstring-interpolation"]  # W1203: allow f-strings in logging
+
+[tool.pylint.'tests/*']
+disable = [
+    "C0115", "C0116",  # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
+]

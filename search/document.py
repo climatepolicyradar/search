@@ -33,12 +33,10 @@ class Document(BaseModel):
     @classmethod
     def from_huggingface_row(cls, row: dict) -> "Document":
         """Create a Document object from a row of a HuggingFace dataset"""
-        title = (
-            row.get("document_metadata.document_title") or row.get("document_id") or ""
-        )
+        title = row["document_metadata.document_title"]
         source_url = row["document_metadata.source_url"]
+        original_document_id = row["document_id"]
         description = row.get("document_metadata.description", "")
-        original_document_id = row.get("document_id", "")
         return cls(
             title=title,
             source_url=source_url,

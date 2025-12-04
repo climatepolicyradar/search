@@ -2,6 +2,19 @@
 default:
     @just --list
 
+# Useful when you want to clear your local caches, your virtual environment, or the test artifacts and start from scratch. Should be followed by `just install` to get your repo back to a clean state.
+clean:
+    uv cache clean
+    uv cache prune
+    rm -rf .venv
+    rm -rf .uv/cache
+    rm -rf .pytest_cache
+    rm -rf .hypothesis
+    rm -rf .ruff_cache
+    rm -rf .mypy_cache
+    rm -rf .coverage
+    rm -rf htmlcov
+
 # install dependencies and set up the project
 install +OPTS="":
     GIT_LFS_SKIP_SMUDGE=1 uv sync --locked --extra dev {{OPTS}}
@@ -28,5 +41,6 @@ lint:
 lint-all:
     uv run pre-commit run --all-files --show-diff-on-failure
 
+# serve the API on a local development server with hot reloading
 serve-api:
     uv run uvicorn api.main:app --reload
