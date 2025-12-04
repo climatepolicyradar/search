@@ -17,13 +17,14 @@ from search.label import Label
 from search.passage import Passage
 
 TModel = TypeVar("TModel", Label, Passage, Document)
+DEFAULT_SPLIT_TOKEN = "<SPLIT>"
 
 
 def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:
     """
-    Serialize a list of Pydantic models as JSONL (JSON Lines) format.
+    Serialise a list of Pydantic models as JSONL (JSON Lines) format.
 
-    Each model is serialized on a separate line using model_dump_json().
+    Each model is serialised on a separate line using model_dump_json().
     """
     return "\n".join(model.model_dump_json() for model in models)
 
@@ -32,7 +33,7 @@ def deserialise_pydantic_list_from_jsonl[T: BaseModel](
     jsonl_content: str, model_class: type[T]
 ) -> list[T]:
     """
-    Deserialize a JSONL (JSON Lines) string into a list of Pydantic models.
+    Deserialise a JSONL (JSON Lines) string into a list of Pydantic models.
 
     Each line is parsed as JSON and validated into an instance of the given model class.
     Empty lines are skipped.
@@ -45,17 +46,17 @@ def deserialise_pydantic_list_from_jsonl[T: BaseModel](
 
 
 @dataclass(frozen=True)
-class SearchSchema(Generic[TModel]):
+class JSONSearchSchema(Generic[TModel]):
     """Schema defining how to search a model."""
 
     model_class: type[TModel]
     extract_searchable_components: Callable[[TModel], list[str]]
 
     def build_searchable_string(
-        self, item: TModel, split_token: str = " <SPLIT> "
+        self, item: TModel, split_token: str = DEFAULT_SPLIT_TOKEN
     ) -> str:
         """
-        Build a normalized searchable string for an item.
+        Build a normalised searchable string for an item.
 
         Combines search fields into a single lowercase string. A split token
         prevents false matches across component boundaries.
@@ -64,10 +65,13 @@ class SearchSchema(Generic[TModel]):
         Without the split token, "b c" would incorrectly match.
         """
         components = self.extract_searchable_components(item)
-        return split_token.join(str(component) for component in components).lower()
+        split_token_with_surrounding_spaces = f" {split_token} "
+        return split_token_with_surrounding_spaces.join(
+            str(component).lower() for component in components
+        )
 
 
-class DocumentSearchSchema(SearchSchema[Document]):
+class JSONDocumentSearchSchema(JSONSearchSchema[Document]):
     """Schema definition for a document search engine."""
 
     def __init__(self):
@@ -77,7 +81,7 @@ class DocumentSearchSchema(SearchSchema[Document]):
         )
 
 
-class PassageSearchSchema(SearchSchema[Passage]):
+class JSONPassageSearchSchema(JSONSearchSchema[Passage]):
     """Schema definition for a passage search engine."""
 
     def __init__(self):
@@ -87,7 +91,7 @@ class PassageSearchSchema(SearchSchema[Passage]):
         )
 
 
-class LabelSearchSchema(SearchSchema[Label]):
+class JSONLabelSearchSchema(JSONSearchSchema[Label]):
     """Schema definition for a label search engine."""
 
     def __init__(self):
@@ -104,7 +108,7 @@ class LabelSearchSchema(SearchSchema[Label]):
 class JSONSearchEngine(SearchEngine, Generic[TModel]):
     """Base search engine using in-memory search over JSONL data."""
 
-    schema: SearchSchema[TModel]
+    schema: JSONSearchSchema[TModel]
 
     @overload
     def __init__(self, *, file_path: str | Path) -> None: ...
@@ -119,7 +123,7 @@ class JSONSearchEngine(SearchEngine, Generic[TModel]):
         items: Iterable[TModel] | None = None,
     ) -> None:
         """
-        Initialize the JSON search engine.
+        Initialise the JSON search engine.
 
         Can be called in two ways:
         1. JSONSearchEngine(file_path=...) - use existing JSONL file
@@ -156,16 +160,16 @@ class JSONSearchEngine(SearchEngine, Generic[TModel]):
 class JSONDocumentSearchEngine(JSONSearchEngine[Document], DocumentSearchEngine):
     """Search engine for documents using JSONL."""
 
-    schema = DocumentSearchSchema()
+    schema = JSONDocumentSearchSchema()
 
 
 class JSONPassageSearchEngine(JSONSearchEngine[Passage], PassageSearchEngine):
     """Search engine for passages using JSONL."""
 
-    schema = PassageSearchSchema()
+    schema = JSONPassageSearchSchema()
 
 
 class JSONLabelSearchEngine(JSONSearchEngine[Label], LabelSearchEngine):
     """Search engine for labels using JSONL."""
 
-    schema = LabelSearchSchema()
+    schema = JSONLabelSearchSchema()

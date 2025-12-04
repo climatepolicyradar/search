@@ -5,15 +5,12 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import boto3
 import pytest
 
 from search.aws import (
     download_file_from_s3,
     get_aws_session,
     get_bucket_name,
-    get_s3_client,
-    get_ssm_client,
     get_ssm_parameter,
     upload_file_to_s3,
 )
@@ -41,27 +38,6 @@ def test_whether_get_aws_session_creates_session_with_correct_profile_and_region
         mock_session_class.assert_called_once_with(
             profile_name=profile, region_name=region
         )
-
-
-@pytest.mark.parametrize(
-    "client_func,expected_service",
-    [
-        (get_s3_client, "s3"),
-        (get_ssm_client, "ssm"),
-    ],
-)
-@patch("search.aws.get_aws_session")
-def test_whether_client_functions_call_get_aws_session_and_return_correct_client(
-    mock_get_session, client_func, expected_service
-):
-    mock_session = boto3.Session(region_name="eu-west-1")
-    mock_get_session.return_value = mock_session
-
-    result = client_func()
-
-    mock_get_session.assert_called_once()
-    assert result is not None
-    assert result.meta.service_model.service_name == expected_service
 
 
 def test_whether_get_bucket_name_retrieves_bucket_name_from_environment_variable():

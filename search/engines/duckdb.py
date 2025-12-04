@@ -23,9 +23,10 @@ T = TypeVar("T", bound=BaseModel)
 
 
 @dataclass(frozen=True)
-class TableSchema(Generic[T]):
+class DuckDBTableSchema(Generic[T]):
     """Schema definition for a model's database table."""
 
+    model_class: type[T]
     table_name: str
     create_sql: str
     insert_sql: str
@@ -40,11 +41,12 @@ class TableSchema(Generic[T]):
         raise NotImplementedError
 
 
-class DocumentSchema(TableSchema[Document]):
+class DuckDBDocumentTableSchema(DuckDBTableSchema[Document]):
     """Schema definition for a document's database table."""
 
     def __init__(self):
         super().__init__(
+            model_class=Document,
             table_name="documents",
             create_sql="CREATE TABLE documents (id TEXT, title TEXT, source_url TEXT, description TEXT, original_document_id TEXT)",
             insert_sql="INSERT INTO documents VALUES (?, ?, ?, ?, ?)",
@@ -64,19 +66,20 @@ class DocumentSchema(TableSchema[Document]):
     def build_model(self, row: tuple) -> Document:
         """Build a document instance from a database row."""
         return Document(
-            title=row[0],
-            source_url=row[1],
-            description=row[2],
-            original_document_id=row[3],
+            title=row[1],
+            source_url=row[2],
+            description=row[3],
+            original_document_id=row[4],
             labels=[],
         )
 
 
-class PassageSchema(TableSchema[Passage]):
+class DuckDBPassageTableSchema(DuckDBTableSchema[Passage]):
     """Schema definition for a passage's database table."""
 
     def __init__(self):
         super().__init__(
+            model_class=Passage,
             table_name="passages",
             create_sql="CREATE TABLE passages (id TEXT, text TEXT, document_id TEXT, labels TEXT[], original_passage_id TEXT)",
             insert_sql="INSERT INTO passages VALUES (?, ?, ?, ?, ?)",
@@ -96,18 +99,19 @@ class PassageSchema(TableSchema[Passage]):
     def build_model(self, row: tuple) -> Passage:
         """Build a passage instance from a database row."""
         return Passage(
-            text=row[0],
-            document_id=row[1],
-            labels=row[2],
-            original_passage_id=row[3],
+            text=row[1],
+            document_id=row[2],
+            labels=row[3],
+            original_passage_id=row[4],
         )
 
 
-class LabelSchema(TableSchema[Label]):
+class DuckDBLabelTableSchema(DuckDBTableSchema[Label]):
     """Schema definition for a label's database table."""
 
     def __init__(self):
         super().__init__(
+            model_class=Label,
             table_name="labels",
             create_sql="CREATE TABLE labels (id TEXT, preferred_label TEXT, alternative_labels TEXT[], negative_labels TEXT[], description TEXT)",
             insert_sql="INSERT INTO labels VALUES (?, ?, ?, ?, ?)",
@@ -127,29 +131,32 @@ class LabelSchema(TableSchema[Label]):
     def build_model(self, row: tuple) -> Label:
         """Build a label instance from a database row."""
         return Label(
-            preferred_label=row[0],
-            alternative_labels=row[1],
-            negative_labels=row[2],
-            description=row[3],
+            preferred_label=row[1],
+            alternative_labels=row[2],
+            negative_labels=row[3],
+            description=row[4],
         )
 
 
 class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
     """Base search engine using DuckDB with parameterized queries."""
 
-    schema: TableSchema[TModel]
+    schema: DuckDBTableSchema[TModel]
 
     @overload
     def __init__(self, *, db_path: str | Path) -> None: ...
 
     @overload
-    def __init__(self, *, items: Iterable[TModel]) -> None: ...
+    def __init__(
+        self, *, items: Iterable[TModel], batch_size: int = DEFAULT_BATCH_SIZE
+    ) -> None: ...
 
     def __init__(
         self,
         *,
         db_path: str | Path | None = None,
         items: Iterable[TModel] | None = None,
+        batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
         if db_path is None and items is None:
             raise ValueError("Either db_path or items must be provided")
@@ -167,7 +174,7 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
             for item in items:
                 batch.append(self.schema.extract_row(item))
 
-                if len(batch) >= DEFAULT_BATCH_SIZE:
+                if len(batch) >= batch_size:
                     self.conn.executemany(self.schema.insert_sql, batch)
                     batch.clear()
 
@@ -178,7 +185,7 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
         """
         Search for items matching the terms.
 
-        Uses parameterized queries to prevent SQL injection.
+        Uses parameterised queries to prevent SQL injection.
         """
         # Build WHERE clause with OR conditions for each search column
         where_conditions = " OR ".join(
@@ -201,19 +208,19 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
 class DuckDBDocumentSearchEngine(DuckDBSearchEngine[Document], DocumentSearchEngine):
     """Search engine for documents."""
 
-    schema = DocumentSchema()
+    schema = DuckDBDocumentTableSchema()
 
 
 class DuckDBPassageSearchEngine(DuckDBSearchEngine[Passage], PassageSearchEngine):
     """Search engine for passages."""
 
-    schema = PassageSchema()
+    schema = DuckDBPassageTableSchema()
 
 
 class DuckDBLabelSearchEngine(DuckDBSearchEngine[Label], LabelSearchEngine):
     """Search engine for labels."""
 
-    schema = LabelSchema()
+    schema = DuckDBLabelTableSchema()
 
     def search(self, terms: str) -> list[Label]:
         """
