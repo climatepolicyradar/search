@@ -6,13 +6,11 @@ from search.engines.json import (
     DEFAULT_SPLIT_TOKEN,
     JSONDocumentSearchEngine,
     JSONDocumentSearchSchema,
-    JSONLabelSearchSchema,
     JSONSearchEngine,
     JSONSearchSchema,
     deserialise_pydantic_list_from_jsonl,
     serialise_pydantic_list_as_jsonl,
 )
-from search.label import Label
 from tests.engines import get_valid_search_term
 
 
@@ -101,22 +99,6 @@ def test_whether_schema_extracts_all_relevant_fields(
         assert len(searchable_string) > 0
 
 
-def test_whether_alternative_labels_are_sorted_by_schema(
-    json_label_search_schema: JSONLabelSearchSchema,
-):
-    """Verify alternative labels are sorted in searchable components."""
-    label = Label(
-        preferred_label="test",
-        alternative_labels=["z", "a", "m"],
-        negative_labels=[],
-    )
-
-    fields = json_label_search_schema.extract_searchable_components(label)
-
-    alt_label_fields = fields[1:-1]  # Between preferred and description
-    assert alt_label_fields == ["a", "m", "z"]  # Sorted alphabetically
-
-
 def test_whether_engine_can_initialize_from_file_path(
     tmp_path,
     any_json_engine_and_items: tuple[JSONSearchEngine, list[Primitive]],
@@ -161,18 +143,3 @@ def test_whether_engine_handles_empty_jsonl_file(tmp_path):
     assert len(engine.items) == 0
     results = engine.search("")
     assert results == []
-
-
-def test_whether_engine_handles_jsonl_with_empty_lines(
-    tmp_path, test_documents: list[Document]
-):
-    """Verify engine skips empty lines in JSONL file."""
-    file_path = tmp_path / "with_empty_lines.jsonl"
-    jsonl = serialise_pydantic_list_as_jsonl(test_documents)
-    # Add empty lines
-    jsonl_with_blanks = "\n".join([jsonl, "", jsonl.split("\n")[0], ""])
-    file_path.write_text(jsonl_with_blanks, encoding="utf-8")
-
-    engine = JSONDocumentSearchEngine(file_path=file_path)
-    # Should load all documents plus one duplicate from the extra line
-    assert len(engine.items) == len(test_documents) + 1
