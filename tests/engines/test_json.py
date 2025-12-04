@@ -1,7 +1,5 @@
 """Tests specific to JSON implementation."""
 
-import pytest
-
 from search import Primitive
 from search.document import Document
 from search.engines.json import (
@@ -15,28 +13,17 @@ from search.engines.json import (
     serialise_pydantic_list_as_jsonl,
 )
 from search.label import Label
-from search.passage import Passage
+from tests.engines import get_valid_search_term
 
 
 def test_whether_schemas_build_an_appropriate_searchable_string(
-    search_schema: JSONSearchSchema,
-    test_documents: list[Document],
-    test_passages: list[Passage],
-    test_labels: list[Label],
+    json_schema_and_items: tuple[JSONSearchSchema, list[Primitive]],
 ):
-    items: list[Primitive] = []
-    if search_schema.model_class == Document:
-        items = test_documents
-    elif search_schema.model_class == Passage:
-        items = test_passages
-    elif search_schema.model_class == Label:
-        items = test_labels
-    else:
-        pytest.fail("Unknown model class")
+    schema, items = json_schema_and_items
 
     for item in items:
-        components = search_schema.extract_searchable_components(item)
-        searchable_string = search_schema.build_searchable_string(item)
+        components = schema.extract_searchable_components(item)
+        searchable_string = schema.build_searchable_string(item)
 
         # All of the components should be in the searchable string
         for component in components:
@@ -80,38 +67,26 @@ def test_whether_engine_initialization_with_empty_items_results_in_an_empty_engi
 
 
 def test_whether_serialisation_and_deserialisation_round_trip_correctly(
-    test_items: list[Primitive],
+    any_items: list[Primitive],
 ):
     """Verify serialization and deserialization preserve Document data."""
-    model_class = test_items[0].__class__
-    jsonl = serialise_pydantic_list_as_jsonl(test_items)
+    model_class = any_items[0].__class__
+    jsonl = serialise_pydantic_list_as_jsonl(any_items)
     recovered = deserialise_pydantic_list_from_jsonl(jsonl, model_class)
 
-    assert len(recovered) == len(test_items)
-    for original, recovered_item in zip(test_items, recovered):
+    assert len(recovered) == len(any_items)
+    for original, recovered_item in zip(any_items, recovered):
         assert recovered_item == original
 
 
 def test_whether_schema_extracts_all_relevant_fields(
-    search_schema: JSONSearchSchema,
-    test_documents: list[Document],
-    test_passages: list[Passage],
-    test_labels: list[Label],
+    json_schema_and_items: tuple[JSONSearchSchema, list[Primitive]],
 ):
     """Verify schema extracts all expected searchable components."""
-    # Get appropriate test items based on schema type
-    test_items: list[Primitive] = []
-    if search_schema.model_class == Document:
-        test_items = test_documents
-    elif search_schema.model_class == Passage:
-        test_items = test_passages
-    elif search_schema.model_class == Label:
-        test_items = test_labels
-    else:
-        pytest.fail("Unknown model class")
+    schema, items = json_schema_and_items
 
-    for item in test_items:
-        fields = search_schema.extract_searchable_components(item)
+    for item in items:
+        fields = schema.extract_searchable_components(item)
 
         # Verify fields are extracted (non-empty list)
         assert isinstance(fields, list)
@@ -121,7 +96,7 @@ def test_whether_schema_extracts_all_relevant_fields(
         assert all(isinstance(field, str) for field in fields)
 
         # Verify searchable string can be built from extracted fields
-        searchable_string = search_schema.build_searchable_string(item)
+        searchable_string = schema.build_searchable_string(item)
         assert isinstance(searchable_string, str)
         assert len(searchable_string) > 0
 
@@ -144,10 +119,7 @@ def test_whether_alternative_labels_are_sorted_by_schema(
 
 def test_whether_engine_can_initialize_from_file_path(
     tmp_path,
-    any_json_engine: JSONSearchEngine,
-    test_documents: list[Document],
-    test_passages: list[Passage],
-    test_labels: list[Label],
+    any_json_engine_and_items: tuple[JSONSearchEngine, list[Primitive]],
 ):
     """
     Verify that an engine can be initialised from a JSONL file.
@@ -157,43 +129,26 @@ def test_whether_engine_can_initialize_from_file_path(
     """
     file_path = tmp_path / "test.jsonl"
 
-    # Get appropriate test items based on engine type
-    items: list[Primitive] = []
-    if any_json_engine.schema.model_class == Document:
-        items = test_documents
-    elif any_json_engine.schema.model_class == Passage:
-        items = test_passages
-    elif any_json_engine.schema.model_class == Label:
-        items = test_labels
-    else:
-        pytest.fail("Unknown model class")
+    engine, items = any_json_engine_and_items
 
     # Serialize the items as JSON and write them to a file
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(serialise_pydantic_list_as_jsonl(items))
 
     # Initialize new engine from file
-    engine_class = any_json_engine.__class__
+    engine_class = engine.__class__
     new_engine = engine_class(file_path=file_path)
 
     # Verify engine loaded all items
     assert len(new_engine.items) == len(items)
 
     # Get a valid search term from the test items
-    search_term: str = ""
-    if any_json_engine.schema.model_class == Document:
-        search_term = test_documents[0].title
-    elif any_json_engine.schema.model_class == Passage:
-        search_term = test_passages[0].text
-    elif any_json_engine.schema.model_class == Label:
-        search_term = test_labels[0].preferred_label
-    else:
-        pytest.fail("Unknown model class")
+    search_term = get_valid_search_term(items[0])
 
     # Verify search works
     results = new_engine.search(search_term)
     assert len(results) >= 1
-    assert all(isinstance(r, any_json_engine.schema.model_class) for r in results)
+    assert all(isinstance(r, engine.schema.model_class) for r in results)
 
 
 def test_whether_engine_handles_empty_jsonl_file(tmp_path):

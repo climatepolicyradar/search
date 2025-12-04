@@ -4,12 +4,11 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from search.document import Document
+from search import Primitive
 from search.engines import SearchEngine
 from search.engines.duckdb import DuckDBDocumentSearchEngine
 from search.engines.json import JSONDocumentSearchEngine
-from search.label import Label
-from search.passage import Passage
+from tests.engines import get_valid_search_term
 
 
 class TestEngineInitialization:
@@ -47,24 +46,14 @@ class TestEngineInitialization:
 class TestSearchBehavior:
     def test_whether_search_returns_correct_type(
         self,
-        any_engine: SearchEngine,
-        test_documents: list[Document],
-        test_passages: list[Passage],
-        test_labels: list[Label],
+        any_engine_and_items: tuple[SearchEngine, list[Primitive]],
     ):
-        # get the search term for the engine's model class
-        if any_engine.model_class == Document:
-            search_term = test_documents[0].title
-        elif any_engine.model_class == Passage:
-            search_term = test_passages[0].text
-        elif any_engine.model_class == Label:
-            search_term = test_labels[0].preferred_label
-        else:
-            pytest.fail("Unknown engine model class")
+        engine, items = any_engine_and_items
+        search_term = get_valid_search_term(items[0])
 
-        results = any_engine.search(search_term)
+        results = engine.search(search_term)
         assert isinstance(results, list)
-        assert all(isinstance(r, any_engine.model_class) for r in results)
+        assert all(isinstance(r, engine.model_class) for r in results)
 
     def test_whether_search_returns_empty_for_nonexistent_term(self, any_engine):
         search_terms_which_almost_definitely_wont_match = "xyzabc123nonexistent"
@@ -82,22 +71,12 @@ class TestSearchBehavior:
 
     def test_whether_search_results_are_deterministic(
         self,
-        any_engine: SearchEngine,
-        test_documents: list[Document],
-        test_passages: list[Passage],
-        test_labels: list[Label],
+        any_engine_and_items: tuple[SearchEngine, list[Primitive]],
     ):
-        search_term: str = ""
-        if any_engine.model_class == Document:
-            search_term = test_documents[0].title[:10]
-        elif any_engine.model_class == Passage:
-            search_term = test_passages[0].text[:10]
-        elif any_engine.model_class == Label:
-            search_term = test_labels[0].preferred_label[:10]
-        else:
-            pytest.fail("Unknown engine model class")
+        engine, items = any_engine_and_items
+        search_term = get_valid_search_term(items[0])[:10]
 
-        results_1 = any_engine.search(search_term)
-        results_2 = any_engine.search(search_term)
+        results_1 = engine.search(search_term)
+        results_2 = engine.search(search_term)
 
         assert {r.id for r in results_1} == {r.id for r in results_2}
