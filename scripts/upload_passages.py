@@ -14,7 +14,7 @@ environment variable.
 import logging
 from collections.abc import Iterator
 
-from datasets import load_dataset
+from datasets import DatasetDict, load_dataset
 from dotenv import load_dotenv
 from rich.logging import RichHandler
 from rich.progress import track
@@ -32,6 +32,9 @@ logger.addHandler(RichHandler())
 
 logger.info(f"Loading dataset '{DATASET_NAME}'")
 dataset = load_dataset(DATASET_NAME, split="train")
+assert isinstance(dataset, DatasetDict), (
+    "dataset from huggingface should be of type DatasetDict"
+)
 logger.info(f"Loaded {len(dataset)} rows")
 
 dataset = dataset.filter(

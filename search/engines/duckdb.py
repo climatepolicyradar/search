@@ -165,7 +165,7 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
 
         if db_path is not None:
             self.conn = duckdb.connect(str(db_path), read_only=True)
-        else:
+        elif items is not None:
             self.conn = duckdb.connect(":memory:")
             self.conn.execute(self.schema.create_sql)
 
