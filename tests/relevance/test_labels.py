@@ -10,7 +10,7 @@ from search.testcase import TestCase
 @pytest.fixture
 def engine() -> LabelSearchEngine:
     """Create a search engine."""
-    return DuckDBLabelSearchEngine(Path("data/labels.duckdb"))
+    return DuckDBLabelSearchEngine(db_path=Path("data/labels.duckdb"))
 
 
 @pytest.mark.parametrize(
