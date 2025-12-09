@@ -57,10 +57,13 @@ def generate_passages() -> Iterator[Passage]:
             yield passage
 
 
-passage_count = create_passages_duckdb_table(passages_duckdb_path, generate_passages())
+create_passages_duckdb_table(passages_duckdb_path, generate_passages())
 
-logger.info(f"Saved {passage_count} passages to '{passages_jsonl_path}'")
-logger.info(f"Saved {passage_count} passages to '{passages_duckdb_path}'")
+with open(passages_jsonl_path, "r", encoding="utf-8") as f:
+    num_passages = sum(1 for _ in f)
+
+logger.info(f"Saved {num_passages} passages to '{passages_jsonl_path}'")
+logger.info(f"Saved {num_passages} passages to '{passages_duckdb_path}'")
 
 logger.info("Uploading files to S3")
 upload_file_to_s3(passages_jsonl_path)

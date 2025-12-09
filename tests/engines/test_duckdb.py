@@ -8,6 +8,7 @@ from search.engines.duckdb import (
     DuckDBDocumentSearchEngine,
     DuckDBSearchEngine,
     DuckDBTableSchema,
+    create_duckdb_table,
 )
 from tests.engines import get_valid_search_term
 
@@ -103,4 +104,30 @@ def test_whether_engine_can_initialize_from_db_path(
 
     search_term = get_valid_search_term(items[0])
     results = new_engine.search(search_term)
+    assert len(results) >= 1
+
+
+def test_whether_create_duckdb_table_function_creates_file_from_items(
+    tmp_path,
+    any_duckdb_engine_and_items: tuple[DuckDBSearchEngine, list[Primitive]],
+):
+    """Test creating a file-based database from items using utility function."""
+    engine, items = any_duckdb_engine_and_items
+    output_file = tmp_path / "test.duckdb"
+
+    # Create file from items
+    count = create_duckdb_table(engine.schema, items, output_file)
+
+    # Verify return value
+    assert count == len(items)
+
+    # Verify file exists
+    assert output_file.exists()
+
+    # Verify data was written
+    engine_class = engine.__class__
+    read_engine = engine_class(db_path=output_file)
+
+    search_term = get_valid_search_term(items[0])
+    results = read_engine.search(search_term)
     assert len(results) >= 1
