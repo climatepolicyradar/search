@@ -275,9 +275,7 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
         if db_path is not None:
             # Read-only mode: open existing file
             self.conn = duckdb.connect(str(db_path), read_only=True)
-        else:
-            # In-memory mode: create temporary database
-            assert items is not None  # to placate type-checker
+        elif items is not None:
             self.conn = duckdb.connect(":memory:")
             self.conn.execute(self.schema.create_sql)
             self._insert_items(items, batch_size)

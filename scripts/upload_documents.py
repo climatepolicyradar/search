@@ -10,7 +10,7 @@ environment variable.
 
 import logging
 
-from datasets import DatasetDict, load_dataset
+from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
 from rich.logging import RichHandler
 from rich.progress import (
@@ -37,8 +37,8 @@ logger.addHandler(RichHandler())
 
 logger.info(f"Loading dataset '{DATASET_NAME}'")
 dataset = load_dataset(DATASET_NAME, split="train")
-assert isinstance(dataset, DatasetDict), (
-    "dataset from huggingface should be of type DatasetDict"
+assert isinstance(dataset, Dataset), (
+    "dataset from huggingface should be of type Dataset"
 )
 logger.info(f"Loaded {len(dataset)} rows")
 
