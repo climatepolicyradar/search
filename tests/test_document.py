@@ -2,8 +2,7 @@
 
 from hypothesis import given
 from knowledge_graph.identifiers import Identifier
-from pydantic import TypeAdapter
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, TypeAdapter
 
 from search.document import Document
 from tests.common_strategies import (
@@ -61,7 +60,9 @@ def test_whether_document_from_huggingface_row_creates_valid_document_with_corre
     doc = Document.from_huggingface_row(row)
     assert isinstance(doc, Document)
     assert isinstance(doc.id, Identifier)
-    assert str(doc.source_url) == str(TypeAdapter(AnyHttpUrl).validate_python(row["document_metadata.source_url"]))
+    assert str(doc.source_url) == str(
+        TypeAdapter(AnyHttpUrl).validate_python(row["document_metadata.source_url"])
+    )
     assert doc.description == row["document_metadata.description"]
     assert doc.original_document_id == row["document_id"]
     assert doc.labels == []
