@@ -10,7 +10,7 @@ environment variable.
 
 import logging
 
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
 from rich.logging import RichHandler
 from rich.progress import (
@@ -37,6 +37,9 @@ logger.addHandler(RichHandler())
 
 logger.info(f"Loading dataset '{DATASET_NAME}'")
 dataset = load_dataset(DATASET_NAME, split="train")
+assert isinstance(dataset, Dataset), (
+    "dataset from huggingface should be of type Dataset"
+)
 logger.info(f"Loaded {len(dataset)} rows")
 
 dataset = dataset.filter(
@@ -65,7 +68,7 @@ with progress_bar:
             progress_bar_kwargs["description"] = (
                 f"Found {len(documents_dict)} documents"
             )
-        progress_bar.update(task, **progress_bar_kwargs)
+        progress_bar.update(task, **progress_bar_kwargs)  # type: ignore
 
         document_id = row["document_id"]
 
