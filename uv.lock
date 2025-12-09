@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.13"
 resolution-markers = [
     "sys_platform == 'linux'",
@@ -5109,6 +5109,7 @@ dependencies = [
     { name = "boto3" },
     { name = "duckdb" },
     { name = "fastapi" },
+    { name = "hypothesis" },
     { name = "knowledge-graph" },
     { name = "pydantic" },
     { name = "pytest" },
@@ -5133,6 +5134,7 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.35.0" },
     { name = "duckdb", specifier = ">=1.4.2" },
     { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "hypothesis", specifier = ">=6.148.5" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "knowledge-graph", git = "https://github.com/climatepolicyradar/knowledge-graph?rev=268d1baa221b8da51f88bc7affa31b4860da8dd0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.5.0" },
