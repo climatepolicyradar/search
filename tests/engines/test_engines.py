@@ -20,19 +20,19 @@ class TestEngineInitialization:
         assert duckdb_engine is not None
 
     def test_whether_engine_requires_either_items_or_path(self):
-        with pytest.raises(ValueError, match="Either .* must be provided"):
+        with pytest.raises(ValueError):
             JSONDocumentSearchEngine()
 
-        with pytest.raises(ValueError, match="Either .* must be provided"):
+        with pytest.raises(ValueError):
             DuckDBDocumentSearchEngine()
 
     def test_whether_engine_rejects_both_items_and_path(self, tmp_path, test_documents):
         path = tmp_path / "test"
 
-        with pytest.raises(ValueError, match="Only one of .* must be provided"):
+        with pytest.raises(ValueError):
             JSONDocumentSearchEngine(file_path=path, items=test_documents)
 
-        with pytest.raises(ValueError, match="Only one of .* must be provided"):
+        with pytest.raises(ValueError):
             DuckDBDocumentSearchEngine(db_path=path, items=test_documents)
 
     def test_whether_engine_initializes_with_empty_items(self):

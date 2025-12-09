@@ -138,10 +138,118 @@ class DuckDBLabelTableSchema(DuckDBTableSchema[Label]):
         )
 
 
+def create_duckdb_table(
+    schema: DuckDBTableSchema[T],
+    items: Iterable[T],
+    output_path: Path,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> int:
+    """
+    Create and populate a DuckDB table file from items.
+
+    :param schema: The table schema defining structure and insert operations
+    :param items: Iterable of model instances to insert into the database
+    :param output_path: Path where the DuckDB file will be created
+    :param batch_size: Maximum number of items to accumulate before executing batch insert
+    :return: Total number of items inserted into the database
+    """
+    conn = duckdb.connect(str(output_path))
+    conn.execute(schema.create_sql)
+
+    batch: list[tuple] = []
+    total_count = 0
+
+    for item in items:
+        batch.append(schema.extract_row(item))
+        total_count += 1
+
+        if len(batch) >= batch_size:
+            conn.executemany(schema.insert_sql, batch)
+            batch.clear()
+
+    if batch:
+        conn.executemany(schema.insert_sql, batch)
+
+    conn.close()
+    return total_count
+
+
+def create_documents_duckdb_table(
+    output_path: Path,
+    documents: Iterable[Document],
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> int:
+    """
+    Create and populate a DuckDB table file with documents.
+
+    :param output_path: Path where the DuckDB file will be created
+    :param documents: Iterable of Document instances to insert
+    :param batch_size: Maximum number of items to accumulate before executing batch insert
+    :return: Total number of documents inserted into the database
+    """
+    return create_duckdb_table(
+        DuckDBDocumentTableSchema(), documents, output_path, batch_size
+    )
+
+
+def create_labels_duckdb_table(
+    output_path: Path,
+    labels: Iterable[Label],
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> int:
+    """
+    Create and populate a DuckDB table file with labels.
+
+    :param output_path: Path where the DuckDB file will be created
+    :param labels: Iterable of Label instances to insert
+    :param batch_size: Maximum number of items to accumulate before executing batch insert
+    :return: Total number of labels inserted into the database
+    """
+    return create_duckdb_table(
+        DuckDBLabelTableSchema(), labels, output_path, batch_size
+    )
+
+
+def create_passages_duckdb_table(
+    output_path: Path,
+    passages: Iterable[Passage],
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> int:
+    """
+    Create and populate a DuckDB table file with passages.
+
+    :param output_path: Path where the DuckDB file will be created
+    :param passages: Iterable of Passage instances to insert
+    :param batch_size: Maximum number of items to accumulate before executing batch insert
+    :return: Total number of passages inserted into the database
+    """
+    return create_duckdb_table(
+        DuckDBPassageTableSchema(), passages, output_path, batch_size
+    )
+
+
 class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
     """Base search engine using DuckDB with parameterized queries."""
 
     schema: DuckDBTableSchema[TModel]
+
+    def _insert_items(self, items: Iterable[TModel], batch_size: int) -> None:
+        """
+        Insert items into the database in batches.
+
+        :param items: Items to insert
+        :param batch_size: Number of items to insert per batch
+        """
+        batch: list[tuple] = []
+        for item in items:
+            batch.append(self.schema.extract_row(item))
+
+            if len(batch) >= batch_size:
+                self.conn.executemany(self.schema.insert_sql, batch)
+                batch.clear()
+
+        if batch:
+            self.conn.executemany(self.schema.insert_sql, batch)
 
     @overload
     def __init__(self, *, db_path: str | Path) -> None: ...
@@ -158,28 +266,21 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
         items: Iterable[TModel] | None = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
+        if db_path is not None and items is not None:
+            raise ValueError("db_path and items are mutually exclusive")
+
         if db_path is None and items is None:
             raise ValueError("Either db_path or items must be provided")
-        if db_path is not None and items is not None:
-            raise ValueError("Only one of db_path or items must be provided")
 
         if db_path is not None:
+            # Read-only mode: open existing file
             self.conn = duckdb.connect(str(db_path), read_only=True)
-        elif items is not None:
+        else:
+            # In-memory mode: create temporary database
+            assert items is not None  # to placate type-checker
             self.conn = duckdb.connect(":memory:")
             self.conn.execute(self.schema.create_sql)
-
-            # iterate over the supplied items and insert them in batches
-            batch: list[tuple] = []
-            for item in items:
-                batch.append(self.schema.extract_row(item))
-
-                if len(batch) >= batch_size:
-                    self.conn.executemany(self.schema.insert_sql, batch)
-                    batch.clear()
-
-            if batch:
-                self.conn.executemany(self.schema.insert_sql, batch)
+            self._insert_items(items, batch_size)
 
     def search(self, terms: str) -> list[TModel]:
         """
