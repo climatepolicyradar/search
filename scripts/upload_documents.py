@@ -38,7 +38,7 @@ logger.addHandler(RichHandler())
 logger.info(f"Loading dataset '{DATASET_NAME}'")
 dataset = load_dataset(DATASET_NAME, split="train")
 assert isinstance(dataset, Dataset), (
-    "dataset from huggingface should be of type DatasetDict"
+    "dataset from huggingface should be of type Dataset"
 )
 logger.info(f"Loaded {len(dataset)} rows")
 
