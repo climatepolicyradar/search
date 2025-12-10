@@ -8,7 +8,6 @@ dependencies = [
     "boto3>=1.35.0",
     "duckdb>=1.4.2",
     "fastapi>=0.115.0",
-    "hypothesis>=6.148.5",
     "knowledge-graph @ git+https://github.com/climatepolicyradar/knowledge-graph@268d1baa221b8da51f88bc7affa31b4860da8dd0",
     "pydantic>=2.12.4",
     "pytest>=9.0.1",
