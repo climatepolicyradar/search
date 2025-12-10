@@ -8,11 +8,8 @@ Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
 environment variable.
 """
 
-import logging
-
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -27,12 +24,11 @@ from search.config import DATA_DIR, DATASET_NAME
 from search.document import Document
 from search.engines.duckdb import create_documents_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
+from search.logging import get_logger
 
 load_dotenv()
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(RichHandler())
+logger = get_logger(__name__)
 
 
 logger.info(f"Loading dataset '{DATASET_NAME}'")

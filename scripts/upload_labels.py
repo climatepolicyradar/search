@@ -9,24 +9,20 @@ Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
 environment variable.
 """
 
-import logging
-
 from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
-from rich.logging import RichHandler
 
 from search.aws import get_ssm_parameter, upload_file_to_s3
 from search.config import DATA_DIR
 from search.engines.duckdb import create_labels_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
+from search.logging import get_logger
 
 load_dotenv()
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(RichHandler())
+logger = get_logger(__name__)
 
 username = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Username")
 password = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Password")

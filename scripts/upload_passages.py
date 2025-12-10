@@ -11,24 +11,21 @@ Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
 environment variable.
 """
 
-import logging
 from collections.abc import Iterator
 
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from rich.logging import RichHandler
 from rich.progress import track
 
 from search.aws import upload_file_to_s3
 from search.config import DATA_DIR, DATASET_NAME
 from search.engines.duckdb import create_passages_duckdb_table
+from search.logging import get_logger
 from search.passage import Passage
 
 load_dotenv()
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(RichHandler())
+logger = get_logger(__name__)
 
 logger.info(f"Loading dataset '{DATASET_NAME}'")
 dataset = load_dataset(DATASET_NAME, split="train")
