@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
 
 from search.aws import get_ssm_parameter, upload_file_to_s3
-from search.config import DATA_DIR
+from search.config import LABELS_PATH_STEM
 from search.engines.duckdb import create_labels_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
@@ -48,13 +48,13 @@ for concept in all_concepts:
 
 logger.info(f"Created a set of {len(labels)} labels from concepts")
 
-jsonl_path = DATA_DIR / "labels.jsonl"
+jsonl_path = LABELS_PATH_STEM.with_suffix(".jsonl")
 with open(jsonl_path, "w", encoding="utf-8") as f:
     f.write(serialise_pydantic_list_as_jsonl(labels))
 
 logger.info(f"Saved {len(labels)} labels to '{jsonl_path}'")
 
-duckdb_path = DATA_DIR / "labels.duckdb"
+duckdb_path = LABELS_PATH_STEM.with_suffix(".duckdb")
 create_labels_duckdb_table(duckdb_path, labels)
 logger.info(f"Saved {len(labels)} labels to '{duckdb_path}'")
 

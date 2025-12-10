@@ -53,6 +53,12 @@ REPO_ROOT_DIR = get_git_root()
 DATA_DIR = Path(os.getenv("DATA_DIR", REPO_ROOT_DIR / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# Path stems to use for storing primitives locally. Can be suffixed with the file
+# extension for the search engine.
+LABELS_PATH_STEM = DATA_DIR / "labels"
+DOCUMENTS_PATH_STEM = DATA_DIR / "documents"
+PASSAGES_PATH_STEM = DATA_DIR / "passages"
+
 # AWS_PROFILE is only used in local development. In deployed containers (ECS),
 # boto3 automatically uses the task IAM role, so the value should be None.
 AWS_PROFILE = os.getenv("AWS_PROFILE", None)
