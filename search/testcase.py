@@ -7,6 +7,8 @@ from search.engines import SearchEngine
 class TestCase(BaseModel):
     """A test case"""
 
+    __test__ = False
+
     search_terms: str
     expected_result_ids: list[Identifier | str]
     description: str
