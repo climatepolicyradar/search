@@ -23,10 +23,11 @@ class TestCase(BaseModel):
         """
         return [Identifier(item) if isinstance(item, str) else item for item in value]
 
-    def run_against(self, engine: SearchEngine) -> bool:
+    def run_against(self, engine: SearchEngine) -> tuple[bool, list[Identifier]]:
         """Run the test case against the given engine."""
         search_results = engine.search(self.search_terms)
         result_ids = [result.id for result in search_results]
-        return all(
-            expected_id in result_ids for expected_id in self.expected_result_ids
+        return (
+            all(expected_id in result_ids for expected_id in self.expected_result_ids),
+            search_results,
         )

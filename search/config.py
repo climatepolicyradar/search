@@ -59,6 +59,10 @@ LABELS_PATH_STEM = DATA_DIR / "labels"
 DOCUMENTS_PATH_STEM = DATA_DIR / "documents"
 PASSAGES_PATH_STEM = DATA_DIR / "passages"
 
+# test results directory
+TEST_RESULTS_DIR = DATA_DIR / "test_results"
+
+
 # AWS_PROFILE is only used in local development. In deployed containers (ECS),
 # boto3 automatically uses the task IAM role, so the value should be None.
 AWS_PROFILE = os.getenv("AWS_PROFILE", None)

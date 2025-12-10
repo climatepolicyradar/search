@@ -1,7 +1,6 @@
-from relevance_tests import TestResult
-from search.config import LABELS_PATH_STEM
+from relevance_tests import TestResult, generate_test_run_id, save_test_results_as_jsonl
+from search.config import LABELS_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBLabelSearchEngine
-from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
 from search.logging import get_logger
 from search.testcase import TestCase
@@ -30,18 +29,23 @@ def test_labels():
         engine_test_results: list[LabelTestResult] = []
 
         for test_case in test_cases:
-            test_passed = test_case.run_against(engine)
+            test_passed, search_results = test_case.run_against(engine)
 
             test_result = LabelTestResult(
                 test_case=test_case,
                 passed=test_passed,
                 # search_engine_id=TODO
-                search_results=[],  # TODO
+                search_results=search_results,  # TODO
             )
             engine_test_results.append(test_result)
 
-        _ = serialise_pydantic_list_as_jsonl(engine_test_results)
+        test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
+        output_file_path = (
+            TEST_RESULTS_DIR / "labels" / f"{engine.name}_{test_run_id}.jsonl"
+        )
+
         # TODO: save results to a file with a unique name based on an identifier of the engine and of the test results
+        save_test_results_as_jsonl(engine_test_results, output_file_path)
 
 
 if __name__ == "__main__":
