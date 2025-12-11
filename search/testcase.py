@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import TypeVar
+from typing import Callable, Generic, Literal, TypeVar
 
 from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
@@ -12,7 +12,7 @@ from search.passage import Passage
 TModel = TypeVar("TModel", Label, Passage, Document)
 
 
-class TestCase(BaseModel, ABC):
+class TestCase(BaseModel, ABC, Generic[TModel]):
     """A test case"""
 
     __test__ = False
@@ -49,7 +49,7 @@ class TestCase(BaseModel, ABC):
         raise NotImplementedError
 
 
-class PrecisionTestCase(TestCase):
+class PrecisionTestCase(TestCase[TModel]):
     """Dictates which should be the top results for a given search"""
 
     expected_result_ids: list[Identifier | str] = Field(
@@ -114,7 +114,7 @@ class PrecisionTestCase(TestCase):
         )
 
 
-class RecallTestCase(TestCase):
+class RecallTestCase(TestCase[TModel]):
     """Dictates which results should be anywhere in the top K results for a given search."""
 
     expected_result_ids: list[Identifier | str] = Field(
@@ -193,5 +193,51 @@ class RecallTestCase(TestCase):
             self.search_terms,
             self.expected_result_ids,
             self.forbidden_result_ids,
+            self.k,
+        )
+
+
+class FieldCharacteristicsTestCase(TestCase[TModel]):
+    """Dictates characteristics that any or all of the top k results should have for a given search."""
+
+    characteristics_test: Callable[[TModel], bool] = Field(
+        description="A function which takes the primitive type as input and returns True if the expected characteristics for the field value are met, and False otherwise.",
+        exclude=True,
+    )
+    k: int = Field(
+        description="The number of results to check for the expected results.",
+        default=20,
+        gt=0,
+    )
+    all_or_any: Literal["all", "any"] = Field(
+        description="Whether all or any of the words in the search terms should be in the field value.",
+        default="all",
+    )
+
+    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+        """Run the test case against the given engine."""
+
+        search_results = engine.search(self.search_terms)
+        passing_results = [
+            result for result in search_results if self.characteristics_test(result)
+        ]
+
+        if self.all_or_any == "all":
+            passed = len(passing_results) == len(search_results)
+        elif self.all_or_any == "any":
+            passed = len(passing_results) > 0
+
+        return passed, search_results
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return Identifier.generate(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.all_or_any,
             self.k,
         )

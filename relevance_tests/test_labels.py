@@ -3,7 +3,7 @@ from search.config import LABELS_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBLabelSearchEngine
 from search.label import Label
 from search.logging import get_logger
-from search.testcase import RecallTestCase
+from search.testcase import FieldCharacteristicsTestCase, RecallTestCase
 
 LabelTestResult = TestResult[Label]
 
@@ -18,7 +18,16 @@ test_cases = [
         search_terms="flood",
         expected_result_ids=["pdhcqueu"],
         description="search should find labels related to flood",
-    )
+    ),
+    FieldCharacteristicsTestCase(
+        search_terms="nz",
+        characteristics_test=lambda label: (
+            "new zealand" in label.preferred_label.lower()
+        )
+        or ("net zero" in label.preferred_label.lower()),  # type: ignore
+        all_or_any="all",
+        description="search for nz should return either new zealand or net zero",
+    ),
 ]
 
 
