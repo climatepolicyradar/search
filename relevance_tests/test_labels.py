@@ -34,7 +34,7 @@ def test_labels():
             test_result = LabelTestResult(
                 test_case=test_case,
                 passed=test_passed,
-                # search_engine_id=TODO
+                search_engine_id=engine.id,
                 search_results=search_results,
             )
             engine_test_results.append(test_result)

@@ -18,7 +18,7 @@ class TestResult(BaseModel, Generic[T]):
 
     test_case: TestCase
     passed: bool
-    search_engine_id: Identifier | None = None  # FIXME: populate this
+    search_engine_id: Identifier
     search_results: list[T]
 
 
