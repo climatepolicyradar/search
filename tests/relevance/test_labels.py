@@ -1,16 +1,24 @@
-from pathlib import Path
-
 import pytest
 
 from search.engines import LabelSearchEngine
 from search.engines.duckdb import DuckDBLabelSearchEngine
+from search.label import Label
 from search.testcase import TestCase
 
 
 @pytest.fixture
 def engine() -> LabelSearchEngine:
-    """Create a search engine."""
-    return DuckDBLabelSearchEngine(db_path=Path("data/labels.duckdb"))
+    """Create a search engine with test labels."""
+    labels = [
+        Label(
+            preferred_label="flood",
+            alternative_labels=["floods", "flooding", "inundation", "flooded"],
+            negative_labels=[],
+            description="Floods are the inundation of normally dry land, resulting from a mix of hydrology, climate, and huma\
+n factors, varying by type and region.",
+        ),
+    ]
+    return DuckDBLabelSearchEngine(items=labels)
 
 
 @pytest.mark.parametrize(

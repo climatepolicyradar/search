@@ -1,7 +1,5 @@
 """API initialization and search engine factories."""
 
-import logging
-
 from search.aws import download_file_from_s3, get_bucket_name
 from search.config import DATA_DIR
 from search.engines import DocumentSearchEngine, LabelSearchEngine, PassageSearchEngine
@@ -10,8 +8,9 @@ from search.engines.duckdb import (
     DuckDBLabelSearchEngine,
     DuckDBPassageSearchEngine,
 )
+from search.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Preferred search engine configuration
 PREFERRED_ENGINES = {

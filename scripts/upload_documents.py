@@ -8,11 +8,8 @@ Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
 environment variable.
 """
 
-import logging
-
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -23,16 +20,15 @@ from rich.progress import (
 )
 
 from search.aws import upload_file_to_s3
-from search.config import DATA_DIR, DATASET_NAME
+from search.config import DATASET_NAME, DOCUMENTS_PATH_STEM
 from search.document import Document
 from search.engines.duckdb import create_documents_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
+from search.logging import get_logger
 
 load_dotenv()
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(RichHandler())
+logger = get_logger(__name__)
 
 
 logger.info(f"Loading dataset '{DATASET_NAME}'")
@@ -80,17 +76,17 @@ with progress_bar:
 documents: list[Document] = list(documents_dict.values())
 logger.info("Created %d unique documents", len(documents))
 
-documents_jsonl_path = DATA_DIR / "documents.jsonl"
-with open(documents_jsonl_path, "w", encoding="utf-8") as f:
+jsonl_path = DOCUMENTS_PATH_STEM.with_suffix(".jsonl")
+with open(jsonl_path, "w", encoding="utf-8") as f:
     f.write(serialise_pydantic_list_as_jsonl(documents))
 logger.info(f"Saved {len(documents)} documents to 'data/documents.jsonl'")
 
 # duckdb
-documents_duckdb_path = DATA_DIR / "documents.duckdb"
-create_documents_duckdb_table(documents_duckdb_path, documents)
-logger.info(f"Saved {len(documents)} documents to '{documents_duckdb_path}'")
+duckdb_path = DOCUMENTS_PATH_STEM.with_suffix(".duckdb")
+create_documents_duckdb_table(duckdb_path, documents)
+logger.info(f"Saved {len(documents)} documents to '{duckdb_path}'")
 
 logger.info("Uploading files to S3")
-upload_file_to_s3(documents_jsonl_path)
-upload_file_to_s3(documents_duckdb_path)
+upload_file_to_s3(jsonl_path)
+upload_file_to_s3(duckdb_path)
 logger.info("Done")
