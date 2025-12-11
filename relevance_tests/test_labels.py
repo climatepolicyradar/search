@@ -3,7 +3,7 @@ from search.config import LABELS_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBLabelSearchEngine
 from search.label import Label
 from search.logging import get_logger
-from search.testcase import TestCase
+from search.testcase import RecallTestCase
 
 LabelTestResult = TestResult[Label]
 
@@ -14,7 +14,7 @@ engines = [DuckDBLabelSearchEngine(db_path=LABELS_PATH_STEM.with_suffix(".duckdb
 
 
 test_cases = [
-    TestCase(
+    RecallTestCase(
         search_terms="flood",
         expected_result_ids=["pdhcqueu"],
         description="search should find labels related to flood",

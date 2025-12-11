@@ -12,7 +12,7 @@ from moto import mock_aws
 from relevance_tests import TestResult
 from search import Primitive
 from search.label import Label
-from search.testcase import TestCase
+from search.testcase import RecallTestCase
 from tests.common_strategies import (
     document_strategy,
     label_data_strategy,
@@ -166,7 +166,7 @@ def simple_test_case():
     :return: A TestCase instance with basic search parameters
     :rtype: TestCase
     """
-    return TestCase(
+    return RecallTestCase(
         search_terms="climate change",
         expected_result_ids=["pdhcqueu"],
         description="Test case for climate change search",
@@ -181,7 +181,7 @@ def another_test_case():
     :return: A TestCase instance with different parameters than simple_test_case
     :rtype: TestCase
     """
-    return TestCase(
+    return RecallTestCase(
         search_terms="flood risk",
         expected_result_ids=["abcdwxyz"],
         description="Test case for flood risk search",
