@@ -25,7 +25,6 @@ class TestResult(BaseModel, Generic[T]):
 def save_test_results_as_jsonl(test_results: list[TestResult], file_path: Path) -> None:
     """Save test results to a JSONL file"""
 
-    logger.info(f"Saving test results to {file_path}")
     jsonl_results = serialise_pydantic_list_as_jsonl(test_results)
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(jsonl_results)
