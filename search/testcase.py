@@ -1,7 +1,14 @@
+from typing import TypeVar
+
 from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, field_validator
 
+from search.document import Document
 from search.engines import SearchEngine
+from search.label import Label
+from search.passage import Passage
+
+TModel = TypeVar("TModel", Label, Passage, Document)
 
 
 class TestCase(BaseModel):
@@ -23,7 +30,7 @@ class TestCase(BaseModel):
         """
         return [Identifier(item) if isinstance(item, str) else item for item in value]
 
-    def run_against(self, engine: SearchEngine) -> tuple[bool, list[Identifier]]:
+    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
         search_results = engine.search(self.search_terms)
         result_ids = [result.id for result in search_results]

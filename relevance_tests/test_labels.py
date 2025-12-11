@@ -35,7 +35,7 @@ def test_labels():
                 test_case=test_case,
                 passed=test_passed,
                 # search_engine_id=TODO
-                search_results=search_results,  # TODO
+                search_results=search_results,
             )
             engine_test_results.append(test_result)
 
@@ -44,7 +44,6 @@ def test_labels():
             TEST_RESULTS_DIR / "labels" / f"{engine.name}_{test_run_id}.jsonl"
         )
 
-        # TODO: save results to a file with a unique name based on an identifier of the engine and of the test results
         save_test_results_as_jsonl(engine_test_results, output_file_path)
 
 
