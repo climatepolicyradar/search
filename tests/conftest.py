@@ -6,10 +6,13 @@ import boto3
 import pytest
 from hypothesis import find
 from hypothesis import strategies as st
+from knowledge_graph.identifiers import Identifier
 from moto import mock_aws
 
+from relevance_tests import TestResult
 from search import Primitive
 from search.label import Label
+from search.testcase import TestCase
 from tests.common_strategies import (
     document_strategy,
     label_data_strategy,
@@ -153,3 +156,58 @@ def generate_labels():
         return _generate_items(label_strategy, count)
 
     return _generate
+
+
+@pytest.fixture
+def simple_test_case():
+    """
+    Create a simple TestCase for testing.
+
+    :return: A TestCase instance with basic search parameters
+    :rtype: TestCase
+    """
+    return TestCase(
+        search_terms="climate change",
+        expected_result_ids=["pdhcqueu"],
+        description="Test case for climate change search",
+    )
+
+
+@pytest.fixture
+def another_test_case():
+    """
+    Create a different TestCase for testing comparisons.
+
+    :return: A TestCase instance with different parameters than simple_test_case
+    :rtype: TestCase
+    """
+    return TestCase(
+        search_terms="flood risk",
+        expected_result_ids=["abcdwxyz"],
+        description="Test case for flood risk search",
+    )
+
+
+@pytest.fixture
+def simple_test_result(simple_test_case, test_labels):
+    """
+    Create a simple TestResult for testing.
+
+    Uses a fixed search engine ID and test labels for consistent test behavior.
+
+    :param simple_test_case: A simple test case fixture
+    :type simple_test_case: TestCase
+    :param test_labels: List of test label objects
+    :type test_labels: list[Label]
+    :return: A TestResult instance
+    :rtype: TestResult[Label]
+    """
+    # Create a deterministic engine ID for testing
+    engine_id = Identifier.generate("JSONLabelSearchEngine")
+
+    return TestResult(
+        test_case=simple_test_case,
+        passed=True,
+        search_engine_id=engine_id,
+        search_results=test_labels[:3],  # Use first 3 labels
+    )

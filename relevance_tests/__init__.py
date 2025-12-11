@@ -37,6 +37,6 @@ def generate_test_run_id(
 ) -> Identifier:
     """Generate a unique identifier for a test run"""
 
-    test_run_id = Identifier.generate(engine.name, test_cases, test_results)
+    test_run_id = Identifier.generate(engine.name, *test_cases, *test_results)
     logger.info(f"Generated test run id: {test_run_id}")
     return test_run_id
