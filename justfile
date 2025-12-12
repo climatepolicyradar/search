@@ -32,6 +32,7 @@ test-functional +OPTS="":
 # test only the relevance of search results
 test-relevance +OPTS="":
     uv run relevance_tests/test_labels.py {{OPTS}}
+    uv run relevance_tests/test_passages.py {{OPTS}}
 
 # run linters and code formatters on relevant files
 lint:
