@@ -130,6 +130,11 @@ class RecallTestCase(TestCase[TModel]):
         gt=0,
     )
 
+    @property
+    def name(self) -> str:
+        """Return the name of the test case class"""
+        return self.__class__.__name__
+
     @field_validator("expected_result_ids", "forbidden_result_ids", mode="before")
     @classmethod
     def coerce_identifiers(
