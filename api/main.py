@@ -83,14 +83,14 @@ def create_search_endpoint(
         engine: SearchEngine = Depends(engine_dependency),
     ) -> SearchResponse[T]:
         """Search endpoint for the specified resource."""
-        results = engine.search(search_terms)
-        total_results = len(results)
+        total_results = engine.count(search_terms)
+
         total_pages = (
             (total_results + page_size - 1) // page_size if total_results > 0 else 0
         )
-        start_idx = page_size * (page - 1)
-        end_idx = start_idx + page_size
-        paginated_results = results[start_idx:end_idx]
+
+        offset = page_size * (page - 1)
+        paginated_results = engine.search(search_terms, limit=page_size, offset=offset)
 
         # Build pagination URLs
         next_page = None
