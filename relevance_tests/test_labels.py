@@ -36,8 +36,11 @@ def test_labels():
 
     for engine in engines:
         engine_test_results: list[LabelTestResult] = []
-
+        logger.info(f"Testing label test cases against {engine.name}")
         for test_case in test_cases:
+            logger.info(
+                f"Running test case: {test_case.name}: {test_case.search_terms}"
+            )
             test_passed, search_results = test_case.run_against(engine)
 
             test_result = LabelTestResult(
