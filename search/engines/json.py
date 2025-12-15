@@ -147,14 +147,36 @@ class JSONSearchEngine(SearchEngine, Generic[TModel]):
             item.id: self.schema.build_searchable_string(item) for item in self.items
         }
 
-    def search(self, terms: str) -> list[TModel]:
+    def search(
+        self, terms: str, limit: int | None = None, offset: int = 0
+    ) -> list[TModel]:
         """Search for items matching the terms (case-insensitive)."""
+
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+        if limit is not None and limit < 1:
+            raise ValueError("limit must be at least 1")
+
         lowercased_terms = terms.lower()
-        return [
+        all_results = [
             item
             for item in self.items
             if lowercased_terms in self._searchable_strings[item.id]
         ]
+
+        if limit is None:
+            return all_results[offset:]
+        else:
+            return all_results[offset : offset + limit]
+
+    def count(self, terms: str) -> int:
+        """Count total number of items matching the search terms."""
+        lowercased_terms = terms.lower()
+        return sum(
+            1
+            for item in self.items
+            if lowercased_terms in self._searchable_strings[item.id]
+        )
 
 
 class JSONDocumentSearchEngine(JSONSearchEngine[Document], DocumentSearchEngine):
