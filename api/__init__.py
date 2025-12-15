@@ -1,5 +1,7 @@
 """API initialization and search engine factories."""
 
+from functools import lru_cache
+
 from search.aws import download_file_from_s3, get_bucket_name
 from search.config import DATA_DIR
 from search.engines import DocumentSearchEngine, LabelSearchEngine, PassageSearchEngine
@@ -37,18 +39,21 @@ async def download_required_datasets_from_s3():
             raise
 
 
+@lru_cache(maxsize=1)
 def get_label_search_engine() -> LabelSearchEngine:
     """Get the label search engine instance."""
     engine_class, filename = PREFERRED_ENGINES["labels"]
     return engine_class(db_path=str(DATA_DIR / filename))
 
 
+@lru_cache(maxsize=1)
 def get_passage_search_engine() -> PassageSearchEngine:
     """Get the passage search engine instance."""
     engine_class, filename = PREFERRED_ENGINES["passages"]
     return engine_class(db_path=str(DATA_DIR / filename))
 
 
+@lru_cache(maxsize=1)
 def get_document_search_engine() -> DocumentSearchEngine:
     """Get the document search engine instance."""
     engine_class, filename = PREFERRED_ENGINES["documents"]
