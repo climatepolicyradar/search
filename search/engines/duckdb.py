@@ -280,21 +280,36 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
             self.conn.execute(self.schema.create_sql)
             self._insert_items(items, batch_size)
 
-    def search(self, terms: str) -> list[TModel]:
+    def search(
+        self, terms: str, limit: int | None = None, offset: int = 0
+    ) -> list[TModel]:
         """
         Search for items matching the terms.
 
         Uses parameterised queries to prevent SQL injection.
         """
+
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+        if limit is not None and limit < 1:
+            raise ValueError("limit must be at least 1")
+
         # Build WHERE clause with OR conditions for each search column
         where_conditions = " OR ".join(
             f"{col} ILIKE ?" for col in self.schema.searchable_columns
         )
 
+        # Build base query
         query = f"""
             SELECT * FROM {self.schema.table_name}
             WHERE {where_conditions}
         """
+
+        # Add pagination clauses
+        if limit is not None:
+            query += f" LIMIT {limit}"
+        if offset > 0:
+            query += f" OFFSET {offset}"
 
         # Create LIKE pattern with wildcards
         pattern = f"%{terms}%"
@@ -302,6 +317,25 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
 
         results = self.conn.execute(query, params).fetchall()
         return [self.schema.build_model(row) for row in results]
+
+    def count(self, terms: str) -> int:
+        """Count total number of items matching the search terms."""
+
+        where_conditions = " OR ".join(
+            f"{col} ILIKE ?" for col in self.schema.searchable_columns
+        )
+
+        query = f"""
+            SELECT COUNT(*) FROM {self.schema.table_name}
+            WHERE {where_conditions}
+        """
+
+        # Create LIKE pattern with wildcards
+        pattern = f"%{terms}%"
+        params = [pattern] * len(self.schema.searchable_columns)
+
+        result = self.conn.execute(query, params).fetchone()
+        return result[0] if result else 0
 
 
 class DuckDBDocumentSearchEngine(DuckDBSearchEngine[Document], DocumentSearchEngine):
@@ -321,13 +355,21 @@ class DuckDBLabelSearchEngine(DuckDBSearchEngine[Label], LabelSearchEngine):
 
     schema = DuckDBLabelTableSchema()
 
-    def search(self, terms: str) -> list[Label]:
+    def search(
+        self, terms: str, limit: int | None = None, offset: int = 0
+    ) -> list[Label]:
         """
         Search for labels, including array column checks.
 
         Extends base search to check alternative_labels array.
         """
-        # Base search on text columns
+        # Validate inputs
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+        if limit is not None and limit < 1:
+            raise ValueError("limit must be at least 1")
+
+        # Base search on text columns plus array column
         query = """
             SELECT * FROM labels
             WHERE preferred_label ILIKE ?
@@ -335,6 +377,26 @@ class DuckDBLabelSearchEngine(DuckDBSearchEngine[Label], LabelSearchEngine):
                 OR list_has_any(alternative_labels, ?)
         """
 
+        # Add pagination clauses
+        if limit is not None:
+            query += f" LIMIT {limit}"
+        if offset > 0:
+            query += f" OFFSET {offset}"
+
         pattern = f"%{terms}%"
         results = self.conn.execute(query, [pattern, pattern, [terms]]).fetchall()
         return [self.schema.build_model(row) for row in results]
+
+    def count(self, terms: str) -> int:
+        """Count total number of labels matching the search terms."""
+
+        query = """
+            SELECT COUNT(*) FROM labels
+            WHERE preferred_label ILIKE ?
+                OR description ILIKE ?
+                OR list_has_any(alternative_labels, ?)
+        """
+
+        pattern = f"%{terms}%"
+        result = self.conn.execute(query, [pattern, pattern, [terms]]).fetchone()
+        return result[0] if result else 0

@@ -16,8 +16,28 @@ class SearchEngine(ABC, Generic[TModel]):
     model_class: type[TModel]
 
     @abstractmethod
-    def search(self, terms: str) -> list[TModel]:
-        """Fetch a list of relevant search results"""
+    def search(
+        self, terms: str, limit: int | None = None, offset: int = 0
+    ) -> list[TModel]:
+        """
+        Fetch a list of relevant search results.
+
+        :param terms: Search terms to match against
+        :param limit: Maximum number of results to return. If None, returns all results.
+        :param offset: Number of results to skip (for pagination)
+        :return: List of matching items
+        """
+
+    @abstractmethod
+    def count(self, terms: str) -> int:
+        """
+        Count total number of results matching the search terms.
+
+        More efficient than len(search(terms)) for database-backed engines.
+
+        :param terms: Search terms to match against
+        :return: Total count of matching items
+        """
 
     def __repr__(self) -> str:
         """Return a string representation of the search engine"""
@@ -43,8 +63,26 @@ class DocumentSearchEngine(SearchEngine[Document]):
     model_class = Document
 
     @abstractmethod
-    def search(self, terms: str) -> list[Document]:
-        """Fetch a list of relevant documents"""
+    def search(
+        self, terms: str, limit: int | None = None, offset: int = 0
+    ) -> list[Document]:
+        """
+        Fetch a list of relevant documents.
+
+        :param terms: Search terms to match against
+        :param limit: Maximum number of results to return. If None, returns all results.
+        :param offset: Number of results to skip (for pagination)
+        :return: List of matching documents
+        """
+
+    @abstractmethod
+    def count(self, terms: str) -> int:
+        """
+        Count total number of documents matching the search terms.
+
+        :param terms: Search terms to match against
+        :return: Total count of matching documents
+        """
 
 
 class PassageSearchEngine(SearchEngine[Passage]):
@@ -53,8 +91,26 @@ class PassageSearchEngine(SearchEngine[Passage]):
     model_class = Passage
 
     @abstractmethod
-    def search(self, terms: str) -> list[Passage]:
-        """Fetch a list of relevant passages"""
+    def search(
+        self, terms: str, limit: int | None = None, offset: int = 0
+    ) -> list[Passage]:
+        """
+        Fetch a list of relevant passages.
+
+        :param terms: Search terms to match against
+        :param limit: Maximum number of results to return. If None, returns all results.
+        :param offset: Number of results to skip (for pagination)
+        :return: List of matching passages
+        """
+
+    @abstractmethod
+    def count(self, terms: str) -> int:
+        """
+        Count total number of passages matching the search terms.
+
+        :param terms: Search terms to match against
+        :return: Total count of matching passages
+        """
 
 
 class LabelSearchEngine(SearchEngine[Label]):
@@ -63,5 +119,23 @@ class LabelSearchEngine(SearchEngine[Label]):
     model_class = Label
 
     @abstractmethod
-    def search(self, terms: str) -> list[Label]:
-        """Fetch a list of relevant labels"""
+    def search(
+        self, terms: str, limit: int | None = None, offset: int = 0
+    ) -> list[Label]:
+        """
+        Fetch a list of relevant labels.
+
+        :param terms: Search terms to match against
+        :param limit: Maximum number of results to return. If None, returns all results.
+        :param offset: Number of results to skip (for pagination)
+        :return: List of matching labels
+        """
+
+    @abstractmethod
+    def count(self, terms: str) -> int:
+        """
+        Count total number of labels matching the search terms.
+
+        :param terms: Search terms to match against
+        :return: Total count of matching labels
+        """
