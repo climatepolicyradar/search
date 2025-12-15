@@ -40,16 +40,16 @@ async def download_required_datasets_from_s3():
 def get_label_search_engine() -> LabelSearchEngine:
     """Get the label search engine instance."""
     engine_class, filename = PREFERRED_ENGINES["labels"]
-    return engine_class(str(DATA_DIR / filename))
+    return engine_class(db_path=str(DATA_DIR / filename))
 
 
 def get_passage_search_engine() -> PassageSearchEngine:
     """Get the passage search engine instance."""
     engine_class, filename = PREFERRED_ENGINES["passages"]
-    return engine_class(str(DATA_DIR / filename))
+    return engine_class(db_path=str(DATA_DIR / filename))
 
 
 def get_document_search_engine() -> DocumentSearchEngine:
     """Get the document search engine instance."""
     engine_class, filename = PREFERRED_ENGINES["documents"]
-    return engine_class(str(DATA_DIR / filename))
+    return engine_class(db_path=str(DATA_DIR / filename))
