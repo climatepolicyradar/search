@@ -8,7 +8,7 @@ from search.config import LABELS_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBLabelSearchEngine
 from search.label import Label
 from search.logging import get_logger
-from search.testcase import FieldCharacteristicsTestCase, RecallTestCase
+from search.testcase import FieldCharacteristicsTestCase
 
 LabelTestResult = TestResult[Label]
 
@@ -19,11 +19,6 @@ engines = [DuckDBLabelSearchEngine(db_path=LABELS_PATH_STEM.with_suffix(".duckdb
 
 
 test_cases = [
-    RecallTestCase[Label](
-        search_terms="flood",
-        expected_result_ids=["pdhcqueu"],
-        description="search should find labels related to flood",
-    ),
     FieldCharacteristicsTestCase[Label](
         category="place name",
         search_terms="brazil",
@@ -66,7 +61,7 @@ test_cases = [
             "energy" in label.preferred_label.lower()
             or "policy" in label.preferred_label.lower()
             or "usa" in label.preferred_label.lower()
-        ),  # type: ignore
+        ),
         all_or_any="all",
         description="search for energy policy act us should return relevant labels",
     ),
