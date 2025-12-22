@@ -212,6 +212,7 @@ test_cases = [
         ),
         all_or_any="any",
         description="search for adaptation or resilience investment should return adaptation finance labels",
+        assert_results=True,
     ),
     FieldCharacteristicsTestCase[Label](
         category="logic",
@@ -225,6 +226,7 @@ test_cases = [
         ),
         all_or_any="all",
         description="search for multiple countries should return labels for those countries",
+        assert_results=True,
     ),
     FieldCharacteristicsTestCase[Label](
         category="logic",
@@ -237,6 +239,7 @@ test_cases = [
         ),
         all_or_any="all",
         description="search for indigenous people colombia laws should return relevant labels",
+        assert_results=True,
     ),
 ]
 
