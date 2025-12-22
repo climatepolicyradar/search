@@ -8,7 +8,12 @@ from search.config import DOCUMENTS_PATH_STEM, TEST_RESULTS_DIR
 from search.document import Document
 from search.engines.duckdb import DuckDBDocumentSearchEngine
 from search.logging import get_logger
-from search.testcase import PrecisionTestCase, SearchComparisonTestCase
+from search.testcase import (
+    FieldCharacteristicsTestCase,
+    PrecisionTestCase,
+    SearchComparisonTestCase,
+    all_words_in_string,
+)
 
 DocumentTestResult = TestResult[Document]
 
@@ -64,6 +69,24 @@ test_cases = [
         search_terms="UK Climate Change Act",
         expected_result_ids=["dqk29nuc"],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Climate Change Act 2008)",
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="adaptation strategy",
+        characteristics_test=lambda document: all_words_in_string(
+            ["adaptation", "strategy"], document.title
+        ),
+        description="Search for 'Adaptation Strategy' should contain at least 20 adaptation strategies first.",
+        k=20,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="national communication",
+        characteristics_test=lambda document: all_words_in_string(
+            ["national", "communication"], document.title
+        ),
+        description="Search for 'National Communication' should contain at least 20 national communications first.",
+        k=20,
     ),
 ]
 
