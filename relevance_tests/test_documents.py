@@ -70,6 +70,12 @@ test_cases = [
         expected_result_ids=["dqk29nuc"],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Climate Change Act 2008)",
     ),
+    PrecisionTestCase[Document](
+        category="document name + geography",
+        search_terms="energy policy act us",
+        expected_result_ids=["p3rnnyee"],
+        description="Searching for title + geography should return the correct document if geography is not in the document title (Energy Policy Act 2005 (Energy Bill))",
+    ),
     FieldCharacteristicsTestCase[Document](
         category="document type",
         search_terms="adaptation strategy",
@@ -87,6 +93,72 @@ test_cases = [
         ),
         description="Search for 'National Communication' should contain at least 20 national communications first.",
         k=20,
+    ),
+    PrecisionTestCase[Document](
+        category="document name",
+        search_terms="Law No. 018/2022 ratifying Ordinance No. 019/PR/2021 relating to climate change",
+        expected_result_ids=["872jfyqv"],
+        description="Searching for exact law title should return the correct document",
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="national climate plan",
+        characteristics_test=lambda document: all_words_in_string(
+            ["national", "climate", "plan"], document.title
+        ),
+        description="Search for 'national climate plan' should return documents with that phrase in the title",
+        k=10,
+    ),
+    PrecisionTestCase[Document](
+        category="document name",
+        search_terms="argentina LT-LEDS",
+        expected_result_ids=["xjeh5fts"],
+        description="Searching for 'argentina LT-LEDS' should return Argentina's long-term low greenhouse gas emission development strategy",
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="entity name",
+        search_terms="nz",
+        characteristics_test=lambda document: any(
+            term in document.title.lower() for term in ["nz", "new zealand", "net zero"]
+        ),
+        description="Search for 'nz' should return documents with 'nz', 'new zealand', or 'net zero' in the title",
+        k=10,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="entity name",
+        search_terms="juliana",
+        characteristics_test=lambda document: "juliana" in document.title.lower(),
+        description="Searching for 'juliana' should return cases with 'juliana' in the name",
+        k=5,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="entity name",
+        search_terms="milieudefensie",
+        characteristics_test=lambda document: "milieudefensie"
+        in document.title.lower(),
+        description="Searching for 'milieudefensie' should return cases with 'milieudefensie' in the name",
+        k=5,
+    ),
+    PrecisionTestCase[Document](
+        category="BROKEN entity name",
+        search_terms="Municipalities of Puerto Rico v. Exxon Mobil Corp.",
+        # FIXME: need to fill in the ID once litigation is in the sample dataset
+        expected_result_ids=[],
+        description="Searching for 'Municipalities of Puerto Rico v. Exxon Mobil Corp.' should return case Commonwealth of Puerto Rico v. Exxon Mobil Corp.",
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="BROKEN question",
+        search_terms="what is the croatias climate strategy",
+        characteristics_test=lambda document: all_words_in_string(
+            ["climate", "strategy"], document.title
+        )
+        # FIXME: should use document metadata field here instead
+        and any(
+            term in document.title.lower() or term in document.description.lower()
+            for term in ["croatia", "croatian"]
+        ),
+        description="Search for 'what is the croatias climate strategy' should return documents titled 'climate strategy' from with 'croatia' in the description. TODO: filter for croatia instead",
+        k=5,
     ),
 ]
 
