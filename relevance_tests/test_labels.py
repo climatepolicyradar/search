@@ -1,4 +1,9 @@
-from relevance_tests import TestResult, generate_test_run_id, save_test_results_as_jsonl
+from relevance_tests import (
+    TestResult,
+    generate_test_run_id,
+    print_test_results,
+    save_test_results_as_jsonl,
+)
 from search.config import LABELS_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBLabelSearchEngine
 from search.label import Label
@@ -260,6 +265,8 @@ def test_labels():
                 search_results=search_results,
             )
             engine_test_results.append(test_result)
+
+        print_test_results(engine_test_results)
 
         test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
         output_file_path = (
