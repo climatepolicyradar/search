@@ -96,6 +96,10 @@ def test_whether_engine_can_initialize_from_db_path(
 
     insert_sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
     file_conn.executemany(insert_sql, rows)
+
+    # Create FTS index after inserting data
+    engine.schema.create_fts_index(file_conn)
+
     file_conn.close()
 
     # Now initialize a new engine from the file

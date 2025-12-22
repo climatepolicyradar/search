@@ -31,6 +31,7 @@ class DuckDBTableSchema(Generic[T]):
     create_sql: str
     insert_sql: str
     searchable_columns: list[str]
+    id_column: str = "id"
 
     def extract_row(self, item: T) -> tuple:
         """Extract a row tuple from a model instance."""
@@ -39,6 +40,25 @@ class DuckDBTableSchema(Generic[T]):
     def build_model(self, row: tuple) -> T:
         """Build a model instance from a database row."""
         raise NotImplementedError
+
+    def create_fts_index(self, conn: duckdb.DuckDBPyConnection) -> None:
+        """
+        Create a Full-Text Search index for searchable columns.
+
+        :param conn: Database connection
+        """
+        if not self.searchable_columns:
+            return
+
+        # Install and load FTS extension
+        conn.execute("INSTALL fts")
+        conn.execute("LOAD fts")
+
+        # Create FTS index on searchable columns with ignore='' to index all characters including digits
+        columns_str = ", ".join(f"'{col}'" for col in self.searchable_columns)
+        conn.execute(
+            f"PRAGMA create_fts_index('{self.table_name}', '{self.id_column}', {columns_str}, ignore='')"
+        )
 
 
 class DuckDBDocumentTableSchema(DuckDBTableSchema[Document]):
@@ -170,6 +190,9 @@ def create_duckdb_table(
     if batch:
         conn.executemany(schema.insert_sql, batch)
 
+    # Create FTS index after all data is inserted
+    schema.create_fts_index(conn)
+
     conn.close()
     return total_count
 
@@ -273,35 +296,59 @@ class DuckDBSearchEngine(SearchEngine, Generic[TModel]):
             raise ValueError("Either db_path or items must be provided")
 
         if db_path is not None:
-            # Read-only mode: open existing file
-            self.conn = duckdb.connect(str(db_path), read_only=True)
+            # Open existing file (not read-only to allow FTS extension operations)
+            self.conn = duckdb.connect(str(db_path), read_only=False)
+            # Allow FTS queries to work properly
+            self.conn.execute("SET scalar_subquery_error_on_multiple_rows=false")
+            # Load FTS extension for querying (should already be installed)
+            try:
+                self.conn.execute("LOAD fts")
+            except Exception:
+                # If not installed yet, install first
+                self.conn.execute("INSTALL fts")
+                self.conn.execute("LOAD fts")
         elif items is not None:
             self.conn = duckdb.connect(":memory:")
+            # Allow FTS queries to work properly
+            self.conn.execute("SET scalar_subquery_error_on_multiple_rows=false")
             self.conn.execute(self.schema.create_sql)
             self._insert_items(items, batch_size)
+            # Create FTS index after inserting items
+            self.schema.create_fts_index(self.conn)
 
     def search(self, terms: str) -> list[TModel]:
         """
-        Search for items matching the terms.
+        Search for items matching the terms using Full-Text Search.
 
         Uses parameterised queries to prevent SQL injection.
         """
-        # Build WHERE clause with OR conditions for each search column
-        where_conditions = " OR ".join(
-            f"{col} ILIKE ?" for col in self.schema.searchable_columns
-        )
 
+        # Use FTS for searching with BM25 ranking
+        fts_index_name = f"fts_main_{self.schema.table_name}"
         query = f"""
-            SELECT * FROM {self.schema.table_name}
-            WHERE {where_conditions}
+            SELECT {self.schema.table_name}.*
+            FROM {self.schema.table_name}
+            WHERE {fts_index_name}.match_bm25({self.schema.id_column}, ?) IS NOT NULL
+            ORDER BY {fts_index_name}.match_bm25({self.schema.id_column}, ?) DESC
         """
 
-        # Create LIKE pattern with wildcards
-        pattern = f"%{terms}%"
-        params = [pattern] * len(self.schema.searchable_columns)
-
-        results = self.conn.execute(query, params).fetchall()
+        # Execute query with search terms (needs to be passed twice for WHERE and ORDER BY)
+        results = self.conn.execute(query, [terms, terms]).fetchall()
         return [self.schema.build_model(row) for row in results]
+
+    def count(self, terms: str) -> int:
+        """Count total number of items matching the search terms using Full-Text Search."""
+
+        # Use FTS for counting matches
+        fts_index_name = f"fts_main_{self.schema.table_name}"
+        query = f"""
+            SELECT COUNT(*)
+            FROM {self.schema.table_name}
+            WHERE {fts_index_name}.match_bm25({self.schema.id_column}, ?) IS NOT NULL
+        """
+
+        result = self.conn.execute(query, [terms]).fetchone()
+        return result[0] if result else 0
 
 
 class DuckDBDocumentSearchEngine(DuckDBSearchEngine[Document], DocumentSearchEngine):
@@ -323,18 +370,35 @@ class DuckDBLabelSearchEngine(DuckDBSearchEngine[Label], LabelSearchEngine):
 
     def search(self, terms: str) -> list[Label]:
         """
-        Search for labels, including array column checks.
+        Search for labels using FTS and array column checks.
 
-        Extends base search to check alternative_labels array.
+        Uses Full-Text Search for text columns and extends to check alternative_labels array.
         """
-        # Base search on text columns
-        query = """
-            SELECT * FROM labels
-            WHERE preferred_label ILIKE ?
-                OR description ILIKE ?
+
+        # Use FTS for text columns, plus array column check
+        fts_index_name = f"fts_main_{self.schema.table_name}"
+        query = f"""
+            SELECT labels.*
+            FROM labels
+            WHERE {fts_index_name}.match_bm25(id, ?) IS NOT NULL
+                OR list_has_any(alternative_labels, ?)
+            ORDER BY COALESCE({fts_index_name}.match_bm25(id, ?), 0) DESC
+        """
+
+        results = self.conn.execute(query, [terms, [terms], terms]).fetchall()
+        return [self.schema.build_model(row) for row in results]
+
+    def count(self, terms: str) -> int:
+        """Count total number of labels matching the search terms using FTS."""
+
+        # Use FTS for text columns, plus array column check
+        fts_index_name = f"fts_main_{self.schema.table_name}"
+        query = f"""
+            SELECT COUNT(*)
+            FROM labels
+            WHERE {fts_index_name}.match_bm25(id, ?) IS NOT NULL
                 OR list_has_any(alternative_labels, ?)
         """
 
-        pattern = f"%{terms}%"
-        results = self.conn.execute(query, [pattern, pattern, [terms]]).fetchall()
-        return [self.schema.build_model(row) for row in results]
+        result = self.conn.execute(query, [terms, [terms]]).fetchone()
+        return result[0] if result else 0
