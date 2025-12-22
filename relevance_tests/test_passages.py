@@ -14,12 +14,12 @@ engines = [DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".du
 
 # TODO: Add proper test cases for passages
 test_cases = [
-    RecallTestCase(
+    RecallTestCase[Passage](
         search_terms="flood",
         expected_result_ids=["pdhcqueu"],
         description="search should find passages related to flood",
     ),
-    FieldCharacteristicsTestCase(
+    FieldCharacteristicsTestCase[Passage](
         search_terms="nz",
         characteristics_test=lambda passage: ("new zealand" in passage.text.lower())
         or ("net zero" in passage.text.lower()),  # type: ignore

@@ -16,12 +16,12 @@ engines = [
 
 # TODO: Add proper test cases for documents
 test_cases = [
-    RecallTestCase(
+    RecallTestCase[Document](
         search_terms="flood",
         expected_result_ids=["pdhcqueu"],
         description="search should find documents related to flood",
     ),
-    FieldCharacteristicsTestCase(
+    FieldCharacteristicsTestCase[Document](
         search_terms="nz",
         characteristics_test=lambda document: ("new zealand" in document.title.lower())
         or ("net zero" in document.title.lower()),  # type: ignore

@@ -14,12 +14,12 @@ engines = [DuckDBLabelSearchEngine(db_path=LABELS_PATH_STEM.with_suffix(".duckdb
 
 
 test_cases = [
-    RecallTestCase(
+    RecallTestCase[Label](
         search_terms="flood",
         expected_result_ids=["pdhcqueu"],
         description="search should find labels related to flood",
     ),
-    FieldCharacteristicsTestCase(
+    FieldCharacteristicsTestCase[Label](
         search_terms="nz",
         characteristics_test=lambda label: (
             "new zealand" in label.preferred_label.lower()

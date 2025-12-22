@@ -49,7 +49,7 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
         raise NotImplementedError
 
 
-class PrecisionTestCase(TestCase[TModel]):
+class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
     """Dictates which should be the top results for a given search"""
 
     expected_result_ids: list[Identifier | str] = Field(
@@ -114,7 +114,7 @@ class PrecisionTestCase(TestCase[TModel]):
         )
 
 
-class RecallTestCase(TestCase[TModel]):
+class RecallTestCase(TestCase[TModel], Generic[TModel]):
     """Dictates which results should be anywhere in the top K results for a given search."""
 
     expected_result_ids: list[Identifier | str] = Field(
@@ -197,7 +197,7 @@ class RecallTestCase(TestCase[TModel]):
         )
 
 
-class FieldCharacteristicsTestCase(TestCase[TModel]):
+class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
     """Dictates characteristics that any or all of the top k results should have for a given search."""
 
     characteristics_test: Callable[[TModel], bool] = Field(
