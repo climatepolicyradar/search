@@ -1,9 +1,14 @@
-from relevance_tests import TestResult, generate_test_run_id, save_test_results_as_jsonl
+from relevance_tests import (
+    TestResult,
+    generate_test_run_id,
+    print_test_results,
+    save_test_results_as_jsonl,
+)
 from search.config import PASSAGES_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBPassageSearchEngine
 from search.logging import get_logger
 from search.passage import Passage
-from search.testcase import FieldCharacteristicsTestCase, RecallTestCase
+from search.testcase import FieldCharacteristicsTestCase, SearchComparisonTestCase
 
 PassageTestResult = TestResult[Passage]
 
@@ -12,19 +17,32 @@ logger = get_logger(__name__)
 
 engines = [DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".duckdb"))]
 
-# TODO: Add proper test cases for passages
 test_cases = [
-    RecallTestCase[Passage](
-        search_terms="flood",
-        expected_result_ids=["pdhcqueu"],
-        description="search should find passages related to flood",
-    ),
     FieldCharacteristicsTestCase[Passage](
+        category="acronym",
         search_terms="nz",
         characteristics_test=lambda passage: ("new zealand" in passage.text.lower())
         or ("net zero" in passage.text.lower()),  # type: ignore
         all_or_any="all",
         description="search for nz should return either new zealand or net zero in the passage text",
+    ),
+    SearchComparisonTestCase[Passage](
+        category="duplicates",
+        search_terms="solar power",
+        search_terms_to_compare="solar powered",
+        description="Compare single vs duplicated search terms (solar power vs solar powered).",
+        k=50,
+        minimum_overlap=0.8,
+        strict_order=False,
+    ),
+    SearchComparisonTestCase[Passage](
+        category="duplicates",
+        search_terms="citizen assembly",
+        search_terms_to_compare="citizens assembly",
+        description="Compare single vs duplicated search terms (citizen assembly vs citizens assembly).",
+        k=50,
+        minimum_overlap=0.8,
+        strict_order=False,
     ),
 ]
 
@@ -48,6 +66,8 @@ def test_passages():
                 search_results=search_results,
             )
             engine_test_results.append(test_result)
+
+        print_test_results(engine_test_results)
 
         test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
         output_file_path = (

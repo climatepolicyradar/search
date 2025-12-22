@@ -1,9 +1,14 @@
-from relevance_tests import TestResult, generate_test_run_id, save_test_results_as_jsonl
+from relevance_tests import (
+    TestResult,
+    generate_test_run_id,
+    print_test_results,
+    save_test_results_as_jsonl,
+)
 from search.config import DOCUMENTS_PATH_STEM, TEST_RESULTS_DIR
 from search.document import Document
 from search.engines.duckdb import DuckDBDocumentSearchEngine
 from search.logging import get_logger
-from search.testcase import FieldCharacteristicsTestCase, RecallTestCase
+from search.testcase import SearchComparisonTestCase
 
 DocumentTestResult = TestResult[Document]
 
@@ -14,19 +19,15 @@ engines = [
     DuckDBDocumentSearchEngine(db_path=DOCUMENTS_PATH_STEM.with_suffix(".duckdb"))
 ]
 
-# TODO: Add proper test cases for documents
 test_cases = [
-    RecallTestCase[Document](
-        search_terms="flood",
-        expected_result_ids=["pdhcqueu"],
-        description="search should find documents related to flood",
-    ),
-    FieldCharacteristicsTestCase[Document](
-        search_terms="nz",
-        characteristics_test=lambda document: ("new zealand" in document.title.lower())
-        or ("net zero" in document.title.lower()),  # type: ignore
-        all_or_any="all",
-        description="search for nz should return either new zealand or net zero in the document title",
+    SearchComparisonTestCase[Document](
+        category="duplicates",
+        search_terms="obligation to provide renewable fuels 2005",
+        search_terms_to_compare="obligation to provide renewable fuel 2005",
+        description="Searches for single vs duplicate terms in a relatively long query should return the same top few documents",
+        k=5,
+        minimum_overlap=1.0,
+        strict_order=False,
     ),
 ]
 
@@ -51,6 +52,8 @@ def test_documents():
                 search_results=search_results,
             )
             engine_test_results.append(test_result)
+
+        print_test_results(engine_test_results)
 
         test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
         output_file_path = (
