@@ -8,7 +8,7 @@ from search.config import DOCUMENTS_PATH_STEM, TEST_RESULTS_DIR
 from search.document import Document
 from search.engines.duckdb import DuckDBDocumentSearchEngine
 from search.logging import get_logger
-from search.testcase import SearchComparisonTestCase
+from search.testcase import PrecisionTestCase, SearchComparisonTestCase
 
 DocumentTestResult = TestResult[Document]
 
@@ -28,6 +28,42 @@ test_cases = [
         k=5,
         minimum_overlap=1.0,
         strict_order=False,
+    ),
+    PrecisionTestCase[Document](
+        category="punctuation",
+        search_terms="Directive (EU) 2022/2464 amending Regulation (EU) No 537/2014 and others, as regards corporate sustainability reporting (Corporate Sustainability Reporting Directive or CSRD)",
+        expected_result_ids=["buhkvq82"],
+        description="Searching for a document title should return the correct document, where the title has brackets.",
+    ),
+    PrecisionTestCase[Document](
+        category="specific document",
+        search_terms="obligation to provide renewable fuels 2005",
+        expected_result_ids=["q7xu8hd9"],
+        description="Searching for a document title where the words are in a different order.",
+    ),
+    PrecisionTestCase[Document](
+        category="specific document",
+        search_terms="National Climate Change Strategy 2021-2026",
+        expected_result_ids=["zkarxnpf"],
+        description="Searching for the document title should return the correct document.",
+    ),
+    PrecisionTestCase[Document](
+        category="specific document",
+        search_terms="fca rules of tcfd",
+        expected_result_ids=["f3b2qeh6"],
+        description="Acronyms in document titles",
+    ),
+    PrecisionTestCase[Document](
+        category="specific document",
+        search_terms="power up britain",
+        expected_result_ids=["jcrp5cka", "dq5aty3a"],
+        description="Stemmed words in document titles",
+    ),
+    PrecisionTestCase[Document](
+        category="document name + geography",
+        search_terms="UK Climate Change Act",
+        expected_result_ids=["dqk29nuc"],
+        description="Searching for title + geography should return the correct document if geography is not in the document title (Climate Change Act 2008)",
     ),
 ]
 
