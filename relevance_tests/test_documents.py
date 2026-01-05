@@ -82,8 +82,26 @@ test_cases = [
         characteristics_test=lambda document: all_words_in_string(
             ["adaptation", "strategy"], document.title
         ),
+        description="Search for 'Adaptation Strategy' should contain at least 5 adaptation strategies first.",
+        k=5,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="adaptation strategy",
+        characteristics_test=lambda document: all_words_in_string(
+            ["adaptation", "strategy"], document.title
+        ),
         description="Search for 'Adaptation Strategy' should contain at least 20 adaptation strategies first.",
         k=20,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="national communication",
+        characteristics_test=lambda document: all_words_in_string(
+            ["national", "communication"], document.title
+        ),
+        description="Search for 'National Communication' should contain at least 5 national communications first.",
+        k=5,
     ),
     FieldCharacteristicsTestCase[Document](
         category="document type",
