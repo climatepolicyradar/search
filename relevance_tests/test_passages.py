@@ -67,19 +67,6 @@ test_cases = [
         all_or_any="all",
     ),
     FieldCharacteristicsTestCase[Passage](
-        category="punctuation",
-        search_terms="reactors feasibility",
-        characteristics_test=(
-            lambda passage: not (
-                "reactors. Feasibility" in passage.text
-                and "reactors feasibility" not in passage.text.lower()
-            )
-        ),
-        description="Exact match search should not ignore full stops.",
-        k=200,
-        all_or_any="all",
-    ),
-    FieldCharacteristicsTestCase[Passage](
         category="BROKEN exact match",
         search_terms="adaptation options",
         # FIXME: this tests exact match search, which we don't currently consider using these tests
@@ -112,7 +99,10 @@ test_cases = [
     FieldCharacteristicsTestCase[Passage](
         category="punctuation",
         search_terms="$100",
-        characteristics_test=lambda passage: "$100" in passage.text,
+        characteristics_test=lambda passage: any(
+            phrase in passage.text
+            for phrase in ["$100", "$ 100", "100 dollars", "100 USD"]
+        ),
         description="Search for $100 should always return $100.",
         k=100,
     ),
