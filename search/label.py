@@ -20,3 +20,17 @@ class Label(BaseModel):
             *sorted(self.alternative_labels),  # Sort for deterministic ordering
             *sorted(self.negative_labels),  # Sort for deterministic ordering
         )
+
+    @computed_field
+    @property
+    def all_labels(self) -> list[str]:
+        """The preferred label, and the alternative labels"""
+
+        return [self.preferred_label] + self.alternative_labels
+
+    @computed_field
+    @property
+    def all_labels_lowercased(self) -> list[str]:
+        """Lowercased preferred label, and the alternative labels"""
+
+        return [lbl.lower() for lbl in self.all_labels]
