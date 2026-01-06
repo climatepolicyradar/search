@@ -8,7 +8,11 @@ from search.config import LABELS_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBLabelSearchEngine
 from search.label import Label
 from search.logging import get_logger
-from search.testcase import FieldCharacteristicsTestCase
+from search.testcase import (
+    FieldCharacteristicsTestCase,
+    PrecisionTestCase,
+    RecallTestCase,
+)
 
 LabelTestResult = TestResult[Label]
 
@@ -19,41 +23,38 @@ engines = [DuckDBLabelSearchEngine(db_path=LABELS_PATH_STEM.with_suffix(".duckdb
 
 
 test_cases = [
-    FieldCharacteristicsTestCase[Label](
+    PrecisionTestCase[Label](
         category="place name",
         search_terms="brazil",
-        characteristics_test=lambda label: "brazil" in label.preferred_label.lower(),
-        all_or_any="all",
-        description="search for brazil should return brazil label",
+        expected_result_ids=["TODOBRAZIL"],
+        description="search for brazil should return correct label first",
     ),
-    FieldCharacteristicsTestCase[Label](
+    PrecisionTestCase[Label](
         category="place name",
         search_terms="new south wales",
-        characteristics_test=lambda label: (
-            "new south wales" in label.preferred_label.lower()
-        )
-        or ("australia" in label.preferred_label.lower()),
-        all_or_any="all",
-        description="search for new south wales should return new south wales or australia",
+        expected_result_ids=["TODONEWSOUTHWALES", "TODOAUSTRALIA"],
+        description="search for new south wales should return new south wales and australia",
     ),
-    FieldCharacteristicsTestCase[Label](
+    PrecisionTestCase[Label](
         category="place name + other terms",
         search_terms="Philippines policies in climate changes",
-        characteristics_test=lambda label: (
-            "philippines" in label.preferred_label.lower()
-            or "policies" in label.preferred_label.lower()
-            or "climate" in label.preferred_label.lower()
-        ),
-        all_or_any="all",
-        description="search for philippines policies in climate changes should return relevant labels",
+        expected_result_ids=[
+            "TODOPHILIPPINES",
+            "TODOPOLICIES",
+            "TODOCLIMATE",
+        ],
+        description="search for philippines policies in climate changes should return relevant labels first",
     ),
-    FieldCharacteristicsTestCase[Label](
+    RecallTestCase[Label](
         category="place name + other terms",
         search_terms="brazil nature based solutions",
-        characteristics_test=lambda label: "brazil" in label.preferred_label.lower(),  # type: ignore
-        all_or_any="all",
-        description="search for brazil nature based solutions should return brazil label",
+        expected_result_ids=["TODOBRAZIL"],
+        k=3,
+        description="search for brazil nature based solutions should return brazil label in the top 3 results",
     ),
+    # NOTE: this test has been left as a FieldCharacteristicsTestCase rather than using
+    # IDs, because we have lots of energy-related concepts but one specifically for
+    # 'energy'. I.e. we want to test for concepts that have 'energy' in them.
     FieldCharacteristicsTestCase[Label](
         category="document name",
         search_terms="energy policy act us",
@@ -65,36 +66,149 @@ test_cases = [
         all_or_any="all",
         description="search for energy policy act us should return relevant labels",
     ),
-    FieldCharacteristicsTestCase[Label](
+    RecallTestCase[Label](
         category="document name",
         search_terms="Law No. 018/2022 ratifying Ordinance No. 019/PR/2021 relating to climate change",
-        characteristics_test=lambda label: (
-            "laws" in label.preferred_label.lower()
-            or "climate" in label.preferred_label.lower()
-        ),
-        all_or_any="all",
+        expected_result_ids=["TODOLAW", "TODOCLIMATE"],
+        k=3,
         description="search for law relating to climate change should return laws or climate labels",
     ),
-    FieldCharacteristicsTestCase[Label](
+    PrecisionTestCase[Label](
         category="document name",
         search_terms="national climate plan",
-        characteristics_test=lambda label: (
-            "national" in label.preferred_label.lower()
-            or "climate" in label.preferred_label.lower()
-            or "plan" in label.preferred_label.lower()
-        ),
-        all_or_any="all",
-        description="search for national climate plan should return relevant labels",
+        expected_result_ids=["TODONATIONAL", "TODOCLIMATE", "TODOPLAN"],
+        description="search for national climate plan should return relevant labels first",
     ),
-    FieldCharacteristicsTestCase[Label](
+    PrecisionTestCase[Label](
         category="entity name",
         search_terms="nz",
+        expected_result_ids=[
+            "wpx36e4m",  # net-zero target
+            "TODONEWZEALAND",
+        ],
+        description="search for nz should return 'new zealand' and 'net zero target' first",
+    ),
+    PrecisionTestCase[Label](
+        category="entity name",
+        search_terms="totalenergies",
+        expected_result_ids=["TODOTOTAL_ENERGIES"],
+        description="search for totalenergies should return total energies label first",
+    ),
+    PrecisionTestCase[Label](
+        category="entity name",
+        search_terms="european court of human rights",
+        expected_result_ids=["TODOECHR"],
+        description="search for european court of human rights should return matching label first",
+    ),
+    PrecisionTestCase[Label](
+        category="question",
+        search_terms="How many targets does Canada currently have relating to climate change?",
+        expected_result_ids=[
+            "sk4kv7u3",  # target
+            "TODOCANADA",
+            "TODOCLIMATE",
+        ],
+        description="search about canada targets should return relevant labels first",
+    ),
+    PrecisionTestCase[Label](
+        category="question",
+        search_terms="what is the croatias climate strategy",
+        expected_result_ids=[
+            "wf4tcvtp",  # strategy setting and planning
+            "TODOCLIMATE",
+            "TODOPOLICY",
+            "TODOSTRATEGY",
+        ],
+        description="search about croatia climate strategy should return relevant labels first",
+    ),
+    RecallTestCase[Label](
+        category="topic",
+        search_terms="hurricanes",
+        expected_result_ids=[
+            "rvw4bbqe",  # extreme weather
+            "6etq43sc",  # storm
+        ],
+        k=5,
+        description="search for hurricanes should return 'extreme weather' and 'storm' labels in the top 5 results",
+    ),
+    PrecisionTestCase[Label](
+        category="topic",
+        search_terms="fossil fuel subsidy removal",
+        expected_result_ids=[
+            "guaj3bdu",  # removal of fossil fuel subsidy
+        ],
+        description="search for fossil fuel subsidy removal should return 'removal of fossil fuel subsidy' label first",
+    ),
+    RecallTestCase[Label](
+        category="topic",
+        search_terms="fossil fuel subsidy removal",
+        expected_result_ids=[
+            "pnsjhvgp",  # subsidy removal
+        ],
+        forbidden_result_ids=[
+            "bg8bf2cs",  # subsidy
+        ],
+        k=10,
+        description="search for fossil fuel subsidy removal should return 'subsidy removal' label, and NOT 'subsidy' label",
+    ),
+    PrecisionTestCase[Label](
+        category="topic",
+        search_terms="Just transition",
+        expected_result_ids=[
+            "fyujvkcc",  # just transition
+        ],
+        description="search for just transition should return just transition label first",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="topic not in kg",
+        search_terms="resilient infrastructure",
         characteristics_test=lambda label: (
-            "new zealand" in label.preferred_label.lower()
-        )
-        or ("net zero" in label.preferred_label.lower()),
-        all_or_any="all",
-        description="search for nz should return either new zealand or net zero",
+            "resilient" in label.preferred_label.lower()
+            or "infrastructure" in label.preferred_label.lower()
+            or "construction" in label.preferred_label.lower()
+        ),
+        all_or_any="any",
+        description="search for resilient infrastructure should return relevant labels",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="topic not in kg",
+        search_terms="offshore wind roadmap",
+        characteristics_test=lambda label: (
+            "wind" in label.preferred_label.lower()
+            or "energy" in label.preferred_label.lower()
+        ),
+        all_or_any="any",
+        description="search for offshore wind roadmap should return wind energy labels",
+    ),
+    PrecisionTestCase[Label](
+        category="logic",
+        search_terms="Adaptation (OR) resilience investment",
+        expected_result_ids=[
+            "qz6fg4dh",  # adaptation finance
+        ],
+        description="search for adaptation or resilience investment should return adaptation finance label first",
+    ),
+    PrecisionTestCase[Label](
+        category="logic",
+        search_terms="japan + united states + sweden + china",
+        expected_result_ids=[
+            "TODOJAPAN",  # japan
+            "TODOUSA",  # united states/us
+            "TODOSWEDEN",  # sweden
+            "TODOCHINA",  # china
+        ],
+        description="search for multiple countries should return labels for those countries first",
+    ),
+    PrecisionTestCase[Label](
+        category="logic",
+        search_terms="indigenous people + colombia + laws",
+        expected_result_ids=[
+            "ptfmpyqe",  # indigenous people
+            "6cn2vjae",  # impacted group
+            "TODOCOLOMBIA",  # colombia
+            "TODOLAWS",  # laws
+        ],
+        description="search for indigenous people colombia laws should return relevant labels first",
     ),
     FieldCharacteristicsTestCase[Label](
         category="entity name",
