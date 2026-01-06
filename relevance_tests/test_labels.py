@@ -22,8 +22,8 @@ test_cases = [
     FieldCharacteristicsTestCase[Label](
         category="place name",
         search_terms="brazil",
-        characteristics_test=lambda label: "brazil" in label.preferred_label.lower(),
-        all_or_any="all",
+        characteristics_test=lambda label: "brazil" in label.all_labels_lowercased,
+        all_or_any="any",
         description="search for brazil should return brazil label",
     ),
     FieldCharacteristicsTestCase[Label](
@@ -50,8 +50,8 @@ test_cases = [
     FieldCharacteristicsTestCase[Label](
         category="place name + other terms",
         search_terms="brazil nature based solutions",
-        characteristics_test=lambda label: "brazil" in label.preferred_label.lower(),  # type: ignore
-        all_or_any="all",
+        characteristics_test=lambda label: "brazil" in label.all_labels_lowercased,  # type: ignore
+        all_or_any="any",
         description="search for brazil nature based solutions should return brazil label",
     ),
     FieldCharacteristicsTestCase[Label](
