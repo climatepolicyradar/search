@@ -248,3 +248,83 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             self.all_or_any,
             self.k,
         )
+
+
+class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
+    """
+    Compare two searches to each other. Compares the top k results.
+
+    This test case runs two different searches and checks that they have a minimum
+    proportion of overlapping results. Optionally, it can also check that the order
+    of the overlapping results is the same.
+    """
+
+    search_terms_to_compare: str = Field(
+        description="The terms to compare search_terms to."
+    )
+    k: int = Field(
+        description="The number of results to compare.",
+        default=20,
+        gt=0,
+    )
+    minimum_overlap: float = Field(
+        description="The desired proportion of the top k results which should overlap.",
+        gt=0,
+        le=1,
+    )
+    strict_order: bool = Field(
+        description=(
+            "Whether the overlapping results should be in the exact order specified."
+        ),
+        default=False,
+    )
+
+    @model_validator(mode="after")
+    def check_comparison_terms(self):
+        """Check that the comparison terms are different from the search terms."""
+        if self.search_terms == self.search_terms_to_compare:
+            raise ValueError(
+                "search_terms and search_terms_to_compare must be different"
+            )
+        return self
+
+    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+        """Run the test case against the given engine."""
+
+        search_results_1 = engine.search(self.search_terms)
+        search_results_2 = engine.search(self.search_terms_to_compare)
+
+        results_1_limited = search_results_1[: self.k]
+        results_2_limited = search_results_2[: self.k]
+
+        result_ids_1 = [result.id for result in results_1_limited]
+        result_ids_2 = [result.id for result in results_2_limited]
+
+        if self.strict_order:
+            # Count matching IDs in the same positions
+            overlap_count = sum(
+                1 for id1, id2 in zip(result_ids_1, result_ids_2) if id1 == id2
+            )
+        else:
+            # Count IDs that appear in both lists regardless of position
+            overlap_count = len(set(result_ids_1).intersection(set(result_ids_2)))
+
+        overlap_proportion = overlap_count / self.k if self.k > 0 else 0
+        passed = overlap_proportion >= self.minimum_overlap
+
+        return passed, search_results_1
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return Identifier.generate(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.search_terms_to_compare,
+            self.minimum_overlap,
+            self.strict_order,
+            self.k,
+        )
