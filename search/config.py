@@ -45,6 +45,19 @@ def get_git_commit_hash() -> str:
         return "unknown"
 
 
+def is_truthy(value: str | bool) -> bool:
+    """
+    Whether a string (e.g. in an environment variable) expresses a true state.
+
+    If the value is a boolean, returns the boolean.
+    """
+
+    if isinstance(value, bool):
+        return value
+
+    return value == "1" or value.lower() == "true"
+
+
 REPO_ROOT_DIR = get_git_root()
 
 # DATA_DIR depends on the environment:
@@ -69,3 +82,8 @@ AWS_PROFILE = os.getenv("AWS_PROFILE", None)
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 
 DATASET_NAME = "climatepolicyradar/all-document-text-data"
+
+# Weights & Biases
+WANDB_ENTITY = "climatepolicyradar"
+WANDB_PROJECT_OFFLINE_TESTS = "search_offline_tests"
+DISABLE_WANDB = is_truthy(os.getenv("DISABLE_WANDB", False))
