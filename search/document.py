@@ -28,7 +28,7 @@ class Document(BaseModel):
     @property
     def id(self) -> Identifier:
         """A canonical identifier for the document"""
-        return Identifier.generate(self.title, self.source_url)
+        return Identifier.generate(self.source_url)
 
     @classmethod
     def from_huggingface_row(cls, row: dict) -> "Document":

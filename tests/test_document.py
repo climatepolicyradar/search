@@ -9,7 +9,6 @@ from tests.common_strategies import (
     document_data_strategy,
     document_strategy,
     huggingface_row_strategy,
-    text_strategy,
     url_strategy,
 )
 
@@ -22,13 +21,6 @@ def test_whether_document_id_is_deterministic_for_same_inputs(document_data):
     assert isinstance(doc1.id, Identifier)
 
 
-@given(doc=document_strategy(), new_title=text_strategy)
-def test_whether_document_id_changes_when_title_changes(doc, new_title):
-    if new_title != doc.title:
-        doc_with_new_title = doc.model_copy(update={"title": new_title})
-        assert doc.id != doc_with_new_title.id
-
-
 @given(doc=document_strategy(), new_url=url_strategy)
 def test_whether_document_id_changes_when_source_url_changes(doc, new_url):
     if str(doc.source_url).lower() != str(new_url).lower():
@@ -37,10 +29,12 @@ def test_whether_document_id_changes_when_source_url_changes(doc, new_url):
 
 
 @given(doc=document_strategy())
-def test_whether_document_id_is_invariant_to_description_original_document_id_and_labels(
+def test_whether_document_id_is_invariant_to_title_description_original_document_id_and_labels(
     doc,
 ):
     base_id = doc.id
+    doc_with_different_title = doc.model_copy(update={"title": "Different Title"})
+    assert doc_with_different_title.id == base_id
     doc_with_different_description = doc.model_copy(update={"description": "Different"})
     assert doc_with_different_description.id == base_id
     doc_with_different_original_id = doc.model_copy(
@@ -48,7 +42,11 @@ def test_whether_document_id_is_invariant_to_description_original_document_id_an
     )
     assert doc_with_different_original_id.id == base_id
     doc_with_all_different_non_id_fields = doc.model_copy(
-        update={"description": "Different", "original_document_id": "different"}
+        update={
+            "title": "Different Title",
+            "description": "Different",
+            "original_document_id": "different",
+        }
     )
     assert doc_with_all_different_non_id_fields.id == base_id
 
