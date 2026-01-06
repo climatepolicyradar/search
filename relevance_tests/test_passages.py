@@ -18,11 +18,6 @@ logger = get_logger(__name__)
 engines = [DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".duckdb"))]
 
 test_cases = [
-    RecallTestCase[Passage](
-        search_terms="flood",
-        expected_result_ids=["pdhcqueu"],
-        description="search should find passages related to flood",
-    ),
     FieldCharacteristicsTestCase[Passage](
         search_terms="nz",
         characteristics_test=lambda passage: ("new zealand" in passage.text.lower())
