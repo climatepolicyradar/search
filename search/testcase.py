@@ -1,3 +1,4 @@
+import re
 from abc import ABC, abstractmethod
 from typing import Callable, Generic, Literal, TypeVar
 
@@ -328,3 +329,17 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             self.strict_order,
             self.k,
         )
+
+
+def all_words_in_string(include_words: list[str], string: str) -> bool:
+    """Case-insensitive check for if all words are in a string, ignoring punctuation."""
+    words = re.findall(r"\b\w+\b", string.lower())
+
+    return all(word.lower() in words for word in include_words)
+
+
+def any_words_in_string(include_words: list[str], string: str) -> bool:
+    """Case-insensitive check for if any words are in a string."""
+    words = re.findall(r"\b\w+\b", string.lower())
+
+    return any(word.lower() in words for word in include_words)

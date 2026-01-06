@@ -19,6 +19,7 @@ engines = [DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".du
 
 test_cases = [
     FieldCharacteristicsTestCase[Passage](
+        category="acronym",
         search_terms="nz",
         characteristics_test=lambda passage: ("new zealand" in passage.text.lower())
         or ("net zero" in passage.text.lower()),  # type: ignore
