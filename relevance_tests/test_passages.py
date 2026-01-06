@@ -14,6 +14,7 @@ from search.testcase import (
     all_words_in_string,
     any_words_in_string,
 )
+from search.weights_and_biases import WandbSession
 
 PassageTestResult = TestResult[Passage]
 
@@ -153,6 +154,8 @@ test_cases = [
 def test_passages():
     """Test passages"""
 
+    wb = WandbSession()
+
     for engine in engines:
         engine_test_results: list[PassageTestResult] = []
         logger.info(f"Testing passage test cases against {engine.name}")
@@ -171,6 +174,10 @@ def test_passages():
             engine_test_results.append(test_result)
 
         print_test_results(engine_test_results)
+        wb.log_test_results(
+            test_results=engine_test_results,
+            primitive=Passage,
+        )
 
         test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
         output_file_path = (
