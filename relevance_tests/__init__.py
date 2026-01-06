@@ -1,6 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel
@@ -45,17 +45,63 @@ def generate_test_run_id(
     return test_run_id
 
 
-def print_test_results(test_results: list[TestResult]) -> None:
-    """Print test results as a rich table showing pass/fail counts per category."""
+def calculate_test_result_metrics(
+    test_results: list[TestResult],
+) -> dict[str, dict[str, int | float | list[TestResult]]]:
+    """
+    Calculate test result pass rates by category and overall.
 
-    category_results: dict[str, list[TestResult]] = defaultdict(list)
+    Returns a dict of dicts keyed by category with an extra "overall" key.
+
+    Each subdictionary has the keys:
+    - results: a list of TestResults per category
+    - passed: the number that passed
+    - failed: the number that didn't pass
+    - total: the number of tests
+    - pass rate: passed/total
+    """
+
+    results_by_category: dict[str, list[TestResult]] = defaultdict(list)
 
     for result in test_results:
         category = result.test_case.category
         if category is None:
             category = "uncategorized"
-        category_results[category].append(result)
+        results_by_category[category].append(result)
 
+    metrics: dict[str, dict[str, int | float | list[TestResult]]] = dict()
+
+    total_passed = sum(1 for r in test_results if r.passed)
+    num_test_results = len(test_results)
+    metrics["overall"] = {
+        "results": test_results,
+        "passed": total_passed,
+        "failed": num_test_results - total_passed,
+        "total": num_test_results,
+        "pass_rate": total_passed / num_test_results if num_test_results > 0 else 0,
+    }
+
+    for category in sorted(results_by_category.keys()):
+        results: list[TestResult] = results_by_category[category]
+        passed = sum(1 for r in results if r.passed)
+        total = len(results)
+        pass_rate = passed / total if total > 0 else 0
+
+        metrics[category] = {
+            "results": results,
+            "passed": passed,
+            "failed": total - passed,
+            "total": total,
+            "pass_rate": pass_rate,
+        }
+
+    return metrics
+
+
+def print_test_results(test_results: list[TestResult]) -> None:
+    """Print test results as a rich table showing pass/fail counts per category, using calculate_test_result_metrics."""
+
+    metrics = calculate_test_result_metrics(test_results)
     table = Table(
         title="Test Results Summary", show_header=True, header_style="bold magenta"
     )
@@ -64,18 +110,18 @@ def print_test_results(test_results: list[TestResult]) -> None:
     table.add_column("Total", style="blue", justify="right")
     table.add_column("Pass Rate", style="yellow", justify="right")
 
-    for category in sorted(category_results.keys()):
-        results = category_results[category]
-        passed = sum(1 for r in results if r.passed)
-        total = len(results)
-        pass_rate = f"{(passed / total * 100):.1f}%" if total > 0 else "N/A"
-
+    for category in sorted(k for k in metrics.keys() if k != "overall"):
+        cat = metrics[category]
+        passed = cat["passed"]
+        total = cat["total"]
+        pass_rate = f"{(cat['pass_rate'] * 100):.1f}%" if total > 0 else "N/A"
         table.add_row(category, str(passed), str(total), pass_rate)
 
-    total_passed = sum(1 for r in test_results if r.passed)
-    total_tests = len(test_results)
+    overall = metrics["overall"]
+    total_passed = overall["passed"]
+    total_tests = overall["total"]
     total_pass_rate = (
-        f"{(total_passed / total_tests * 100):.1f}%" if total_tests > 0 else "N/A"
+        f"{(overall['pass_rate'] * 100):.1f}%" if total_tests > 0 else "N/A"
     )
     table.add_row(
         "[bold]TOTAL[/bold]",
@@ -89,9 +135,9 @@ def print_test_results(test_results: list[TestResult]) -> None:
     console.print()
 
     has_failures = False
-    for category in sorted(category_results.keys()):
-        results = category_results[category]
-        failures = [r for r in results if not r.passed]
+    for category in sorted(k for k in metrics.keys() if k != "overall"):
+        cat = metrics[category]
+        failures = [r for r in cat["results"] if not r.passed]  # type: ignore
 
         if failures:
             has_failures = True

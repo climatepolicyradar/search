@@ -72,6 +72,9 @@ line-length = 88
     "D101", "D102", # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
 ]
 
+[tool.ruff.lint.isort]
+known-third-party = ["wandb"]
+
 [tool.pylint."messages control"]
 disable = ["logging-fstring-interpolation"]  # W1203: allow f-strings in logging
 

@@ -645,6 +645,151 @@ test_cases = [
         description="search for indigenous people colombia laws should return relevant labels",
         assert_results=True,
     ),
+    FieldCharacteristicsTestCase[Label](
+        category="entity name",
+        search_terms="totalenergies",
+        characteristics_test=lambda label: (
+            "total" in label.preferred_label.lower()
+            and "energies" in label.preferred_label.lower()
+        ),
+        all_or_any="all",
+        description="search for totalenergies should return total energies label",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="entity name",
+        search_terms="european court of human rights",
+        characteristics_test=lambda label: (
+            "european" in label.preferred_label.lower()
+            and "court" in label.preferred_label.lower()
+            and "human" in label.preferred_label.lower()
+            and "rights" in label.preferred_label.lower()
+        ),
+        all_or_any="all",
+        description="search for european court of human rights should return matching label",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="question",
+        search_terms="How many targets does Canada currently have relating to climate change?",
+        characteristics_test=lambda label: (
+            "targets" in label.preferred_label.lower()
+            or "canada" in label.preferred_label.lower()
+            or "climate" in label.preferred_label.lower()
+        ),
+        all_or_any="all",
+        description="search about canada targets should return relevant labels",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="question",
+        search_terms="what is the croatias climate strategy",
+        characteristics_test=lambda label: (
+            "croatia" in label.preferred_label.lower()
+            or "climate" in label.preferred_label.lower()
+            or "policy" in label.preferred_label.lower()
+            or "strategy" in label.preferred_label.lower()
+        ),
+        all_or_any="all",
+        description="search about croatia climate strategy should return relevant labels",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="topic",
+        search_terms="hurricanes",
+        characteristics_test=lambda label: (
+            "extreme weather" in label.preferred_label.lower()
+            or "storm" in label.preferred_label.lower()
+        ),
+        all_or_any="all",
+        description="search for hurricanes should return extreme weather or storm related labels",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="topic",
+        search_terms="fossil fuel subsidy removal",
+        characteristics_test=lambda label: (
+            (
+                "fossil" in label.preferred_label.lower()
+                and "fuel" in label.preferred_label.lower()
+            )
+            or (
+                "subsidy" in label.preferred_label.lower()
+                and "removal" in label.preferred_label.lower()
+            )
+        ),
+        all_or_any="all",
+        description="search for fossil fuel subsidy removal should return fossil fuel or subsidy removal related labels",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="topic",
+        search_terms="fossil fuel subsidy removal",
+        characteristics_test=lambda label: (label.preferred_label.lower() != "subsidy"),
+        all_or_any="all",
+        description="search for fossil fuel subsidy removal should not return subsidy labels",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="topic",
+        search_terms="Just transition",
+        characteristics_test=lambda label: (
+            label.preferred_label.lower() == "just transition"
+        ),
+        all_or_any="any",
+        description="search for just transition should return just transition label",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="topic not in kg",
+        search_terms="resilient infrastructure",
+        characteristics_test=lambda label: (
+            "resilient" in label.preferred_label.lower()
+            or "infrastructure" in label.preferred_label.lower()
+            or "construction" in label.preferred_label.lower()
+        ),
+        all_or_any="any",
+        description="search for resilient infrastructure should return relevant labels",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="topic not in kg",
+        search_terms="offshore wind roadmap",
+        characteristics_test=lambda label: (
+            "wind" in label.preferred_label.lower()
+            or "energy" in label.preferred_label.lower()
+        ),
+        all_or_any="any",
+        description="search for offshore wind roadmap should return wind energy labels",
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="logic",
+        search_terms="Adaptation (OR) resilience investment",
+        characteristics_test=lambda label: (
+            label.preferred_label.lower() == "adaptation finance"
+        ),
+        all_or_any="any",
+        description="search for adaptation or resilience investment should return adaptation finance labels",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="logic",
+        search_terms="japan + united states + sweden + china",
+        characteristics_test=lambda label: (
+            "japan" in label.preferred_label.lower()
+            or "us" in label.preferred_label.lower()
+            or "united states" in label.preferred_label.lower()
+            or "sweden" in label.preferred_label.lower()
+            or "china" in label.preferred_label.lower()
+        ),
+        all_or_any="all",
+        description="search for multiple countries should return labels for those countries",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Label](
+        category="logic",
+        search_terms="indigenous people + colombia + laws",
+        characteristics_test=lambda label: (
+            "indigenous" in label.preferred_label.lower()
+            or label.preferred_label.lower() == "impacted groups"
+            or "colombia" in label.preferred_label.lower()
+            or "laws" in label.preferred_label.lower()
+        ),
+        all_or_any="all",
+        description="search for indigenous people colombia laws should return relevant labels",
+        assert_results=True,
+    ),
 ]
 
 
