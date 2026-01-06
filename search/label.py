@@ -9,16 +9,16 @@ class Label(BaseModel):
     alternative_labels: list[str]
     negative_labels: list[str]
     description: str | None = None
+    source: str
+    id_at_source: str
 
     @computed_field
     @property
     def id(self) -> Identifier:
         """Return a unique ID for the concept"""
         return Identifier.generate(
-            self.preferred_label,
-            self.description or "",
-            *sorted(self.alternative_labels),  # Sort for deterministic ordering
-            *sorted(self.negative_labels),  # Sort for deterministic ordering
+            self.source,
+            self.id_at_source,
         )
 
     @computed_field

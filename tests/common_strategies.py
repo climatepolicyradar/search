@@ -98,6 +98,8 @@ def label_data_strategy(draw) -> dict:
         "alternative_labels": draw(st.lists(text_strategy, max_size=5)),
         "negative_labels": draw(st.lists(text_strategy, max_size=5)),
         "description": draw(st.one_of(st.none(), text_strategy)),
+        "source": draw(text_strategy),
+        "id_at_source": draw(text_strategy),
     }
 
 

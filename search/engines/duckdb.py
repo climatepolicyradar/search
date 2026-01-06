@@ -113,8 +113,8 @@ class DuckDBLabelTableSchema(DuckDBTableSchema[Label]):
         super().__init__(
             model_class=Label,
             table_name="labels",
-            create_sql="CREATE TABLE labels (id TEXT, preferred_label TEXT, alternative_labels TEXT[], negative_labels TEXT[], description TEXT)",
-            insert_sql="INSERT INTO labels VALUES (?, ?, ?, ?, ?)",
+            create_sql="CREATE TABLE labels (id TEXT, preferred_label TEXT, alternative_labels TEXT[], negative_labels TEXT[], description TEXT, source TEXT, id_at_source TEXT)",
+            insert_sql="INSERT INTO labels VALUES (?, ?, ?, ?, ?, ?, ?)",
             searchable_columns=["preferred_label", "description"],
         )
 
@@ -126,6 +126,8 @@ class DuckDBLabelTableSchema(DuckDBTableSchema[Label]):
             item.alternative_labels,
             item.negative_labels,
             item.description,
+            item.source,
+            item.id_at_source,
         )
 
     def build_model(self, row: tuple) -> Label:
@@ -135,6 +137,8 @@ class DuckDBLabelTableSchema(DuckDBTableSchema[Label]):
             alternative_labels=row[2],
             negative_labels=row[3],
             description=row[4],
+            source=row[5],
+            id_at_source=row[6],
         )
 
 
