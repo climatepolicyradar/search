@@ -211,8 +211,12 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
         gt=0,
     )
     all_or_any: Literal["all", "any"] = Field(
-        description="Whether all or any of the words in the search terms should be in the field value.",
+        description="Whether all or any of the results should match the test characteristics.",
         default="all",
+    )
+    assert_results: bool = Field(
+        description="Whether to assert that results should be returned for a search. Checks that more than 0 results are returned.",
+        default=False,
     )
 
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
@@ -227,6 +231,9 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             passed = len(passing_results) == len(search_results)
         elif self.all_or_any == "any":
             passed = len(passing_results) > 0
+
+        if self.assert_results:
+            passed = passed and (len(search_results) > 0)
 
         return passed, search_results
 
