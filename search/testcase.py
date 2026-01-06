@@ -210,7 +210,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
         gt=0,
     )
     all_or_any: Literal["all", "any"] = Field(
-        description="Whether all or any of the words in the search terms should be in the field value.",
+        description="Whether all or any of the results should match the test characteristics.",
         default="all",
     )
     assert_results: bool = Field(
