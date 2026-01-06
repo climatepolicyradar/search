@@ -43,6 +43,8 @@ for concept in all_concepts:
             alternative_labels=concept.alternative_labels,
             negative_labels=concept.negative_labels,
             description=concept.description,
+            source="wikibase",
+            id_at_source=str(concept.wikibase_id),
         )
     )
 

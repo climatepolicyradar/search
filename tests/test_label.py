@@ -1,5 +1,6 @@
 """Tests for Label model."""
 
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from knowledge_graph.identifiers import Identifier
@@ -16,78 +17,47 @@ def test_whether_label_id_is_deterministic_for_same_inputs(label_data):
     assert isinstance(label1.id, Identifier)
 
 
-@given(
-    label=label_strategy(), labels_list=st.lists(text_strategy, min_size=2, max_size=5)
+@given(label=label_strategy(), new_source=text_strategy)
+def test_whether_label_id_changes_when_source_changes(label, new_source):
+    if new_source != label.source:
+        label_with_new_source = label.model_copy(update={"source": new_source})
+        assert label.id != label_with_new_source.id
+
+
+@given(label=label_strategy(), new_id_at_source=text_strategy)
+def test_whether_label_id_changes_when_id_at_source_changes(label, new_id_at_source):
+    if new_id_at_source != label.id_at_source:
+        label_with_new_id_at_source = label.model_copy(
+            update={"id_at_source": new_id_at_source}
+        )
+        assert label.id != label_with_new_id_at_source.id
+
+
+@pytest.mark.parametrize(
+    "field_name,value_strategy",
+    [
+        ("preferred_label", text_strategy),
+        ("description", st.one_of(st.none(), text_strategy)),
+        ("alternative_labels", st.lists(text_strategy, max_size=5)),
+        ("negative_labels", st.lists(text_strategy, max_size=5)),
+    ],
 )
-def test_whether_label_ids_are_invariant_to_the_order_of_their_alternative_labels(
-    label, labels_list
+@given(label=label_strategy(), data=st.data())
+def test_whether_label_id_is_invariant_to_field_changes(
+    label, data, field_name, value_strategy
 ):
-    if len(labels_list) >= 2:
-        label_with_ordered = label.model_copy(
-            update={"alternative_labels": labels_list}
-        )
-        label_with_reversed = label.model_copy(
-            update={"alternative_labels": list(reversed(labels_list))}
-        )
-        assert label_with_ordered.id == label_with_reversed.id
+    new_value = data.draw(value_strategy)
+    current_value = getattr(label, field_name)
 
-
-@given(
-    label=label_strategy(), labels_list=st.lists(text_strategy, min_size=2, max_size=5)
-)
-def test_whether_label_ids_are_invariant_to_the_order_of_their_negative_labels(
-    label, labels_list
-):
-    if len(labels_list) >= 2:
-        label_with_ordered = label.model_copy(update={"negative_labels": labels_list})
-        label_with_reversed = label.model_copy(
-            update={"negative_labels": list(reversed(labels_list))}
-        )
-        assert label_with_ordered.id == label_with_reversed.id
-
-
-@given(label=label_strategy(), new_preferred_label=text_strategy)
-def test_whether_label_id_changes_when_preferred_label_changes(
-    label, new_preferred_label
-):
-    if new_preferred_label != label.preferred_label:
-        label_with_new_preferred = label.model_copy(
-            update={"preferred_label": new_preferred_label}
-        )
-        assert label.id != label_with_new_preferred.id
-
-
-@given(label=label_strategy(), new_description=st.one_of(st.none(), text_strategy))
-def test_whether_label_id_changes_when_description_changes(label, new_description):
-    if new_description != label.description:
-        label_with_new_description = label.model_copy(
-            update={"description": new_description}
-        )
-        assert label.id != label_with_new_description.id
-
-
-@given(
-    label=label_strategy(), new_alternative_labels=st.lists(text_strategy, max_size=5)
-)
-def test_whether_label_id_changes_when_alternative_labels_change(
-    label, new_alternative_labels
-):
-    if sorted(new_alternative_labels) != sorted(label.alternative_labels):
-        label_with_new_alternatives = label.model_copy(
-            update={"alternative_labels": new_alternative_labels}
-        )
-        assert label.id != label_with_new_alternatives.id
-
-
-@given(label=label_strategy(), new_negative_labels=st.lists(text_strategy, max_size=5))
-def test_whether_label_id_changes_when_negative_labels_change(
-    label, new_negative_labels
-):
-    if sorted(new_negative_labels) != sorted(label.negative_labels):
-        label_with_new_negatives = label.model_copy(
-            update={"negative_labels": new_negative_labels}
-        )
-        assert label.id != label_with_new_negatives.id
+    # For lists, compare sorted values
+    if isinstance(current_value, list):
+        if sorted(new_value) != sorted(current_value):
+            label_with_new_value = label.model_copy(update={field_name: new_value})
+            assert label.id == label_with_new_value.id
+    else:
+        if new_value != current_value:
+            label_with_new_value = label.model_copy(update={field_name: new_value})
+            assert label.id == label_with_new_value.id
 
 
 @given(label=label_strategy())
