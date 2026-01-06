@@ -8,7 +8,12 @@ from search.config import PASSAGES_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBPassageSearchEngine
 from search.logging import get_logger
 from search.passage import Passage
-from search.testcase import FieldCharacteristicsTestCase, SearchComparisonTestCase
+from search.testcase import (
+    FieldCharacteristicsTestCase,
+    SearchComparisonTestCase,
+    all_words_in_string,
+    any_words_in_string,
+)
 
 PassageTestResult = TestResult[Passage]
 
@@ -43,6 +48,104 @@ test_cases = [
         k=50,
         minimum_overlap=0.8,
         strict_order=False,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="search term + geography",
+        search_terms="brazil nature based solutions",
+        characteristics_test=lambda passage: "nature based solutions"
+        in passage.text.lower().replace("-", " "),
+        all_or_any="any",
+        description="Search for 'brazil nature based solutions' returns passages which mention nature based solutions",
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="exact match",
+        search_terms='"national strategy for climate change 2050"',
+        characteristics_test=lambda passage: "national strategy for climate change 2050"
+        in passage.text.lower(),
+        description="Search in quotes should perform an exact match search.",
+        k=100,
+        all_or_any="all",
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="BROKEN exact match",
+        search_terms="adaptation options",
+        # FIXME: this tests exact match search, which we don't currently consider using these tests
+        # exact_match=True,
+        characteristics_test=(
+            lambda passage: not (
+                "adaptation option" in passage.text.lower()
+                and "adaptation options" not in passage.text.lower()
+            )
+        ),
+        description="Exact match search should not perform stemming.",
+        k=100,
+        all_or_any="all",
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="dissimilar passages excluded",
+        search_terms="mango",
+        characteristics_test=(lambda passage: "mango" in passage.text.lower()),
+        description="Dissimilar passages to 'mango' should be excluded.",
+        k=20,
+        all_or_any="all",
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="dissimilar passages excluded",
+        search_terms="statement",
+        characteristics_test=(lambda passage: "statement" in passage.text.lower()),
+        description="Dissimilar passages to 'statement' should be excluded.",
+        k=20,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="punctuation",
+        search_terms="$100",
+        characteristics_test=lambda passage: any(
+            phrase in passage.text
+            for phrase in ["$100", "$ 100", "100 dollars", "100 USD"]
+        ),
+        description="Search for $100 should always return $100.",
+        k=100,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="punctuation",
+        search_terms="$100",
+        characteristics_test=lambda passage: not (
+            "$1000" in passage.text and "$100" not in passage.text
+        ),
+        description="Exact match search for $100 should not return $1000.",
+        k=100,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="acronym",
+        search_terms="nationally determined contribution",
+        characteristics_test=lambda passage: "NDC" in passage.text
+        and not all_words_in_string(
+            ["nationally", "determined", "contribution"], passage.text
+        ),
+        description="Acronyms: search for nationally determined contribution should return NDC.",
+        k=100,
+        all_or_any="any",
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="misspellings",
+        search_terms="environment",
+        characteristics_test=lambda passage: all_words_in_string(
+            ["environment"], passage.text
+        ),
+        description="Search for misspelled text (environment).",
+        k=20,
+        all_or_any="any",
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="logic",
+        search_terms="green-washing or greenwashing or climatewashing or climate-washing",
+        characteristics_test=lambda passage: any_words_in_string(
+            ["greenwashing", "green-washing", "climatewashing", "climate-washing"],
+            passage.text,
+        ),
+        description="OR logic in search.",
+        k=20,
+        all_or_any="all",
     ),
 ]
 
