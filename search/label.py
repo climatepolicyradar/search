@@ -1,5 +1,6 @@
-from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, computed_field
+
+from search.identifiers import IdentifierWithSuffix
 
 
 class Label(BaseModel):
@@ -14,11 +15,12 @@ class Label(BaseModel):
 
     @computed_field
     @property
-    def id(self) -> Identifier:
+    def id(self) -> IdentifierWithSuffix:
         """Return a unique ID for the concept"""
-        return Identifier.generate(
+        return IdentifierWithSuffix.generate(
             self.source,
             self.id_at_source,
+            suffix=self.id_at_source,
         )
 
     @computed_field

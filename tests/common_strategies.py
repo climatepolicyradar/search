@@ -93,13 +93,21 @@ def huggingface_row_strategy(
 @st.composite
 def label_data_strategy(draw) -> dict:
     """Generate input data for Label model."""
+    # id_at_source should only contain ASCII alphanumeric characters to match IdentifierWithSuffix pattern
+    # Using string.ascii_letters + string.digits would be: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    alphanumeric_strategy = st.text(
+        alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        min_size=1,
+        max_size=50,
+    )
+
     return {
         "preferred_label": draw(text_strategy),
         "alternative_labels": draw(st.lists(text_strategy, max_size=5)),
         "negative_labels": draw(st.lists(text_strategy, max_size=5)),
         "description": draw(st.one_of(st.none(), text_strategy)),
         "source": draw(text_strategy),
-        "id_at_source": draw(text_strategy),
+        "id_at_source": draw(alphanumeric_strategy),
     }
 
 

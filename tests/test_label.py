@@ -8,6 +8,13 @@ from knowledge_graph.identifiers import Identifier
 from search.label import Label
 from tests.common_strategies import label_data_strategy, label_strategy, text_strategy
 
+# Strategy for alphanumeric strings (ASCII letters and digits only)
+alphanumeric_strategy = st.text(
+    alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    min_size=1,
+    max_size=50,
+)
+
 
 @given(label_data=label_data_strategy())
 def test_whether_label_id_is_deterministic_for_same_inputs(label_data):
@@ -24,7 +31,7 @@ def test_whether_label_id_changes_when_source_changes(label, new_source):
         assert label.id != label_with_new_source.id
 
 
-@given(label=label_strategy(), new_id_at_source=text_strategy)
+@given(label=label_strategy(), new_id_at_source=alphanumeric_strategy)
 def test_whether_label_id_changes_when_id_at_source_changes(label, new_id_at_source):
     if new_id_at_source != label.id_at_source:
         label_with_new_id_at_source = label.model_copy(
