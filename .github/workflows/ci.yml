@@ -43,6 +43,25 @@ jobs:
       - name: Run linting
         run: just lint-all
 
+  check-scripts-structure:
+    runs-on: ubuntu-latest
+    name: "Check scripts directory"
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+
+      - name: Check there are no .py files in scripts/ root
+        run: |
+          if ls scripts/*.py 2>/dev/null; then
+            echo "❌ Error: Found .py files in scripts/ root directory:"
+            ls scripts/*.py
+            echo ""
+            echo "Python files must be placed in subdirectories under scripts/, not in the root."
+            exit 1
+          else
+            echo "✅ No .py files found in scripts/ root directory"
+          fi
+
   test:
     runs-on: ubuntu-latest
     name: "Test"
