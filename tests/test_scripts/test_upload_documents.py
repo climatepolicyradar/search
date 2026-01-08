@@ -1,5 +1,6 @@
 """Tests for upload_documents.py script."""
 
+import json
 from unittest.mock import patch
 
 import duckdb
@@ -132,8 +133,10 @@ def test_whether_upload_documents_filters_rows_without_source_url(
 
         with open(jsonl_path) as f:
             doc_count = sum(1 for line in f if line.strip())
+            created_documents = [json.loads(line) for line in f]
 
         assert doc_count == 5, "Should only create documents for rows with source_url"
+        assert all([doc["source_url"] is not None for doc in created_documents])
 
 
 def test_whether_upload_documents_returns_unique_document_ids(
