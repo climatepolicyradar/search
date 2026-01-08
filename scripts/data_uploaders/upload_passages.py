@@ -23,46 +23,51 @@ from search.engines.duckdb import create_passages_duckdb_table
 from search.logging import get_logger
 from search.passage import Passage
 
-load_dotenv()
 
-logger = get_logger(__name__)
+def main():
+    """Main execution function for uploading passages."""
+    load_dotenv()
 
-logger.info(f"Loading dataset '{DATASET_NAME}'")
-dataset = load_dataset(DATASET_NAME, split="train")
-assert isinstance(dataset, Dataset), (
-    "dataset from huggingface should be of type Dataset"
-)
-logger.info(f"Loaded {len(dataset)} rows")
+    logger = get_logger(__name__)
 
-dataset = dataset.filter(
-    lambda row: row.get("document_metadata.source_url") is not None
-    and row.get("text_block.text") is not None,
-    desc="Filtering rows without source_url or text",
-)
-logger.info(f"Filtered to {len(dataset)} rows with source_url and text")
+    logger.info(f"Loading dataset '{DATASET_NAME}'")
+    dataset = load_dataset(DATASET_NAME, split="train")
+    assert isinstance(dataset, Dataset), (
+        "dataset from huggingface should be of type Dataset"
+    )
+    logger.info(f"Loaded {len(dataset)} rows")
 
-jsonl_path = PASSAGES_PATH_STEM.with_suffix(".jsonl")
-duckdb_path = PASSAGES_PATH_STEM.with_suffix(".duckdb")
+    dataset = dataset.filter(
+        lambda row: row.get("document_metadata.source_url") is not None
+        and row.get("text_block.text") is not None,
+        desc="Filtering rows without source_url or text",
+    )
+    logger.info(f"Filtered to {len(dataset)} rows with source_url and text")
+
+    jsonl_path = PASSAGES_PATH_STEM.with_suffix(".jsonl")
+    duckdb_path = PASSAGES_PATH_STEM.with_suffix(".duckdb")
+
+    def generate_passages() -> Iterator[Passage]:
+        """Generate Passage objects from the dataset, writing to JSONL as we go."""
+        with open(jsonl_path, "w", encoding="utf-8") as jsonl_file:
+            for row in track(dataset, description="Creating passages"):
+                passage = Passage.from_huggingface_row(row)
+                jsonl_file.write(passage.model_dump_json() + "\n")
+                yield passage
+
+    create_passages_duckdb_table(duckdb_path, generate_passages())
+
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        num_passages = sum(1 for _ in f)
+
+    logger.info(f"Saved {num_passages} passages to '{jsonl_path}'")
+    logger.info(f"Saved {num_passages} passages to '{duckdb_path}'")
+
+    logger.info("Uploading files to S3")
+    upload_file_to_s3(jsonl_path)
+    upload_file_to_s3(duckdb_path)
+    logger.info("Done")
 
 
-def generate_passages() -> Iterator[Passage]:
-    """Generate Passage objects from the dataset, writing to JSONL as we go."""
-    with open(jsonl_path, "w", encoding="utf-8") as jsonl_file:
-        for row in track(dataset, description="Creating passages"):
-            passage = Passage.from_huggingface_row(row)
-            jsonl_file.write(passage.model_dump_json() + "\n")
-            yield passage
-
-
-create_passages_duckdb_table(duckdb_path, generate_passages())
-
-with open(jsonl_path, "r", encoding="utf-8") as f:
-    num_passages = sum(1 for _ in f)
-
-logger.info(f"Saved {num_passages} passages to '{jsonl_path}'")
-logger.info(f"Saved {num_passages} passages to '{duckdb_path}'")
-
-logger.info("Uploading files to S3")
-upload_file_to_s3(jsonl_path)
-upload_file_to_s3(duckdb_path)
-logger.info("Done")
+if __name__ == "__main__":
+    main()

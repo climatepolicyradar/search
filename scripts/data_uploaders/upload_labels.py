@@ -19,49 +19,54 @@ from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
 from search.logging import get_logger
 
-load_dotenv()
 
+def main():
+    """Main execution function for uploading labels."""
+    load_dotenv()
 
-logger = get_logger(__name__)
+    logger = get_logger(__name__)
 
-username = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Username")
-password = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Password")
-url = get_ssm_parameter("/Wikibase/Cloud/URL")
-logger.info("Fetched wikibase credentials from AWS SSM")
+    username = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Username")
+    password = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Password")
+    url = get_ssm_parameter("/Wikibase/Cloud/URL")
+    logger.info("Fetched wikibase credentials from AWS SSM")
 
-wikibase = WikibaseSession(url=url, username=username, password=password)
-logger.info(f"Connected to Wikibase: {wikibase}")
+    wikibase = WikibaseSession(url=url, username=username, password=password)
+    logger.info(f"Connected to Wikibase: {wikibase}")
 
-all_concepts = wikibase.get_concepts()
-logger.info(f"Found {len(all_concepts)} concepts in Wikibase")
+    all_concepts = wikibase.get_concepts()
+    logger.info(f"Found {len(all_concepts)} concepts in Wikibase")
 
-labels: list[Label] = []
-for concept in all_concepts:
-    labels.append(
-        Label(
-            preferred_label=concept.preferred_label,
-            alternative_labels=concept.alternative_labels,
-            negative_labels=concept.negative_labels,
-            description=concept.description,
-            source="wikibase",
-            id_at_source=str(concept.wikibase_id),
+    labels: list[Label] = []
+    for concept in all_concepts:
+        labels.append(
+            Label(
+                preferred_label=concept.preferred_label,
+                alternative_labels=concept.alternative_labels,
+                negative_labels=concept.negative_labels,
+                description=concept.description,
+                source="wikibase",
+                id_at_source=str(concept.wikibase_id),
+            )
         )
-    )
 
-logger.info(f"Created a set of {len(labels)} labels from concepts")
+    logger.info(f"Created a set of {len(labels)} labels from concepts")
 
-jsonl_path = LABELS_PATH_STEM.with_suffix(".jsonl")
-with open(jsonl_path, "w", encoding="utf-8") as f:
-    f.write(serialise_pydantic_list_as_jsonl(labels))
+    jsonl_path = LABELS_PATH_STEM.with_suffix(".jsonl")
+    with open(jsonl_path, "w", encoding="utf-8") as f:
+        f.write(serialise_pydantic_list_as_jsonl(labels))
 
-logger.info(f"Saved {len(labels)} labels to '{jsonl_path}'")
+    logger.info(f"Saved {len(labels)} labels to '{jsonl_path}'")
 
-duckdb_path = LABELS_PATH_STEM.with_suffix(".duckdb")
-create_labels_duckdb_table(duckdb_path, labels)
-logger.info(f"Saved {len(labels)} labels to '{duckdb_path}'")
+    duckdb_path = LABELS_PATH_STEM.with_suffix(".duckdb")
+    create_labels_duckdb_table(duckdb_path, labels)
+    logger.info(f"Saved {len(labels)} labels to '{duckdb_path}'")
+
+    logger.info("Uploading datasets to S3")
+    upload_file_to_s3(jsonl_path)
+    upload_file_to_s3(duckdb_path)
+    logger.info("Done")
 
 
-logger.info("Uploading datasets to S3")
-upload_file_to_s3(jsonl_path)
-upload_file_to_s3(duckdb_path)
-logger.info("Done")
+if __name__ == "__main__":
+    main()

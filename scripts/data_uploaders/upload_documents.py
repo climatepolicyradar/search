@@ -26,67 +26,72 @@ from search.engines.duckdb import create_documents_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.logging import get_logger
 
-load_dotenv()
 
-logger = get_logger(__name__)
+def main():
+    """Main execution function for uploading documents."""
+    load_dotenv()
+
+    logger = get_logger(__name__)
+
+    logger.info(f"Loading dataset '{DATASET_NAME}'")
+    dataset = load_dataset(DATASET_NAME, split="train")
+    assert isinstance(dataset, Dataset), (
+        "dataset from huggingface should be of type Dataset"
+    )
+    logger.info(f"Loaded {len(dataset)} rows")
+
+    dataset = dataset.filter(
+        lambda row: row.get("document_metadata.source_url") is not None,
+        desc="Filtering rows without source_url",
+    )
+    logger.info(f"Filtered to {len(dataset)} rows with source_url")
+
+    # Track documents by document_id to avoid duplicates
+    documents_dict: dict[str, Document] = {}
+
+    progress_bar = Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeRemainingColumn(),
+    )
+
+    with progress_bar:
+        task = progress_bar.add_task("Creating documents", total=len(dataset))
+        for idx, row in enumerate(dataset):
+            progress_bar_kwargs: dict[str, int | str] = {"advance": 1}
+            if idx % 10_000 == 0:
+                progress_bar_kwargs["description"] = (
+                    f"Found {len(documents_dict)} documents"
+                )
+            progress_bar.update(task, **progress_bar_kwargs)  # type: ignore
+
+            document_id = row["document_id"]
+
+            # If we haven't seen this document_id before, create a new Document object
+            if document_id not in documents_dict:
+                documents_dict[document_id] = Document.from_huggingface_row(row)
+
+    documents: list[Document] = list(documents_dict.values())
+    logger.info("Created %d unique documents", len(documents))
+
+    jsonl_path = DOCUMENTS_PATH_STEM.with_suffix(".jsonl")
+    with open(jsonl_path, "w", encoding="utf-8") as f:
+        f.write(serialise_pydantic_list_as_jsonl(documents))
+    logger.info(f"Saved {len(documents)} documents to 'data/documents.jsonl'")
+
+    # duckdb
+    duckdb_path = DOCUMENTS_PATH_STEM.with_suffix(".duckdb")
+    create_documents_duckdb_table(duckdb_path, documents)
+    logger.info(f"Saved {len(documents)} documents to '{duckdb_path}'")
+
+    logger.info("Uploading files to S3")
+    upload_file_to_s3(jsonl_path)
+    upload_file_to_s3(duckdb_path)
+    logger.info("Done")
 
 
-logger.info(f"Loading dataset '{DATASET_NAME}'")
-dataset = load_dataset(DATASET_NAME, split="train")
-assert isinstance(dataset, Dataset), (
-    "dataset from huggingface should be of type Dataset"
-)
-logger.info(f"Loaded {len(dataset)} rows")
-
-dataset = dataset.filter(
-    lambda row: row.get("document_metadata.source_url") is not None,
-    desc="Filtering rows without source_url",
-)
-logger.info(f"Filtered to {len(dataset)} rows with source_url")
-
-# Track documents by document_id to avoid duplicates
-documents_dict: dict[str, Document] = {}
-
-progress_bar = Progress(
-    TextColumn("[progress.description]{task.description}"),
-    BarColumn(),
-    MofNCompleteColumn(),
-    TimeElapsedColumn(),
-    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-    TimeRemainingColumn(),
-)
-
-with progress_bar:
-    task = progress_bar.add_task("Creating documents", total=len(dataset))
-    for idx, row in enumerate(dataset):
-        progress_bar_kwargs: dict[str, int | str] = {"advance": 1}
-        if idx % 10_000 == 0:
-            progress_bar_kwargs["description"] = (
-                f"Found {len(documents_dict)} documents"
-            )
-        progress_bar.update(task, **progress_bar_kwargs)  # type: ignore
-
-        document_id = row["document_id"]
-
-        # If we haven't seen this document_id before, create a new Document object
-        if document_id not in documents_dict:
-            documents_dict[document_id] = Document.from_huggingface_row(row)
-
-
-documents: list[Document] = list(documents_dict.values())
-logger.info("Created %d unique documents", len(documents))
-
-jsonl_path = DOCUMENTS_PATH_STEM.with_suffix(".jsonl")
-with open(jsonl_path, "w", encoding="utf-8") as f:
-    f.write(serialise_pydantic_list_as_jsonl(documents))
-logger.info(f"Saved {len(documents)} documents to 'data/documents.jsonl'")
-
-# duckdb
-duckdb_path = DOCUMENTS_PATH_STEM.with_suffix(".duckdb")
-create_documents_duckdb_table(duckdb_path, documents)
-logger.info(f"Saved {len(documents)} documents to '{duckdb_path}'")
-
-logger.info("Uploading files to S3")
-upload_file_to_s3(jsonl_path)
-upload_file_to_s3(duckdb_path)
-logger.info("Done")
+if __name__ == "__main__":
+    main()
