@@ -11,6 +11,7 @@ environment variable.
 
 from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
+from prefect import flow, task
 
 from search.aws import get_ssm_parameter, upload_file_to_s3
 from search.config import LABELS_PATH_STEM
@@ -20,8 +21,9 @@ from search.label import Label
 from search.logging import get_logger
 
 
-def main():
-    """Main execution function for uploading labels."""
+@task
+def get_labels_from_wikibase() -> list[Label]:
+    """Get labels from Wikibase and transform them into Label objects."""
     load_dotenv()
 
     logger = get_logger(__name__)
@@ -52,6 +54,14 @@ def main():
 
     logger.info(f"Created a set of {len(labels)} labels from concepts")
 
+    return labels
+
+
+@task
+def upload_labels_to_s3(labels: list[Label]) -> None:
+    """Upload a list of label objects to S3, for consumption by search engines."""
+    logger = get_logger(__name__)
+
     jsonl_path = LABELS_PATH_STEM.with_suffix(".jsonl")
     with open(jsonl_path, "w", encoding="utf-8") as f:
         f.write(serialise_pydantic_list_as_jsonl(labels))
@@ -66,6 +76,15 @@ def main():
     upload_file_to_s3(jsonl_path)
     upload_file_to_s3(duckdb_path)
     logger.info("Done")
+
+
+@flow
+def main():
+    """Main execution function for uploading labels."""
+
+    labels = get_labels_from_wikibase()
+
+    upload_labels_to_s3(labels)
 
 
 if __name__ == "__main__":
