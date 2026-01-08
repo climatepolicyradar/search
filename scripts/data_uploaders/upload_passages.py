@@ -12,9 +12,11 @@ environment variable.
 """
 
 from collections.abc import Iterator
+from pathlib import Path
 
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
+from prefect import flow, task
 from rich.progress import track
 
 from search.aws import upload_file_to_s3
@@ -24,8 +26,9 @@ from search.logging import get_logger
 from search.passage import Passage
 
 
-def main():
-    """Main execution function for uploading passages."""
+@task
+def get_passages_from_huggingface() -> tuple[Path, Path]:
+    """Get passages from HuggingFace and save them to JSONL and DuckDB files."""
     load_dotenv()
 
     logger = get_logger(__name__)
@@ -63,10 +66,27 @@ def main():
     logger.info(f"Saved {num_passages} passages to '{jsonl_path}'")
     logger.info(f"Saved {num_passages} passages to '{duckdb_path}'")
 
+    return jsonl_path, duckdb_path
+
+
+@task
+def upload_passages_to_s3(jsonl_path: Path, duckdb_path: Path) -> None:
+    """Upload passage files to S3."""
+    logger = get_logger(__name__)
+
     logger.info("Uploading files to S3")
     upload_file_to_s3(jsonl_path)
     upload_file_to_s3(duckdb_path)
     logger.info("Done")
+
+
+@flow
+def main():
+    """Main execution function for uploading passages."""
+
+    jsonl_path, duckdb_path = get_passages_from_huggingface()
+
+    upload_passages_to_s3(jsonl_path, duckdb_path)
 
 
 if __name__ == "__main__":
