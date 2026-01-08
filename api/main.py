@@ -1,3 +1,4 @@
+import time
 from contextlib import asynccontextmanager
 from typing import Annotated, Callable, Generic, TypeVar
 
@@ -13,7 +14,10 @@ from api import (
 from search.document import Document
 from search.engines import SearchEngine
 from search.label import Label
+from search.logging import get_logger
 from search.passage import Passage
+
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -38,10 +42,10 @@ T = TypeVar("T", bound=BaseModel)
 class SearchResponse(BaseModel, Generic[T]):
     """Response model for search results"""
 
-    total_results: int
+    total_results: int | None = None
     page: int
     page_size: int
-    total_pages: int
+    total_pages: int | None
     next_page: AnyHttpUrl | None = None
     previous_page: AnyHttpUrl | None = None
     results: list[T]
@@ -80,21 +84,45 @@ def create_search_endpoint(
         ],
         page: Annotated[int, Query(description="Page number (1 indexed)", ge=1)] = 1,
         page_size: Annotated[int, Query(description="Page size", ge=1, le=100)] = 10,
+        count: Annotated[
+            bool,
+            Query(
+                description="Whether to return result count and number of pages. Recommended to set to False for datasets in the size of millions.",
+                alias="count",
+            ),
+        ] = False,
         engine: SearchEngine = Depends(engine_dependency),
     ) -> SearchResponse[T]:
         """Search endpoint for the specified resource."""
-        total_results = engine.count(search_terms)
 
-        total_pages = (
-            (total_results + page_size - 1) // page_size if total_results > 0 else 0
-        )
+        if count:
+            logger.info("Counting total results...")
+            start = time.time()
+            total_results = engine.count(search_terms)
+            elapsed = time.time() - start
+            logger.info(f"{total_results} results found in {elapsed:.1f} seconds")
+
+            total_pages = (
+                (total_results + page_size - 1) // page_size if total_results > 0 else 0
+            )
+        else:
+            total_results = None
+            total_pages = None
 
         offset = page_size * (page - 1)
+
+        logger.info(
+            f"Running search for {search_terms} with limit {page_size} and offset {offset}..."
+        )
+        start = time.time()
         paginated_results = engine.search(search_terms, limit=page_size, offset=offset)
+        elapsed = time.time() - start
+        logger.info(f"Search complete in {elapsed:.1f} seconds")
 
         # Build pagination URLs
-        next_page = None
-        if page < total_pages:
+        next_page_likely_exists = len(paginated_results) == page_size
+
+        if next_page_likely_exists:
             next_page = AnyHttpUrl(
                 build_pagination_url(request, search_terms, page + 1, page_size)
             )
