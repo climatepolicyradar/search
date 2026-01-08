@@ -81,7 +81,7 @@ TEST_RESULTS_DIR = DATA_DIR / "test_results"
 AWS_PROFILE = os.getenv("AWS_PROFILE", None)
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 
-DATASET_NAME = "climatepolicyradar/all-document-text-data"
+DATASET_NAME = "climatepolicyradar/all-document-text-data-weekly"
 
 # Weights & Biases
 WANDB_ENTITY = "climatepolicyradar"
