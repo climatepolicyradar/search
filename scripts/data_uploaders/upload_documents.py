@@ -10,6 +10,7 @@ environment variable.
 
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
+from prefect import flow, task
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -27,8 +28,10 @@ from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.logging import get_logger
 
 
-def main():
-    """Main execution function for uploading documents."""
+@task()
+def get_documents_from_huggingface() -> list[Document]:
+    """Get data from Huggingface, and transform it into a list of Document objects"""
+
     load_dotenv()
 
     logger = get_logger(__name__)
@@ -59,14 +62,14 @@ def main():
     )
 
     with progress_bar:
-        task = progress_bar.add_task("Creating documents", total=len(dataset))
+        progress_task = progress_bar.add_task("Creating documents", total=len(dataset))
         for idx, row in enumerate(dataset):
             progress_bar_kwargs: dict[str, int | str] = {"advance": 1}
             if idx % 10_000 == 0:
                 progress_bar_kwargs["description"] = (
                     f"Found {len(documents_dict)} documents"
                 )
-            progress_bar.update(task, **progress_bar_kwargs)  # type: ignore
+            progress_bar.update(progress_task, **progress_bar_kwargs)  # type: ignore
 
             document_id = row["document_id"]
 
@@ -76,6 +79,15 @@ def main():
 
     documents: list[Document] = list(documents_dict.values())
     logger.info("Created %d unique documents", len(documents))
+
+    return documents
+
+
+@task
+def upload_documents_to_s3(documents: list[Document]) -> None:
+    """Upload a list of document objects to S3, for consumption by search engines"""
+
+    logger = get_logger(__name__)
 
     jsonl_path = DOCUMENTS_PATH_STEM.with_suffix(".jsonl")
     with open(jsonl_path, "w", encoding="utf-8") as f:
@@ -91,6 +103,15 @@ def main():
     upload_file_to_s3(jsonl_path)
     upload_file_to_s3(duckdb_path)
     logger.info("Done")
+
+
+@flow
+def main():
+    """Main execution function for uploading documents."""
+
+    documents = get_documents_from_huggingface()
+
+    upload_documents_to_s3(documents)
 
 
 if __name__ == "__main__":
