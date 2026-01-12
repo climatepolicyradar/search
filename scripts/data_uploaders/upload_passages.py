@@ -20,7 +20,7 @@ from prefect import flow, task
 from rich.progress import track
 
 from search.aws import upload_file_to_s3
-from search.config import DATASET_NAME, PASSAGES_PATH_STEM
+from search.config import DATASET_NAME, HUGGINGFACE_TOKEN, PASSAGES_PATH_STEM
 from search.engines.duckdb import create_passages_duckdb_table
 from search.log import get_logger
 from search.passage import Passage
@@ -34,7 +34,7 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
     logger = get_logger(__name__)
 
     logger.info(f"Loading dataset '{DATASET_NAME}'")
-    dataset = load_dataset(DATASET_NAME, split="train")
+    dataset = load_dataset(DATASET_NAME, split="train", token=HUGGINGFACE_TOKEN)
     assert isinstance(dataset, Dataset), (
         "dataset from huggingface should be of type Dataset"
     )
