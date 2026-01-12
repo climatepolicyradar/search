@@ -18,7 +18,7 @@ from search.config import LABELS_PATH_STEM
 from search.engines.duckdb import create_labels_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
-from search.logging import get_logger
+from search.log import get_logger
 
 
 @task

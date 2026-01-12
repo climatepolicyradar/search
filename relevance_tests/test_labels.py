@@ -7,7 +7,7 @@ from relevance_tests import (
 from search.config import LABELS_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBLabelSearchEngine
 from search.label import Label
-from search.logging import get_logger
+from search.log import get_logger
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,

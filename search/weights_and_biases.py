@@ -10,7 +10,7 @@ from relevance_tests import TestResult, calculate_test_result_metrics
 from search import config
 from search.document import Document
 from search.label import Label
-from search.logging import get_logger
+from search.log import get_logger
 from search.passage import Passage
 
 logger = get_logger(__name__)

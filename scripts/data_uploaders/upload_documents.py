@@ -25,7 +25,7 @@ from search.config import DATASET_NAME, DOCUMENTS_PATH_STEM
 from search.document import Document
 from search.engines.duckdb import create_documents_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
-from search.logging import get_logger
+from search.log import get_logger
 
 
 @task()

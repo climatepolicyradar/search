@@ -10,7 +10,7 @@ from search.engines.duckdb import (
     DuckDBLabelSearchEngine,
     DuckDBPassageSearchEngine,
 )
-from search.logging import get_logger
+from search.log import get_logger
 
 logger = get_logger(__name__)
 
