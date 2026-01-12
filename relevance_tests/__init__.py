@@ -9,7 +9,7 @@ from rich.table import Table
 
 from search.engines import SearchEngine
 from search.engines.json import serialise_pydantic_list_as_jsonl
-from search.logging import get_logger
+from search.log import get_logger
 from search.testcase import TestCase
 
 logger = get_logger(__name__)

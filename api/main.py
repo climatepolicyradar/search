@@ -14,7 +14,7 @@ from api import (
 from search.document import Document
 from search.engines import SearchEngine
 from search.label import Label
-from search.logging import get_logger
+from search.log import get_logger
 from search.passage import Passage
 
 logger = get_logger(__name__)

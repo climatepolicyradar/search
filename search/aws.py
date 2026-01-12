@@ -7,7 +7,7 @@ import boto3
 from botocore.client import BaseClient
 
 from search.config import AWS_PROFILE, AWS_REGION, DATA_DIR
-from search.logging import get_logger
+from search.log import get_logger
 
 logger = get_logger(__name__)
 

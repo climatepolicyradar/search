@@ -22,7 +22,7 @@ from rich.progress import track
 from search.aws import upload_file_to_s3
 from search.config import DATASET_NAME, PASSAGES_PATH_STEM
 from search.engines.duckdb import create_passages_duckdb_table
-from search.logging import get_logger
+from search.log import get_logger
 from search.passage import Passage
 
 
