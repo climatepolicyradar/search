@@ -1,18 +1,58 @@
-# Exclude data directory from Docker build context
-data/
+# Version control
+.git
+.gitignore
 
-# Exclude other unnecessary files
-.git/
-.venv/
-__pycache__/
+# Python
+.venv
+venv
+__pycache__
 *.pyc
 *.pyo
 *.pyd
 .Python
 *.so
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
+*.egg
+*.egg-info
+dist
+build
 
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.hypothesis
+
+# Linting
+.ruff_cache
+.mypy_cache
+.pylint.d
+
+# Environment
+.env
+.env.local
+
+# Data
+data/
+
+# Infrastructure
+infra/
+
+# Tests
+tests/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+docs/
+*.md
+!README.md

@@ -1,3 +1,5 @@
+set dotenv-load
+
 # Set the default command to list all available commands
 default:
     @just --list
@@ -46,3 +48,27 @@ lint-all:
 # serve the API on a local development server with hot reloading
 serve-api:
     uv run uvicorn api.main:app --reload
+
+# Build Docker image for deployment
+build-image:
+    docker build --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
+
+# Run Docker image locally
+run-image cmd="sh":
+    docker run --rm -it ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} {{cmd}}
+
+# Login to AWS ECR
+ecr-login:
+    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+
+# Push Docker image to ECR
+push-image:
+    docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
+
+# Deploy flows to Prefect Cloud (build, push, and register)
+deploy-flows-from-local:
+    echo building ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} in region: ${AWS_REGION}
+    just ecr-login
+    just build-image
+    just push-image
+    uv run python deployments.py
