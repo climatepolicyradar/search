@@ -49,7 +49,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: just install-transformers
+        run: just install
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.3.1
@@ -87,9 +87,6 @@ jobs:
 
       - name: Confirm Prefect binary availability
         run: docker run --rm ${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} prefect version
-
-      - name: Confirm Coiled binary availability
-        run: docker run --rm ${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} coiled --version
 
       - name: Confirm dependencies availability
         run: docker run --rm ${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }} python -c "import aioboto3; print('aioboto3 imported successfully')"

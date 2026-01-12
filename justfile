@@ -72,3 +72,6 @@ deploy-flows-from-local:
     just build-image
     just push-image
     uv run python deployments.py
+
+get-version:
+    @grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/'
