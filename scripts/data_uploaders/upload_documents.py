@@ -10,7 +10,7 @@ environment variable.
 
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from prefect import flow, task
+from prefect import flow, get_run_logger, task
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -25,7 +25,6 @@ from search.config import DATASET_NAME, DOCUMENTS_PATH_STEM, get_from_env_with_f
 from search.document import Document
 from search.engines.duckdb import create_documents_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
-from search.log import get_logger
 
 
 @task()
@@ -34,7 +33,7 @@ def get_documents_from_huggingface() -> list[Document]:
 
     load_dotenv()
 
-    logger = get_logger(__name__)
+    logger = get_run_logger()
 
     huggingface_token = get_from_env_with_fallback(
         var_name="HUGGINGFACE_TOKEN", ssm_name="/Huggingface/Token"
@@ -91,7 +90,7 @@ def get_documents_from_huggingface() -> list[Document]:
 def upload_documents_to_s3(documents: list[Document]) -> None:
     """Upload a list of document objects to S3, for consumption by search engines"""
 
-    logger = get_logger(__name__)
+    logger = get_run_logger()
 
     jsonl_path = DOCUMENTS_PATH_STEM.with_suffix(".jsonl")
     with open(jsonl_path, "w", encoding="utf-8") as f:

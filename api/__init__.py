@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from search.aws import download_file_from_s3, get_bucket_name
+from search.aws import download_file_from_s3
 from search.config import BUCKET_NAME, DATA_DIR
 from search.engines import DocumentSearchEngine, LabelSearchEngine, PassageSearchEngine
 from search.engines.duckdb import (

@@ -16,13 +16,12 @@ from pathlib import Path
 
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from prefect import flow, task
+from prefect import flow, get_run_logger, task
 from rich.progress import track
 
 from search.aws import upload_file_to_s3
 from search.config import DATASET_NAME, PASSAGES_PATH_STEM, get_from_env_with_fallback
 from search.engines.duckdb import create_passages_duckdb_table
-from search.log import get_logger
 from search.passage import Passage
 
 
@@ -31,7 +30,7 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
     """Get passages from HuggingFace and save them to JSONL and DuckDB files."""
     load_dotenv()
 
-    logger = get_logger(__name__)
+    logger = get_run_logger()
 
     huggingface_token = get_from_env_with_fallback(
         var_name="HUGGINGFACE_TOKEN", ssm_name="/Huggingface/Token"
@@ -76,7 +75,7 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
 @task
 def upload_passages_to_s3(jsonl_path: Path, duckdb_path: Path) -> None:
     """Upload passage files to S3."""
-    logger = get_logger(__name__)
+    logger = get_run_logger()
 
     logger.info("Uploading files to S3")
     upload_file_to_s3(jsonl_path)
