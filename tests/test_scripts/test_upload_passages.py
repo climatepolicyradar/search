@@ -56,9 +56,9 @@ def test_whether_upload_passages_creates_files(
             "scripts.data_uploaders.upload_passages.upload_file_to_s3"
         ) as mock_upload,
     ):
-        from scripts.data_uploaders.upload_passages import main
+        from scripts.data_uploaders.upload_passages import upload_passages_databases
 
-        main()
+        upload_passages_databases()
 
         # Verify JSONL file
         assert jsonl_path.exists(), "JSONL file should be created"
@@ -147,9 +147,9 @@ def test_whether_upload_passages_filters_rows_missing_required_fields(
         ),
         patch("scripts.data_uploaders.upload_passages.upload_file_to_s3"),
     ):
-        from scripts.data_uploaders.upload_passages import main
+        from scripts.data_uploaders.upload_passages import upload_passages_databases
 
-        main()
+        upload_passages_databases()
 
         with open(jsonl_path) as f:
             passage_count = sum(1 for line in f if line.strip())
