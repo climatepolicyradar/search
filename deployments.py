@@ -141,12 +141,15 @@ if __name__ == "__main__":
     create_deployment(
         flow=upload_documents_databases,
         description="Upload documents from HuggingFace to S3 as jsonl and duckdb",
+        schedule="0 18 * * SUN",
     )
     create_deployment(
         flow=upload_labels_databases,
         description="Upload labels from Wikibase to S3 as jsonl and duckdb",
+        schedule="0 18 * * SUN",
     )
     create_deployment(
         flow=upload_passages_databases,
         description="Upload passages from HuggingFace to S3 as jsonl and duckdb",
+        schedule="0 18 * * SUN",
     )
