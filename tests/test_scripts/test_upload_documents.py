@@ -6,6 +6,7 @@ from unittest.mock import patch
 import duckdb
 from hypothesis import find
 from hypothesis import strategies as st
+from prefect.testing.utilities import prefect_test_harness
 
 from search.document import Document
 from tests.common_strategies import huggingface_row_strategy
@@ -43,47 +44,49 @@ def test_whether_upload_documents_creates_files(
     documents_path_stem = tmp_path / "documents"
     jsonl_path = documents_path_stem.with_suffix(".jsonl")
     duckdb_path = documents_path_stem.with_suffix(".duckdb")
+    with prefect_test_harness():
+        with (
+            patch(
+                "scripts.data_uploaders.upload_documents.load_dataset",
+                return_value=mock_dataset,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",
+                documents_path_stem,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_documents.upload_file_to_s3"
+            ) as mock_upload,
+        ):
+            from scripts.data_uploaders.upload_documents import (
+                upload_documents_databases,
+            )
 
-    with (
-        patch(
-            "scripts.data_uploaders.upload_documents.load_dataset",
-            return_value=mock_dataset,
-        ),
-        patch(
-            "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",
-            documents_path_stem,
-        ),
-        patch(
-            "scripts.data_uploaders.upload_documents.upload_file_to_s3"
-        ) as mock_upload,
-    ):
-        from scripts.data_uploaders.upload_documents import upload_documents_databases
+            upload_documents_databases()
 
-        upload_documents_databases()
+            # Verify JSONL file
+            assert jsonl_path.exists(), "JSONL file should be created"
+            with open(jsonl_path) as f:
+                lines = [line for line in f if line.strip()]
 
-        # Verify JSONL file
-        assert jsonl_path.exists(), "JSONL file should be created"
-        with open(jsonl_path) as f:
-            lines = [line for line in f if line.strip()]
+            assert len(lines) > 0, "JSONL should contain documents"
 
-        assert len(lines) > 0, "JSONL should contain documents"
+            # Verify first line is valid Document JSON
+            first_doc = Document.model_validate_json(lines[0])
+            assert first_doc.id is not None
 
-        # Verify first line is valid Document JSON
-        first_doc = Document.model_validate_json(lines[0])
-        assert first_doc.id is not None
+            # Verify DuckDB file
+            assert duckdb_path.exists(), "DuckDB file should be created"
+            conn = duckdb.connect(str(duckdb_path), read_only=True)
+            count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+            conn.close()
+            assert count == len(lines), "DuckDB and JSONL should have same count"
 
-        # Verify DuckDB file
-        assert duckdb_path.exists(), "DuckDB file should be created"
-        conn = duckdb.connect(str(duckdb_path), read_only=True)
-        count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
-        conn.close()
-        assert count == len(lines), "DuckDB and JSONL should have same count"
-
-        # Verify uploads
-        assert mock_upload.call_count == 2, "Should upload both files"
-        uploaded_paths = [call[0][0] for call in mock_upload.call_args_list]
-        assert jsonl_path in uploaded_paths
-        assert duckdb_path in uploaded_paths
+            # Verify uploads
+            assert mock_upload.call_count == 2, "Should upload both files"
+            uploaded_paths = [call[0][0] for call in mock_upload.call_args_list]
+            assert jsonl_path in uploaded_paths
+            assert duckdb_path in uploaded_paths
 
 
 def test_whether_upload_documents_filters_rows_without_source_url(
@@ -116,27 +119,32 @@ def test_whether_upload_documents_filters_rows_without_source_url(
     documents_path_stem = tmp_path / "documents"
     jsonl_path = documents_path_stem.with_suffix(".jsonl")
 
-    with (
-        patch(
-            "scripts.data_uploaders.upload_documents.load_dataset",
-            return_value=mock_dataset,
-        ),
-        patch(
-            "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",
-            documents_path_stem,
-        ),
-        patch("scripts.data_uploaders.upload_documents.upload_file_to_s3"),
-    ):
-        from scripts.data_uploaders.upload_documents import upload_documents_databases
+    with prefect_test_harness():
+        with (
+            patch(
+                "scripts.data_uploaders.upload_documents.load_dataset",
+                return_value=mock_dataset,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",
+                documents_path_stem,
+            ),
+            patch("scripts.data_uploaders.upload_documents.upload_file_to_s3"),
+        ):
+            from scripts.data_uploaders.upload_documents import (
+                upload_documents_databases,
+            )
 
-        upload_documents_databases()
+            upload_documents_databases()
 
-        with open(jsonl_path) as f:
-            doc_count = sum(1 for line in f if line.strip())
-            created_documents = [json.loads(line) for line in f]
+            with open(jsonl_path) as f:
+                doc_count = sum(1 for line in f if line.strip())
+                created_documents = [json.loads(line) for line in f]
 
-        assert doc_count == 5, "Should only create documents for rows with source_url"
-        assert all([doc["source_url"] is not None for doc in created_documents])
+            assert doc_count == 5, (
+                "Should only create documents for rows with source_url"
+            )
+            assert all([doc["source_url"] is not None for doc in created_documents])
 
 
 def test_whether_upload_documents_returns_unique_document_ids(
@@ -172,23 +180,26 @@ def test_whether_upload_documents_returns_unique_document_ids(
     documents_path_stem = tmp_path / "documents"
     jsonl_path = documents_path_stem.with_suffix(".jsonl")
 
-    with (
-        patch(
-            "scripts.data_uploaders.upload_documents.load_dataset",
-            return_value=mock_dataset,
-        ),
-        patch(
-            "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",
-            documents_path_stem,
-        ),
-        patch("scripts.data_uploaders.upload_documents.upload_file_to_s3"),
-    ):
-        from scripts.data_uploaders.upload_documents import upload_documents_databases
+    with prefect_test_harness():
+        with (
+            patch(
+                "scripts.data_uploaders.upload_documents.load_dataset",
+                return_value=mock_dataset,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",
+                documents_path_stem,
+            ),
+            patch("scripts.data_uploaders.upload_documents.upload_file_to_s3"),
+        ):
+            from scripts.data_uploaders.upload_documents import (
+                upload_documents_databases,
+            )
 
-        upload_documents_databases()
+            upload_documents_databases()
 
-        with open(jsonl_path) as f:
-            doc_count = sum(1 for line in f if line.strip())
+            with open(jsonl_path) as f:
+                doc_count = sum(1 for line in f if line.strip())
 
-        # Should only have 3 unique documents (1 from duplicates, 2 unique)
-        assert doc_count == 3, "Should deduplicate by document_id"
+            # Should only have 3 unique documents (1 from duplicates, 2 unique)
+            assert doc_count == 3, "Should deduplicate by document_id"
