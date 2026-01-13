@@ -15,9 +15,9 @@ from prefect.blocks.system import JSON
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 
-from scripts.data_uploaders.upload_documents import main as upload_documents_flow
-from scripts.data_uploaders.upload_labels import main as upload_labels_flow
-from scripts.data_uploaders.upload_passages import main as upload_passages_flow
+from scripts.data_uploaders.upload_documents import upload_documents_databases
+from scripts.data_uploaders.upload_labels import upload_labels_databases
+from scripts.data_uploaders.upload_passages import upload_passages_databases
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {
@@ -125,14 +125,14 @@ if __name__ == "__main__":
     logger.info(f"using version: {importlib.metadata.version('search')}")
 
     create_deployment(
-        flow=upload_documents_flow,
+        flow=upload_documents_databases,
         description="Upload documents from HuggingFace to S3 as jsonl and duckdb",
     )
     create_deployment(
-        flow=upload_labels_flow,
-        description="Upload labels from HuggingFace to S3 as jsonl and duckdb",
+        flow=upload_labels_databases,
+        description="Upload labels from Wikibase to S3 as jsonl and duckdb",
     )
     create_deployment(
-        flow=upload_passages_flow,
+        flow=upload_passages_databases,
         description="Upload passages from HuggingFace to S3 as jsonl and duckdb",
     )

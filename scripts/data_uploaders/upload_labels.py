@@ -79,8 +79,8 @@ def upload_labels_to_s3(labels: list[Label]) -> None:
 
 
 @flow
-def main():
-    """Main execution function for uploading labels."""
+def upload_labels_databases():
+    """Get labels from Wikibase, and upload to required database formats in s3."""
 
     labels = get_labels_from_wikibase()
 
@@ -88,4 +88,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    upload_labels_databases()

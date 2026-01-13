@@ -106,8 +106,8 @@ def upload_documents_to_s3(documents: list[Document]) -> None:
 
 
 @flow
-def main():
-    """Main execution function for uploading documents."""
+def upload_documents_databases():
+    """Get documents from Huggingface, and upload to required database formats in s3."""
 
     documents = get_documents_from_huggingface()
 
@@ -115,4 +115,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    upload_documents_databases()

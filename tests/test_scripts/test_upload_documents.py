@@ -57,9 +57,9 @@ def test_whether_upload_documents_creates_files(
             "scripts.data_uploaders.upload_documents.upload_file_to_s3"
         ) as mock_upload,
     ):
-        from scripts.data_uploaders.upload_documents import main
+        from scripts.data_uploaders.upload_documents import upload_documents_databases
 
-        main()
+        upload_documents_databases()
 
         # Verify JSONL file
         assert jsonl_path.exists(), "JSONL file should be created"
@@ -127,9 +127,9 @@ def test_whether_upload_documents_filters_rows_without_source_url(
         ),
         patch("scripts.data_uploaders.upload_documents.upload_file_to_s3"),
     ):
-        from scripts.data_uploaders.upload_documents import main
+        from scripts.data_uploaders.upload_documents import upload_documents_databases
 
-        main()
+        upload_documents_databases()
 
         with open(jsonl_path) as f:
             doc_count = sum(1 for line in f if line.strip())
@@ -183,9 +183,9 @@ def test_whether_upload_documents_returns_unique_document_ids(
         ),
         patch("scripts.data_uploaders.upload_documents.upload_file_to_s3"),
     ):
-        from scripts.data_uploaders.upload_documents import main
+        from scripts.data_uploaders.upload_documents import upload_documents_databases
 
-        main()
+        upload_documents_databases()
 
         with open(jsonl_path) as f:
             doc_count = sum(1 for line in f if line.strip())

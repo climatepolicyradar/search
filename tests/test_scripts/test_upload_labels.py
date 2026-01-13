@@ -51,7 +51,7 @@ def test_whether_upload_labels_creates_files(
         patch("scripts.data_uploaders.upload_labels.upload_file_to_s3") as mock_upload,
     ):
         upload_labels = importlib.import_module("scripts.data_uploaders.upload_labels")
-        upload_labels.main()
+        upload_labels.upload_labels_databases()
 
         # Verify JSONL file exists and has correct number of lines
         assert jsonl_path.exists(), "JSONL file should be created"
@@ -102,9 +102,9 @@ def test_whether_upload_labels_creates_valid_labels_from_concepts(
         ),
         patch("scripts.data_uploaders.upload_labels.upload_file_to_s3"),
     ):
-        from scripts.data_uploaders.upload_labels import main
+        from scripts.data_uploaders.upload_labels import upload_labels_databases
 
-        main()
+        upload_labels_databases()
 
         with open(jsonl_path) as f:
             labels = [Label.model_validate_json(line) for line in f if line.strip()]

@@ -81,8 +81,8 @@ def upload_passages_to_s3(jsonl_path: Path, duckdb_path: Path) -> None:
 
 
 @flow
-def main():
-    """Main execution function for uploading passages."""
+def upload_passages_databases():
+    """Get passages from Huggingface, and upload to required database formats in s3."""
 
     jsonl_path, duckdb_path = get_passages_from_huggingface()
 
@@ -90,4 +90,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    upload_passages_databases()
