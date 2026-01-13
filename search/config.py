@@ -58,30 +58,6 @@ def is_truthy(value: str | bool) -> bool:
     return value == "1" or value.lower() == "true"
 
 
-def get_from_env_with_fallback(
-    var_name: str,
-    ssm_name: str,
-) -> str | None:
-    """
-    Get an environment variable from local env with fallback to ssm.
-
-    Optionally specify an ssm_name which is different to the local env var name. If
-    the variable is missing for both options, returns None.
-    """
-
-    value = os.getenv(var_name)
-
-    if value is not None:
-        return value
-
-    from search.aws import get_ssm_parameter
-
-    try:
-        return get_ssm_parameter(ssm_name or var_name)
-    except Exception:
-        return None
-
-
 REPO_ROOT_DIR = get_git_root()
 
 # DATA_DIR depends on the environment:
@@ -106,6 +82,30 @@ AWS_PROFILE = os.getenv("AWS_PROFILE", None)
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 
 
+def get_from_env_with_fallback(
+    var_name: str,
+    ssm_name: str,
+) -> str | None:
+    """
+    Get an environment variable from local env with fallback to SSM.
+
+    :param var_name: The environment variable name
+    :param ssm_name: SSM parameter name (uses var_name if not provided)
+    :return: Value from env or SSM, or None if neither exists
+    """
+    value = os.getenv(var_name)
+    if value is not None:
+        return value
+
+    # Import here to avoid circular import (aws.py imports from this module)
+    from search.aws import get_ssm_parameter
+
+    try:
+        return get_ssm_parameter(ssm_name or var_name)
+    except Exception:
+        return None
+
+
 # Weights & Biases
 WANDB_ENTITY = "climatepolicyradar"
 WANDB_PROJECT_OFFLINE_TESTS = "search_offline_tests"
@@ -113,6 +113,3 @@ DISABLE_WANDB = is_truthy(os.getenv("DISABLE_WANDB", False))
 
 # Huggingface
 DATASET_NAME = "climatepolicyradar/all-document-text-data-weekly"
-HUGGINGFACE_TOKEN = get_from_env_with_fallback(
-    var_name="HUGGINGFACE_TOKEN", ssm_name="/Huggingface/Token"
-)

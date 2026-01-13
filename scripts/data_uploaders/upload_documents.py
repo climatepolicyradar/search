@@ -21,7 +21,7 @@ from rich.progress import (
 )
 
 from search.aws import upload_file_to_s3
-from search.config import DATASET_NAME, DOCUMENTS_PATH_STEM, HUGGINGFACE_TOKEN
+from search.config import DATASET_NAME, DOCUMENTS_PATH_STEM, get_from_env_with_fallback
 from search.document import Document
 from search.engines.duckdb import create_documents_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
@@ -36,8 +36,12 @@ def get_documents_from_huggingface() -> list[Document]:
 
     logger = get_logger(__name__)
 
+    huggingface_token = get_from_env_with_fallback(
+        var_name="HUGGINGFACE_TOKEN", ssm_name="/Huggingface/Token"
+    )
+
     logger.info(f"Loading dataset '{DATASET_NAME}'")
-    dataset = load_dataset(DATASET_NAME, split="train", token=HUGGINGFACE_TOKEN)
+    dataset = load_dataset(DATASET_NAME, split="train", token=huggingface_token)
     assert isinstance(dataset, Dataset), (
         "dataset from huggingface should be of type Dataset"
     )
