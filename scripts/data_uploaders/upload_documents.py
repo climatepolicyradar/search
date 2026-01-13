@@ -8,7 +8,7 @@ Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
 environment variable.
 """
 
-from datasets import Dataset, load_dataset
+from datasets import Dataset, DownloadConfig, load_dataset
 from dotenv import load_dotenv
 from prefect import flow, get_run_logger, task
 from rich.progress import (
@@ -21,7 +21,12 @@ from rich.progress import (
 )
 
 from search.aws import upload_file_to_s3
-from search.config import DATASET_NAME, DOCUMENTS_PATH_STEM, get_from_env_with_fallback
+from search.config import (
+    DATASET_NAME,
+    DOCUMENTS_PATH_STEM,
+    HF_CACHE_DIR,
+    get_from_env_with_fallback,
+)
 from search.document import Document
 from search.engines.duckdb import create_documents_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
@@ -40,7 +45,13 @@ def get_documents_from_huggingface() -> list[Document]:
     )
 
     logger.info(f"Loading dataset '{DATASET_NAME}'")
-    dataset = load_dataset(DATASET_NAME, split="train", token=huggingface_token)
+    dataset = load_dataset(
+        DATASET_NAME,
+        split="train",
+        token=huggingface_token,
+        cache_dir=str(HF_CACHE_DIR),
+        download_config=DownloadConfig(cache_dir=str(HF_CACHE_DIR / "downloads")),
+    )
     assert isinstance(dataset, Dataset), (
         "dataset from huggingface should be of type Dataset"
     )
