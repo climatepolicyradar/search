@@ -20,7 +20,12 @@ from prefect import flow, get_run_logger, task
 from rich.progress import track
 
 from search.aws import upload_file_to_s3
-from search.config import DATASET_NAME, PASSAGES_PATH_STEM, get_from_env_with_fallback
+from search.config import (
+    DATASET_NAME,
+    HF_CACHE_DIR,
+    PASSAGES_PATH_STEM,
+    get_from_env_with_fallback,
+)
 from search.engines.duckdb import create_passages_duckdb_table
 from search.passage import Passage
 
@@ -37,7 +42,12 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
     )
 
     logger.info(f"Loading dataset '{DATASET_NAME}'")
-    dataset = load_dataset(DATASET_NAME, split="train", token=huggingface_token)
+    dataset = load_dataset(
+        DATASET_NAME,
+        split="train",
+        token=huggingface_token,
+        cache_dir=str(HF_CACHE_DIR),
+    )
     assert isinstance(dataset, Dataset), (
         "dataset from huggingface should be of type Dataset"
     )
