@@ -11,14 +11,13 @@ environment variable.
 
 from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
-from prefect import flow, task
+from prefect import flow, get_run_logger, task
 
 from search.aws import get_ssm_parameter, upload_file_to_s3
 from search.config import LABELS_PATH_STEM
 from search.engines.duckdb import create_labels_duckdb_table
 from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
-from search.log import get_logger
 
 
 @task
@@ -26,7 +25,7 @@ def get_labels_from_wikibase() -> list[Label]:
     """Get labels from Wikibase and transform them into Label objects."""
     load_dotenv()
 
-    logger = get_logger(__name__)
+    logger = get_run_logger()
 
     username = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Username")
     password = get_ssm_parameter("/Wikibase/Cloud/ServiceAccount/Password")
@@ -60,7 +59,7 @@ def get_labels_from_wikibase() -> list[Label]:
 @task
 def upload_labels_to_s3(labels: list[Label]) -> None:
     """Upload a list of label objects to S3, for consumption by search engines."""
-    logger = get_logger(__name__)
+    logger = get_run_logger()
 
     jsonl_path = LABELS_PATH_STEM.with_suffix(".jsonl")
     with open(jsonl_path, "w", encoding="utf-8") as f:
