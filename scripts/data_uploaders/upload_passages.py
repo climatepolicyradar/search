@@ -14,7 +14,7 @@ environment variable.
 from collections.abc import Iterator
 from pathlib import Path
 
-from datasets import Dataset, DownloadConfig, load_dataset
+from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
 from prefect import flow, get_run_logger, task
 from rich.progress import track
@@ -47,7 +47,6 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
         split="train",
         token=huggingface_token,
         cache_dir=str(HF_CACHE_DIR),
-        download_config=DownloadConfig(cache_dir=str(HF_CACHE_DIR / "downloads")),
     )
     assert isinstance(dataset, Dataset), (
         "dataset from huggingface should be of type Dataset"

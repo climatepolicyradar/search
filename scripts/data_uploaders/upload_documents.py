@@ -8,7 +8,7 @@ Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
 environment variable.
 """
 
-from datasets import Dataset, DownloadConfig, load_dataset
+from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
 from prefect import flow, get_run_logger, task
 from rich.progress import (
@@ -50,7 +50,6 @@ def get_documents_from_huggingface() -> list[Document]:
         split="train",
         token=huggingface_token,
         cache_dir=str(HF_CACHE_DIR),
-        download_config=DownloadConfig(cache_dir=str(HF_CACHE_DIR / "downloads")),
     )
     assert isinstance(dataset, Dataset), (
         "dataset from huggingface should be of type Dataset"
