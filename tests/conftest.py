@@ -1,6 +1,7 @@
 """Pytest configuration and shared fixtures."""
 
 import os
+from unittest.mock import patch
 
 import boto3
 import pytest
@@ -19,6 +20,35 @@ from tests.common_strategies import (
     label_strategy,
     passage_strategy,
 )
+
+
+@pytest.fixture(scope="function", autouse=True)
+def mock_prefect_decorators():
+    """
+    Mock Prefect decorators to prevent cloud authentication during tests.
+
+    This fixture automatically mocks @flow and @task decorators to be identity
+    functions, allowing decorated functions to execute as normal Python functions
+    without attempting to connect to Prefect Cloud.
+    """
+
+    def identity_decorator(fn=None, **kwargs):
+        """
+        Identity decorator that handles both @decorator and @decorator() syntax.
+
+        :param fn: Function to decorate (when used as @decorator)
+        :param kwargs: Keyword arguments (when used as @decorator(**kwargs))
+        :return: The function unchanged, or a decorator that returns it unchanged
+        """
+        if fn is not None:
+            # Used as @decorator (function passed directly)
+            return fn
+        # Used as @decorator() or @decorator(arg=value)
+        return lambda f: f
+
+    with patch("prefect.flow", identity_decorator):
+        with patch("prefect.task", identity_decorator):
+            yield
 
 
 @pytest.fixture(scope="function")
