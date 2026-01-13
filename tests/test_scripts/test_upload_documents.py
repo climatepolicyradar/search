@@ -46,6 +46,7 @@ def test_whether_upload_documents_creates_files(
     duckdb_path = documents_path_stem.with_suffix(".duckdb")
     with prefect_test_harness():
         with (
+            patch("scripts.data_uploaders.upload_documents.snapshot_download"),
             patch(
                 "scripts.data_uploaders.upload_documents.load_dataset",
                 return_value=mock_dataset,
@@ -121,6 +122,7 @@ def test_whether_upload_documents_filters_rows_without_source_url(
 
     with prefect_test_harness():
         with (
+            patch("scripts.data_uploaders.upload_documents.snapshot_download"),
             patch(
                 "scripts.data_uploaders.upload_documents.load_dataset",
                 return_value=mock_dataset,
@@ -182,6 +184,7 @@ def test_whether_upload_documents_returns_unique_document_ids(
 
     with prefect_test_harness():
         with (
+            patch("scripts.data_uploaders.upload_documents.snapshot_download"),
             patch(
                 "scripts.data_uploaders.upload_documents.load_dataset",
                 return_value=mock_dataset,
