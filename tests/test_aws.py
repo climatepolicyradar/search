@@ -1,6 +1,5 @@
 """Tests for AWS utility functions."""
 
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -10,7 +9,6 @@ import pytest
 from search.aws import (
     download_file_from_s3,
     get_aws_session,
-    get_bucket_name,
     get_ssm_parameter,
     upload_file_to_s3,
 )
@@ -38,18 +36,6 @@ def test_whether_get_aws_session_creates_session_with_correct_profile_and_region
         mock_session_class.assert_called_once_with(
             profile_name=profile, region_name=region
         )
-
-
-def test_whether_get_bucket_name_retrieves_bucket_name_from_environment_variable():
-    with patch.dict(os.environ, {"BUCKET_NAME": "test-bucket"}, clear=True):
-        result = get_bucket_name()
-        assert result == "test-bucket"
-
-
-def test_whether_get_bucket_name_raises_value_error_when_bucket_name_not_set():
-    with patch.dict(os.environ, {}, clear=True):
-        with pytest.raises(ValueError, match="BUCKET_NAME is not set"):
-            get_bucket_name()
 
 
 @pytest.mark.parametrize(
@@ -87,22 +73,22 @@ def test_whether_default_decryption_value_is_used_when_left_unspecified():
 
 
 @pytest.mark.parametrize(
-    "bucket_name,s3_key,should_call_get_bucket_name",
+    "bucket_name,s3_key",
     [
-        (None, None, True),  # Default: uses get_bucket_name() and file_path.name
-        ("custom-bucket", None, False),  # Custom bucket, default key
-        (None, "custom/key.txt", True),  # Default bucket, custom key
-        ("custom-bucket", "custom/key.txt", False),  # Both custom
+        (None, None),  # Default: uses BUCKET_NAME and file_path.name
+        ("custom-bucket", None),  # Custom bucket, default key
+        (None, "custom/key.txt"),  # Default bucket, custom key
+        ("custom-bucket", "custom/key.txt"),  # Both custom
     ],
 )
 def test_whether_upload_file_to_s3_resolves_bucket_and_key_correctly(
-    bucket_name, s3_key, should_call_get_bucket_name
+    bucket_name, s3_key
 ):
     """
     Verifies that upload_file_to_s3:
 
     - Calls get_s3_client() to get the S3 client
-    - Calls get_bucket_name() when bucket_name is None (to get default from env var)
+    - Uses BUCKET_NAME from config when bucket_name is None
     - Resolves s3_key (defaults to file_path.name when not provided)
     - Calls s3.upload_file() with the correct file path, bucket, and key
     - Logs an info message containing the bucket and key
@@ -113,16 +99,15 @@ def test_whether_upload_file_to_s3_resolves_bucket_and_key_correctly(
 
     try:
         # Determine expected values based on test parameters:
-        # - If bucket_name is None, function will call get_bucket_name() to get default
+        # - If bucket_name is None, function will use BUCKET_NAME from config
         # - If s3_key is None, function will use file_path.name as the key
-        expected_bucket = bucket_name or "default-bucket"
+        default_bucket = "test-bucket"
+        expected_bucket = bucket_name or default_bucket
         expected_key = s3_key or tmp_path.name
 
         with (
             patch("search.aws.get_s3_client") as mock_get_client,
-            patch(
-                "search.aws.get_bucket_name", return_value=expected_bucket
-            ) as mock_get_bucket,
+            patch("search.aws.BUCKET_NAME", default_bucket),
             patch("search.aws.logger") as mock_logger,
         ):
             mock_s3_client = mock_get_client.return_value
@@ -130,15 +115,9 @@ def test_whether_upload_file_to_s3_resolves_bucket_and_key_correctly(
 
             # Verify get_s3_client() was called to obtain the S3 client
             mock_get_client.assert_called_once()
-            # Verify get_bucket_name() is only called when bucket_name is None
-            # (i.e., when we need to get the default bucket from environment)
-            if should_call_get_bucket_name:
-                mock_get_bucket.assert_called_once()
-            else:
-                mock_get_bucket.assert_not_called()
 
             # Verify upload_file() was called with correct parameters:
-            # file path (as string), bucket name, and S3 key
+            # file path (as string), bucket name (from BUCKET_NAME or custom), and S3 key
             mock_s3_client.upload_file.assert_called_once_with(
                 str(tmp_path), expected_bucket, expected_key
             )

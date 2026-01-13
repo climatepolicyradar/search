@@ -3,7 +3,7 @@
 from functools import lru_cache
 
 from search.aws import download_file_from_s3, get_bucket_name
-from search.config import DATA_DIR
+from search.config import BUCKET_NAME, DATA_DIR
 from search.engines import DocumentSearchEngine, LabelSearchEngine, PassageSearchEngine
 from search.engines.duckdb import (
     DuckDBDocumentSearchEngine,
@@ -24,7 +24,6 @@ PREFERRED_ENGINES = {
 
 async def download_required_datasets_from_s3():
     """Download the datasets required by the preferred search engines from S3."""
-    bucket_name = get_bucket_name()
 
     for name, (_, filename) in PREFERRED_ENGINES.items():
         if (DATA_DIR / filename).exists():
@@ -33,7 +32,7 @@ async def download_required_datasets_from_s3():
 
         try:
             logger.info(f"Downloading {name}: {filename}")
-            download_file_from_s3(bucket_name, filename)
+            download_file_from_s3(BUCKET_NAME, filename)
         except Exception as e:
             logger.error(f"Failed to download {name}: {e}")
             raise

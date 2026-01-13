@@ -89,6 +89,7 @@ REPO_ROOT_DIR = get_git_root()
 # - In local development, use REPO_ROOT_DIR/data
 DATA_DIR = Path(os.getenv("DATA_DIR", REPO_ROOT_DIR / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+BUCKET_NAME = os.getenv("BUCKET_NAME", "search-a0a134e")
 
 # Path stems to use for storing primitives locally. Can be suffixed with the file
 # extension for the search engine.

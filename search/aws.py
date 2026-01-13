@@ -1,12 +1,11 @@
 """AWS utility functions for interacting with S3 and SSM."""
 
-import os
 from pathlib import Path
 
 import boto3
 from botocore.client import BaseClient
 
-from search.config import AWS_PROFILE, AWS_REGION, DATA_DIR
+from search.config import AWS_PROFILE, AWS_REGION, BUCKET_NAME, DATA_DIR
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -32,14 +31,6 @@ def get_ssm_client() -> BaseClient:
     """Get an SSM client using the configured session."""
     session = get_aws_session()
     return session.client("ssm")
-
-
-def get_bucket_name() -> str:
-    """Get and validate the BUCKET_NAME environment variable."""
-    bucket_name = os.getenv("BUCKET_NAME")
-    if bucket_name is None:
-        raise ValueError("BUCKET_NAME is not set")
-    return bucket_name
 
 
 def get_ssm_parameter(name: str, with_decryption: bool = True) -> str:
@@ -71,7 +62,7 @@ def upload_file_to_s3(
     """
     s3 = get_s3_client()
     if bucket_name is None:
-        bucket_name = get_bucket_name()
+        bucket_name = BUCKET_NAME
     if s3_key is None:
         s3_key = file_path.name
 
