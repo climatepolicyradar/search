@@ -14,6 +14,7 @@ from typing import Any, ParamSpec, TypeVar
 from prefect.blocks.system import JSON
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
+from prefect.schedules import Cron
 
 from scripts.data_uploaders.upload_documents import upload_documents_databases
 from scripts.data_uploaders.upload_labels import upload_labels_databases
@@ -52,6 +53,7 @@ def create_deployment(
     description: str,
     flow_variables: dict[str, Any] = DEFAULT_FLOW_VARIABLES,
     extra_tags: list[str] = [],
+    schedule: str | None = None,
 ) -> None:
     """
     Create a deployment for the specified flow in the labs environment.
@@ -66,7 +68,8 @@ def create_deployment(
         ECS task configuration (CPU, memory, etc.)
     extra_tags : list[str], optional
         Additional tags for the deployment
-
+    schedule: str | None, optional
+        Cron schedule for the deployed flow
     """
     version = importlib.metadata.version("search")
     flow_name = flow.name
@@ -104,6 +107,16 @@ def create_deployment(
     except Exception as e:
         logger.error(f"failed to get branch: {e}")
 
+    schedule_obj = (
+        Cron(
+            schedule,
+            timezone="Europe/London",
+            active=True,
+        )
+        if schedule is not None
+        else None
+    )
+
     _ = flow.deploy(
         f"search-{flow_name}-labs",
         work_pool_name=work_pool_name,
@@ -118,6 +131,7 @@ def create_deployment(
         description=description,
         build=False,
         push=False,
+        schedule=schedule_obj,
     )
 
 
@@ -132,14 +146,17 @@ if __name__ == "__main__":
     create_deployment(
         flow=upload_documents_databases,
         description="Upload documents from HuggingFace to S3 as jsonl and duckdb",
+        schedule="0 18 * * SUN",
         flow_variables=document_passage_flow_variables,
     )
     create_deployment(
         flow=upload_labels_databases,
         description="Upload labels from Wikibase to S3 as jsonl and duckdb",
+        schedule="0 18 * * SUN",
     )
     create_deployment(
         flow=upload_passages_databases,
         description="Upload passages from HuggingFace to S3 as jsonl and duckdb",
+        schedule="0 18 * * SUN",
         flow_variables=document_passage_flow_variables,
     )
