@@ -138,10 +138,16 @@ def create_deployment(
 if __name__ == "__main__":
     logger.info(f"using version: {importlib.metadata.version('search')}")
 
+    # Data upload flows that load the full text data need more storage
+    document_passage_flow_variables = DEFAULT_FLOW_VARIABLES | {
+        "ephemeralStorage": {"sizeInGiB": 120}
+    }
+
     create_deployment(
         flow=upload_documents_databases,
         description="Upload documents from HuggingFace to S3 as jsonl and duckdb",
         schedule="0 18 * * SUN",
+        flow_variables=document_passage_flow_variables,
     )
     create_deployment(
         flow=upload_labels_databases,
@@ -152,4 +158,5 @@ if __name__ == "__main__":
         flow=upload_passages_databases,
         description="Upload passages from HuggingFace to S3 as jsonl and duckdb",
         schedule="0 18 * * SUN",
+        flow_variables=document_passage_flow_variables,
     )
