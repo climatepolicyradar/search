@@ -10,6 +10,7 @@ environment variable.
 
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
+from huggingface_hub import snapshot_download
 from prefect import flow, get_run_logger, task
 from rich.progress import (
     BarColumn,
@@ -44,13 +45,18 @@ def get_documents_from_huggingface() -> list[Document]:
         var_name="HUGGINGFACE_TOKEN", ssm_name="/Huggingface/Token"
     )
 
-    logger.info(f"Loading dataset '{DATASET_NAME}'")
-    dataset = load_dataset(
-        DATASET_NAME,
-        split="train",
+    dataset_cache = HF_CACHE_DIR / "datasets" / DATASET_NAME.replace("/", "--")
+
+    logger.info(f"Downloading dataset '{DATASET_NAME}' to {dataset_cache}")
+    snapshot_download(
+        repo_id=DATASET_NAME,
+        repo_type="dataset",
+        local_dir=dataset_cache,
         token=huggingface_token,
-        cache_dir=str(HF_CACHE_DIR),
     )
+
+    logger.info(f"Loading dataset from {dataset_cache}")
+    dataset = load_dataset(str(dataset_cache), split="train")
     assert isinstance(dataset, Dataset), (
         "dataset from huggingface should be of type Dataset"
     )
