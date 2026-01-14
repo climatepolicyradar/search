@@ -11,7 +11,9 @@ environment variable.
 import shutil
 from pathlib import Path
 
-from datasets import Dataset, load_dataset
+import pyarrow as pa
+import pyarrow.parquet as pq
+from datasets import Dataset
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
 from prefect import flow, get_run_logger, task
@@ -129,10 +131,27 @@ def get_documents_from_huggingface() -> list[Document]:
     log_disk_usage(logger, "After HF snapshot download", [HF_CACHE_DIR, dataset_cache])
 
     logger.info(f"Loading dataset from {dataset_cache}")
-    dataset = load_dataset(str(dataset_cache), split="train", keep_in_memory=True)
-    assert isinstance(dataset, Dataset), (
-        "dataset from huggingface should be of type Dataset"
-    )
+
+    # Find all Parquet files in the dataset cache
+    parquet_files = list(dataset_cache.glob("**/*.parquet"))
+
+    if not parquet_files:
+        raise FileNotFoundError(f"No Parquet files found in {dataset_cache}")
+
+    logger.info(f"Found {len(parquet_files)} Parquet file(s)")
+
+    # Load Parquet files directly using PyArrow (no disk cache generation)
+    tables = [pq.read_table(str(f)) for f in parquet_files]
+
+    # Combine tables if there are multiple files
+    if len(tables) > 1:
+        combined_table = pa.concat_tables(tables)
+    else:
+        combined_table = tables[0]
+
+    # Create Dataset from the PyArrow table (in-memory)
+    dataset = Dataset(combined_table)
+
     logger.info(f"Loaded {len(dataset)} rows")
 
     log_disk_usage(logger, "After loading dataset into memory")
