@@ -129,7 +129,7 @@ def get_documents_from_huggingface() -> list[Document]:
     log_disk_usage(logger, "After HF snapshot download", [HF_CACHE_DIR, dataset_cache])
 
     logger.info(f"Loading dataset from {dataset_cache}")
-    dataset = load_dataset(str(dataset_cache), split="train")
+    dataset = load_dataset(str(dataset_cache), split="train", keep_in_memory=True)
     assert isinstance(dataset, Dataset), (
         "dataset from huggingface should be of type Dataset"
     )
