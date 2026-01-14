@@ -9,6 +9,7 @@ dependencies = [
     "duckdb>=1.4.2",
     "fastapi>=0.115.0",
     "knowledge-graph @ git+https://github.com/climatepolicyradar/knowledge-graph@268d1baa221b8da51f88bc7affa31b4860da8dd0",
+    "posthog>=7.5.1",
     "prefect>=3.4.25",
     "pydantic>=2.12.4",
     "pytest>=9.0.1",

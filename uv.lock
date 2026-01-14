@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.13"
 resolution-markers = [
     "sys_platform == 'linux'",
@@ -3685,6 +3685,23 @@ wheels = [
 ]
 
 [[package]]
+name = "posthog"
+version = "7.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "backoff" },
+    { name = "distro" },
+    { name = "python-dateutil" },
+    { name = "requests" },
+    { name = "six" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/98/3b/866af11cb12e9d35feffcd480d4ebf31f87b2164926b9c670cbdafabc814/posthog-7.5.1.tar.gz", hash = "sha256:d8a8165b3d47465023ea2f919982a34890e2dda76402ec47d6c68424b2534a55", size = 145244, upload-time = "2026-01-08T21:18:39.266Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1f/03/ba011712ce9d07fe87dcfb72474c388d960e6d0c4f2262d2ae11fd27f0c5/posthog-7.5.1-py3-none-any.whl", hash = "sha256:fd3431ce32c9bbfb1e3775e3633c32ee589c052b0054fafe5ed9e4b17c1969d3", size = 167555, upload-time = "2026-01-08T21:18:37.437Z" },
+]
+
+[[package]]
 name = "pre-commit"
 version = "4.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -5123,6 +5140,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "fastapi" },
     { name = "knowledge-graph" },
+    { name = "posthog" },
     { name = "prefect" },
     { name = "pydantic" },
     { name = "pytest" },
@@ -5149,6 +5167,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "knowledge-graph", git = "https://github.com/climatepolicyradar/knowledge-graph?rev=268d1baa221b8da51f88bc7affa31b4860da8dd0" },
+    { name = "posthog", specifier = ">=7.5.1" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.5.0" },
     { name = "prefect", specifier = ">=3.4.25" },
     { name = "pulumi", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
