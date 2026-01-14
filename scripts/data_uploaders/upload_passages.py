@@ -11,6 +11,7 @@ Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
 environment variable.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import duckdb
@@ -27,6 +28,19 @@ from search.config import (
 )
 from search.engines.duckdb import create_passages_duckdb_table
 from search.passage import Passage
+
+
+def read_passages_from_jsonl(jsonl_path: Path) -> Iterator[Passage]:
+    """
+    Stream passages from JSONL file without loading all into memory.
+
+    :param jsonl_path: Path to the JSONL file containing passages
+    :return: Iterator of Passage objects
+    """
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():  # Skip empty lines
+                yield Passage.model_validate_json(line.strip())
 
 
 @task
@@ -79,11 +93,11 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
     jsonl_path = PASSAGES_PATH_STEM.with_suffix(".jsonl")
     duckdb_path = PASSAGES_PATH_STEM.with_suffix(".duckdb")
 
-    passages: list[Passage] = []
     batch_size = 10_000
     total_rows_processed = 0
+    num_passages_created = 0
 
-    # Stream passages and write to JSONL while collecting for DuckDB
+    # Stream passages and write to JSONL only (no accumulation in memory)
     logger.info("Streaming passages and writing to JSONL")
     with open(jsonl_path, "w", encoding="utf-8") as jsonl_file:
         while True:
@@ -105,25 +119,27 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
                 try:
                     passage = Passage.from_huggingface_row(row_dict)
                     jsonl_file.write(passage.model_dump_json() + "\n")
-                    passages.append(passage)
+                    num_passages_created += 1
                 except Exception:
                     continue
 
             total_rows_processed += len(rows)
             if total_rows_processed % 100_000 == 0:
                 logger.info(
-                    f"Processed {total_rows_processed} passage rows, with {total_rows_processed - len(passages)} failures"
+                    f"Processed {total_rows_processed} passage rows, created {num_passages_created} passages so far"
                 )
 
     conn.close()
 
-    logger.info(f"Created {len(passages)} passages from {total_rows_processed} rows")
-    logger.info(f"Saved {len(passages)} passages to '{jsonl_path}'")
+    logger.info(
+        f"Created {num_passages_created} passages from {total_rows_processed} rows"
+    )
+    logger.info(f"Saved {num_passages_created} passages to '{jsonl_path}'")
 
-    # Create DuckDB table from collected passages
+    # Create DuckDB table by streaming from JSONL file
     logger.info(f"Creating DuckDB table at {duckdb_path}")
-    create_passages_duckdb_table(duckdb_path, passages)
-    logger.info(f"Saved {len(passages)} passages to '{duckdb_path}'")
+    create_passages_duckdb_table(duckdb_path, read_passages_from_jsonl(jsonl_path))
+    logger.info(f"Saved {num_passages_created} passages to '{duckdb_path}'")
 
     return jsonl_path, duckdb_path
 
