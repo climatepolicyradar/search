@@ -11,20 +11,10 @@ environment variable.
 import shutil
 from pathlib import Path
 
-import pyarrow as pa
-import pyarrow.parquet as pq
-from datasets import Dataset
+import duckdb
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
 from prefect import flow, get_run_logger, task
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 
 from search.aws import upload_file_to_s3
 from search.config import (
@@ -132,68 +122,76 @@ def get_documents_from_huggingface() -> list[Document]:
 
     logger.info(f"Loading dataset from {dataset_cache}")
 
-    # Find all Parquet files in the dataset cache
-    parquet_files = list(dataset_cache.glob("**/*.parquet"))
+    # Get documents by streaming through results of a duckdb query
 
-    if not parquet_files:
-        raise FileNotFoundError(f"No Parquet files found in {dataset_cache}")
+    conn = duckdb.connect(":memory:")
+    conn.execute("SET threads=2")  # Reduce parallelism to save memory
+    conn.execute(
+        "SET preserve_insertion_order=false"
+    )  # Don't maintain order (saves memory)
 
-    logger.info(f"Found {len(parquet_files)} Parquet file(s)")
+    parquet_pattern = str(dataset_cache / "**/*.parquet")
 
-    # Load Parquet files directly using PyArrow (no disk cache generation)
-    tables = [pq.read_table(str(f)) for f in parquet_files]
+    query = """
+    SELECT
+        document_id,
+        "document_metadata.document_title" as document_title,
+        "document_metadata.source_url" as source_url,
+        "document_metadata.description" as description
+    FROM read_parquet(?)
+    WHERE "document_metadata.source_url" IS NOT NULL
+    """
 
-    # Combine tables if there are multiple files
-    if len(tables) > 1:
-        combined_table = pa.concat_tables(tables)
-    else:
-        combined_table = tables[0]
+    logger.info("Executing DuckDB streaming query (no aggregation)")
 
-    # Create Dataset from the PyArrow table (in-memory)
-    dataset = Dataset(combined_table)
+    result = conn.execute(query, [parquet_pattern])
 
-    logger.info(f"Loaded {len(dataset)} rows")
+    log_disk_usage(logger, "After DuckDB query execution")
 
-    log_disk_usage(logger, "After loading dataset into memory")
+    documents_dict: dict[str, Document | None] = {}
+    batch_size = 10_000
+    total_rows_processed = 0
 
-    dataset = dataset.filter(
-        lambda row: row.get("document_metadata.source_url") is not None,
-        desc="Filtering rows without source_url",
+    while True:
+        rows = result.fetchmany(batch_size)
+        if not rows:
+            break
+
+        for row in rows:
+            document_id = row[0]
+
+            # Skip if we've already seen this document_id
+            if document_id in documents_dict:
+                continue
+
+            # Convert DuckDB row tuple to dict for Document.from_huggingface_row()
+            row_dict = {
+                "document_id": document_id,
+                "document_metadata.document_title": row[1],
+                "document_metadata.source_url": row[2],
+                "document_metadata.description": row[3] if row[3] else "",
+            }
+
+            try:
+                documents_dict[document_id] = Document.from_huggingface_row(row_dict)
+            except Exception:
+                logger.info(f"Failed to convert document {document_id}")
+                documents_dict[document_id] = None
+
+        total_rows_processed += len(rows)
+        if total_rows_processed % 1_000_000 == 0:
+            logger.info(
+                f"Processed {total_rows_processed} rows, found {len(documents_dict)} unique documents so far"
+            )
+
+    conn.close()
+
+    log_disk_usage(logger, "After streaming document creation")
+
+    documents: list[Document] = list(
+        [v for v in documents_dict.values() if v is not None]
     )
-    logger.info(f"Filtered to {len(dataset)} rows with source_url")
-
-    log_disk_usage(logger, "After filtering dataset")
-
-    # Track documents by document_id to avoid duplicates
-    documents_dict: dict[str, Document] = {}
-
-    progress_bar = Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeRemainingColumn(),
-    )
-
-    with progress_bar:
-        progress_task = progress_bar.add_task("Creating documents", total=len(dataset))
-        for idx, row in enumerate(dataset):
-            progress_bar_kwargs: dict[str, int | str] = {"advance": 1}
-            if idx % 10_000 == 0:
-                progress_bar_kwargs["description"] = (
-                    f"Found {len(documents_dict)} documents"
-                )
-            progress_bar.update(progress_task, **progress_bar_kwargs)  # type: ignore
-
-            document_id = row["document_id"]
-
-            # If we haven't seen this document_id before, create a new Document object
-            if document_id not in documents_dict:
-                documents_dict[document_id] = Document.from_huggingface_row(row)
-
-    documents: list[Document] = list(documents_dict.values())
-    logger.info("Created %d unique documents", len(documents))
+    logger.info("Created %d unique documents which were valid", len(documents))
 
     log_disk_usage(logger, "After creating Document objects")
 
