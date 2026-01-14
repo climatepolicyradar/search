@@ -46,6 +46,7 @@ def test_whether_upload_passages_creates_files(
 
     with prefect_test_harness():
         with (
+            patch("scripts.data_uploaders.upload_passages.snapshot_download"),
             patch(
                 "scripts.data_uploaders.upload_passages.load_dataset",
                 return_value=mock_dataset,
@@ -140,6 +141,7 @@ def test_whether_upload_passages_filters_rows_missing_required_fields(
 
     with prefect_test_harness():
         with (
+            patch("scripts.data_uploaders.upload_passages.snapshot_download"),
             patch(
                 "scripts.data_uploaders.upload_passages.load_dataset",
                 return_value=mock_dataset,

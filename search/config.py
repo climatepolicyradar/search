@@ -114,11 +114,5 @@ DISABLE_WANDB = is_truthy(os.getenv("DISABLE_WANDB", False))
 
 # Huggingface
 DATASET_NAME = "climatepolicyradar/all-document-text-data-weekly"
-
-# Configure HuggingFace cache to use DATA_DIR (on ECS instance's ephemeral volume)
-# This ensures HuggingFace downloads use the 120 GiB ephemeral storage configured for data upload tasks
 HF_CACHE_DIR = DATA_DIR / "huggingface_cache"
 HF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-os.environ["HF_HOME"] = str(HF_CACHE_DIR)
-os.environ["HF_DATASETS_CACHE"] = str(HF_CACHE_DIR / "datasets")
-os.environ["TRANSFORMERS_CACHE"] = str(HF_CACHE_DIR / "transformers")
