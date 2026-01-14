@@ -26,29 +26,29 @@ test_cases = [
     PrecisionTestCase[Label](
         category="place name",
         search_terms="brazil",
-        expected_result_ids=["TODOBRAZIL"],
+        expected_result_ids=["dummy001"],  # BRAZIL
         description="search for brazil should return correct label first",
     ),
     PrecisionTestCase[Label](
         category="place name",
         search_terms="new south wales",
-        expected_result_ids=["TODONEWSOUTHWALES", "TODOAUSTRALIA"],
+        expected_result_ids=["dummy002", "dummy003"],  # NEW SOUTH WALES, AUSTRALIA
         description="search for new south wales should return new south wales and australia",
     ),
     PrecisionTestCase[Label](
         category="place name + other terms",
         search_terms="Philippines policies in climate changes",
         expected_result_ids=[
-            "TODOPHILIPPINES",
-            "TODOPOLICIES",
-            "TODOCLIMATE",
+            "dummy004",  # PHILIPPINES
+            "dummy005",  # POLICIES
+            "dummy006",  # CLIMATE
         ],
         description="search for philippines policies in climate changes should return relevant labels first",
     ),
     RecallTestCase[Label](
         category="place name + other terms",
         search_terms="brazil nature based solutions",
-        expected_result_ids=["TODOBRAZIL"],
+        expected_result_ids=["dummy001"],  # BRAZIL
         k=3,
         description="search for brazil nature based solutions should return brazil label in the top 3 results",
     ),
@@ -69,14 +69,18 @@ test_cases = [
     RecallTestCase[Label](
         category="document name",
         search_terms="Law No. 018/2022 ratifying Ordinance No. 019/PR/2021 relating to climate change",
-        expected_result_ids=["TODOLAW", "TODOCLIMATE"],
+        expected_result_ids=["dummy007", "dummy006"],  # LAW, CLIMATE
         k=3,
         description="search for law relating to climate change should return laws or climate labels",
     ),
     PrecisionTestCase[Label](
         category="document name",
         search_terms="national climate plan",
-        expected_result_ids=["TODONATIONAL", "TODOCLIMATE", "TODOPLAN"],
+        expected_result_ids=[
+            "dummy008",
+            "dummy006",
+            "dummy009",
+        ],  # NATIONAL, CLIMATE, PLAN
         description="search for national climate plan should return relevant labels first",
     ),
     PrecisionTestCase[Label](
@@ -84,20 +88,20 @@ test_cases = [
         search_terms="nz",
         expected_result_ids=[
             "wpx36e4m",  # net-zero target
-            "TODONEWZEALAND",
+            "dummy010",  # NEW ZEALAND
         ],
         description="search for nz should return 'new zealand' and 'net zero target' first",
     ),
     PrecisionTestCase[Label](
         category="entity name",
         search_terms="totalenergies",
-        expected_result_ids=["TODOTOTAL_ENERGIES"],
+        expected_result_ids=["dummy011"],  # TOTAL ENERGIES
         description="search for totalenergies should return total energies label first",
     ),
     PrecisionTestCase[Label](
         category="entity name",
         search_terms="european court of human rights",
-        expected_result_ids=["TODOECHR"],
+        expected_result_ids=["dummy012"],  # ECHR
         description="search for european court of human rights should return matching label first",
     ),
     PrecisionTestCase[Label](
@@ -105,8 +109,8 @@ test_cases = [
         search_terms="How many targets does Canada currently have relating to climate change?",
         expected_result_ids=[
             "sk4kv7u3",  # target
-            "TODOCANADA",
-            "TODOCLIMATE",
+            "dummy013",  # CANADA
+            "dummy006",  # CLIMATE
         ],
         description="search about canada targets should return relevant labels first",
     ),
@@ -115,9 +119,9 @@ test_cases = [
         search_terms="what is the croatias climate strategy",
         expected_result_ids=[
             "wf4tcvtp",  # strategy setting and planning
-            "TODOCLIMATE",
-            "TODOPOLICY",
-            "TODOSTRATEGY",
+            "dummy006",  # CLIMATE
+            "dummy014",  # POLICY
+            "dummy015",  # STRATEGY
         ],
         description="search about croatia climate strategy should return relevant labels first",
     ),
@@ -192,10 +196,10 @@ test_cases = [
         category="logic",
         search_terms="japan + united states + sweden + china",
         expected_result_ids=[
-            "TODOJAPAN",  # japan
-            "TODOUSA",  # united states/us
-            "TODOSWEDEN",  # sweden
-            "TODOCHINA",  # china
+            "dummy016",  # JAPAN
+            "dummy017",  # USA
+            "dummy018",  # SWEDEN
+            "dummy019",  # CHINA
         ],
         description="search for multiple countries should return labels for those countries first",
     ),
@@ -205,8 +209,8 @@ test_cases = [
         expected_result_ids=[
             "ptfmpyqe",  # indigenous people
             "6cn2vjae",  # impacted group
-            "TODOCOLOMBIA",  # colombia
-            "TODOLAWS",  # laws
+            "dummy020",  # COLOMBIA
+            "dummy021",  # LAWS
         ],
         description="search for indigenous people colombia laws should return relevant labels first",
     ),
