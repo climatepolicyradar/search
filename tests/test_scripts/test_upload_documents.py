@@ -44,12 +44,23 @@ def test_whether_upload_documents_creates_files(
     documents_path_stem = tmp_path / "documents"
     jsonl_path = documents_path_stem.with_suffix(".jsonl")
     duckdb_path = documents_path_stem.with_suffix(".duckdb")
+
+    # Create a mock parquet file for DuckDB to read in the expected directory structure
+    mock_dataset_dir = tmp_path / "datasets" / "mock"
+    mock_dataset_dir.mkdir(parents=True, exist_ok=True)
+    mock_parquet_path = mock_dataset_dir / "data.parquet"
+    mock_dataset.to_parquet(str(mock_parquet_path))
+
     with prefect_test_harness():
         with (
             patch("scripts.data_uploaders.upload_documents.snapshot_download"),
             patch(
-                "scripts.data_uploaders.upload_documents.load_dataset",
-                return_value=mock_dataset,
+                "scripts.data_uploaders.upload_documents.HF_CACHE_DIR",
+                tmp_path,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_documents.DATASET_NAME",
+                "mock",
             ),
             patch(
                 "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",
@@ -120,12 +131,22 @@ def test_whether_upload_documents_filters_rows_without_source_url(
     documents_path_stem = tmp_path / "documents"
     jsonl_path = documents_path_stem.with_suffix(".jsonl")
 
+    mock_dataset_dir = tmp_path / "datasets" / "mock"
+    mock_parquet_path = mock_dataset_dir / "data.parquet"
+
+    mock_dataset_dir.mkdir(parents=True, exist_ok=True)
+    mock_dataset.to_parquet(str(mock_parquet_path))
+
     with prefect_test_harness():
         with (
             patch("scripts.data_uploaders.upload_documents.snapshot_download"),
             patch(
-                "scripts.data_uploaders.upload_documents.load_dataset",
-                return_value=mock_dataset,
+                "scripts.data_uploaders.upload_documents.HF_CACHE_DIR",
+                tmp_path,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_documents.DATASET_NAME",
+                "mock",
             ),
             patch(
                 "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",
@@ -182,12 +203,22 @@ def test_whether_upload_documents_returns_unique_document_ids(
     documents_path_stem = tmp_path / "documents"
     jsonl_path = documents_path_stem.with_suffix(".jsonl")
 
+    # Create a mock parquet file for DuckDB to read in the expected directory structure
+    mock_dataset_dir = tmp_path / "datasets" / "mock"
+    mock_dataset_dir.mkdir(parents=True, exist_ok=True)
+    mock_parquet_path = mock_dataset_dir / "data.parquet"
+    mock_dataset.to_parquet(str(mock_parquet_path))
+
     with prefect_test_harness():
         with (
             patch("scripts.data_uploaders.upload_documents.snapshot_download"),
             patch(
-                "scripts.data_uploaders.upload_documents.load_dataset",
-                return_value=mock_dataset,
+                "scripts.data_uploaders.upload_documents.HF_CACHE_DIR",
+                tmp_path,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_documents.DATASET_NAME",
+                "mock",
             ),
             patch(
                 "scripts.data_uploaders.upload_documents.DOCUMENTS_PATH_STEM",

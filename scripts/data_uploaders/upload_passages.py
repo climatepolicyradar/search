@@ -14,11 +14,10 @@ environment variable.
 from collections.abc import Iterator
 from pathlib import Path
 
-from datasets import Dataset, load_dataset
+import duckdb
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
 from prefect import flow, get_run_logger, task
-from rich.progress import track
 
 from search.aws import upload_file_to_s3
 from search.config import (
@@ -27,8 +26,20 @@ from search.config import (
     PASSAGES_PATH_STEM,
     get_from_env_with_fallback,
 )
-from search.engines.duckdb import create_passages_duckdb_table
 from search.passage import Passage
+
+
+def read_passages_from_jsonl(jsonl_path: Path) -> Iterator[Passage]:
+    """
+    Stream passages from JSONL file without loading all into memory.
+
+    :param jsonl_path: Path to the JSONL file containing passages
+    :return: Iterator of Passage objects
+    """
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():  # Skip empty lines
+                yield Passage.model_validate_json(line.strip())
 
 
 @task
@@ -51,39 +62,106 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
         token=huggingface_token,
     )
 
-    # Load from local directory
     logger.info(f"Loading dataset from {dataset_cache}")
-    dataset = load_dataset(str(dataset_cache), split="train")
-    assert isinstance(dataset, Dataset), (
-        "dataset from huggingface should be of type Dataset"
-    )
-    logger.info(f"Loaded {len(dataset)} rows")
 
-    dataset = dataset.filter(
-        lambda row: row.get("document_metadata.source_url") is not None
-        and row.get("text_block.text") is not None,
-        desc="Filtering rows without source_url or text",
-    )
-    logger.info(f"Filtered to {len(dataset)} rows with source_url and text")
+    # Use DuckDB to stream passages directly from parquet files
+    conn = duckdb.connect(":memory:")
+    conn.execute("SET threads=2")  # Reduce parallelism to save memory
+    conn.execute(
+        "SET preserve_insertion_order=false"
+    )  # Don't maintain order (saves memory)
+
+    parquet_pattern = str(dataset_cache / "**/*.parquet")
+
+    query = """
+    SELECT
+        document_id,
+        "text_block.text" as text,
+        "text_block.text_block_id" as text_block_id,
+        "document_metadata.source_url" as source_url,
+        "document_metadata.document_title" as document_title,
+        "document_metadata.description" as description
+    FROM read_parquet(?)
+    WHERE "document_metadata.source_url" IS NOT NULL
+        AND "text_block.text" IS NOT NULL
+    """
+
+    logger.info("Executing DuckDB streaming query")
+    result = conn.execute(query, [parquet_pattern])
 
     jsonl_path = PASSAGES_PATH_STEM.with_suffix(".jsonl")
     duckdb_path = PASSAGES_PATH_STEM.with_suffix(".duckdb")
 
-    def generate_passages() -> Iterator[Passage]:
-        """Generate Passage objects from the dataset, writing to JSONL as we go."""
-        with open(jsonl_path, "w", encoding="utf-8") as jsonl_file:
-            for row in track(dataset, description="Creating passages"):
-                passage = Passage.from_huggingface_row(row)
-                jsonl_file.write(passage.model_dump_json() + "\n")
-                yield passage
+    batch_size = 10_000
+    total_rows_processed = 0
+    num_passages_created = 0
 
-    create_passages_duckdb_table(duckdb_path, generate_passages())
+    # Stream passages and write to JSONL only (no accumulation in memory)
+    logger.info("Streaming passages and writing to JSONL")
+    with open(jsonl_path, "w", encoding="utf-8") as jsonl_file:
+        while True:
+            rows = result.fetchmany(batch_size)
+            if not rows:
+                break
 
-    with open(jsonl_path, "r", encoding="utf-8") as f:
-        num_passages = sum(1 for _ in f)
+            for row in rows:
+                # Convert DuckDB row tuple to dict for Passage.from_huggingface_row()
+                row_dict = {
+                    "document_id": row[0],
+                    "text_block.text": row[1],
+                    "text_block.text_block_id": row[2] if row[2] else "",
+                    "document_metadata.source_url": row[3],
+                    "document_metadata.document_title": row[4],
+                    "document_metadata.description": row[5] if row[5] else "",
+                }
 
-    logger.info(f"Saved {num_passages} passages to '{jsonl_path}'")
-    logger.info(f"Saved {num_passages} passages to '{duckdb_path}'")
+                try:
+                    passage = Passage.from_huggingface_row(row_dict)
+                    jsonl_file.write(passage.model_dump_json() + "\n")
+                    num_passages_created += 1
+                except Exception:
+                    continue
+
+            total_rows_processed += len(rows)
+            if total_rows_processed % 100_000 == 0:
+                logger.info(
+                    f"Processed {total_rows_processed} passage rows, created {num_passages_created} passages so far"
+                )
+
+    conn.close()
+
+    logger.info(
+        f"Created {num_passages_created} passages from {total_rows_processed} rows"
+    )
+    logger.info(f"Saved {num_passages_created} passages to '{jsonl_path}'")
+
+    # Create DuckDB table by reading JSONL directly (much faster than Python parsing)
+    logger.info(f"Creating DuckDB table at {duckdb_path}")
+    conn = duckdb.connect(str(duckdb_path))
+    conn.execute(
+        """
+        CREATE TABLE passages AS
+        SELECT
+            id,
+            text,
+            document_id,
+            labels,
+            original_passage_id
+        FROM read_json(?,
+            format='newline_delimited',
+            columns={
+                'id': 'VARCHAR',
+                'text': 'VARCHAR',
+                'document_id': 'VARCHAR',
+                'labels': 'VARCHAR[]',
+                'original_passage_id': 'VARCHAR'
+            }
+        )
+    """,
+        [str(jsonl_path)],
+    )
+    conn.close()
+    logger.info(f"Saved {num_passages_created} passages to '{duckdb_path}'")
 
     return jsonl_path, duckdb_path
 

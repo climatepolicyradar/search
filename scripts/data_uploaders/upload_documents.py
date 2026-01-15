@@ -8,18 +8,10 @@ Take a look at infra/README.md for instructions on how to set the `BUCKET_NAME`
 environment variable.
 """
 
-from datasets import Dataset, load_dataset
+import duckdb
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
 from prefect import flow, get_run_logger, task
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 
 from search.aws import upload_file_to_s3
 from search.config import (
@@ -56,48 +48,72 @@ def get_documents_from_huggingface() -> list[Document]:
     )
 
     logger.info(f"Loading dataset from {dataset_cache}")
-    dataset = load_dataset(str(dataset_cache), split="train")
-    assert isinstance(dataset, Dataset), (
-        "dataset from huggingface should be of type Dataset"
+
+    # Get documents by streaming through results of a duckdb query
+    conn = duckdb.connect(":memory:")
+    conn.execute("SET threads=2")  # Reduce parallelism to save memory
+    conn.execute(
+        "SET preserve_insertion_order=false"
+    )  # Don't maintain order (saves memory)
+
+    parquet_pattern = str(dataset_cache / "**/*.parquet")
+
+    query = """
+    SELECT
+        document_id,
+        "document_metadata.document_title" as document_title,
+        "document_metadata.source_url" as source_url,
+        "document_metadata.description" as description
+    FROM read_parquet(?)
+    WHERE "document_metadata.source_url" IS NOT NULL
+    """
+
+    logger.info("Executing DuckDB streaming query (no aggregation)")
+
+    result = conn.execute(query, [parquet_pattern])
+
+    documents_dict: dict[str, Document | None] = {}
+    batch_size = 10_000
+    total_rows_processed = 0
+
+    while True:
+        rows = result.fetchmany(batch_size)
+        if not rows:
+            break
+
+        for row in rows:
+            document_id = row[0]
+
+            # Skip if we've already seen this document_id
+            if document_id in documents_dict:
+                continue
+
+            # Convert DuckDB row tuple to dict for Document.from_huggingface_row()
+            row_dict = {
+                "document_id": document_id,
+                "document_metadata.document_title": row[1],
+                "document_metadata.source_url": row[2],
+                "document_metadata.description": row[3] if row[3] else "",
+            }
+
+            try:
+                documents_dict[document_id] = Document.from_huggingface_row(row_dict)
+            except Exception:
+                logger.info(f"Failed to convert document {document_id}")
+                documents_dict[document_id] = None
+
+        total_rows_processed += len(rows)
+        if total_rows_processed % 1_000_000 == 0:
+            logger.info(
+                f"Processed {total_rows_processed} rows, found {len(documents_dict)} unique documents so far"
+            )
+
+    conn.close()
+
+    documents: list[Document] = list(
+        [v for v in documents_dict.values() if v is not None]
     )
-    logger.info(f"Loaded {len(dataset)} rows")
-
-    dataset = dataset.filter(
-        lambda row: row.get("document_metadata.source_url") is not None,
-        desc="Filtering rows without source_url",
-    )
-    logger.info(f"Filtered to {len(dataset)} rows with source_url")
-
-    # Track documents by document_id to avoid duplicates
-    documents_dict: dict[str, Document] = {}
-
-    progress_bar = Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TimeElapsedColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        TimeRemainingColumn(),
-    )
-
-    with progress_bar:
-        progress_task = progress_bar.add_task("Creating documents", total=len(dataset))
-        for idx, row in enumerate(dataset):
-            progress_bar_kwargs: dict[str, int | str] = {"advance": 1}
-            if idx % 10_000 == 0:
-                progress_bar_kwargs["description"] = (
-                    f"Found {len(documents_dict)} documents"
-                )
-            progress_bar.update(progress_task, **progress_bar_kwargs)  # type: ignore
-
-            document_id = row["document_id"]
-
-            # If we haven't seen this document_id before, create a new Document object
-            if document_id not in documents_dict:
-                documents_dict[document_id] = Document.from_huggingface_row(row)
-
-    documents: list[Document] = list(documents_dict.values())
-    logger.info("Created %d unique documents", len(documents))
+    logger.info("Created %d unique documents which were valid", len(documents))
 
     return documents
 
@@ -108,6 +124,7 @@ def upload_documents_to_s3(documents: list[Document]) -> None:
 
     logger = get_run_logger()
 
+    # jsonl
     jsonl_path = DOCUMENTS_PATH_STEM.with_suffix(".jsonl")
     with open(jsonl_path, "w", encoding="utf-8") as f:
         f.write(serialise_pydantic_list_as_jsonl(documents))
@@ -115,6 +132,8 @@ def upload_documents_to_s3(documents: list[Document]) -> None:
 
     # duckdb
     duckdb_path = DOCUMENTS_PATH_STEM.with_suffix(".duckdb")
+    if duckdb_path.exists():
+        duckdb_path.unlink()
     create_documents_duckdb_table(duckdb_path, documents)
     logger.info(f"Saved {len(documents)} documents to '{duckdb_path}'")
 

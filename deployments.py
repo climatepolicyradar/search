@@ -140,7 +140,7 @@ if __name__ == "__main__":
 
     # Data upload flows that load the full text data need more storage
     document_passage_flow_variables = DEFAULT_FLOW_VARIABLES | {
-        "ephemeralStorage": {"sizeInGiB": 120}
+        "ephemeralStorage": {"sizeInGiB": 30}
     }
 
     create_deployment(
