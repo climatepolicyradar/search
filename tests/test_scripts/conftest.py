@@ -19,23 +19,19 @@ def create_mock_huggingface_dataset():
     """
     Factory for HuggingFace datasets that support filtering.
 
-    The mock supports:
-    - len(dataset) - returns row count
-    - iteration - yields rows
-    - dataset.filter() - applies filter function and returns filtered mock
+    Creates a Dataset object from a list of row dicts.
     """
 
     def _create_mock_dataset(rows: list[dict]):
-        mock = MagicMock(spec=Dataset)
-        mock.__len__.return_value = len(rows)
-        mock.__iter__.return_value = iter(rows)
+        if not rows:
+            return Dataset.from_dict({})
 
-        def filter_func(func, desc=None):
-            filtered = [row for row in rows if func(row)]
-            return _create_mock_dataset(filtered)
+        # Convert list of dicts to dict of lists for Dataset.from_dict
+        columns = {}
+        for key in rows[0].keys():
+            columns[key] = [row.get(key) for row in rows]
 
-        mock.filter.side_effect = filter_func
-        return mock
+        return Dataset.from_dict(columns)
 
     return _create_mock_dataset
 
