@@ -26,7 +26,6 @@ from search.config import (
     PASSAGES_PATH_STEM,
     get_from_env_with_fallback,
 )
-from search.engines.duckdb import create_passages_duckdb_table
 from search.passage import Passage
 
 
@@ -136,9 +135,32 @@ def get_passages_from_huggingface() -> tuple[Path, Path]:
     )
     logger.info(f"Saved {num_passages_created} passages to '{jsonl_path}'")
 
-    # Create DuckDB table by streaming from JSONL file
+    # Create DuckDB table by reading JSONL directly (much faster than Python parsing)
     logger.info(f"Creating DuckDB table at {duckdb_path}")
-    create_passages_duckdb_table(duckdb_path, read_passages_from_jsonl(jsonl_path))
+    conn = duckdb.connect(str(duckdb_path))
+    conn.execute(
+        """
+        CREATE TABLE passages AS
+        SELECT
+            id,
+            text,
+            document_id,
+            labels,
+            original_passage_id
+        FROM read_json(?,
+            format='newline_delimited',
+            columns={
+                'id': 'VARCHAR',
+                'text': 'VARCHAR',
+                'document_id': 'VARCHAR',
+                'labels': 'VARCHAR[]',
+                'original_passage_id': 'VARCHAR'
+            }
+        )
+    """,
+        [str(jsonl_path)],
+    )
+    conn.close()
     logger.info(f"Saved {num_passages_created} passages to '{duckdb_path}'")
 
     return jsonl_path, duckdb_path
