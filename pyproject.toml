@@ -84,3 +84,6 @@ disable = ["logging-fstring-interpolation"]  # W1203: allow f-strings in logging
 disable = [
     "C0115", "C0116",  # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
 ]
+
+[tool.typos.files]
+extend-exclude = ["relevance_tests/*.py"]

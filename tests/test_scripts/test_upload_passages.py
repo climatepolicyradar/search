@@ -44,12 +44,22 @@ def test_whether_upload_passages_creates_files(
     jsonl_path = passages_path_stem.with_suffix(".jsonl")
     duckdb_path = passages_path_stem.with_suffix(".duckdb")
 
+    mock_dataset_dir = tmp_path / "datasets" / "mock"
+    mock_parquet_path = mock_dataset_dir / "data.parquet"
+
+    mock_dataset_dir.mkdir(parents=True, exist_ok=True)
+    mock_dataset.to_parquet(str(mock_parquet_path))
+
     with prefect_test_harness():
         with (
             patch("scripts.data_uploaders.upload_passages.snapshot_download"),
             patch(
-                "scripts.data_uploaders.upload_passages.load_dataset",
-                return_value=mock_dataset,
+                "scripts.data_uploaders.upload_passages.HF_CACHE_DIR",
+                tmp_path,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_passages.DATASET_NAME",
+                "mock",
             ),
             patch(
                 "scripts.data_uploaders.upload_passages.PASSAGES_PATH_STEM",
@@ -139,12 +149,22 @@ def test_whether_upload_passages_filters_rows_missing_required_fields(
     passages_path_stem = tmp_path / "passages"
     jsonl_path = passages_path_stem.with_suffix(".jsonl")
 
+    mock_dataset_dir = tmp_path / "datasets" / "mock"
+    mock_parquet_path = mock_dataset_dir / "data.parquet"
+
+    mock_dataset_dir.mkdir(parents=True, exist_ok=True)
+    mock_dataset.to_parquet(str(mock_parquet_path))
+
     with prefect_test_harness():
         with (
             patch("scripts.data_uploaders.upload_passages.snapshot_download"),
             patch(
-                "scripts.data_uploaders.upload_passages.load_dataset",
-                return_value=mock_dataset,
+                "scripts.data_uploaders.upload_passages.HF_CACHE_DIR",
+                tmp_path,
+            ),
+            patch(
+                "scripts.data_uploaders.upload_passages.DATASET_NAME",
+                "mock",
             ),
             patch(
                 "scripts.data_uploaders.upload_passages.PASSAGES_PATH_STEM",
