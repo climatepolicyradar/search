@@ -129,7 +129,7 @@ test_cases = [
     ),
     FieldCharacteristicsTestCase[Passage](
         category="misspellings",
-        search_terms="environment",
+        search_terms="enviornment",
         characteristics_test=lambda passage: all_words_in_string(
             ["environment"], passage.text
         ),
