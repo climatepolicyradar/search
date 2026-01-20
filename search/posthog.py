@@ -63,7 +63,7 @@ class PostHogSession:
 
         try:
             DateRange(date_from=date_from, date_to=date_to)
-            logger.info(f"Date range {date_from} and {date_to} is valid")
+            logger.debug(f"Date range {date_from} and {date_to} is valid")
         except ValidationError as e:
             logger.error(f"Error validating date range: {date_from} and {date_to}: {e}")
             raise
