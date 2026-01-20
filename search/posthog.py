@@ -1,9 +1,12 @@
 """Helpers for interacting with PostHog"""
 
+# TODO filter internal users
+# TODO validate date inputs
+
 from typing import Any
 
 import requests
-from pydantic import NonNegativeInt
+from pydantic import NonNegativeFloat, NonNegativeInt
 
 from search.config import (
     POSTHOG_HOST,
@@ -18,6 +21,10 @@ logger = get_logger(__name__)
 
 class Count(NonNegativeInt):
     """A count of a value returned from PostHog"""
+
+
+class Percentage(NonNegativeFloat):
+    """A percentage value returned from PostHog"""
 
 
 class PostHogSession:
@@ -83,3 +90,60 @@ class PostHogSession:
         if not results:
             raise ValueError("PostHog query returned no results unexpectedly")
         return Count(results[0][0])
+
+    def calculate_percentage_of_users_who_search(
+        self,
+        date_from: str = "now() - interval 6 day",
+        date_to: str = "now()",
+    ) -> Percentage:
+        """
+        Calculate the percentage of users who searched (NOT within a document) in the time period.
+
+        What's a search?
+        A search is any filtered/unfiltered view of the results.  In that context, we consider search terms, page numbers, and regular topic/geogrraphy/etc filters are filters.  Thus, all of the following are valid search events:
+
+        - hitting the SERP (search engine results page) with some search terms e.g., "https://app.climatepolicyradar.org/search?q=kenya"
+        - going to the second page of results (this triggers URL change and API request)
+        - running a 'search' with no search terms, only filters
+        - running a 'search' with no search terms, no filters
+        - landing on the search page as the first pageview of a session
+
+        what's not a search
+        - searching within a document
+            - this is a search, but it's not the sort of search that most people are asking questions about.  It should be its own event, counted differently.
+        -clicking on a document from the search results (this triggers an API request)
+            - this is an event which appears in the user's search journey, but it's not a search.
+
+        The users include those with a pageview where the `consent` boolean is set.
+
+        See https://www.notion.so/climatepolicyradar/What-counts-as-a-search-2e89109609a48020b247fb9f19fac1de
+
+
+        :param date_from: start of time period, usually a date as string in format YYYY-MM-DD
+        :param date_to: end of time period, usually a date as string in format YYYY-MM-DD
+        :return: Percentage of users who searched in the time period as a float
+        """
+        query = f"""
+            SELECT 
+                count(Distinct(
+                    if(
+                        properties.$current_url LIKE '%/search%',
+                        distinct_id,
+                        NULL
+                    )
+                )) / count(Distinct(distinct_id)) * 100.0 AS search_percentage
+            FROM events
+            WHERE timestamp >= {date_from}
+                AND timestamp <= {date_to}
+                AND properties.consent IS NOT NULL
+                AND event = '$pageview'
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise ValueError("PostHog query returned no results unexpectedly")
+        return Percentage(results[0][0])
+
+
+session = PostHogSession()
+percentage = session.calculate_percentage_of_users_who_search()
+logger.info(f"Percentage of users who searched: {percentage}")
