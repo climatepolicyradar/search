@@ -16,15 +16,10 @@ class PostHogSession:
 
     def __init__(self) -> None:
         """Initialize PostHog session class."""
-        self.disable = config.DISABLE_POSTHOG
 
-        if self.disable:
-            logger.info(
-                "PostHogSession has been created with connection disabled. "
-                "Pass an empty or false value to env variable DISABLE_POSTHOG to enable."
-            )
-
-        self.api_key = config.POSTHOG_API_KEY
+        self.api_key = config.get_from_env_with_fallback(
+            var_name="POSTHOG_API_KEY", ssm_name=config.POSTHOG_PARAM_NAME
+        )
         self.host = config.POSTHOG_HOST
         self.project_id = config.POSTHOG_PROJECT_ID
 
@@ -32,11 +27,6 @@ class PostHogSession:
         self, endpoint: str = "query/", json_data: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Make an authenticated request to PostHog API."""
-        if self.disable:
-            logger.info(
-                "PostHogSession has been created with connection disabled. Pass an empty or false value to the env variable DISABLE_POSTHOG to enable PostHog connection."
-            )
-            return {}
 
         url = f"{self.host}/api/projects/{self.project_id}/{endpoint}"
         response = requests.post(
@@ -60,9 +50,6 @@ class PostHogSession:
         :param hogql_query: Raw HogQL query string
         :return: DataFrame with query results
         """
-        if self.disable:
-            logger.warning("PostHog disabled, returning empty DataFrame")
-            return pd.DataFrame()
 
         query = {"kind": "HogQLQuery", "query": hogql_query}
 
@@ -96,6 +83,7 @@ class PostHogSession:
 
 
 posthog_session = PostHogSession()
+print(posthog_session.api_key)
 
 df = posthog_session.count_unique_users()
 logger.info(df)

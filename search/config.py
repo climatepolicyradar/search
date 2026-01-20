@@ -2,7 +2,6 @@ import os
 import subprocess
 from pathlib import Path
 
-import boto3
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -119,27 +118,6 @@ HF_CACHE_DIR = DATA_DIR / "huggingface_cache"
 HF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # PostHog
-
-POSTHOG_PARAM_NAME = os.getenv("POSTHOG_PARAM_NAME")
-if POSTHOG_PARAM_NAME is None:
-    raise ValueError("POSTHOG_PARAM_NAME is not set")
-
-
-def get_and_set_posthog_api_key():
-    """Get posthog API key from AWS Secrets Manager."""
-
-    try:
-        session = boto3.Session(profile_name=AWS_PROFILE)
-        secretsmanager = session.client("secretsmanager", region_name=AWS_REGION)
-        response = secretsmanager.get_secret_value(SecretId=POSTHOG_PARAM_NAME)
-        posthog_api_key = response["SecretString"]
-        os.environ["POSTHOG_API_KEY"] = posthog_api_key
-    except Exception:
-        return None
-
-
-get_and_set_posthog_api_key()
-POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY")
-POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://eu.posthog.com")
+POSTHOG_PARAM_NAME = "posthog_readonly"
 POSTHOG_PROJECT_ID = os.getenv("POSTHOG_PROJECT_ID")
-DISABLE_POSTHOG = is_truthy(os.getenv("DISABLE_POSTHOG", False))
+POSTHOG_HOST = "https://eu.posthog.com"
