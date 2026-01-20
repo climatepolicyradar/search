@@ -15,8 +15,6 @@ from pydantic import (
 from search.config import (
     POSTHOG_CPR_DOMAINS,
     POSTHOG_HOST,
-    POSTHOG_PARAM_NAME,
-    POSTHOG_PROJECT_ID,
     get_from_env_with_fallback,
 )
 from search.log import get_logger
@@ -51,10 +49,12 @@ class PostHogSession:
 
     def __init__(self) -> None:
         self.api_key = get_from_env_with_fallback(
-            var_name="POSTHOG_API_KEY", ssm_name=POSTHOG_PARAM_NAME
+            var_name="POSTHOG_API_KEY", ssm_name="posthog_readonly"
         )
         self.host = POSTHOG_HOST
-        self.project_id = POSTHOG_PROJECT_ID
+        self.project_id = get_from_env_with_fallback(
+            var_name="POSTHOG_PROJECT_ID", ssm_name="posthog_project_id"
+        )
         # to filter out internal users mainly, in HogQL queries
         self.cpr_domains = "(" + ", ".join(f"'{d}'" for d in POSTHOG_CPR_DOMAINS) + ")"
 
