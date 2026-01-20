@@ -1,14 +1,19 @@
 """Helpers for interacting with PostHog"""
 
-# TODO filter internal users
-# TODO validate date inputs
-
+from datetime import date
 from typing import Any
 
 import requests
-from pydantic import NonNegativeFloat, NonNegativeInt
+from pydantic import (
+    BaseModel,
+    NonNegativeFloat,
+    NonNegativeInt,
+    ValidationError,
+    model_validator,
+)
 
 from search.config import (
+    POSTHOG_CPR_DOMAINS,
     POSTHOG_HOST,
     POSTHOG_PARAM_NAME,
     POSTHOG_PROJECT_ID,
@@ -27,6 +32,20 @@ class Percentage(NonNegativeFloat):
     """A percentage value returned from PostHog"""
 
 
+class DateRange(BaseModel):
+    """An inclusive range of dates for a HogQL query"""
+
+    date_from: date
+    date_to: date
+
+    @model_validator(mode="after")
+    def check_date_order(self):
+        """Check if the date range is valid"""
+        if self.date_from > self.date_to:
+            raise ValueError("Date from must be before date to")
+        return self
+
+
 class PostHogSession:
     """Session for querying PostHog analytics data."""
 
@@ -36,6 +55,18 @@ class PostHogSession:
         )
         self.host = POSTHOG_HOST
         self.project_id = POSTHOG_PROJECT_ID
+        # to filter out internal users mainly, in HogQL queries
+        self.cpr_domains = "(" + ", ".join(f"'{d}'" for d in POSTHOG_CPR_DOMAINS) + ")"
+
+    def _check_date_range(self, date_from: str, date_to: str) -> None:
+        """Check if a date range input is valid for a HogQL query"""
+
+        try:
+            DateRange(date_from=date_from, date_to=date_to)
+            logger.info(f"Date range {date_from} and {date_to} is valid")
+        except ValidationError as e:
+            logger.error(f"Error validating date range: {date_from} and {date_to}: {e}")
+            raise
 
     def _make_request(
         self, endpoint: str = "query/", json_data: dict[str, Any] | None = None
@@ -68,39 +99,16 @@ class PostHogSession:
         data = self._make_request(json_data=payload)
         return data.get("results", [])
 
-    def count_unique_users(
-        self,
-        date_from: str = "now() - interval 6 day",
-        date_to: str = "now()",
-    ) -> Count:
-        """
-        Placeholder method: Count unique users in the time period, inclusive (default is last 7 days from current date)
-
-        :param date_from: start of time period, usually a date as string in format YYYY-MM-DD
-        :param date_to: end of time period, usually a date as string in format YYYY-MM-DD
-        :return: Count of unique users as a NonNegativeInt in the time period
-
-        """
-        query = f"""
-            SELECT COUNT(DISTINCT properties.distinct_id) FROM events
-            WHERE timestamp >= {date_from}
-            AND timestamp <= {date_to}
-        """
-        results = self.execute_query(query)
-        if not results:
-            raise ValueError("PostHog query returned no results unexpectedly")
-        return Count(results[0][0])
-
     def calculate_percentage_of_users_who_search(
         self,
-        date_from: str = "now() - interval 6 day",
-        date_to: str = "now()",
+        date_from: str,
+        date_to: str,
     ) -> Percentage:
         """
-        Calculate the percentage of users who searched (NOT within a document) in the time period.
+        Calculate the percentage of users who searched (NOT within a document) in the time period, inclusive of start and end dates.
 
         What's a search?
-        A search is any filtered/unfiltered view of the results.  In that context, we consider search terms, page numbers, and regular topic/geogrraphy/etc filters are filters.  Thus, all of the following are valid search events:
+        A search is any filtered/unfiltered view of the results.  In that context, we consider search terms, page numbers, and regular topic/geography/etc filters are filters.  Thus, all of the following are valid search events:
 
         - hitting the SERP (search engine results page) with some search terms e.g., "https://app.climatepolicyradar.org/search?q=kenya"
         - going to the second page of results (this triggers URL change and API request)
@@ -114,15 +122,17 @@ class PostHogSession:
         -clicking on a document from the search results (this triggers an API request)
             - this is an event which appears in the user's search journey, but it's not a search.
 
-        The users include those with a pageview where the `consent` boolean is set.
+        "The total users" include only those with a pageview where the `consent` boolean is set.
 
         See https://www.notion.so/climatepolicyradar/What-counts-as-a-search-2e89109609a48020b247fb9f19fac1de
 
 
-        :param date_from: start of time period, usually a date as string in format YYYY-MM-DD
-        :param date_to: end of time period, usually a date as string in format YYYY-MM-DD
+        :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
+        :param date_to: end of time period (exclusive), a date as string in format YYYY-MM-DD
         :return: Percentage of users who searched in the time period as a float
         """
+
+        self._check_date_range(date_from, date_to)
         query = f"""
             SELECT 
                 count(Distinct(
@@ -133,17 +143,13 @@ class PostHogSession:
                     )
                 )) / count(Distinct(distinct_id)) * 100.0 AS search_percentage
             FROM events
-            WHERE timestamp >= {date_from}
-                AND timestamp <= {date_to}
+            WHERE timestamp >= '{date_from} 00:00:00'
+                AND timestamp <= '{date_to} 23:59:59'
                 AND properties.consent IS NOT NULL
                 AND event = '$pageview'
+                AND properties.$host IN {self.cpr_domains}
         """
         results = self.execute_query(query)
         if not results:
             raise ValueError("PostHog query returned no results unexpectedly")
         return Percentage(results[0][0])
-
-
-session = PostHogSession()
-percentage = session.calculate_percentage_of_users_who_search()
-logger.info(f"Percentage of users who searched: {percentage}")
