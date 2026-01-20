@@ -2,26 +2,33 @@
 
 from typing import Any
 
-import pandas as pd
 import requests
+from pydantic import NonNegativeInt
 
-from search import config
+from search.config import (
+    POSTHOG_HOST,
+    POSTHOG_PARAM_NAME,
+    POSTHOG_PROJECT_ID,
+    get_from_env_with_fallback,
+)
 from search.log import get_logger
 
 logger = get_logger(__name__)
+
+
+class Count(NonNegativeInt):
+    """A count of a value returned from PostHog"""
 
 
 class PostHogSession:
     """Session for querying PostHog analytics data."""
 
     def __init__(self) -> None:
-        """Initialize PostHog session class."""
-
-        self.api_key = config.get_from_env_with_fallback(
-            var_name="POSTHOG_API_KEY", ssm_name=config.POSTHOG_PARAM_NAME
+        self.api_key = get_from_env_with_fallback(
+            var_name="POSTHOG_API_KEY", ssm_name=POSTHOG_PARAM_NAME
         )
-        self.host = config.POSTHOG_HOST
-        self.project_id = config.POSTHOG_PROJECT_ID
+        self.host = POSTHOG_HOST
+        self.project_id = POSTHOG_PROJECT_ID
 
     def _make_request(
         self, endpoint: str = "query/", json_data: dict[str, Any] | None = None
@@ -40,37 +47,31 @@ class PostHogSession:
         response.raise_for_status()
         return response.json()
 
-    def execute_query(
-        self,
-        hogql_query: str,
-    ) -> pd.DataFrame:
+    def execute_query(self, hogql_query: str) -> list[list[Any]]:
         """
-        Execute a HogQL query and return results as a DataFrame.
+        Execute a HogQL query and return raw results.
 
         :param hogql_query: Raw HogQL query string
-        :return: DataFrame with query results
+        :return: List of result rows
         """
-
         query = {"kind": "HogQLQuery", "query": hogql_query}
-
         payload = {"query": query, "name": "test API"}
         logger.info(f"Executing HogQL query: {hogql_query}")
 
         data = self._make_request(json_data=payload)
-
-        return pd.DataFrame(data.get("results", []), columns=data.get("columns", []))
+        return data.get("results", [])
 
     def count_unique_users(
         self,
         date_from: str = "now() - interval 6 day",
         date_to: str = "now()",
-    ) -> pd.DataFrame:
+    ) -> Count:
         """
-        Count unique users in the time period, inclusive (default is last 7 days from current date)
+        Placeholder method: Count unique users in the time period, inclusive (default is last 7 days from current date)
 
         :param date_from: start of time period, usually a date as string in format YYYY-MM-DD
         :param date_to: end of time period, usually a date as string in format YYYY-MM-DD
-        :return: DataFrame with count of unique users
+        :return: Count of unique users as a NonNegativeInt in the time period
 
         """
         query = f"""
@@ -78,12 +79,7 @@ class PostHogSession:
             WHERE timestamp >= {date_from}
             AND timestamp <= {date_to}
         """
-        df = self.execute_query(query)
-        return df
-
-
-posthog_session = PostHogSession()
-print(posthog_session.api_key)
-
-df = posthog_session.count_unique_users()
-logger.info(df)
+        results = self.execute_query(query)
+        if not results:
+            raise ValueError("PostHog query returned no results unexpectedly")
+        return Count(results[0][0])
