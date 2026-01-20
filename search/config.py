@@ -116,3 +116,12 @@ DISABLE_WANDB = is_truthy(os.getenv("DISABLE_WANDB", False))
 DATASET_NAME = "climatepolicyradar/all-document-text-data-weekly"
 HF_CACHE_DIR = DATA_DIR / "huggingface_cache"
 HF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# PostHog
+POSTHOG_HOST = "https://eu.posthog.com"
+POSTHOG_CPR_DOMAINS = [
+    "app.climatepolicyradar.org",
+    "climate-laws.org",
+    "climateprojectexplorer.org",
+    "www.climatecasechart.com",
+]
