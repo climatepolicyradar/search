@@ -147,3 +147,48 @@ class PostHogSession:
         if not results:
             raise ValueError("PostHog query returned no results unexpectedly")
         return Percentage(results[0][0])
+
+    def calculate_percentage_of_users_who_download_data(
+        self,
+        date_from: str,
+        date_to: str,
+    ) -> Percentage:
+        """
+        Calculate the percentage of total users who downloaded data in the time period, inclusive of start and end dates.
+
+        What's a search download?
+        It refers specifically to 1. clicking "this search" and then "Download" in the resulting popup on the search results page.
+
+        It does not include:
+        - clicking to download the "whole database" as this is tracked by jotform, not Posthog.
+
+        Note: this IS BREAKABLE if the link text changes.  It is queued to be updated with more robust frontend tracking (see SCI-677).
+
+        "The total users" include only those with a pageview where the `consent` boolean is set.
+
+        :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
+        :param date_to: end of time period (exclusive), a date as string in format YYYY-MM-DD
+        :return: Percentage of users who downloaded data in the time period as a float
+        """
+        self._check_date_range(date_from, date_to)
+        # TODO: the consent property is only on pageview events.  Need to add a CTE for total users/distinct IDs who have a pageview with consent set.  Also the number seems quite high....over 10% of users
+
+        query = f"""
+            SELECT 
+                count(Distinct(
+                    if(
+                        properties.$el_text = 'Download' AND properties.$current_url LIKE '%/search%',
+                        distinct_id,
+                        NULL
+                    )
+                )) / count(Distinct(distinct_id)) * 100.0 AS search_download_percentage
+            FROM events
+            WHERE timestamp >= '{date_from} 00:00:00'
+                AND timestamp <= '{date_to} 23:59:59'
+                /* AND properties.consent IS NOT NULL */
+                AND properties.$host IN {self.cpr_domains}
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise ValueError("PostHog query returned no results unexpectedly")
+        return Percentage(results[0][0])
