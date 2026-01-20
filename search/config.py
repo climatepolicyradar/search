@@ -118,8 +118,6 @@ HF_CACHE_DIR = DATA_DIR / "huggingface_cache"
 HF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # PostHog
-POSTHOG_PARAM_NAME = "posthog_readonly"
-POSTHOG_PROJECT_ID = os.getenv("POSTHOG_PROJECT_ID")
 POSTHOG_HOST = "https://eu.posthog.com"
 POSTHOG_CPR_DOMAINS = [
     "app.climatepolicyradar.org",
