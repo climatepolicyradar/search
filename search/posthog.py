@@ -68,23 +68,6 @@ class PostHogSession:
             logger.error(f"Error validating date range: {date_from} and {date_to}: {e}")
             raise
 
-    def _make_request(
-        self, endpoint: str = "query/", json_data: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        """Make an authenticated request to PostHog API."""
-
-        url = f"{self.host}/api/projects/{self.project_id}/{endpoint}"
-        response = requests.post(
-            url,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-            json=json_data,
-        )
-        response.raise_for_status()
-        return response.json()
-
     def execute_query(self, hogql_query: str) -> list[list[Any]]:
         """
         Execute a HogQL query and return raw results.
@@ -96,7 +79,18 @@ class PostHogSession:
         payload = {"query": query, "name": "test API"}
         logger.info(f"Executing HogQL query: {hogql_query}")
 
-        data = self._make_request(json_data=payload)
+        url = f"{self.host}/api/projects/{self.project_id}/query/"
+        response = requests.post(
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+            json=payload,
+        )
+        response.raise_for_status()
+        data = response.json()
+
         return data.get("results", [])
 
     def calculate_percentage_of_users_who_search(
