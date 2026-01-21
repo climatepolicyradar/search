@@ -238,3 +238,67 @@ class PostHogSession:
         if not results:
             raise ValueError("PostHog query returned no results unexpectedly")
         return Percentage(results[0][0])
+
+    def calculate_7_day_searcher_retention_rate(
+        self,
+        date_from: str,
+    ) -> Percentage:
+        """
+        Calculate the percentage of [users whose searched] who return within 7 days of an input date.  The input date must be least 7 days before the current date.
+
+        What's a searcher?
+        A searcher is a user who has searched in the time period.  See 'what is a search' in the calculate_percentage_of_users_who_search method for more details on defining a search.
+
+        As only users who accept cookies can be tracked cross-session, this calculation is only available for users with consent = True.
+
+        What's a return?
+        A return is counted if a user's distinct_id is associated with a different session_id within 7 days of the original session.
+
+        :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
+        :return: Percentage of searchers who return within 7 days in the time period as a float
+        """
+        # TODO: validate the input date and that it is at least 7 days before the current date
+        # TODO: ponder if we should include sessions on the same day as the start date, but after the original search session, or only from the next day.  The difference is appreciable.
+
+        query = f"""
+        WITH consent_users AS (
+            SELECT DISTINCT(distinct_id)
+            FROM events 
+            WHERE properties.consent = true
+        ),
+
+        search_users AS (
+            SELECT 
+                events.distinct_id,
+                min(timestamp) as first_search_date,
+                argMin(properties.$session_id, timestamp) as search_session_id
+            FROM events
+            INNER JOIN consent_users ON events.distinct_id = consent_users.distinct_id
+            WHERE 
+                properties.$current_url LIKE '%/search%'
+                AND timestamp >= '{date_from} 00:00:00' 
+                AND timestamp < '{date_from} 00:00:00' + interval 1 day
+            GROUP BY events.distinct_id
+        ),
+
+        returning_users AS (SELECT
+            distinct(search_users.distinct_id)
+        FROM search_users
+        INNER JOIN events on search_users.distinct_id = events.distinct_id
+        WHERE
+            events.timestamp < search_users.first_search_date + interval 6 day
+            AND events.timestamp > search_users.first_search_date
+            AND events.$session_id != search_users.search_session_id
+            AND events.properties.$host IN {self.cpr_domains}
+        )
+
+        SELECT 
+            (SELECT count(DISTINCT(distinct_id)) FROM returning_users) /
+            (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as retention_percentage_7_days,
+
+
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise ValueError("PostHog query returned no results unexpectedly")
+        return Percentage(results[0][0])
