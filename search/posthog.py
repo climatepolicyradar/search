@@ -191,8 +191,48 @@ class PostHogSession:
             INNER JOIN consent_set_users ON events.distinct_id = consent_set_users.distinct_id
             WHERE timestamp >= '{date_from} 00:00:00'
                 AND timestamp <= '{date_to} 23:59:59'
-                /* AND properties.consent IS NOT NULL */
                 AND properties.$host IN {self.cpr_domains}
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise ValueError("PostHog query returned no results unexpectedly")
+        return Percentage(results[0][0])
+
+    def calculate_percentage_of_searches_with_no_results(
+        self,
+        date_from: str,
+        date_to: str,
+    ) -> Percentage:
+        """
+        Calculate the percentage of searches with no results in the time period, inclusive of start and end dates.
+
+        What's a search with no results?
+        It refers specifically to searches on the main search results page (where properties.$current_url LIKE '%/search%') that return no results.  See 'what is a search' in the calculate_percentage_of_users_who_search method for more details on defining a search.
+
+        Each search event on the main search results page triggers an API request, which we track in PostHog as 'search:results_fetch' with a property 'total_family_hits' as a number.  This event was created in October 2025.
+
+        This is a calculation against the TOTAL number of searches, not a number of users.
+
+        :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
+        :param date_to: end of time period (exclusive), a date as string in format YYYY-MM-DD
+        :return: Percentage of searches with no results in the time period as a float
+        """
+        self._check_date_range(date_from, date_to)
+        query = f"""
+            SELECT 
+                count(DISTINCT(
+                    if(
+                        properties.total_family_hits = 0 AND properties.$current_url LIKE '%/search%',
+                        distinct_id,
+                        NULL
+                    )
+                )) /
+                count(DISTINCT(distinct_id)) * 100.0 AS zero_results_rate
+            FROM events
+            WHERE timestamp >= '{date_from} 00:00:00'
+                AND timestamp <= '{date_to} 23:59:59'
+                AND properties.$host IN {self.cpr_domains}
+                AND event = 'search:results_fetch'
         """
         results = self.execute_query(query)
         if not results:
