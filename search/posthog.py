@@ -171,18 +171,24 @@ class PostHogSession:
         :return: Percentage of users who downloaded data in the time period as a float
         """
         self._check_date_range(date_from, date_to)
-        # TODO: the consent property is only on pageview events.  Need to add a CTE for total users/distinct IDs who have a pageview with consent set.  Also the number seems quite high....over 10% of users
-
         query = f"""
+            WITH consent_set_users AS (
+                SELECT DISTINCT distinct_id
+                FROM events 
+                WHERE properties.consent IS NOT NULL
+            )
+
             SELECT 
-                count(Distinct(
+                count(DISTINCT(
                     if(
                         properties.$el_text = 'Download' AND properties.$current_url LIKE '%/search%',
-                        distinct_id,
+                        events.distinct_id,
                         NULL
                     )
-                )) / count(Distinct(distinct_id)) * 100.0 AS search_download_percentage
+                )) /
+                count(DISTINCT(consent_set_users.distinct_id)) * 100.0 AS search_downloaders_percentage
             FROM events
+            INNER JOIN consent_set_users ON events.distinct_id = consent_set_users.distinct_id
             WHERE timestamp >= '{date_from} 00:00:00'
                 AND timestamp <= '{date_to} 23:59:59'
                 /* AND properties.consent IS NOT NULL */
