@@ -209,6 +209,7 @@ def test_documents():
         wb.log_test_results(
             test_results=engine_test_results,
             primitive=Document,
+            search_engine=engine,
         )
 
         test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
