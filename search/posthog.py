@@ -275,7 +275,6 @@ class PostHogSession:
         :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
         :return: Percentage of searchers who return within 7 days in the time period as a float
         """
-        # TODO: validate the input date and that it is at least 7 days before the current date
         # TODO: ponder if we should include sessions on the same day as the start date, but after the original search session, or only from the next day.  The difference is appreciable.
         self._check_date_at_least_n_days_ago(date_from, 7)
 
@@ -306,7 +305,7 @@ class PostHogSession:
         INNER JOIN events on search_users.distinct_id = events.distinct_id
         WHERE
             events.timestamp < search_users.first_search_date + interval 6 day
-            AND events.timestamp > search_users.first_search_date
+            AND events.timestamp > toStartOfDay(search_users.first_search_date) + interval 1 day
             AND events.$session_id != search_users.search_session_id
             AND events.properties.$host IN {self.cpr_domains}
         )
@@ -370,7 +369,7 @@ class PostHogSession:
         INNER JOIN events on search_users.distinct_id = events.distinct_id
         WHERE
             events.timestamp < search_users.first_search_date + interval 29 day
-            AND events.timestamp > search_users.first_search_date
+            AND events.timestamp > toStartOfDay(search_users.first_search_date) + interval 1 day
             AND events.$session_id != search_users.search_session_id
             AND events.properties.$host IN {self.cpr_domains}
         )
