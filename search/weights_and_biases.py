@@ -9,6 +9,7 @@ from wandb import Run
 from relevance_tests import TestResult, calculate_test_result_metrics
 from search import config
 from search.document import Document
+from search.engines import SearchEngine
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -70,6 +71,7 @@ class WandbSession:
         self,
         test_results: list[TestResult],
         primitive: type[Document | Label | Passage],
+        search_engine: SearchEngine,
         run: Run | None = None,
     ) -> None:
         """
@@ -83,14 +85,14 @@ class WandbSession:
                 "All test results passed to log_test_results must be from the same search engine."
             )
 
-        search_engine_id = test_results[0].search_engine_id
         primitive_name = primitive.__name__
 
         run = self.new_run(
             project=self.offline_tests_project,
             config={
                 "primitive": primitive_name,
-                "search_engine_id": search_engine_id,
+                "search_engine_id": search_engine.id,
+                "search_engine": str(search_engine),
             },
         )
 
