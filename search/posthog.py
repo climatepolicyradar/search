@@ -402,6 +402,8 @@ class PostHogSession:
         1. only opening the sidebar, without clicking on to a document
         2. clicking search results within a document that are not on the main search results page.
 
+        This only includes users where pageview events have the `consent` property set (not null)
+
         """
         self._check_date_range(date_from, date_to)
         query = f"""
@@ -465,6 +467,8 @@ class PostHogSession:
         Calculate the percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 10 seconds or more.
 
         This is the same as the calculate_click_through_rate_from_search method, but it also includes when users click from to a family then straight to a document in less than 10 seconds, as long as they spend at least 10 seconds on the document.
+
+        This only includes users where pageview events have the `consent` property set (not null)
         """
         self._check_date_range(date_from, date_to)
         query = f"""
