@@ -44,6 +44,13 @@ class DateRange(BaseModel):
         return self
 
 
+class PosthogNoResultsException(Exception):
+    """An exception raised when a PostHog query returns no results."""
+
+    def __init__(self, message: str = "PostHog query returned no results unexpectedly"):
+        super().__init__(message)
+
+
 class PostHogSession:
     """Session for querying PostHog analytics data."""
 
@@ -163,7 +170,7 @@ class PostHogSession:
         """
         results = self.execute_query(query)
         if not results:
-            raise ValueError("PostHog query returned no results unexpectedly")
+            raise PosthogNoResultsException()
         return Percentage(results[0][0])
 
     def calculate_percentage_of_users_who_download_data(
@@ -213,7 +220,7 @@ class PostHogSession:
         """
         results = self.execute_query(query)
         if not results:
-            raise ValueError("PostHog query returned no results unexpectedly")
+            raise PosthogNoResultsException()
         return Percentage(results[0][0])
 
     def calculate_percentage_of_searches_with_no_results(
@@ -254,7 +261,7 @@ class PostHogSession:
         """
         results = self.execute_query(query)
         if not results:
-            raise ValueError("PostHog query returned no results unexpectedly")
+            raise PosthogNoResultsException()
         return Percentage(results[0][0])
 
     def calculate_7_day_searcher_retention_rate(
@@ -318,7 +325,7 @@ class PostHogSession:
         """
         results = self.execute_query(query)
         if not results:
-            raise ValueError("PostHog query returned no results unexpectedly")
+            raise PosthogNoResultsException()
         return Percentage(results[0][0])
 
     def calculate_30_day_searcher_retention_rate(
@@ -382,10 +389,10 @@ class PostHogSession:
         """
         results = self.execute_query(query)
         if not results:
-            raise ValueError("PostHog query returned no results unexpectedly")
+            raise PosthogNoResultsException()
         return Percentage(results[0][0])
 
-    def calculate_click_through_rate_from_search(
+    def calculate_click_through_rate_from_search_results_page(
         self,
         date_from: str,
         date_to: str,
@@ -455,10 +462,10 @@ class PostHogSession:
         """
         results = self.execute_query(query)
         if not results:
-            raise ValueError("PostHog query returned no results unexpectedly")
+            raise PosthogNoResultsException()
         return Percentage(results[0][0])
 
-    def calculate_click_through_rate_from_search_with_dwell_time(
+    def calculate_click_through_rate_from_search_results_page_with_dwell_time(
         self,
         date_from: str,
         date_to: str,
@@ -496,6 +503,7 @@ class PostHogSession:
                     dateDiff('second', p2.timestamp, p3.timestamp) as next_dwell_time,
                     dateDiff('second', p3.timestamp, p4.timestamp) as next_next_dwell_time
                 FROM ranked_pageviews p1
+                -- Self joins to get the next 3 pageviews for each pageview
                 LEFT JOIN ranked_pageviews p2 ON p1.distinct_id = p2.distinct_id AND p2.rn = p1.rn + 1
                 LEFT JOIN ranked_pageviews p3 ON p1.distinct_id = p3.distinct_id AND p3.rn = p1.rn + 2
                 LEFT JOIN ranked_pageviews p4 ON p1.distinct_id = p4.distinct_id AND p4.rn = p1.rn + 3
@@ -531,5 +539,5 @@ class PostHogSession:
         """
         results = self.execute_query(query)
         if not results:
-            raise ValueError("PostHog query returned no results unexpectedly")
+            raise PosthogNoResultsException()
         return Percentage(results[0][0])
