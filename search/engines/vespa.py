@@ -68,8 +68,8 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
     """Abstract search engine for connecting to Vespa"""
 
     VESPA_INSTANCE_URL_SSM_PARAMETER = "VESPA_INSTANCE_URL"
-    VESPA_PUBLIC_CERT_SSM_PARAMETER = "VESPA_PUBLIC_CERT"
-    VESPA_PRIVATE_KEY_SSM_PARAMETER = "VESPA_PRIVATE_KEY"
+    VESPA_PUBLIC_CERT_SSM_PARAMETER = "VESPA_PUBLIC_CERT_READ_ONLY"
+    VESPA_PRIVATE_KEY_SSM_PARAMETER = "VESPA_PRIVATE_KEY_READ_ONLY"
 
     def __init__(self) -> None:
         self.client: Vespa | None = None
