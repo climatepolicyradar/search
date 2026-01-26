@@ -1,6 +1,6 @@
 """Helpers for interacting with PostHog"""
 
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 import requests
@@ -8,7 +8,6 @@ from pydantic import (
     BaseModel,
     NonNegativeFloat,
     NonNegativeInt,
-    ValidationError,
     model_validator,
 )
 
@@ -17,6 +16,7 @@ from search.config import (
     POSTHOG_HOST,
     get_from_env_with_fallback,
 )
+from search.date_utils import check_date_at_least_n_days_ago, check_date_range
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -57,34 +57,6 @@ class PostHogSession:
         )
         # to filter out internal users mainly, in HogQL queries
         self.cpr_domains = "(" + ", ".join(f"'{d}'" for d in POSTHOG_CPR_DOMAINS) + ")"
-
-    def _check_date_range(self, date_from: str, date_to: str) -> None:
-        """Check if a date range input is valid for a HogQL query"""
-
-        try:
-            DateRange(date_from=date_from, date_to=date_to)
-            logger.debug(f"Date range {date_from} and {date_to} is valid")
-        except ValidationError as e:
-            logger.error(f"Error validating date range: {date_from} and {date_to}: {e}")
-            raise
-
-    from datetime import date, timedelta
-
-    def _check_date_at_least_n_days_ago(self, input_date: str, days_ago: int) -> None:
-        """Validate that a date string is valid and at least n days in the past."""
-        try:
-            parsed_date = date.fromisoformat(input_date)
-        except ValueError:
-            raise ValueError(
-                f"Invalid date format: '{input_date}'. Expected YYYY-MM-DD format."
-            )
-
-        cutoff_date = date.today() - timedelta(days=days_ago)
-        if parsed_date > cutoff_date:
-            raise ValueError(
-                f"Date '{input_date}' must be at least {days_ago} days in the past. "
-                f"Earliest valid date is {cutoff_date.isoformat()}."
-            )
 
     def execute_query(self, hogql_query: str) -> list[list[Any]]:
         """
@@ -144,7 +116,7 @@ class PostHogSession:
         :return: Percentage of users who searched in the time period as a float
         """
 
-        self._check_date_range(date_from, date_to)
+        check_date_range(date_from, date_to)
         query = f"""
             SELECT 
                 count(Distinct(
@@ -188,7 +160,7 @@ class PostHogSession:
         :param date_to: end of time period (exclusive), a date as string in format YYYY-MM-DD
         :return: Percentage of users who downloaded data in the time period as a float
         """
-        self._check_date_range(date_from, date_to)
+        check_date_range(date_from, date_to)
         query = f"""
             WITH consent_set_users AS (
                 SELECT DISTINCT distinct_id
@@ -235,7 +207,7 @@ class PostHogSession:
         :param date_to: end of time period (exclusive), a date as string in format YYYY-MM-DD
         :return: Percentage of searches with no results in the time period as a float
         """
-        self._check_date_range(date_from, date_to)
+        check_date_range(date_from, date_to)
         query = f"""
             SELECT 
                 count(DISTINCT(
@@ -276,7 +248,7 @@ class PostHogSession:
         :return: Percentage of searchers who return within 7 days in the time period as a float
         """
         # TODO: ponder if we should include sessions on the same day as the start date, but after the original search session, or only from the next day.  The difference is appreciable.
-        self._check_date_at_least_n_days_ago(date_from, 7)
+        check_date_at_least_n_days_ago(date_from, 7)
 
         query = f"""
         WITH consent_users AS (
@@ -340,7 +312,7 @@ class PostHogSession:
         :return: Percentage of searchers who return within 30 days in the time period as a float
         """
         # TODO: ponder if we should include sessions on the same day as the start date, but after the original search session, or only from the next day.  The difference is appreciable.
-        self._check_date_at_least_n_days_ago(date_from, 30)
+        check_date_at_least_n_days_ago(date_from, 30)
 
         query = f"""
         WITH consent_users AS (
