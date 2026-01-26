@@ -1,4 +1,4 @@
-"""Tests for VespaPassageSearchEngine pure functions and parsing logic."""
+"""Tests for Vespa search engine classes and parsing logic."""
 
 from typing import Any
 from unittest.mock import MagicMock
@@ -7,7 +7,10 @@ import pytest
 from hypothesis import given
 from vespa.io import VespaQueryResponse
 
-from search.engines.vespa import VespaPassageSearchEngine
+from search.engines.vespa import (
+    ExactVespaPassageSearchEngine,
+    HybridVespaPassageSearchEngine,
+)
 from tests.common_strategies import (
     search_limit_strategy,
     search_offset_strategy,
@@ -16,25 +19,23 @@ from tests.common_strategies import (
 
 
 @pytest.fixture
-def vespa_passage_engine():
+def exact_vespa_passage_engine():
     """
-    Create a VespaPassageSearchEngine instance for testing.
+    Create an ExactVespaPassageSearchEngine instance for testing.
 
-    Returns:
-        VespaPassageSearchEngine: Engine in 'exact' mode
+    :return: ExactVespaPassageSearchEngine instance
     """
-    return VespaPassageSearchEngine(mode="exact")
+    return ExactVespaPassageSearchEngine()
 
 
 @pytest.fixture
-def vespa_passage_engine_hybrid():
+def hybrid_vespa_passage_engine():
     """
-    Create a VespaPassageSearchEngine instance in hybrid mode.
+    Create a HybridVespaPassageSearchEngine instance for testing.
 
-    Returns:
-        VespaPassageSearchEngine: Engine in 'hybrid' mode
+    :return: HybridVespaPassageSearchEngine instance
     """
-    return VespaPassageSearchEngine(mode="hybrid")
+    return HybridVespaPassageSearchEngine()
 
 
 @pytest.fixture
@@ -95,8 +96,8 @@ def sample_passage_fields():
 def test_exact_request(terms, limit, offset):
     """Test exact request returns the expected fields."""
 
-    engine = VespaPassageSearchEngine(mode="exact")
-    request = engine._build_exact_request(terms, limit, offset)
+    engine = ExactVespaPassageSearchEngine()
+    request = engine._build_request(terms, limit, offset)
 
     assert isinstance(request, dict)
     assert "yql" in request
@@ -117,8 +118,8 @@ def test_exact_request(terms, limit, offset):
 def test_hybrid_request(terms, limit, offset):
     """Test hybrid request returns the expected fields."""
 
-    engine = VespaPassageSearchEngine(mode="hybrid")
-    request = engine._build_hybrid_request(terms, limit, offset)
+    engine = HybridVespaPassageSearchEngine()
+    request = engine._build_request(terms, limit, offset)
 
     assert isinstance(request, dict)
     assert "yql" in request
@@ -130,7 +131,7 @@ def test_hybrid_request(terms, limit, offset):
 
 
 def test_parse_vespa_passage_response(
-    vespa_passage_engine, mock_vespa_passage_response, sample_passage_fields
+    exact_vespa_passage_engine, mock_vespa_passage_response, sample_passage_fields
 ):
     """Test parsing a Vespa response with multiple passages."""
 
@@ -147,7 +148,7 @@ def test_parse_vespa_passage_response(
     }
 
     response = mock_vespa_passage_response([fields_1, fields_2, fields_3])
-    passages = vespa_passage_engine._parse_vespa_response(response)
+    passages = exact_vespa_passage_engine._parse_vespa_response(response)
 
     assert len(passages) == 3
     assert passages[0].text == "This is a sample passage about climate change."

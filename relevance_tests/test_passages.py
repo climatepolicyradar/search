@@ -6,7 +6,10 @@ from relevance_tests import (
 )
 from search.config import PASSAGES_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBPassageSearchEngine
-from search.engines.vespa import VespaPassageSearchEngine
+from search.engines.vespa import (
+    ExactVespaPassageSearchEngine,
+    HybridVespaPassageSearchEngine,
+)
 from search.log import get_logger
 from search.passage import Passage
 from search.testcase import (
@@ -24,8 +27,8 @@ logger = get_logger(__name__)
 
 engines = [
     DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".duckdb")),
-    VespaPassageSearchEngine(mode="exact"),
-    VespaPassageSearchEngine(mode="hybrid"),
+    ExactVespaPassageSearchEngine(),
+    HybridVespaPassageSearchEngine(),
 ]
 
 test_cases = [

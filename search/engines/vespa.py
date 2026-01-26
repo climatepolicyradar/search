@@ -1,8 +1,8 @@
 import base64
-from abc import ABC
+from abc import ABC, abstractmethod
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Generic, Literal, cast
+from typing import Any, Generic, cast
 
 from vespa.application import Vespa
 from vespa.exceptions import VespaError
@@ -112,13 +112,11 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         )
 
 
-class VespaPassageSearchEngine(VespaSearchEngine[Passage]):
+class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
     """
-    Search engine for searching passages in Vespa.
+    Abstract base class for Vespa passage search engines.
 
-    Supports two search modes:
-    - "exact": Exact text matching without stemming or embeddings
-    - "hybrid": Combined text and semantic search using embeddings
+    Subclasses must implement _build_request() to define their search strategy.
     """
 
     model_class = Passage
@@ -126,17 +124,17 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage]):
     DEFAULT_SEARCH_LIMIT: int = 20
     DEFAULT_TIMEOUT_SECONDS: int = 20
 
-    def __init__(self, mode: Literal["exact", "hybrid"] = "exact") -> None:
-        """Initialize VespaPassageSearchEngine"""
-
-        super().__init__()
-        self.mode = mode
-
     def search(
         self, terms: str, limit: int | None = None, offset: int = 0
     ) -> list[Passage]:
-        """Search for passages using the configured search mode."""
+        """
+        Search for passages using the configured search strategy.
 
+        :param terms: Search terms from the user
+        :param limit: Maximum number of results to return
+        :param offset: Number of results to skip
+        :return: List of Passage objects matching the search
+        """
         if limit is None:
             logger.info(
                 f"Search limit was not set. Setting to {self.DEFAULT_SEARCH_LIMIT}."
@@ -147,10 +145,7 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage]):
             self.connect_to_vespa()
             assert self.client is not None
 
-        if self.mode == "exact":
-            request_body = self._build_exact_request(terms, limit, offset)
-        else:
-            request_body = self._build_hybrid_request(terms, limit, offset)
+        request_body = self._build_request(terms, limit, offset)
 
         try:
             vespa_response = cast(
@@ -166,61 +161,20 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage]):
 
         return self._parse_vespa_response(vespa_response)
 
-    def _build_exact_request(
-        self, terms: str, limit: int, offset: int
-    ) -> dict[str, Any]:
-        """Build request body for exact match search."""
-
-        yql = f"""
-        select * from sources document_passage where
-            (text_block_not_stemmed contains ({{stem: false}}@query_string))
-        limit {limit} offset {offset}
+    @abstractmethod
+    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
         """
+        Build the Vespa query request body.
 
-        return {
-            "yql": yql,
-            "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
-            "ranking.softtimeout.factor": "0.7",
-            "query_string": terms,
-            "ranking.profile": "exact_not_stemmed",
-            "summary": "search_summary",
-        }
-
-    def _build_hybrid_request(
-        self, terms: str, limit: int, offset: int
-    ) -> dict[str, Any]:
-        """Build request body for hybrid search (text + embeddings)."""
-
-        yql = f"""
-        select * from sources document_passage where
-            (
-                (userInput(@query_string)) or
-                ([{{"targetNumHits": 1000, "distanceThreshold": 0.24}}]
-                 nearestNeighbor(text_embedding,query_embedding))
-            )
-        limit {limit} offset {offset}
+        :param terms: Search terms from the user
+        :param limit: Maximum number of results to return
+        :param offset: Number of results to skip
+        :return: Dictionary containing the Vespa query request body
         """
-
-        return {
-            "yql": yql,
-            "timeout": str(str(self.DEFAULT_TIMEOUT_SECONDS)),
-            "ranking.softtimeout.factor": "0.7",
-            "query_string": terms,
-            "ranking.profile": "hybrid",
-            "input.query(query_embedding)": "embed(msmarco-distilbert-dot-v5, @query_string)",
-            "summary": "search_summary",
-        }
+        ...
 
     def _parse_vespa_response(self, response: VespaQueryResponse) -> list[Passage]:
-        """
-        Parse a Vespa query response into a list of Passage objects.
-
-        Args:
-            response (VespaQueryResponse): The response from a Vespa query
-
-        Returns:
-            list[Passage]: List of Passage objects extracted from the response
-        """
+        """Parse a Vespa query response with summary `search_summary`."""
         passages = []
 
         root = response.json.get("root", {})
@@ -259,6 +213,82 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage]):
         """
         Count search results.
 
-        Not yet implemented; may never be implemented for hybrid or passage search
+        Not yet implemented; may never be implemented for hybrid or passage search.
         """
         raise NotImplementedError()
+
+
+class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
+    """
+    Vespa search engine using exact text matching without stemming.
+
+    Uses the text_block_not_stemmed field with stem:false for precise
+    text matching. Ranking profile: exact_not_stemmed.
+    """
+
+    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+        """
+        Build request body for exact match search.
+
+        :param terms: Search terms from the user
+        :param limit: Maximum number of results to return
+        :param offset: Number of results to skip
+        :return: Dictionary containing the Vespa query request body
+        """
+        yql = f"""
+        select * from sources document_passage where
+            (text_block_not_stemmed contains ({{stem: false}}@query_string))
+        limit {limit} offset {offset}
+        """
+
+        return {
+            "yql": yql,
+            "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
+            "ranking.softtimeout.factor": "0.7",
+            "query_string": terms,
+            "ranking.profile": "exact_not_stemmed",
+            "summary": "search_summary",
+        }
+
+
+class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
+    """
+    Vespa search engine combining text search with semantic embeddings.
+
+    Uses userInput for text search combined with nearestNeighbor for
+    embedding-based semantic search. Uses msmarco-distilbert-dot-v5
+    embedding model. Ranking profile: hybrid.
+    """
+
+    EMBEDDING_MODEL: str = "msmarco-distilbert-dot-v5"
+    DISTANCE_THRESHOLD: float = 0.24
+    TARGET_NUM_HITS: int = 1000
+
+    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+        """
+        Build request body for hybrid search (text + embeddings).
+
+        :param terms: Search terms from the user
+        :param limit: Maximum number of results to return
+        :param offset: Number of results to skip
+        :return: Dictionary containing the Vespa query request body
+        """
+        yql = f"""
+        select * from sources document_passage where
+            (
+                (userInput(@query_string)) or
+                ([{{"targetNumHits": {self.TARGET_NUM_HITS}, "distanceThreshold": {self.DISTANCE_THRESHOLD}}}]
+                 nearestNeighbor(text_embedding,query_embedding))
+            )
+        limit {limit} offset {offset}
+        """
+
+        return {
+            "yql": yql,
+            "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
+            "ranking.softtimeout.factor": "0.7",
+            "query_string": terms,
+            "ranking.profile": "hybrid",
+            "input.query(query_embedding)": f"embed({self.EMBEDDING_MODEL}, @query_string)",
+            "summary": "search_summary",
+        }
