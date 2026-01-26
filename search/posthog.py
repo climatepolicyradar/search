@@ -455,3 +455,77 @@ class PostHogSession:
         if not results:
             raise ValueError("PostHog query returned no results unexpectedly")
         return Percentage(results[0][0])
+
+    def calculate_click_through_rate_from_search_with_dwell_time(
+        self,
+        date_from: str,
+        date_to: str,
+    ) -> Percentage:
+        """
+        Calculate the percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 10 seconds or more.
+
+        This is the same as the calculate_click_through_rate_from_search method, but it also includes when users click from to a family then straight to a document in less than 10 seconds, as long as they spend at least 10 seconds on the document.
+        """
+        self._check_date_range(date_from, date_to)
+        query = f"""
+            WITH ranked_pageviews AS (
+            SELECT 
+                distinct_id,
+                properties.$current_url as current_url,
+                timestamp,
+                row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
+            FROM events
+            WHERE 
+                event = '$pageview'
+                AND properties.consent IS NOT NULL
+                AND timestamp >= '{date_from} 00:00:00'
+                AND timestamp <= '{date_to} 23:59:59'
+                AND properties.$host IN {self.cpr_domains}
+            ),
+
+            pageviews_with_next AS (
+                SELECT 
+                    p1.distinct_id,
+                    p1.current_url,
+                    p2.current_url as next_url,
+                    p3.current_url as next_next_url,
+                    dateDiff('second', p2.timestamp, p3.timestamp) as next_dwell_time,
+                    dateDiff('second', p3.timestamp, p4.timestamp) as next_next_dwell_time
+                FROM ranked_pageviews p1
+                LEFT JOIN ranked_pageviews p2 ON p1.distinct_id = p2.distinct_id AND p2.rn = p1.rn + 1
+                LEFT JOIN ranked_pageviews p3 ON p1.distinct_id = p3.distinct_id AND p3.rn = p1.rn + 2
+                LEFT JOIN ranked_pageviews p4 ON p1.distinct_id = p4.distinct_id AND p4.rn = p1.rn + 3
+            ),
+
+            search_users AS (
+                SELECT DISTINCT distinct_id
+                FROM pageviews_with_next
+                WHERE current_url LIKE '%/search%'
+            ),
+
+            clickthrough_users AS (
+                SELECT DISTINCT distinct_id
+                FROM pageviews_with_next
+                WHERE 
+                    current_url LIKE '%/search%'
+                    AND (
+                        -- Direct: search -> document page with 10+ seconds
+                        ((next_url LIKE '%/document/%' OR next_url LIKE '%/documents/%') 
+                        AND next_dwell_time >= 10)
+                        OR
+                        -- Two-step: search -> document (family) -> documents with 10+ seconds on documents
+                        (next_url LIKE '%/document/%' 
+                        AND next_next_url LIKE '%/documents/%' 
+                        AND next_next_dwell_time >= 10)
+                    )
+            )
+
+            SELECT 
+                count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
+            FROM search_users
+            LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise ValueError("PostHog query returned no results unexpectedly")
+        return Percentage(results[0][0])
