@@ -384,3 +384,74 @@ class PostHogSession:
         if not results:
             raise ValueError("PostHog query returned no results unexpectedly")
         return Percentage(results[0][0])
+
+    def calculate_click_through_rate_from_search(
+        self,
+        date_from: str,
+        date_to: str,
+    ) -> Percentage:
+        """
+        Calculate the percentage of users who clicked on a search result to a document or family page.
+
+        What is 'clicking on a search result'?
+        It refers specifically to either:
+        1. clicking to a document family or document page from a search result on the main search results page.
+        2. clicking to view text passages matching a search, then clicking to a document from the resulting sidebar.
+
+        It does not include:
+        1. only opening the sidebar, without clicking on to a document
+        2. clicking search results within a document that are not on the main search results page.
+
+        """
+        self._check_date_range(date_from, date_to)
+        query = f"""
+            WITH ranked_pageviews AS (
+            SELECT 
+                distinct_id,
+                properties.$current_url as current_url,
+                timestamp,
+                row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
+            FROM events
+            WHERE 
+                event = '$pageview'
+                AND properties.consent IS NOT NULL
+                AND timestamp >= '{date_from} 00:00:00'
+                AND timestamp <= '{date_to} 23:59:59'
+                AND properties.$host IN {self.cpr_domains}
+            ),
+
+            pageviews_with_next AS (
+                SELECT 
+                    p1.distinct_id,
+                    p1.current_url,
+                    p2.current_url as next_url
+                FROM ranked_pageviews p1
+                LEFT JOIN ranked_pageviews p2 
+                    ON p1.distinct_id = p2.distinct_id 
+                    AND p2.rn = p1.rn + 1
+            ),
+
+            search_users AS (
+                SELECT DISTINCT distinct_id
+                FROM pageviews_with_next
+                WHERE current_url LIKE '%/search%'
+            ),
+
+            clickthrough_users AS (
+                SELECT DISTINCT distinct_id
+                FROM pageviews_with_next
+                WHERE 
+                    current_url LIKE '%/search%'
+                    AND (next_url LIKE '%/document/%' OR next_url LIKE '%/documents/%')
+            )
+
+            SELECT 
+                count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
+            FROM search_users
+            LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
+        
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise ValueError("PostHog query returned no results unexpectedly")
+        return Percentage(results[0][0])
