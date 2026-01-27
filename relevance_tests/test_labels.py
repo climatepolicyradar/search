@@ -36,6 +36,12 @@ test_cases = [
         expected_result_ids=["dummy992", "dummy993"],  # NEW SOUTH WALES, AUSTRALIA
         description="search for new south wales should return new south wales and australia",
     ),
+    RecallTestCase[Label](
+        category="place name",
+        search_terms="new south wales",
+        forbidden_result_ids=["dummy994"],  # WALES
+        description="search for new south wales should not return 'wales'",
+    ),
     PrecisionTestCase[Label](
         category="place name + other terms",
         search_terms="Philippines policies in climate changes",
