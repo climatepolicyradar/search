@@ -4,7 +4,8 @@ from relevance_tests import (
     print_test_results,
     save_test_results_as_jsonl,
 )
-from search.config import DOCUMENTS_PATH_STEM, TEST_RESULTS_DIR
+from search.aws import download_file_from_s3
+from search.config import BUCKET_NAME, DOCUMENTS_PATH_STEM, TEST_RESULTS_DIR
 from search.document import Document
 from search.engines.duckdb import DuckDBDocumentSearchEngine
 from search.log import get_logger
@@ -20,10 +21,6 @@ DocumentTestResult = TestResult[Document]
 
 
 logger = get_logger(__name__)
-
-engines = [
-    DuckDBDocumentSearchEngine(db_path=DOCUMENTS_PATH_STEM.with_suffix(".duckdb"))
-]
 
 test_cases = [
     SearchComparisonTestCase[Document](
@@ -184,6 +181,13 @@ test_cases = [
 
 def test_documents():
     """Test documents"""
+
+    logger.info("Downloading relevant files from S3")
+    download_file_from_s3(BUCKET_NAME, "documents.duckdb", skip_if_present=True)
+
+    engines = [
+        DuckDBDocumentSearchEngine(db_path=DOCUMENTS_PATH_STEM.with_suffix(".duckdb"))
+    ]
 
     wb = WandbSession()
 

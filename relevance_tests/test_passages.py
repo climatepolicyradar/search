@@ -4,7 +4,8 @@ from relevance_tests import (
     print_test_results,
     save_test_results_as_jsonl,
 )
-from search.config import PASSAGES_PATH_STEM, TEST_RESULTS_DIR
+from search.aws import download_file_from_s3
+from search.config import BUCKET_NAME, PASSAGES_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBPassageSearchEngine
 from search.engines.vespa import (
     ExactVespaPassageSearchEngine,
@@ -24,12 +25,6 @@ PassageTestResult = TestResult[Passage]
 
 
 logger = get_logger(__name__)
-
-engines = [
-    DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".duckdb")),
-    ExactVespaPassageSearchEngine(),
-    HybridVespaPassageSearchEngine(),
-]
 
 test_cases = [
     FieldCharacteristicsTestCase[Passage](
@@ -172,6 +167,15 @@ test_cases = [
 
 def test_passages():
     """Test passages"""
+
+    logger.info("Downloading relevant files from S3")
+    download_file_from_s3(BUCKET_NAME, "passages.duckdb", skip_if_present=True)
+
+    engines = [
+        DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".duckdb")),
+        ExactVespaPassageSearchEngine(),
+        HybridVespaPassageSearchEngine(),
+    ]
 
     wb = WandbSession()
 

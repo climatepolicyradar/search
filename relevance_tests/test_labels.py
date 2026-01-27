@@ -4,7 +4,8 @@ from relevance_tests import (
     print_test_results,
     save_test_results_as_jsonl,
 )
-from search.config import LABELS_PATH_STEM, TEST_RESULTS_DIR
+from search.aws import download_file_from_s3
+from search.config import BUCKET_NAME, LABELS_PATH_STEM, TEST_RESULTS_DIR
 from search.engines.duckdb import DuckDBLabelSearchEngine
 from search.label import Label
 from search.log import get_logger
@@ -19,8 +20,6 @@ LabelTestResult = TestResult[Label]
 
 
 logger = get_logger(__name__)
-
-engines = [DuckDBLabelSearchEngine(db_path=LABELS_PATH_STEM.with_suffix(".duckdb"))]
 
 
 test_cases = [
@@ -800,6 +799,11 @@ test_cases = [
 
 def test_labels():
     """Test labels"""
+
+    logger.info("Downloading relevant files from S3")
+    download_file_from_s3(BUCKET_NAME, "labels.duckdb", skip_if_present=True)
+
+    engines = [DuckDBLabelSearchEngine(db_path=LABELS_PATH_STEM.with_suffix(".duckdb"))]
 
     wb = WandbSession()
 
