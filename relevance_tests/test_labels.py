@@ -13,6 +13,7 @@ from search.testcase import (
     PrecisionTestCase,
     RecallTestCase,
 )
+from search.weights_and_biases import WandbSession
 
 LabelTestResult = TestResult[Label]
 
@@ -800,6 +801,8 @@ test_cases = [
 def test_labels():
     """Test labels"""
 
+    wb = WandbSession()
+
     for engine in engines:
         engine_test_results: list[LabelTestResult] = []
         logger.info(f"Testing label test cases against {engine.name}")
@@ -818,6 +821,11 @@ def test_labels():
             engine_test_results.append(test_result)
 
         print_test_results(engine_test_results)
+        wb.log_test_results(
+            test_results=engine_test_results,
+            primitive=Label,
+            search_engine=engine,
+        )
 
         test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
         output_file_path = (
