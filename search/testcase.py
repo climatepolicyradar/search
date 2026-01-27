@@ -116,10 +116,11 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
 
 
 class RecallTestCase(TestCase[TModel], Generic[TModel]):
-    """Dictates which results should be anywhere in the top K results for a given search."""
+    """Dictates which results should be or not be anywhere in the top K results for a given search."""
 
-    expected_result_ids: list[Identifier | str] = Field(
-        description="IDs which should appear in the top k results."
+    expected_result_ids: list[Identifier | str] | None = Field(
+        description="IDs which should appear in the top k results.",
+        default=None,
     )
     forbidden_result_ids: list[Identifier | str] | None = Field(
         description="IDs which should not appear in the top k results.",
@@ -148,9 +149,20 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         return [Identifier(item) if isinstance(item, str) else item for item in value]
 
     @model_validator(mode="after")
+    def check_expected_result_ids_or_forbidden_result_ids_set(self):
+        """Check that either expected result IDs or forbidden result IDs is set."""
+        if self.expected_result_ids is None and self.forbidden_result_ids is None:
+            raise ValueError(
+                "at least one of expected_result_ids or forbidden_result_ids must be set"
+            )
+        return self
+
+    @model_validator(mode="after")
     def check_expected_result_ids_unique(self):
         """Check that the expected family slugs are unique."""
-        if len(self.expected_result_ids) != len(set(self.expected_result_ids)):
+        if self.expected_result_ids is not None and len(
+            self.expected_result_ids
+        ) != len(set(self.expected_result_ids)):
             raise ValueError("expected_result_ids must be unique")
         return self
 
@@ -169,8 +181,10 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         search_results = engine.search(self.search_terms)
         result_ids = [result.id for result in search_results]
 
-        expected_ids_not_in_response = set(self.expected_result_ids).difference(
-            set(result_ids)
+        expected_ids_not_in_response = (
+            set(self.expected_result_ids).difference(set(result_ids))
+            if self.expected_result_ids is not None
+            else None
         )
         forbidden_ids_in_response = (
             set(self.forbidden_result_ids).intersection(set(result_ids))
