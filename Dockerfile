@@ -14,6 +14,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY search ./search/
 COPY scripts ./scripts/
+COPY relevance_tests ./relevance_tests/
 
 # Install all dependencies including editable project (requires git for knowledge-graph dependency)
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -32,6 +33,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY pyproject.toml README.md ./
 COPY search ./search/
 COPY scripts ./scripts/
+COPY relevance_tests ./relevance_tests/
 
 # Set PYTHONPATH to ensure modules can be found
 ENV PYTHONPATH="/app:/app/search:/app/scripts"
