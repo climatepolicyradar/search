@@ -51,7 +51,7 @@ serve-api:
 
 # Build Docker image for deployment
 build-image:
-    docker build --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
+    docker build --file api/Dockerfile --platform=linux/amd64 --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
 
 # Run Docker image locally
 run-image cmd="sh":
