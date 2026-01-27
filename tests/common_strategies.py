@@ -143,3 +143,9 @@ def passage_data_strategy(draw) -> dict:
 def passage_strategy(draw) -> Passage:
     """Generate a Passage instance for testing."""
     return Passage(**draw(passage_data_strategy()))
+
+
+# General search strategies
+search_terms_strategy = st.text(min_size=0, max_size=1000)
+search_limit_strategy = st.one_of(st.none(), st.integers(min_value=1, max_value=10000))
+search_offset_strategy = st.integers(min_value=0, max_value=1000000)
