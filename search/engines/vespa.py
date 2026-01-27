@@ -123,6 +123,8 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
 
     DEFAULT_SEARCH_LIMIT: int = 20
     DEFAULT_TIMEOUT_SECONDS: int = 20
+    DEFAULT_RANKING_SOFTTIMEOUT_FACTOR: str = "0.7"
+    DEFAULT_SUMMARY: str = "search_summary"
 
     def search(
         self, terms: str, limit: int | None = None, offset: int = 0
@@ -244,10 +246,10 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
         return {
             "yql": yql,
             "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
-            "ranking.softtimeout.factor": "0.7",
+            "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
             "query_string": terms,
             "ranking.profile": "exact_not_stemmed",
-            "summary": "search_summary",
+            "summary": self.DEFAULT_SUMMARY,
         }
 
 
@@ -286,9 +288,9 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
         return {
             "yql": yql,
             "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
-            "ranking.softtimeout.factor": "0.7",
+            "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
             "query_string": terms,
             "ranking.profile": "hybrid",
             "input.query(query_embedding)": f"embed({self.EMBEDDING_MODEL}, @query_string)",
-            "summary": "search_summary",
+            "summary": self.DEFAULT_SUMMARY,
         }
