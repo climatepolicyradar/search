@@ -17,10 +17,10 @@ COPY search/ search/
 # Create data directory (will be populated from S3 at runtime)
 RUN mkdir -p /app/data
 
-# Expose the FastAPI server on port 8000
-EXPOSE 8000
+# Expose the FastAPI server on port 8080
+EXPOSE 8080
 
 # Run the FastAPI server with uvicorn
 # The lifespan event will download data from S3 before starting
-CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "fastapi", "run", "./api/main.py", "--host", "0.0.0.0", "--port", "8080"]
 

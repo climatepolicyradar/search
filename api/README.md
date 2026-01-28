@@ -18,7 +18,7 @@ Start the development server:
 just serve-api
 ```
 
-The API will be available at `http://localhost:8000` with interactive documentation and type details at `http://localhost:8000/docs`.
+The API will be available at `http://localhost:8080` with interactive documentation and type details at `http://localhost:8080/docs`.
 
 ## Endpoints
 
