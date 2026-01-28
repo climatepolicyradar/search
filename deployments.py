@@ -16,6 +16,7 @@ from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron
 
+from relevance_tests import test_documents, test_labels, test_passages
 from scripts.data_uploaders.upload_documents import upload_documents_databases
 from scripts.data_uploaders.upload_labels import upload_labels_databases
 from scripts.data_uploaders.upload_passages import upload_passages_databases
@@ -54,6 +55,7 @@ def create_deployment(
     flow_variables: dict[str, Any] = DEFAULT_FLOW_VARIABLES,
     extra_tags: list[str] = [],
     schedule: str | None = None,
+    **kwargs,
 ) -> None:
     """
     Create a deployment for the specified flow in the labs environment.
@@ -70,6 +72,8 @@ def create_deployment(
         Additional tags for the deployment
     schedule: str | None, optional
         Cron schedule for the deployed flow
+    **kwargs:
+        Are passed to flow.deploy
     """
     version = importlib.metadata.version("search")
     flow_name = flow.name
@@ -132,6 +136,7 @@ def create_deployment(
         build=False,
         push=False,
         schedule=schedule_obj,
+        **kwargs,
     )
 
 
@@ -143,6 +148,7 @@ if __name__ == "__main__":
         "ephemeralStorage": {"sizeInGiB": 30}
     }
 
+    # Uploading jsonl and duckdb for dev search endpoints
     create_deployment(
         flow=upload_documents_databases,
         description="Upload documents from HuggingFace to S3 as jsonl and duckdb",
@@ -159,4 +165,23 @@ if __name__ == "__main__":
         description="Upload passages from HuggingFace to S3 as jsonl and duckdb",
         schedule="0 18 * * SUN",
         flow_variables=document_passage_flow_variables,
+    )
+
+    # Running relevance tests
+    rrule_relevance_tests = "RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=-1MO;BYHOUR=21;BYMINUTE=0"  # last Monday of every month at 21:00
+
+    create_deployment(
+        flow=test_documents.relevance_tests_documents,  # type: ignore
+        description="Run relevance tests for documents",
+        rrule=rrule_relevance_tests,
+    )
+    create_deployment(
+        flow=test_labels.relevance_tests_labels,  # type: ignore
+        description="Run relevance tests for labels",
+        rrule=rrule_relevance_tests,
+    )
+    create_deployment(
+        flow=test_passages.relevance_tests_passages,  # type: ignore
+        description="Run relevance tests for passages",
+        rrule=rrule_relevance_tests,
     )
