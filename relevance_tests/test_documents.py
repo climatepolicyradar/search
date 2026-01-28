@@ -1,29 +1,16 @@
-from relevance_tests import (
-    TestResult,
-    generate_test_run_id,
-    print_test_results,
-    save_test_results_as_jsonl,
-)
-from search.config import DOCUMENTS_PATH_STEM, TEST_RESULTS_DIR
+from prefect import flow, get_run_logger
+from prefect.task_runners import ThreadPoolTaskRunner
+
+from relevance_tests import run_relevance_tests_parallel
+from search.config import DOCUMENTS_PATH_STEM
 from search.document import Document
 from search.engines.duckdb import DuckDBDocumentSearchEngine
-from search.log import get_logger
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
 )
-from search.weights_and_biases import WandbSession
-
-DocumentTestResult = TestResult[Document]
-
-
-logger = get_logger(__name__)
-
-engines = [
-    DuckDBDocumentSearchEngine(db_path=DOCUMENTS_PATH_STEM.with_suffix(".duckdb"))
-]
 
 test_cases = [
     SearchComparisonTestCase[Document](
@@ -203,43 +190,30 @@ test_cases = [
 ]
 
 
-def test_documents():
-    """Test documents"""
+@flow(
+    name="relevance_tests_documents",
+    task_runner=ThreadPoolTaskRunner(max_workers=3),  # type: ignore[arg-type]
+)
+def relevance_tests_documents():
+    """Run relevance tests for documents"""
+    from search.aws import download_file_from_s3
+    from search.config import BUCKET_NAME
 
-    wb = WandbSession()
+    logger = get_run_logger()
+    logger.info("Downloading files from s3")
+    download_file_from_s3(BUCKET_NAME, "documents.duckdb", skip_if_present=True)
 
-    for engine in engines:
-        engine_test_results: list[DocumentTestResult] = []
-        logger.info(f"Testing document test cases against {engine.name}")
+    engines = [
+        DuckDBDocumentSearchEngine(db_path=DOCUMENTS_PATH_STEM.with_suffix(".duckdb"))
+    ]
 
-        for test_case in test_cases:
-            logger.info(
-                f"Running test case: {test_case.name}: {test_case.search_terms}"
-            )
-            test_passed, search_results = test_case.run_against(engine)
-
-            test_result = DocumentTestResult(
-                test_case=test_case,
-                passed=test_passed,
-                search_engine_id=engine.id,
-                search_results=search_results,
-            )
-            engine_test_results.append(test_result)
-
-        print_test_results(engine_test_results)
-        wb.log_test_results(
-            test_results=engine_test_results,
-            primitive=Document,
-            search_engine=engine,
-        )
-
-        test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
-        output_file_path = (
-            TEST_RESULTS_DIR / "documents" / f"{engine.name}_{test_run_id}.jsonl"
-        )
-
-        save_test_results_as_jsonl(engine_test_results, output_file_path)
+    run_relevance_tests_parallel(
+        engines=engines,
+        test_cases=test_cases,
+        primitive_type=Document,
+        output_subdir="documents",
+    )
 
 
 if __name__ == "__main__":
-    test_documents()
+    relevance_tests_documents()
