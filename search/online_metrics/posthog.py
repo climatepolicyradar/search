@@ -104,8 +104,8 @@ class PostHogSession:
                     )
                 )) / count(Distinct(distinct_id)) * 100.0 AS search_percentage
             FROM events
-            WHERE timestamp >= '{date_range.get_earliest_time_of_date()}'
-                AND timestamp <= '{date_range.get_latest_time_of_date()}'
+            WHERE timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                 AND properties.consent IS NOT NULL
                 AND event = '$pageview'
                 AND properties.$host IN {self.cpr_domains}
@@ -160,8 +160,8 @@ class PostHogSession:
                 count(DISTINCT(consent_set_users.distinct_id)) * 100.0 AS search_downloaders_percentage
             FROM events
             INNER JOIN consent_set_users ON events.distinct_id = consent_set_users.distinct_id
-            WHERE timestamp >= '{date_range.get_earliest_time_of_date()}'
-                AND timestamp <= '{date_range.get_latest_time_of_date()}'
+            WHERE timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                 AND properties.$host IN {self.cpr_domains}
         """
         results = self.execute_query(query)
@@ -203,8 +203,8 @@ class PostHogSession:
                 )) /
                 count(DISTINCT(distinct_id)) * 100.0 AS zero_results_rate
             FROM events
-            WHERE timestamp >= '{date_range.get_earliest_time_of_date()}'
-                AND timestamp <= '{date_range.get_latest_time_of_date()}'
+            WHERE timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                 AND properties.$host IN {self.cpr_domains}
                 AND event = 'search:results_fetch'
         """
@@ -394,8 +394,8 @@ class PostHogSession:
             WHERE 
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
-                AND timestamp >= '{date_range.get_earliest_time_of_date()}'
-                AND timestamp <= '{date_range.get_latest_time_of_date()}'
+                AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                 AND properties.$host IN {self.cpr_domains}
             ),
 
@@ -465,8 +465,8 @@ class PostHogSession:
             WHERE 
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
-                AND timestamp >= '{date_range.get_earliest_time_of_date()}'
-                AND timestamp <= '{date_range.get_latest_time_of_date()}'
+                AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                 AND properties.$host IN {self.cpr_domains}
             ),
 
