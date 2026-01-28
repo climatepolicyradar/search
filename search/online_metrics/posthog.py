@@ -94,10 +94,6 @@ class PostHogSession:
         :return: Percentage of users who searched in the time period as a float
         """
 
-        date_range = DateRange(
-            date_from=date_range.date_from, date_to=date_range.date_to
-        )
-
         query = f"""
             SELECT 
                 count(Distinct(
@@ -108,8 +104,8 @@ class PostHogSession:
                     )
                 )) / count(Distinct(distinct_id)) * 100.0 AS search_percentage
             FROM events
-            WHERE timestamp >= '{date_range.get_start_time_of_day()}'
-                AND timestamp <= '{date_range.get_end_time_of_day()}'
+            WHERE timestamp >= '{date_range.get_earliest_time_of_date()}'
+                AND timestamp <= '{date_range.get_latest_time_of_date()}'
                 AND properties.consent IS NOT NULL
                 AND event = '$pageview'
                 AND properties.$host IN {self.cpr_domains}
@@ -145,9 +141,6 @@ class PostHogSession:
         :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of users who downloaded data in the time period as a float
         """
-        date_range = DateRange(
-            date_from=date_range.date_from, date_to=date_range.date_to
-        )
 
         query = f"""
             WITH consent_set_users AS (
@@ -167,8 +160,8 @@ class PostHogSession:
                 count(DISTINCT(consent_set_users.distinct_id)) * 100.0 AS search_downloaders_percentage
             FROM events
             INNER JOIN consent_set_users ON events.distinct_id = consent_set_users.distinct_id
-            WHERE timestamp >= '{date_range.get_start_time_of_day()}'
-                AND timestamp <= '{date_range.get_end_time_of_day()}'
+            WHERE timestamp >= '{date_range.get_earliest_time_of_date()}'
+                AND timestamp <= '{date_range.get_latest_time_of_date()}'
                 AND properties.$host IN {self.cpr_domains}
         """
         results = self.execute_query(query)
@@ -199,9 +192,6 @@ class PostHogSession:
         :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of searches with no results in the time period as a float
         """
-        date_range = DateRange(
-            date_from=date_range.date_from, date_to=date_range.date_to
-        )
         query = f"""
             SELECT 
                 count(DISTINCT(
@@ -213,8 +203,8 @@ class PostHogSession:
                 )) /
                 count(DISTINCT(distinct_id)) * 100.0 AS zero_results_rate
             FROM events
-            WHERE timestamp >= '{date_range.get_start_time_of_day()}'
-                AND timestamp <= '{date_range.get_end_time_of_day()}'
+            WHERE timestamp >= '{date_range.get_earliest_time_of_date()}'
+                AND timestamp <= '{date_range.get_latest_time_of_date()}'
                 AND properties.$host IN {self.cpr_domains}
                 AND event = 'search:results_fetch'
         """
@@ -393,9 +383,6 @@ class PostHogSession:
         :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
         """
-        date_range = DateRange(
-            date_from=date_range.date_from, date_to=date_range.date_to
-        )
         query = f"""
             WITH ranked_pageviews AS (
             SELECT 
@@ -407,8 +394,8 @@ class PostHogSession:
             WHERE 
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
-                AND timestamp >= '{date_range.get_start_time_of_day()}'
-                AND timestamp <= '{date_range.get_end_time_of_day()}'
+                AND timestamp >= '{date_range.get_earliest_time_of_date()}'
+                AND timestamp <= '{date_range.get_latest_time_of_date()}'
                 AND properties.$host IN {self.cpr_domains}
             ),
 
@@ -467,9 +454,6 @@ class PostHogSession:
         :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 10 seconds or more in the time period as a float
         """
-        date_range = DateRange(
-            date_from=date_range.date_from, date_to=date_range.date_to
-        )
         query = f"""
             WITH ranked_pageviews AS (
             SELECT 
@@ -481,8 +465,8 @@ class PostHogSession:
             WHERE 
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
-                AND timestamp >= '{date_range.get_start_time_of_day()}'
-                AND timestamp <= '{date_range.get_end_time_of_day()}'
+                AND timestamp >= '{date_range.get_earliest_time_of_date()}'
+                AND timestamp <= '{date_range.get_latest_time_of_date()}'
                 AND properties.$host IN {self.cpr_domains}
             ),
 
