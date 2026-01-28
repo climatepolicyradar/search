@@ -112,6 +112,10 @@ WANDB_ENTITY = "climatepolicyradar"
 WANDB_PROJECT_OFFLINE_TESTS = "search_offline_tests"
 DISABLE_WANDB = is_truthy(os.getenv("DISABLE_WANDB", False))
 
+# Skipping SSM allows using the local user, rather than the bot user which has its
+# credentials stored in SSM.
+WANDB_SKIP_SSM_AUTH: bool = is_truthy(os.getenv("WANDB_SKIP_SSM_AUTH", False))
+
 # Huggingface
 DATASET_NAME = "climatepolicyradar/all-document-text-data-weekly"
 HF_CACHE_DIR = DATA_DIR / "huggingface_cache"

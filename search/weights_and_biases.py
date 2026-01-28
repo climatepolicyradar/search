@@ -8,6 +8,7 @@ from wandb import Run
 
 from relevance_tests import TestResult, calculate_test_result_metrics
 from search import config
+from search.aws import get_ssm_parameter
 from search.document import Document
 from search.engines import SearchEngine
 from search.label import Label
@@ -38,8 +39,15 @@ class WandbSession:
             )
 
         self.entity = config.WANDB_ENTITY
-
         self.offline_tests_project = config.WANDB_PROJECT_OFFLINE_TESTS
+
+        if not config.WANDB_SKIP_SSM_AUTH:
+            logger.info(
+                "Using Weights and Biases credentials from SSM. This will overwrite any login you have locally for the duration of the session."
+            )
+            self.api_key = get_ssm_parameter("WANDB_API_KEY")
+        else:
+            self.api_key = None
 
     def new_run(
         self,
@@ -54,6 +62,12 @@ class WandbSession:
 
         Extra kwargs are passed to wandb.init.
         """
+
+        if self.api_key:
+            wandb.login(
+                key=self.api_key,
+                relogin=False,
+            )
 
         run = wandb.init(
             entity=self.entity,
