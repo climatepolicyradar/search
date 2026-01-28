@@ -1,33 +1,18 @@
 """Helpers for interacting with Grafana"""
 
-from datetime import datetime
-from typing import Annotated
+from datetime import date, datetime
 
 import requests
-from pydantic import BaseModel, Field, NonNegativeFloat
 
 from search.config import (
     GRAFANA_LABELS,
     get_from_env_with_fallback,
 )
-from search.date_utils import DateRange
 from search.log import get_logger
+from search.online_metrics import OnlineMetricResult, PercentileResult
+from search.online_metrics.date_utils import DateRange
 
 logger = get_logger(__name__)
-
-
-TimeMilliseconds = Annotated[
-    NonNegativeFloat,
-    Field(description="A time value in milliseconds returned from Grafana"),
-]
-
-
-class PercentileResult(BaseModel):
-    """A result from a percentile query"""
-
-    p50: TimeMilliseconds
-    p95: TimeMilliseconds
-    p99: TimeMilliseconds
 
 
 class GrafanaSession:
@@ -63,7 +48,7 @@ class GrafanaSession:
         else:
             raise ValueError(f"Grafana query returned no results: {data}")
 
-    def get_search_latency_ms(self, date_range: DateRange) -> PercentileResult:
+    def get_search_latency_ms(self, date_range: DateRange) -> OnlineMetricResult:
         """
         Get the mean search API latency (p50, p95, p99) in milliseconds for the given date range (inclusive)
 
@@ -87,6 +72,18 @@ class GrafanaSession:
             values = self.execute_query(query, start_time, end_time)
             # Get the last value in the range (latency is in seconds) and convert to milliseconds
             results[name] = float(values[-1][1]) * 1000
-        return PercentileResult(
-            p50=results["p50"], p95=results["p95"], p99=results["p99"]
+        return OnlineMetricResult(
+            metric="search_latency_ms",
+            query=f"p50: {query_p50}\np95: {query_p95}\np99: {query_p99}",
+            value=PercentileResult(
+                p50=results["p50"], p95=results["p95"], p99=results["p99"]
+            ),
+            date_range=date_range,
         )
+
+
+session = GrafanaSession()
+result = session.get_search_latency_ms(
+    date_range=DateRange(date_from=date(2025, 12, 16), date_to=date(2025, 12, 31))
+)
+print(result)

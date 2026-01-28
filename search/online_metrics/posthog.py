@@ -4,28 +4,17 @@ from datetime import date, timedelta
 from typing import Any
 
 import requests
-from pydantic import (
-    NonNegativeFloat,
-    NonNegativeInt,
-)
 
 from search.config import (
     POSTHOG_CPR_DOMAINS,
     POSTHOG_HOST,
     get_from_env_with_fallback,
 )
-from search.date_utils import DateRange, InvalidStartDateException
 from search.log import get_logger
+from search.online_metrics import OnlineMetricResult
+from search.online_metrics.date_utils import DateRange, InvalidStartDateException
 
 logger = get_logger(__name__)
-
-
-class Count(NonNegativeInt):
-    """A count of a value returned from PostHog"""
-
-
-class Percentage(NonNegativeFloat):
-    """A percentage value returned from PostHog"""
 
 
 class PosthogNoResultsException(Exception):
@@ -77,7 +66,7 @@ class PostHogSession:
     def calculate_percentage_of_users_who_search(
         self,
         date_range: DateRange,
-    ) -> Percentage:
+    ) -> OnlineMetricResult:
         """
         Calculate the percentage of users who searched (NOT within a document) in the time period, inclusive of start and end dates.
 
@@ -128,12 +117,18 @@ class PostHogSession:
         results = self.execute_query(query)
         if not results:
             raise PosthogNoResultsException()
-        return Percentage(results[0][0])
+
+        return OnlineMetricResult(
+            metric="percentage_of_users_who_search",
+            query=query,
+            value=results[0][0],
+            date_range=date_range,
+        )
 
     def calculate_percentage_of_users_who_download_data(
         self,
         date_range: DateRange,
-    ) -> Percentage:
+    ) -> OnlineMetricResult:
         """
         Calculate the percentage of total users who downloaded data in the time period, inclusive of start and end dates.
 
@@ -179,12 +174,18 @@ class PostHogSession:
         results = self.execute_query(query)
         if not results:
             raise PosthogNoResultsException()
-        return Percentage(results[0][0])
+
+        return OnlineMetricResult(
+            metric="percentage_of_users_who_download_data",
+            query=query,
+            value=results[0][0],
+            date_range=date_range,
+        )
 
     def calculate_percentage_of_searches_with_no_results(
         self,
         date_range: DateRange,
-    ) -> Percentage:
+    ) -> OnlineMetricResult:
         """
         Calculate the percentage of searches with no results in the time period, inclusive of start and end dates.
 
@@ -220,12 +221,17 @@ class PostHogSession:
         results = self.execute_query(query)
         if not results:
             raise PosthogNoResultsException()
-        return Percentage(results[0][0])
+        return OnlineMetricResult(
+            metric="percentage_of_searches_with_no_results",
+            query=query,
+            value=results[0][0],
+            date_range=date_range,
+        )
 
     def calculate_7_day_searcher_retention_rate(
         self,
         date_from: date,
-    ) -> Percentage:
+    ) -> OnlineMetricResult:
         """
         Calculate the percentage of [users whose searched] who return within 7 days of an input date.  The input date must be least 7 days before the current date.
 
@@ -287,12 +293,17 @@ class PostHogSession:
         results = self.execute_query(query)
         if not results:
             raise PosthogNoResultsException()
-        return Percentage(results[0][0])
+        return OnlineMetricResult(
+            metric="percentage_of_searchers_who_return_within_7_days",
+            query=query,
+            value=results[0][0],
+            date_from=date_from,
+        )
 
     def calculate_30_day_searcher_retention_rate(
         self,
         date_from: date,
-    ) -> Percentage:
+    ) -> OnlineMetricResult:
         """
         Calculate the percentage of [users whose searched] who return within 30 days of an input date.  The input date must be least 30 days before the current date.
 
@@ -354,12 +365,17 @@ class PostHogSession:
         results = self.execute_query(query)
         if not results:
             raise PosthogNoResultsException()
-        return Percentage(results[0][0])
+        return OnlineMetricResult(
+            metric="percentage_of_searchers_who_return_within_30_days",
+            query=query,
+            value=results[0][0],
+            date_from=date_from,
+        )
 
     def calculate_click_through_rate_from_search_results_page(
         self,
         date_range: DateRange,
-    ) -> Percentage:
+    ) -> OnlineMetricResult:
         """
         Calculate the percentage of users who clicked on a search result to a document or family page.
 
@@ -430,12 +446,17 @@ class PostHogSession:
         results = self.execute_query(query)
         if not results:
             raise PosthogNoResultsException()
-        return Percentage(results[0][0])
+        return OnlineMetricResult(
+            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            query=query,
+            value=results[0][0],
+            date_range=date_range,
+        )
 
     def calculate_click_through_rate_from_search_results_page_with_dwell_time(
         self,
         date_range: DateRange,
-    ) -> Percentage:
+    ) -> OnlineMetricResult:
         """
         Calculate the percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 10 seconds or more.
 
@@ -511,4 +532,14 @@ class PostHogSession:
         results = self.execute_query(query)
         if not results:
             raise PosthogNoResultsException()
-        return Percentage(results[0][0])
+        return OnlineMetricResult(
+            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page_with_at_least_10s_dwell_time",
+            query=query,
+            value=results[0][0],
+            date_range=date_range,
+        )
+
+
+session = PostHogSession()
+result = session.calculate_7_day_searcher_retention_rate(date_from=date(2025, 12, 16))
+print(result)
