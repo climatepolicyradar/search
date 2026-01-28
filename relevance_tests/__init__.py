@@ -1,19 +1,27 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Generic, Sequence, TypeVar, cast
 
 from knowledge_graph.identifiers import Identifier
+from prefect import get_run_logger, task
+from prefect.cache_policies import NO_CACHE
+from prefect.futures import wait
 from pydantic import BaseModel
 from rich.console import Console
 from rich.table import Table
 
+from search.document import Document
 from search.engines import SearchEngine
 from search.engines.json import serialise_pydantic_list_as_jsonl
+from search.label import Label
 from search.log import get_logger
+from search.passage import Passage
 from search.testcase import TestCase
 
 logger = get_logger(__name__)
 T = TypeVar("T", bound=BaseModel)
+# Constrained TypeVar matching SearchEngine's TModel
+TModel = TypeVar("TModel", Document, Label, Passage)
 console = Console()
 
 
@@ -151,3 +159,78 @@ def print_test_results(test_results: list[TestResult]) -> None:
 
     if not has_failures:
         console.print("[bold green]✓ All tests passed![/bold green]")
+
+
+@task(cache_policy=NO_CACHE)
+def run_tests_for_engine(
+    engine: SearchEngine[TModel],
+    test_cases: list[TestCase],
+    primitive_type: type[TModel],
+    output_subdir: str,
+) -> None:
+    """
+    Run test cases for a single search engine and save results.
+
+    :param engine: Search engine to test
+    :param test_cases: List of test cases to run
+    :param primitive_type: Type of model being tested (Document, Label, or Passage)
+    :param output_subdir: Subdirectory name for saving results (e.g., "documents")
+    """
+    from search.config import TEST_RESULTS_DIR
+    from search.weights_and_biases import WandbSession
+
+    logger = get_run_logger()
+    wb = WandbSession()
+
+    engine_test_results: list[TestResult[TModel]] = []
+    logger.info(f"Testing test cases against {engine.name}")
+
+    for test_case in test_cases:
+        logger.info(f"Running test case: {test_case.name}: {test_case.search_terms}")
+        test_passed, search_results = test_case.run_against(engine)
+
+        test_result = TestResult(
+            test_case=test_case,
+            passed=test_passed,
+            search_engine_id=engine.id,
+            search_results=search_results,
+        )
+        engine_test_results.append(test_result)
+
+    print_test_results(engine_test_results)
+    wb.log_test_results(
+        test_results=engine_test_results,
+        primitive=primitive_type,
+        search_engine=engine,
+    )
+
+    test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
+    output_file_path = (
+        TEST_RESULTS_DIR / output_subdir / f"{engine.name}_{test_run_id}.jsonl"
+    )
+
+    save_test_results_as_jsonl(engine_test_results, output_file_path)
+
+
+def run_relevance_tests_parallel(
+    engines: Sequence[SearchEngine[TModel]],
+    test_cases: list[TestCase],
+    primitive_type: type[TModel],
+    output_subdir: str,
+) -> None:
+    """
+    Run relevance tests across multiple engines in parallel.
+
+    :param engines: List of search engines to test
+    :param test_cases: List of test cases to run
+    :param primitive_type: Type of model being tested (Document, Label, or Passage)
+    :param output_subdir: Subdirectory name for saving results (e.g., "documents")
+    """
+    wait(
+        [
+            run_tests_for_engine.submit(
+                engine, test_cases, primitive_type, output_subdir
+            )
+            for engine in engines
+        ]
+    )

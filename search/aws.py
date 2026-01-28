@@ -71,7 +71,10 @@ def upload_file_to_s3(
 
 
 def download_file_from_s3(
-    bucket_name: str, s3_key: str, local_path: Path | None = None
+    bucket_name: str,
+    s3_key: str,
+    local_path: Path | None = None,
+    skip_if_present: bool = True,
 ) -> None:
     """
     Download a file from S3.
@@ -81,9 +84,16 @@ def download_file_from_s3(
         s3_key: S3 key/object name (e.g. 'data/documents.jsonl')
         local_path: Path to the local file to download.
             If None, mirrors the S3 key structure under DATA_DIR
+        skip_if_present: Skip download if file already exists in local path
     """
     if local_path is None:
         local_path = DATA_DIR / s3_key
+
+    if local_path.exists() and skip_if_present:
+        logger.info(
+            f"Skipping download of '{s3_key}' from '{bucket_name}' as it already exists in the target location."
+        )
+        return
 
     # Create parent directories if needed
     local_path.parent.mkdir(parents=True, exist_ok=True)
