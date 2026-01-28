@@ -129,3 +129,6 @@ POSTHOG_CPR_DOMAINS = [
     "climateprojectexplorer.org",
     "www.climatecasechart.com",
 ]
+
+# Grafana
+GRAFANA_LABELS = 'span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER", job="navigator-backend", span_name="POST /api/v1/searches", environment=~"production"'
