@@ -74,7 +74,7 @@ class PostHogSession:
         """
         query = {"kind": "HogQLQuery", "query": hogql_query}
         payload = {"query": query, "name": "test API"}
-        logger.info(f"Executing HogQL query: {hogql_query}")
+        logger.debug(f"Executing HogQL query: {hogql_query}")
 
         url = f"{self.host}/api/projects/{self.project_id}/query/"
         response = requests.post(
