@@ -538,8 +538,3 @@ class PostHogSession:
             value=results[0][0],
             date_range=date_range,
         )
-
-
-session = PostHogSession()
-result = session.calculate_7_day_searcher_retention_rate(date_from=date(2025, 12, 16))
-print(result)

@@ -1,6 +1,6 @@
 """Helpers for interacting with Grafana"""
 
-from datetime import date, datetime
+from datetime import datetime
 
 import requests
 
@@ -80,10 +80,3 @@ class GrafanaSession:
             ),
             date_range=date_range,
         )
-
-
-session = GrafanaSession()
-result = session.get_search_latency_ms(
-    date_range=DateRange(date_from=date(2025, 12, 16), date_to=date(2025, 12, 31))
-)
-print(result)
