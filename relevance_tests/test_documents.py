@@ -179,6 +179,27 @@ test_cases = [
         description="Search for 'what is the croatias climate strategy' should return documents titled 'climate strategy' from with 'croatia' in the description. TODO: filter for croatia instead",
         k=5,
     ),
+    # TODO (all docket number tests): making these FieldCharacteristicsTestCases would mean they're much easier parametrisable
+    # for a handful of docket numbers, expanding our sense of where this test works and doesn't. That relies on us using a
+    # non-Huggingface data source which has docket number in document metadata.
+    PrecisionTestCase[Document](
+        category="docket number",
+        search_terms="1:25-cv-02214",
+        expected_result_ids=["nk5qx7pk", "8hm35kjn", "f3858m3m"],
+        description="Searching for docket number of US case should return all the documents from the case first.",
+    ),
+    PrecisionTestCase[Document](
+        category="docket number",
+        search_terms="13-1820",
+        expected_result_ids=["3w4yvv5b"],
+        description="Searching for docket number of US case should return all the documents from the case first.",
+    ),
+    PrecisionTestCase[Document](
+        category="docket number",
+        search_terms="24-3397",
+        expected_result_ids=["3ftsndpa"],
+        description="Searching for docket number of US case should return all the documents from the case first.",
+    ),
 ]
 
 
