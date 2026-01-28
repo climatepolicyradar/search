@@ -1,14 +1,12 @@
 """Helpers for interacting with PostHog"""
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import requests
 from pydantic import (
-    BaseModel,
     NonNegativeFloat,
     NonNegativeInt,
-    model_validator,
 )
 
 from search.config import (
@@ -16,7 +14,7 @@ from search.config import (
     POSTHOG_HOST,
     get_from_env_with_fallback,
 )
-from search.date_utils import check_date_at_least_n_days_ago, check_date_range
+from search.date_utils import DateRange, InvalidStartDateException
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -28,20 +26,6 @@ class Count(NonNegativeInt):
 
 class Percentage(NonNegativeFloat):
     """A percentage value returned from PostHog"""
-
-
-class DateRange(BaseModel):
-    """An inclusive range of dates for a HogQL query"""
-
-    date_from: date
-    date_to: date
-
-    @model_validator(mode="after")
-    def check_date_order(self):
-        """Check if the date range is valid"""
-        if self.date_from > self.date_to:
-            raise ValueError("Date from must be before date to")
-        return self
 
 
 class PosthogNoResultsException(Exception):
@@ -92,8 +76,7 @@ class PostHogSession:
 
     def calculate_percentage_of_users_who_search(
         self,
-        date_from: str,
-        date_to: str,
+        date_range: DateRange,
     ) -> Percentage:
         """
         Calculate the percentage of users who searched (NOT within a document) in the time period, inclusive of start and end dates.
@@ -118,12 +101,14 @@ class PostHogSession:
         See https://www.notion.so/climatepolicyradar/What-counts-as-a-search-2e89109609a48020b247fb9f19fac1de
 
 
-        :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
-        :param date_to: end of time period (exclusive), a date as string in format YYYY-MM-DD
+        :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of users who searched in the time period as a float
         """
 
-        check_date_range(date_from, date_to)
+        date_range = DateRange(
+            date_from=date_range.date_from, date_to=date_range.date_to
+        )
+
         query = f"""
             SELECT 
                 count(Distinct(
@@ -134,8 +119,8 @@ class PostHogSession:
                     )
                 )) / count(Distinct(distinct_id)) * 100.0 AS search_percentage
             FROM events
-            WHERE timestamp >= '{date_from} 00:00:00'
-                AND timestamp <= '{date_to} 23:59:59'
+            WHERE timestamp >= '{date_range.get_start_time_of_day()}'
+                AND timestamp <= '{date_range.get_end_time_of_day()}'
                 AND properties.consent IS NOT NULL
                 AND event = '$pageview'
                 AND properties.$host IN {self.cpr_domains}
@@ -147,8 +132,7 @@ class PostHogSession:
 
     def calculate_percentage_of_users_who_download_data(
         self,
-        date_from: str,
-        date_to: str,
+        date_range: DateRange,
     ) -> Percentage:
         """
         Calculate the percentage of total users who downloaded data in the time period, inclusive of start and end dates.
@@ -163,11 +147,13 @@ class PostHogSession:
 
         "The total users" include only those with a pageview where the `consent` boolean is set.
 
-        :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
-        :param date_to: end of time period (exclusive), a date as string in format YYYY-MM-DD
+        :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of users who downloaded data in the time period as a float
         """
-        check_date_range(date_from, date_to)
+        date_range = DateRange(
+            date_from=date_range.date_from, date_to=date_range.date_to
+        )
+
         query = f"""
             WITH consent_set_users AS (
                 SELECT DISTINCT distinct_id
@@ -186,8 +172,8 @@ class PostHogSession:
                 count(DISTINCT(consent_set_users.distinct_id)) * 100.0 AS search_downloaders_percentage
             FROM events
             INNER JOIN consent_set_users ON events.distinct_id = consent_set_users.distinct_id
-            WHERE timestamp >= '{date_from} 00:00:00'
-                AND timestamp <= '{date_to} 23:59:59'
+            WHERE timestamp >= '{date_range.get_start_time_of_day()}'
+                AND timestamp <= '{date_range.get_end_time_of_day()}'
                 AND properties.$host IN {self.cpr_domains}
         """
         results = self.execute_query(query)
@@ -197,8 +183,7 @@ class PostHogSession:
 
     def calculate_percentage_of_searches_with_no_results(
         self,
-        date_from: str,
-        date_to: str,
+        date_range: DateRange,
     ) -> Percentage:
         """
         Calculate the percentage of searches with no results in the time period, inclusive of start and end dates.
@@ -210,11 +195,12 @@ class PostHogSession:
 
         This is a calculation against the TOTAL number of searches, not a number of users.
 
-        :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
-        :param date_to: end of time period (exclusive), a date as string in format YYYY-MM-DD
+        :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of searches with no results in the time period as a float
         """
-        check_date_range(date_from, date_to)
+        date_range = DateRange(
+            date_from=date_range.date_from, date_to=date_range.date_to
+        )
         query = f"""
             SELECT 
                 count(DISTINCT(
@@ -226,8 +212,8 @@ class PostHogSession:
                 )) /
                 count(DISTINCT(distinct_id)) * 100.0 AS zero_results_rate
             FROM events
-            WHERE timestamp >= '{date_from} 00:00:00'
-                AND timestamp <= '{date_to} 23:59:59'
+            WHERE timestamp >= '{date_range.get_start_time_of_day()}'
+                AND timestamp <= '{date_range.get_end_time_of_day()}'
                 AND properties.$host IN {self.cpr_domains}
                 AND event = 'search:results_fetch'
         """
@@ -238,7 +224,7 @@ class PostHogSession:
 
     def calculate_7_day_searcher_retention_rate(
         self,
-        date_from: str,
+        date_from: date,
     ) -> Percentage:
         """
         Calculate the percentage of [users whose searched] who return within 7 days of an input date.  The input date must be least 7 days before the current date.
@@ -251,11 +237,14 @@ class PostHogSession:
         What's a return?
         A return is counted if a user's distinct_id is associated with a different session_id within 7 days of the original session.
 
-        :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
+        :param date_from: datetime.date object of the start of the time period (inclusive)
         :return: Percentage of searchers who return within 7 days in the time period as a float
         """
-        # TODO: ponder if we should include sessions on the same day as the start date, but after the original search session, or only from the next day.  The difference is appreciable.
-        check_date_at_least_n_days_ago(date_from, 7)
+
+        if date_from > date.today() - timedelta(days=7):
+            raise InvalidStartDateException(
+                f"{date_from} is not a valid input.  Date must be at least 7 days in the past.  Earliest valid date is {date.today() - timedelta(days=7)}."
+            )
 
         query = f"""
         WITH consent_users AS (
@@ -302,7 +291,7 @@ class PostHogSession:
 
     def calculate_30_day_searcher_retention_rate(
         self,
-        date_from: str,
+        date_from: date,
     ) -> Percentage:
         """
         Calculate the percentage of [users whose searched] who return within 30 days of an input date.  The input date must be least 30 days before the current date.
@@ -318,8 +307,11 @@ class PostHogSession:
         :param date_from: start of time period (inclusive), a date as string in format YYYY-MM-DD
         :return: Percentage of searchers who return within 30 days in the time period as a float
         """
-        # TODO: ponder if we should include sessions on the same day as the start date, but after the original search session, or only from the next day.  The difference is appreciable.
-        check_date_at_least_n_days_ago(date_from, 30)
+
+        if date_from > date.today() - timedelta(days=30):
+            raise InvalidStartDateException(
+                f"{date_from} is not a valid input.  Date must be at least 30 days in the past.  Earliest valid date is {date.today() - timedelta(days=30)}."
+            )
 
         query = f"""
         WITH consent_users AS (
@@ -366,8 +358,7 @@ class PostHogSession:
 
     def calculate_click_through_rate_from_search_results_page(
         self,
-        date_from: str,
-        date_to: str,
+        date_range: DateRange,
     ) -> Percentage:
         """
         Calculate the percentage of users who clicked on a search result to a document or family page.
@@ -383,8 +374,12 @@ class PostHogSession:
 
         This only includes users where pageview events have the `consent` property set (not null)
 
+        :param date_range: DateRange object specifying the inclusive date range
+        :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
         """
-        self._check_date_range(date_from, date_to)
+        date_range = DateRange(
+            date_from=date_range.date_from, date_to=date_range.date_to
+        )
         query = f"""
             WITH ranked_pageviews AS (
             SELECT 
@@ -396,8 +391,8 @@ class PostHogSession:
             WHERE 
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
-                AND timestamp >= '{date_from} 00:00:00'
-                AND timestamp <= '{date_to} 23:59:59'
+                AND timestamp >= '{date_range.get_start_time_of_day()}'
+                AND timestamp <= '{date_range.get_end_time_of_day()}'
                 AND properties.$host IN {self.cpr_domains}
             ),
 
@@ -439,8 +434,7 @@ class PostHogSession:
 
     def calculate_click_through_rate_from_search_results_page_with_dwell_time(
         self,
-        date_from: str,
-        date_to: str,
+        date_range: DateRange,
     ) -> Percentage:
         """
         Calculate the percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 10 seconds or more.
@@ -448,8 +442,13 @@ class PostHogSession:
         This is the same as the calculate_click_through_rate_from_search method, but it also includes when users click from to a family then straight to a document in less than 10 seconds, as long as they spend at least 10 seconds on the document.
 
         This only includes users where pageview events have the `consent` property set (not null)
+
+        :param date_range: DateRange object specifying the inclusive date range
+        :return: Percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 10 seconds or more in the time period as a float
         """
-        self._check_date_range(date_from, date_to)
+        date_range = DateRange(
+            date_from=date_range.date_from, date_to=date_range.date_to
+        )
         query = f"""
             WITH ranked_pageviews AS (
             SELECT 
@@ -461,8 +460,8 @@ class PostHogSession:
             WHERE 
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
-                AND timestamp >= '{date_from} 00:00:00'
-                AND timestamp <= '{date_to} 23:59:59'
+                AND timestamp >= '{date_range.get_start_time_of_day()}'
+                AND timestamp <= '{date_range.get_end_time_of_day()}'
                 AND properties.$host IN {self.cpr_domains}
             ),
 

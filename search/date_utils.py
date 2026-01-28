@@ -1,8 +1,8 @@
 """Shared date utilities for online metrics."""
 
-from datetime import date, timedelta
+from datetime import date, datetime
 
-from pydantic import BaseModel, ValidationError, model_validator
+from pydantic import BaseModel, model_validator
 
 from search.log import get_logger
 
@@ -22,30 +22,16 @@ class DateRange(BaseModel):
             raise ValueError("Date from must be before date to")
         return self
 
+    def get_start_time_of_day(self) -> datetime:
+        """Get the start time (midnight) of the date range."""
+        return datetime.combine(self.date_from, datetime.min.time())
 
-def check_date_range(date_from: str | date, date_to: str | date) -> DateRange:
-    """Check if a date range is valid for an API query."""
-    try:
-        DateRange(date_from=date_from, date_to=date_to)
-        logger.debug(f"Date range {date_from} and {date_to} is valid")
-        return DateRange(date_from=date_from, date_to=date_to)
-    except ValidationError as e:
-        logger.error(f"Error validating date range: {date_from} and {date_to}: {e}")
-        raise
+    def get_end_time_of_day(self) -> datetime:
+        """Get the end time (end of day) of the date range."""
+        return datetime.combine(self.date_to, datetime.max.time())
 
 
-def check_date_at_least_n_days_ago(input_date: str, days_ago: int) -> None:
-    """Validate that a date string is valid and at least n days in the past."""
-    try:
-        parsed_date = date.fromisoformat(input_date)
-    except ValueError:
-        raise ValueError(
-            f"Invalid date format: '{input_date}'. Expected YYYY-MM-DD format."
-        )
+class InvalidStartDateException(Exception):
+    """Exception raised when the start date is invalid."""
 
-    cutoff_date = date.today() - timedelta(days=days_ago)
-    if parsed_date > cutoff_date:
-        raise ValueError(
-            f"Date '{input_date}' must be at least {days_ago} days in the past. "
-            f"Earliest valid date is {cutoff_date.isoformat()}."
-        )
+    pass

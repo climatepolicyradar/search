@@ -1,22 +1,33 @@
 """Helpers for interacting with Grafana"""
 
 from datetime import datetime
+from typing import Annotated
 
 import requests
-from pydantic import NonNegativeFloat
+from pydantic import BaseModel, Field, NonNegativeFloat
 
 from search.config import (
     GRAFANA_LABELS,
     get_from_env_with_fallback,
 )
-from search.date_utils import check_date_range
+from search.date_utils import DateRange
 from search.log import get_logger
 
 logger = get_logger(__name__)
 
 
-class Latency(NonNegativeFloat):
-    """A latency value in milliseconds returned from Grafana"""
+TimeMilliseconds = Annotated[
+    NonNegativeFloat,
+    Field(description="A time value in milliseconds returned from Grafana"),
+]
+
+
+class PercentileResult(BaseModel):
+    """A result from a percentile query"""
+
+    p50: TimeMilliseconds
+    p95: TimeMilliseconds
+    p99: TimeMilliseconds
 
 
 class GrafanaSession:
@@ -52,17 +63,15 @@ class GrafanaSession:
         else:
             raise ValueError(f"Grafana query returned no results: {data}")
 
-    def get_search_latency(self, start_date: str, end_date: str) -> dict[str, Latency]:
+    def get_search_latency_ms(self, date_range: DateRange) -> PercentileResult:
         """
         Get the mean search API latency (p50, p95, p99) in milliseconds for the given date range (inclusive)
 
-        :param start_date: start of date range in YYYY-MM-DD format (inclusive)
-        :param end_date: end of date range in YYYY-MM-DD format (inclusive)
+        :param date_range: DateRange object specifying the inclusive date range
         :return: dict with keys "p50", "p95", "p99" and values as Latency objects
         """
-        date_range = check_date_range(start_date, end_date)
-        start_time = datetime.combine(date_range.date_from, datetime.min.time())
-        end_time = datetime.combine(date_range.date_to, datetime.max.time())
+        start_time = date_range.get_start_time_of_day()
+        end_time = date_range.get_end_time_of_day()
 
         # P50 (median) latency
         query_p50 = f"""histogram_quantile(0.50, sum(rate(traces_spanmetrics_latency_bucket{{{GRAFANA_LABELS}}}[5m])) by (le,job))"""
@@ -78,4 +87,6 @@ class GrafanaSession:
             values = self.execute_query(query, start_time, end_time)
             # Get the last value in the range (latency is in seconds) and convert to milliseconds
             results[name] = float(values[-1][1]) * 1000
-        return {name: Latency(value) for name, value in results.items()}
+        return PercentileResult(
+            p50=results["p50"], p95=results["p95"], p99=results["p99"]
+        )
