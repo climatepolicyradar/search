@@ -164,7 +164,6 @@ class WandbSession:
     ) -> None:
         """Log a single online metric result to Weights & Biases."""
 
-        # TODO: make it work for the Grafana latency output
         # TODO: remove the query from the table / add canonical id for query and date/date range?
         # TODO: right now each run is for a single metric and creates a new table.  Do we want that?
 
