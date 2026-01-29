@@ -13,6 +13,7 @@ from search.document import Document
 from search.engines import SearchEngine
 from search.label import Label
 from search.log import get_logger
+from search.online_metrics import OnlineMetricResult
 from search.passage import Passage
 
 logger = get_logger(__name__)
@@ -40,6 +41,7 @@ class WandbSession:
 
         self.entity = config.WANDB_ENTITY
         self.offline_tests_project = config.WANDB_PROJECT_OFFLINE_TESTS
+        self.online_metrics_project = config.WANDB_PROJECT_ONLINE_METRICS
 
         if not config.WANDB_SKIP_SSM_AUTH:
             logger.info(
@@ -153,5 +155,34 @@ class WandbSession:
         logger.info(
             f"Logged tables: metrics for {len(metrics_by_category_table)} categories, {len(test_results_table)} test results"
         )
+
+        run.finish()
+
+    def log_online_metric_result(
+        self,
+        online_metric_result: OnlineMetricResult,
+    ) -> None:
+        """Log a single online metric result to Weights & Biases."""
+
+        # TODO: remove the query from the table / add canonical id for query and date/date range?
+        # TODO: right now each run is for a single metric and creates a new table.  Do we want that?
+
+        config = {"metric": online_metric_result.metric}
+        config["date_from"] = online_metric_result.date_from
+        if online_metric_result.date_to:
+            config["date_to"] = online_metric_result.date_to
+
+        run = self.new_run(
+            project=self.online_metrics_project,
+            config=config,
+        )
+
+        metric_model_dump = online_metric_result.model_dump()
+
+        metric_table = wandb.Table(dataframe=pd.DataFrame([metric_model_dump]))
+
+        run.log({"metric_table": metric_table})
+
+        logger.info(f"Logged online metric '{online_metric_result.metric}' to W&B")
 
         run.finish()

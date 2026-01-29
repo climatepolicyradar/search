@@ -110,6 +110,7 @@ def get_from_env_with_fallback(
 # Weights & Biases
 WANDB_ENTITY = "climatepolicyradar"
 WANDB_PROJECT_OFFLINE_TESTS = "search_offline_tests"
+WANDB_PROJECT_ONLINE_METRICS = "search_online_metrics"
 DISABLE_WANDB = is_truthy(os.getenv("DISABLE_WANDB", False))
 
 # Skipping SSM allows using the local user, rather than the bot user which has its
