@@ -169,11 +169,9 @@ class WandbSession:
         # TODO: right now each run is for a single metric and creates a new table.  Do we want that?
 
         config = {"metric": online_metric_result.metric}
-        if online_metric_result.date_range:
-            config["date_from"] = str(online_metric_result.date_range.date_from)
-            config["date_to"] = str(online_metric_result.date_range.date_to)
-        elif online_metric_result.date_from:
-            config["date_from"] = str(online_metric_result.date_from)
+        config["date_from"] = online_metric_result.date_from
+        if online_metric_result.date_to:
+            config["date_to"] = online_metric_result.date_to
 
         run = self.new_run(
             project=self.online_metrics_project,

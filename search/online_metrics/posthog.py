@@ -118,7 +118,8 @@ class PostHogSession:
             metric="percentage_of_users_who_search",
             query=query,
             value=results[0][0],
-            date_range=date_range,
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
         )
 
     def calculate_percentage_of_users_who_download_data(
@@ -172,7 +173,8 @@ class PostHogSession:
             metric="percentage_of_users_who_download_data",
             query=query,
             value=results[0][0],
-            date_range=date_range,
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
         )
 
     def calculate_percentage_of_searches_with_no_results(
@@ -215,7 +217,8 @@ class PostHogSession:
             metric="percentage_of_searches_with_no_results",
             query=query,
             value=results[0][0],
-            date_range=date_range,
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
         )
 
     def calculate_7_day_searcher_retention_rate(
@@ -437,7 +440,8 @@ class PostHogSession:
             metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
             query=query,
             value=results[0][0],
-            date_range=date_range,
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
         )
 
     def calculate_click_through_rate_from_search_results_page_with_dwell_time(
@@ -520,5 +524,6 @@ class PostHogSession:
             metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page_with_at_least_10s_dwell_time",
             query=query,
             value=results[0][0],
-            date_range=date_range,
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
         )

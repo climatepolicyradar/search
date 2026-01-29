@@ -55,8 +55,8 @@ class GrafanaSession:
         :param date_range: DateRange object specifying the inclusive date range
         :return: dict with keys "p50", "p95", "p99" and values as Latency objects
         """
-        start_time = date_range.get_earliest_time_of_date()
-        end_time = date_range.get_latest_time_of_date()
+        start_time = date_range.get_earliest_datetime_of_range()
+        end_time = date_range.get_latest_datetime_of_range()
 
         # P50 (median) latency
         query_p50 = f"""histogram_quantile(0.50, sum(rate(traces_spanmetrics_latency_bucket{{{GRAFANA_LABELS}}}[5m])) by (le,job))"""
@@ -78,5 +78,6 @@ class GrafanaSession:
             value=PercentileResult(
                 p50=results["p50"], p95=results["p95"], p99=results["p99"]
             ),
-            date_range=date_range,
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
         )
