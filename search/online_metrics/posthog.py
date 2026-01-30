@@ -527,3 +527,69 @@ class PostHogSession:
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
+
+    def calculate_click_through_rate_from_search_results_page_for_top_5_results(
+        self,
+        date_range: DateRange,
+    ) -> OnlineMetricResult:
+        """
+        Calculate the percentage of users who clicked on a search result to a document or family page.
+
+        What does this metric measure?
+        It measures the percentage of unique users who clicked on a search result to a family page for the top 5 results.  Right now, this ONLY includes clicking directly on a family page link, not clicking to view a document or family after viewing the passage match sidebar. (see https://linear.app/climate-policy-radar/issue/APP-1610/facilitate-better-analytics-by-including-more-context-in-dom-elements).  This is ONLY available for data after the 29th of January 2026.
+
+        This only includes users where pageview events have the `consent` property set (not null)
+
+        :param date_range: DateRange object specifying the inclusive date range
+        :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
+        """
+        query = f"""
+            WITH ranked_pageviews AS (
+                SELECT 
+                    distinct_id,
+                    properties.$current_url as current_url,
+                    timestamp,
+                    row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
+                FROM events
+                WHERE 
+                    event = '$pageview'
+                    AND properties.consent IS NOT NULL
+                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND properties.$host IN {self.cpr_domains}
+            ),
+            search_users AS (
+                SELECT DISTINCT distinct_id
+                FROM ranked_pageviews
+                WHERE current_url LIKE '%/search%'
+            ),
+            clickthrough_users AS (
+                SELECT DISTINCT distinct_id
+                FROM events
+                WHERE 
+                    event = '$autocapture'
+                    AND properties.$event_type = 'click'
+                    AND properties.$current_url LIKE '%/search%'
+                    AND properties.`position-page` IN ('1', '2', '3', '4', '5')
+                    AND properties.`position-total` = 'NaN'
+                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0' OR properties.o = 0)
+                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND properties.$host IN {self.cpr_domains}
+            )
+            SELECT 
+                count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
+            FROM search_users
+            LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
+        
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise PosthogNoResultsException()
+        return OnlineMetricResult(
+            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            query=query,
+            value=results[0][0],
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
+        )
