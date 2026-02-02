@@ -543,6 +543,10 @@ class PostHogSession:
         :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
         """
+        if date_range.date_from < date(2026, 1, 29):
+            raise InvalidStartDateException(
+                f"{date_range.date_from} is not a valid input.  Start date for this metric must be on or after the 29th of January 2026."
+            )
         query = f"""
             WITH ranked_pageviews AS (
                 SELECT 
@@ -609,6 +613,12 @@ class PostHogSession:
         :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
         """
+
+        if date_range.date_from < date(2026, 1, 29):
+            raise InvalidStartDateException(
+                f"{date_range.date_from} is not a valid input.  Start date for this metric must be on or after the 29th of January 2026."
+            )
+
         query = f"""
             -- Step 1: Get all pageviews with row numbers for sequential ordering
             WITH ranked_pageviews AS (
