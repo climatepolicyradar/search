@@ -119,14 +119,16 @@ class WandbSession:
 
         metrics = calculate_test_result_metrics(test_results)
         categories = [k for k in metrics if k != "overall"]
-        summary_stats = {
-            "passed": metrics["overall"]["passed"],
-            "total": metrics["overall"]["total"],
-            "pass_rate": metrics["overall"]["pass_rate"],
-            "categories": [k for k in metrics if k != "overall"],
-        }
 
-        run.summary.update(summary_stats)
+        summary_metrics = {
+            key: {k: v for k, v in cat_metrics.items() if k != "results"}
+            for key, cat_metrics in metrics.items()
+        }
+        summary_metrics = {
+            (f"category.{k}" if k != "overall" else k): v
+            for k, v in summary_metrics.items()
+        }
+        run.summary.update(summary_metrics)
 
         metrics_by_category_table = pd.DataFrame(
             [{**metrics[cat], "category": cat} for cat in categories]
