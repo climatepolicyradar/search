@@ -40,7 +40,7 @@ class WandbSession:
             )
 
         self.entity = config.WANDB_ENTITY
-        self.offline_tests_project = config.WANDB_PROJECT_OFFLINE_TESTS
+        self.offline_tests_project_prefix = config.WANDB_PROJECT_PREFIX_OFFLINE_TESTS
         self.online_metrics_project = config.WANDB_PROJECT_ONLINE_METRICS
 
         if not config.WANDB_SKIP_SSM_AUTH:
@@ -102,9 +102,10 @@ class WandbSession:
             )
 
         primitive_name = primitive.__name__
+        project_name = f"{self.offline_tests_project_prefix}_{primitive_name.lower()}"
 
         run = self.new_run(
-            project=self.offline_tests_project,
+            project=project_name,
             config={
                 "primitive": primitive_name,
                 "search_engine_id": search_engine.id,
