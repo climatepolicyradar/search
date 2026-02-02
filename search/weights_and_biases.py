@@ -109,6 +109,7 @@ class WandbSession:
                 "primitive": primitive_name,
                 "search_engine_id": search_engine.id,
                 "search_engine": str(search_engine),
+                "search_engine_name": search_engine.name,
             },
         )
 
