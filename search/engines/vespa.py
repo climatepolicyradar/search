@@ -64,11 +64,16 @@ class VespaErrorDetails:
 
 
 class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
-    """Abstract search engine for connecting to Vespa"""
+    """Abstract search engine for connecting to Vespa."""
 
     VESPA_INSTANCE_URL_SSM_PARAMETER = "VESPA_INSTANCE_URL"
     VESPA_PUBLIC_CERT_SSM_PARAMETER = "VESPA_PUBLIC_CERT_READ_ONLY"
     VESPA_PRIVATE_KEY_SSM_PARAMETER = "VESPA_PRIVATE_KEY_READ_ONLY"
+
+    DEFAULT_SEARCH_LIMIT: int = 20
+    DEFAULT_TIMEOUT_SECONDS: int = 20
+    DEFAULT_RANKING_SOFTTIMEOUT_FACTOR: str = "0.7"
+    DEFAULT_SUMMARY: str = "search_summary"
 
     def __init__(self) -> None:
         self.client: Vespa | None = None
@@ -110,31 +115,16 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
             key=str(key_path),
         )
 
-
-class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
-    """
-    Abstract base class for Vespa passage search engines.
-
-    Subclasses must implement _build_request() to define their search strategy.
-    """
-
-    model_class = Passage
-
-    DEFAULT_SEARCH_LIMIT: int = 20
-    DEFAULT_TIMEOUT_SECONDS: int = 20
-    DEFAULT_RANKING_SOFTTIMEOUT_FACTOR: str = "0.7"
-    DEFAULT_SUMMARY: str = "search_summary"
-
     def search(
         self, terms: str, limit: int | None = None, offset: int = 0
-    ) -> list[Passage]:
+    ) -> list[TModel]:
         """
-        Search for passages using the configured search strategy.
+        Search Vespa using the configured search strategy.
 
         :param terms: Search terms from the user
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip
-        :return: List of Passage objects matching the search
+        :return: List of model objects matching the search.
         """
         if limit is None:
             logger.info(
@@ -170,12 +160,78 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
         :param terms: Search terms from the user
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip
-        :return: Dictionary containing the Vespa query request body
+        :return: Dictionary containing the Vespa query request body.
         """
         ...
 
+    @abstractmethod
+    def _parse_vespa_response(self, response: VespaQueryResponse) -> list[TModel]:
+        """
+        Parse a Vespa query response into model objects.
+
+        :param response: The raw Vespa query response.
+        :return: List of parsed model objects.
+        """
+        ...
+
+    def count(self, terms: str) -> int:
+        """
+        Count search results.
+
+        Not yet implemented.
+        """
+        raise NotImplementedError()
+
+
+class VespaDocumentSearchEngine(VespaSearchEngine[Document], ABC):
+    """
+    Abstract base class for Vespa document search engines.
+
+    Searches the ``family_document`` schema in Vespa, returning
+    :class:`~search.document.Document` instances. Subclasses must implement
+    :meth:`_build_request` to define their search strategy.
+    """
+
+    model_class = Document
+
+    def _parse_vespa_response(self, response: VespaQueryResponse) -> list[Document]:
+        """Parse a Vespa query response into Document objects."""
+        documents = []
+
+        root = response.json.get("root", {})
+        children = root.get("children", [])
+
+        for child in children:
+            fields = child.get("fields", {})
+
+            family_name = fields.get("family_name", "")
+            family_description = fields.get("family_description", "")
+            document_source_url = fields.get("document_source_url", "")
+            document_import_id = fields.get("document_import_id", "")
+
+            document = Document(
+                title=family_name,
+                source_url=document_source_url,
+                description=family_description,
+                original_document_id=document_import_id,
+                labels=[],
+            )
+            documents.append(document)
+
+        return documents
+
+
+class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
+    """
+    Abstract base class for Vespa passage search engines.
+
+    Subclasses must implement _build_request() to define their search strategy.
+    """
+
+    model_class = Passage
+
     def _parse_vespa_response(self, response: VespaQueryResponse) -> list[Passage]:
-        """Parse a Vespa query response with summary `search_summary`."""
+        """Parse a Vespa query response with summary ``search_summary``."""
         passages = []
 
         root = response.json.get("root", {})
@@ -209,14 +265,6 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
             passages.append(passage)
 
         return passages
-
-    def count(self):
-        """
-        Count search results.
-
-        Not yet implemented; may never be implemented for hybrid or passage search.
-        """
-        raise NotImplementedError()
 
 
 class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
@@ -291,5 +339,38 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
             "query_string": terms,
             "ranking.profile": "hybrid",
             "input.query(query_embedding)": f"embed({self.EMBEDDING_MODEL}, @query_string)",
+            "summary": self.DEFAULT_SUMMARY,
+        }
+
+
+class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
+    """
+    Vespa document search engine that matches against document titles using BM25.
+
+    Searches the ``family_document`` source using the ``document_title_index``
+    field and the ``bm25_document_title`` ranking profile.
+    """
+
+    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+        """
+        Build request body for BM25 document title search.
+
+        :param terms: Search terms from the user.
+        :param limit: Maximum number of results to return.
+        :param offset: Number of results to skip.
+        :return: Dictionary containing the Vespa query request body.
+        """
+        yql = f"""
+        select * from sources family_document where
+            (document_title_index contains(@query_string))
+        limit {limit} offset {offset}
+        """
+
+        return {
+            "yql": yql,
+            "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
+            "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
+            "query_string": terms,
+            "ranking.profile": "bm25_document_title",
             "summary": self.DEFAULT_SUMMARY,
         }
