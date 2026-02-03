@@ -1,0 +1,19 @@
+services:
+  vespa:
+    image: vespaengine/vespa
+    container_name: vespa-container
+    ports:
+      - "8000:8080"
+      - "19071:19071"
+      - "8081:8081"
+    volumes:
+      - vespa-data:/opt/vespa/var
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/state/v1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  vespa-data:

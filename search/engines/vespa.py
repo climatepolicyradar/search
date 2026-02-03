@@ -4,15 +4,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Generic, cast
 
-from vespa.application import Vespa
-from vespa.exceptions import VespaError
-from vespa.io import VespaQueryResponse
-
 from search.aws import get_ssm_parameter
 from search.document import Document
 from search.engines import SearchEngine, TModel
 from search.log import get_logger
 from search.passage import Passage
+from vespa.application import Vespa
+from vespa.exceptions import VespaError
+from vespa.io import VespaQueryResponse
 
 logger = get_logger(__name__)
 
