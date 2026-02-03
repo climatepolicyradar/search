@@ -345,7 +345,7 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
         }
 
 
-class BM25TitleDocumentSearchEngine(VespaDocumentSearchEngine):
+class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
     """
     Vespa document search engine that matches against document titles using BM25.
 

@@ -527,3 +527,195 @@ class PostHogSession:
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
+
+    def calculate_click_through_rate_from_search_results_page_for_top_5_results(
+        self,
+        date_range: DateRange,
+    ) -> OnlineMetricResult:
+        """
+        Calculate the percentage of users who clicked on a search result in the top 5 to a family page.
+
+        What does this metric measure?
+        It measures the percentage of unique users who clicked on a search result to a family page for the top 5 results.  Right now, this ONLY includes clicking directly on a family page link, not clicking to view a document or family after viewing the passage match sidebar. (see https://linear.app/climate-policy-radar/issue/APP-1610/facilitate-better-analytics-by-including-more-context-in-dom-elements).  This is ONLY available for data after the 29th of January 2026.
+
+        This only includes users where pageview events have the `consent` property set (not null)
+
+        :param date_range: DateRange object specifying the inclusive date range
+        :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
+        """
+        if date_range.date_from < date(2026, 1, 29):
+            raise InvalidStartDateException(
+                f"{date_range.date_from} is not a valid input.  Start date for this metric must be on or after the 29th of January 2026."
+            )
+        query = f"""
+            WITH ranked_pageviews AS (
+                SELECT 
+                    distinct_id,
+                    properties.$current_url as current_url,
+                    timestamp,
+                    row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
+                FROM events
+                WHERE 
+                    event = '$pageview'
+                    AND properties.consent IS NOT NULL
+                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND properties.$host IN {self.cpr_domains}
+            ),
+            search_users AS (
+                SELECT DISTINCT distinct_id
+                FROM ranked_pageviews
+                WHERE current_url LIKE '%/search%'
+            ),
+            clickthrough_users AS (
+                SELECT DISTINCT distinct_id
+                FROM events
+                WHERE 
+                    event = '$autocapture'
+                    AND properties.$event_type = 'click'
+                    AND properties.$current_url LIKE '%/search%'
+                    AND properties.`position-page` IN ('1', '2', '3', '4', '5')
+                    AND properties.`position-total` = 'NaN'
+                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0' OR properties.o = 0)
+                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND properties.$host IN {self.cpr_domains}
+            )
+            SELECT 
+                count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
+            FROM search_users
+            LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
+        
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise PosthogNoResultsException()
+        return OnlineMetricResult(
+            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            query=query,
+            value=results[0][0],
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
+        )
+
+    def calculate_click_through_rate_from_search_results_page_for_top_5_results_with_dwell_time(
+        self,
+        date_range: DateRange,
+    ) -> OnlineMetricResult:
+        """
+        Calculate the percentage of users who clicked on a search result in the top 5 to a family page then stayed on that family or one of its documents for 10 seconds or more.
+
+        What does this metric measure?
+        It measures the percentage of unique users who clicked on a search result to a family page for the top 5 results and then stayed on that family or one of its documents for 10 seconds or more.  Right now, this ONLY includes clicking directly on a family page link, not clicking to view a document or family after viewing the passage match sidebar. (see https://linear.app/climate-policy-radar/issue/APP-1610/facilitate-better-analytics-by-including-more-context-in-dom-elements).  This is ONLY available for data after the 29th of January 2026.
+
+        This only includes users where pageview events have the `consent` property set (not null)
+
+        :param date_range: DateRange object specifying the inclusive date range
+        :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
+        """
+
+        if date_range.date_from < date(2026, 1, 29):
+            raise InvalidStartDateException(
+                f"{date_range.date_from} is not a valid input.  Start date for this metric must be on or after the 29th of January 2026."
+            )
+
+        query = f"""
+            -- Step 1: Get all pageviews with row numbers for sequential ordering
+            WITH ranked_pageviews AS (
+                SELECT 
+                    distinct_id,
+                    properties.$current_url as current_url,
+                    timestamp,
+                    -- Row number allows us to find the "next" pageview for each user
+                    row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
+                FROM events
+                WHERE 
+                    event = '$pageview'
+                    AND properties.consent IS NOT NULL
+                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND properties.$host IN {self.cpr_domains}
+            ),
+            -- Step 2: Identify all users who visited a search page (our denominator)
+            search_users AS (
+                SELECT DISTINCT distinct_id
+                FROM ranked_pageviews
+                WHERE current_url LIKE '%/search%'
+            ),
+            -- Step 3: Find all qualifying autocapture click events on search pages
+            autocapture_clicks AS (
+                SELECT 
+                    distinct_id,
+                    timestamp as click_timestamp
+                FROM events
+                WHERE 
+                    event = '$autocapture'
+                    AND properties.$event_type = 'click'
+                    AND properties.$current_url LIKE '%/search%'
+                    -- Position 1-5 in search results
+                    AND properties.`position-page` IN ('1', '2', '3', '4', '5')
+                    -- Total count is NaN (stored as string in PostHog)
+                    AND properties.`position-total` = 'NaN'
+                    -- Property 'o' either doesn't exist or equals 0
+                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0' OR properties.o = 0)
+                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
+                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND properties.$host IN {self.cpr_domains}
+            ),
+            -- Step 4: For each click, find the immediate next pageview (must be a /document/ page)
+            clicks_with_next_pageview AS (
+                SELECT 
+                    ac.distinct_id,
+                    ac.click_timestamp,
+                    -- Find the earliest pageview timestamp after the click
+                    MIN(p1.timestamp) as next_pageview_timestamp,
+                    -- Get the URL of that earliest pageview using argMin (returns value where timestamp is minimum)
+                    argMin(p1.current_url, p1.timestamp) as next_pageview_url,
+                    -- Get the row number of that earliest pageview so we can find subsequent pages
+                    argMin(p1.rn, p1.timestamp) as next_pageview_rn
+                FROM autocapture_clicks ac
+                INNER JOIN ranked_pageviews p1
+                    ON ac.distinct_id = p1.distinct_id
+                    -- Only pageviews that happened after the click
+                    AND p1.timestamp > ac.click_timestamp
+                    -- Only pageviews to /document/ pages (the click must lead to a document)
+                    AND p1.current_url LIKE '%/document/%'
+                GROUP BY ac.distinct_id, ac.click_timestamp
+            ),
+            -- Step 5: Determine which clicks resulted in sufficient engagement (10+ second dwell time)
+            clickthrough_users AS (
+                SELECT DISTINCT c.distinct_id
+                FROM clicks_with_next_pageview c
+                -- Join to get the page AFTER the /document/ page (p2)
+                LEFT JOIN ranked_pageviews p2
+                    ON p2.distinct_id = c.distinct_id AND p2.rn = c.next_pageview_rn + 1
+                -- Join to get the page AFTER p2 (p3) - needed for scenario 2
+                LEFT JOIN ranked_pageviews p3
+                    ON p3.distinct_id = p2.distinct_id AND p3.rn = p2.rn + 1
+                WHERE 
+                    -- Scenario 1: User stayed on the /document/ page for 10+ seconds
+                    -- (Time from landing on /document/ to next pageview or now)
+                    dateDiff('second', c.next_pageview_timestamp, COALESCE(p2.timestamp, now())) >= 10
+                    OR 
+                    -- Scenario 2: User went from /document/ to /documents/ and stayed there 10+ seconds
+                    -- (Even if they left /document/ quickly)
+                    (p2.current_url LIKE '%/documents/%' AND dateDiff('second', p2.timestamp, COALESCE(p3.timestamp, now())) >= 10)
+            )
+            -- Step 6: Calculate click-through rate as percentage
+            SELECT 
+                -- Number of users who clicked and engaged / total users who visited search
+                count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
+            FROM search_users
+            LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
+        
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise PosthogNoResultsException()
+        return OnlineMetricResult(
+            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            query=query,
+            value=results[0][0],
+            date_from=date_range.date_from,
+            date_to=date_range.date_to,
+        )
