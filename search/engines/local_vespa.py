@@ -11,7 +11,7 @@ from vespa.io import VespaQueryResponse
 logger = get_logger(__name__)
 
 
-class LocalVespaSearchEngine(DocumentSearchEngine):
+class LocalVespaDocumentSearchEngine(DocumentSearchEngine):
     """Search engine for local Vespa"""
 
     def __init__(self) -> None:
