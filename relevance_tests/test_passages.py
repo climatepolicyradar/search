@@ -2,8 +2,6 @@ from prefect import flow, get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from relevance_tests import run_relevance_tests_parallel
-from search.config import PASSAGES_PATH_STEM
-from search.engines.duckdb import DuckDBPassageSearchEngine
 from search.engines.vespa import (
     ExactVespaPassageSearchEngine,
     HybridVespaPassageSearchEngine,
@@ -169,7 +167,7 @@ def relevance_tests_passages():
     download_file_from_s3(BUCKET_NAME, "passages.duckdb", skip_if_present=True)
 
     engines = [
-        DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".duckdb")),
+        # DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".duckdb")),
         ExactVespaPassageSearchEngine(),
         HybridVespaPassageSearchEngine(),
     ]

@@ -4,6 +4,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 from relevance_tests import run_relevance_tests_parallel
 from search.config import LABELS_PATH_STEM
 from search.engines.duckdb import DuckDBLabelSearchEngine
+from search.engines.vespa import VespaLabelSearchEngine
 from search.label import Label
 from search.testcase import (
     FieldCharacteristicsTestCase,
@@ -799,7 +800,10 @@ def relevance_tests_labels():
     logger.info("Downloading files from s3")
     download_file_from_s3(BUCKET_NAME, "labels.duckdb", skip_if_present=True)
 
-    engines = [DuckDBLabelSearchEngine(db_path=LABELS_PATH_STEM.with_suffix(".duckdb"))]
+    engines = [
+        DuckDBLabelSearchEngine(db_path=LABELS_PATH_STEM.with_suffix(".duckdb")),
+        VespaLabelSearchEngine(),
+    ]
 
     run_relevance_tests_parallel(
         engines=engines,

@@ -40,7 +40,7 @@ class WandbSession:
             )
 
         self.entity = config.WANDB_ENTITY
-        self.offline_tests_project = config.WANDB_PROJECT_OFFLINE_TESTS
+        self.offline_tests_project_prefix = config.WANDB_PROJECT_PREFIX_OFFLINE_TESTS
         self.online_metrics_project = config.WANDB_PROJECT_ONLINE_METRICS
 
         if not config.WANDB_SKIP_SSM_AUTH:
@@ -102,13 +102,15 @@ class WandbSession:
             )
 
         primitive_name = primitive.__name__
+        project_name = f"{self.offline_tests_project_prefix}_{primitive_name.lower()}"
 
         run = self.new_run(
-            project=self.offline_tests_project,
+            project=project_name,
             config={
                 "primitive": primitive_name,
                 "search_engine_id": search_engine.id,
                 "search_engine": str(search_engine),
+                "search_engine_name": search_engine.name,
             },
         )
 
@@ -118,14 +120,16 @@ class WandbSession:
 
         metrics = calculate_test_result_metrics(test_results)
         categories = [k for k in metrics if k != "overall"]
-        summary_stats = {
-            "passed": metrics["overall"]["passed"],
-            "total": metrics["overall"]["total"],
-            "pass_rate": metrics["overall"]["pass_rate"],
-            "categories": [k for k in metrics if k != "overall"],
-        }
 
-        run.summary.update(summary_stats)
+        summary_metrics = {
+            key: {k: v for k, v in cat_metrics.items() if k != "results"}
+            for key, cat_metrics in metrics.items()
+        }
+        summary_metrics = {
+            (f"category.{k}" if k != "overall" else k): v
+            for k, v in summary_metrics.items()
+        }
+        run.summary.update(summary_metrics)
 
         metrics_by_category_table = pd.DataFrame(
             [{**metrics[cat], "category": cat} for cat in categories]
