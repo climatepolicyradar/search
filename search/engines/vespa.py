@@ -10,7 +10,8 @@ from vespa.io import VespaQueryResponse
 
 from search.aws import get_ssm_parameter
 from search.document import Document
-from search.engines import SearchEngine, TModel
+from search.engines import LabelSearchEngine, SearchEngine, TModel
+from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
 
@@ -375,3 +376,80 @@ class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
             "ranking.profile": "bm25_document_title",
             "summary": self.DEFAULT_SUMMARY,
         }
+
+
+class VespaLabelSearchEngine(VespaSearchEngine[Label], LabelSearchEngine):
+    """
+    Vespa search engine for label search.
+
+    Searches across preferred_label and description fields in the concept schema in
+    Vespa. Alternative labels are returned in results but not currently searchable due
+    to indexing limitations.
+    """
+
+    model_class = Label
+
+    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+        """
+        Build request body for concept/label search.
+
+        Searches across preferred_label and description (indexed fields) using text search.
+        Alternative_labels are returned but not searched due to lack of indexing.
+
+        :param terms: Search terms from the user
+        :param limit: Maximum number of results to return
+        :param offset: Number of results to skip
+        :return: Dictionary containing the Vespa query request body
+        """
+        yql = (
+            f"select * from sources concept where "
+            f"userInput(@query_string) "
+            f"limit {limit} offset {offset}"
+        )
+
+        return {
+            "yql": yql,
+            "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
+            "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
+            "query_string": terms,
+            "summary": self.DEFAULT_SUMMARY,
+        }
+
+    def _parse_vespa_response(self, response: VespaQueryResponse) -> list[Label]:
+        """
+        Parse a Vespa query response into Label objects.
+
+        Extracts concept fields from Vespa and maps them to the Label model,
+        ignoring wikibase-specific and relationship fields.
+
+        :param response: The raw Vespa query response
+        :return: List of Label objects
+        """
+        labels = []
+
+        root = response.json.get("root", {})
+        children = root.get("children", [])
+
+        for child in children:
+            fields = child.get("fields", {})
+
+            preferred_label = fields.get("preferred_label", "")
+            alternative_labels = fields.get("alternative_labels", [])
+            negative_labels = fields.get("negative_labels", [])
+            description = fields.get("description")
+            id_at_source = fields.get("id", "")
+
+            if description == "":
+                description = None
+
+            label = Label(
+                preferred_label=preferred_label,
+                alternative_labels=alternative_labels,
+                negative_labels=negative_labels,
+                description=description,
+                source="wikibase",
+                id_at_source=id_at_source,
+            )
+            labels.append(label)
+
+        return labels
