@@ -1,0 +1,25 @@
+# Run vespa dev
+up:
+    docker compose up -d
+
+# Deploy Vespa application
+deploy ip="localhost":
+    vespa deploy ./app --target http://{{ip}}:19071 --wait 300
+
+# Remove the application
+destroy ip="localhost":
+    curl -X DELETE http://{{ip}}:19071/application/v2/tenant/default/application/default
+
+# Load data into Vespa
+load ip="localhost":
+    head -100 ../.data_cache/build_vespa_updates/updates.jsonl | vespa feed - --target http://{{ip}}:8080
+
+# Dev
+dev ip="localhost":
+    just up
+    just deploy {{ip}}
+    just load {{ip}}
+
+# admin
+add_local_ip name:
+    pushd infra; pulumi config set --path "vespa-dev:allowed_cidrs.{{name}}" "$(curl -s https://ifconfig.me)" --secret; pulumi up; popd;
