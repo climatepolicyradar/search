@@ -78,6 +78,7 @@ class WandbSession:
             config=config,
             job_type=job_type,
             group=group,
+            reinit=True,
             **kwargs,
         )
 

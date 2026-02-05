@@ -5,7 +5,7 @@ from relevance_tests import run_relevance_tests_parallel
 from search.config import DOCUMENTS_PATH_STEM
 from search.document import Document
 from search.engines.duckdb import DuckDBDocumentSearchEngine
-from search.engines.vespa import BM25TitleDocumentSearchEngine
+from search.engines.vespa import BM25TitleVespaDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
@@ -206,7 +206,7 @@ def relevance_tests_documents():
 
     engines = [
         DuckDBDocumentSearchEngine(db_path=DOCUMENTS_PATH_STEM.with_suffix(".duckdb")),
-        BM25TitleDocumentSearchEngine(),
+        BM25TitleVespaDocumentSearchEngine(),
     ]
 
     run_relevance_tests_parallel(
