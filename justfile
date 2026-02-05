@@ -75,23 +75,3 @@ deploy-flows-from-local:
 
 get-version:
     @grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/'
-
-# Run vespa dev
-vespa-dev:
-    docker compose up -d
-
-# Deploy Vespa application
-vespa-deploy:
-    cd vespa && zip -r ../app.zip . && cd .. && curl --header "Content-Type:application/zip" --data-binary @app.zip "http://localhost:19071/application/v2/tenant/default/prepareandactivate" && rm app.zip
-
-# Load data into Vespa
-vespa-load:
-    uv run --with requests python vespa/scripts/load_data_in_api.py
-
-# Dev
-dev:
-    just vespa-dev
-    just vespa-deploy
-    just vespa-load
-    uv run fastapi run ./api/dev.py --port 8080
-

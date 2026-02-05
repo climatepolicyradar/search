@@ -1,0 +1,6 @@
+config:
+  aws:region: eu-west-1
+  aws:profile: production
+  vespa-dev:allowed_cidrs:
+    james:
+      secure: AAABAF1cYyTThEngwRxHComuJ78PTNC4YPu98Yg/KBX+I7gPV2IA/K7907U=

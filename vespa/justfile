@@ -1,0 +1,136 @@
+# Run vespa dev
+up:
+    docker compose up -d
+
+# Deploy Vespa application
+deploy:
+    vespa deploy ./app --target http://localhost:19071/ --wait 300
+
+# Remove the application
+destroy:
+    curl -X DELETE http://localhost:19071/application/v2/tenant/default/application/default
+
+# Load data into Vespa
+load:
+    head -100 ../.data_cache/build_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080
+
+# Dev
+dev:
+    just up
+    just deploy
+    just load
+
+get query="congo":
+    #!/usr/bin/env bash
+    set -e
+    curl -G "http://localhost:8080/search/" \
+     --data-urlencode 'yql=select * from sources documents where userQuery()' \
+     --data-urlencode 'query={{query}}' \
+     --data-urlencode 'hits=10'
+
+###
+# HERE BE DRAGONS
+# This is for remote schema and data management.
+# This allows us to start surfacing data to the UI ASAP.
+###
+
+# remote command
+remote-deploy:
+    #!/usr/bin/env bash
+    set -e
+    eval "$(aws configure export-credentials --profile production --format env)"
+    
+    # Get Instance ID from Pulumi
+    pushd infra > /dev/null
+    INSTANCE_ID=$(pulumi stack output instance_id)
+    popd > /dev/null
+    echo "Targeting Instance: $INSTANCE_ID"
+
+    # Start SSM Session in background
+    # Forwarding remote 19071 (config server/deploy) to local 19072
+    aws ssm start-session \
+        --target "$INSTANCE_ID" \
+        --document-name AWS-StartPortForwardingSession \
+        --parameters '{"portNumber":["19071"],"localPortNumber":["19072"]}' > /dev/null &
+    SSM_PID=$!
+    
+    # Ensure cleanup on exit
+    trap "kill $SSM_PID" EXIT
+
+    # Wait for port to be ready
+    echo "Waiting for tunnel..."
+    while ! nc -z localhost 19072; do sleep 1; done
+    echo "Tunnel established on port 19072"
+
+    vespa deploy ./app --target http://localhost:19072/ --wait 300
+
+remote-destroy:
+    #!/usr/bin/env bash
+    set -e
+    eval "$(aws configure export-credentials --profile production --format env)"
+    
+    # Get Instance ID from Pulumi
+    pushd infra > /dev/null
+    INSTANCE_ID=$(pulumi stack output instance_id)
+    popd > /dev/null
+    echo "Targeting Instance: $INSTANCE_ID"
+
+    # Start SSM Session in background
+    # Forwarding remote 19071 (config server/deploy) to local 19072
+    aws ssm start-session \
+        --target "$INSTANCE_ID" \
+        --document-name AWS-StartPortForwardingSession \
+        --parameters '{"portNumber":["19071"],"localPortNumber":["19072"]}' > /dev/null &
+    SSM_PID=$!
+    
+    # Ensure cleanup on exit
+    trap "kill $SSM_PID" EXIT
+
+    # Wait for port to be ready
+    echo "Waiting for tunnel..."
+    while ! nc -z localhost 19072; do sleep 1; done
+    echo "Tunnel established on port 19072"
+
+    curl -X DELETE http://localhost:19072/application/v2/tenant/default/application/default 
+
+remote-load length="100":
+    #!/usr/bin/env bash
+    set -e
+    eval "$(aws configure export-credentials --profile production --format env)"
+    
+    # Get Instance ID from Pulumi
+    pushd infra > /dev/null
+    INSTANCE_ID=$(pulumi stack output instance_id)
+    popd > /dev/null
+    echo "Targeting Instance: $INSTANCE_ID"
+
+    # Start SSM Session in background
+    # Using specific parameters to forward remote 8080 to local 8082 to avoid conflicts
+    aws ssm start-session \
+        --target "$INSTANCE_ID" \
+        --document-name AWS-StartPortForwardingSession \
+        --parameters '{"portNumber":["8080"],"localPortNumber":["8082"]}' > /dev/null &
+    SSM_PID=$!
+    
+    # Ensure cleanup on exit
+    trap "kill $SSM_PID" EXIT
+
+    # Wait for port to be ready
+    echo "Waiting for tunnel..."
+    while ! nc -z localhost 8082; do sleep 1; done
+    echo "Tunnel established on port 8082"
+
+    # Run Vespa Feed
+    head -{{length}} ../.data_cache/build_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8082 --connections 1
+
+remote-get query="congo":
+    #!/usr/bin/env bash
+    set -e
+
+    pushd infra > /dev/null
+    API_URL=$(pulumi stack output api_url)
+    popd > /dev/null
+    curl -G "$API_URL/search/" \
+     --data-urlencode 'yql=select * from sources documents where userQuery()' \
+     --data-urlencode 'query={{query}}' \
+     --data-urlencode 'hits=10'
