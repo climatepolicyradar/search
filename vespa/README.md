@@ -1,0 +1,1 @@
+pulumi config set --path 'vespa-dev:allowed_cidrs[0]' 81.136.13.47/32 --secret
