@@ -1,20 +1,30 @@
 name: CI
 
 on:
-  pull_request:
-    paths-ignore:
-      - "**/*.md" # Run on all pull requests, regardless of target branch but don't run for a Markdown file change
+  pull_request: {}
   push:
     branches:
       - main
-    paths-ignore:
-      - "**/*.md" # don't trigger CI for a Markdown file change
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # @see: https://github.com/dorny/paths-filter?tab=readme-ov-file#custom-processing-of-changed-files
+  changes: 
+    runs-on: ubuntu-latest
+    outputs:
+      markdown: ${{ steps.filter.outputs.markdown }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          list-files: shell
+          filters: |
+            markdown:
+              - added|modified: '*.md'
+
   lint:
     permissions:
       # For trunk to post annotations
@@ -41,6 +51,7 @@ jobs:
         uses: trunk-io/trunk-action@v1
         with:
           arguments: --ci
+
   check-scripts-structure:
     runs-on: ubuntu-latest
     name: "Check scripts directory"
@@ -63,6 +74,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: "Test"
+    needs: [changes]
+    if: needs.changes.outputs.markdown == 'false'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
@@ -87,3 +100,18 @@ jobs:
 
       - name: Run tests
         run: just test-functional
+
+  # This is the job that is required in our branch protection rules.
+  # As `test` runs on a conditional it might not run, so we need to
+  # accumulate the results here.
+  tests:
+    if: always()
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    steps:
+      # possible values
+      # @see: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#jobs-context
+      - run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            exit 1
+          fi
