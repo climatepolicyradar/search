@@ -60,9 +60,35 @@ jobs:
             echo "✅ No .py files found in scripts/ root directory"
           fi
 
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run-tests: ${{ steps.filter-code-changes.outputs.run-tests }}
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter-code-changes
+        with:
+          filters: |
+            run-tests:
+              - 'api/**'
+              - 'relevance_tests/**'
+              - 'search/**'
+              - 'tests/**'
+              - 'vespa/**'
+              - 'uv.lock'
+              - pyproject.toml
+
+          # Treat a service as \"changed\" if ANY matching files changed,
+          # even if other unrelated root-level files changed too.
+          predicate-quantifier: some
+
   test:
     runs-on: ubuntu-latest
     name: "Test"
+    needs: changes
+    if: needs.changes.outputs.run-tests == 'true'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
