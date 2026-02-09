@@ -87,8 +87,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: "Test"
-    needs: changes
-    if: needs.changes.outputs.run-tests == 'true'
+    needs: detect-changes
+    if: needs.detect-changes.outputs.run-tests == 'true'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
