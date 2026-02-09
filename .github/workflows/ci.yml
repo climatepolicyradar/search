@@ -75,7 +75,7 @@ jobs:
           enable-cache: true
 
       - name: Install just
-        run: pipx install rust-just
+        uses: extractions/setup-just@v3
 
       - name: Install python or load from cache with dependencies
         uses: actions/setup-python@v6
