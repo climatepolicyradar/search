@@ -4,9 +4,13 @@ Pulumi stack for deploying the Search API to AWS using ECS Fargate.
 
 ## Prerequisites
 
-- Project dependencies installed by running `just install` from the project root.
-- AWS account and [credentials configured for Pulumi](https://www.pulumi.com/docs/clouds/aws/get-started/begin/). Run `aws sso login --profile labs` to authenticate.
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) running locally.
+- Project dependencies installed by running `just install` from the project
+  root.
+- AWS account and
+  [credentials configured for Pulumi](https://www.pulumi.com/docs/clouds/aws/get-started/begin/).
+  Run `aws sso login --profile labs` to authenticate.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) running
+  locally.
 
 ## Architecture
 
@@ -18,7 +22,8 @@ The pulumi stack in `__main__.py` will create the following resources:
 - **Application Load Balancer**: Routes HTTP traffic to the containers
 - **Security Group**: Controls network access (HTTP on port 80)
 - **CloudWatch Log Group**: Centralized logging with 14-day retention
-- **IAM Roles**: Task execution role and task role with S3 and CloudWatch permissions
+- **IAM Roles**: Task execution role and task role with S3 and CloudWatch
+  permissions
 
 ## Deployment
 
@@ -30,9 +35,13 @@ To deploy the infrastructure, run:
 cd infra && pulumi up
 ```
 
-Pulumi will build the Docker image, push it to a private ECR repository, and deploy the service to ECS Fargate. The output will include the public URL of the load balancer.
+Pulumi will build the Docker image, push it to a private ECR repository, and
+deploy the service to ECS Fargate. The output will include the public URL of the
+load balancer.
 
-**Note for MacBook (ARM-based) users:** The Docker image is built for the `linux/amd64` platform to ensure compatibility with AWS Fargate. Docker Desktop should handle this cross-platform build automatically.
+**Note for MacBook (ARM-based) users:** The Docker image is built for the
+`linux/amd64` platform to ensure compatibility with AWS Fargate. Docker Desktop
+should handle this cross-platform build automatically.
 
 ### Force a new deployment (refresh ECS service)
 
@@ -46,7 +55,8 @@ aws ecs update-service \
   --profile labs
 ```
 
-If you've run `pulumi up` this shouldn't be necessary, but can be a helpful check to ensure the service is running the latest code.
+If you've run `pulumi up` this shouldn't be necessary, but can be a helpful
+check to ensure the service is running the latest code.
 
 ### Destroy the infrastructure
 
@@ -58,7 +68,8 @@ cd infra && pulumi destroy
 
 ## Getting environment variables out of the Pulumi stack
 
-The most useful outputs are probably the S3 bucket name and the CloudWatch log group name. To get these out of the Pulumi stack, run:
+The most useful outputs are probably the S3 bucket name and the CloudWatch log
+group name. To get these out of the Pulumi stack, run:
 
 ```bash
 cd infra
@@ -66,7 +77,8 @@ pulumi stack output bucket_name
 pulumi stack output log_group_name
 ```
 
-This will output the bucket name, which you can then use to set the `BUCKET_NAME` environment variable in your local environment:
+This will output the bucket name, which you can then use to set the
+`BUCKET_NAME` environment variable in your local environment:
 
 ```bash
 export BUCKET_NAME=$(cd infra && pulumi stack output bucket_name)

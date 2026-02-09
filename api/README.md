@@ -1,6 +1,7 @@
 # Search API
 
-FastAPI app for searching documents, passages, and labels, with configurable underlying search engine implementations for each endpoint.
+FastAPI app for searching documents, passages, and labels, with configurable
+underlying search engine implementations for each endpoint.
 
 ## Installation
 
@@ -18,7 +19,8 @@ Start the development server:
 just serve-api
 ```
 
-The API will be available at `http://localhost:8080` with interactive documentation and type details at `http://localhost:8080/docs`.
+The API will be available at `http://localhost:8080` with interactive
+documentation and type details at `http://localhost:8080/docs`.
 
 ## Endpoints
 
@@ -27,4 +29,5 @@ The API will be available at `http://localhost:8080` with interactive documentat
 - `GET /passages` - Search passages
 - `GET /labels` - Search labels
 
-Each of the search endpoints takes a `search_terms` query parameter, and optionally supports pagination via the `page` and `page_size` query parameters.
+Each of the search endpoints takes a `search_terms` query parameter, and
+optionally supports pagination via the `page` and `page_size` query parameters.

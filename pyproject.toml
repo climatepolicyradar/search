@@ -44,42 +44,6 @@ packages = ["search"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
-[tool.ruff]
-lint.select = ["E", "F", "D", "I", "ARG"]
-lint.ignore = [
-  "D100",
-  "D103",
-  "D104",
-  "D107",
-  "D202",
-  "D203",
-  "D212",
-  "D400",
-  "D401",
-  "D406",
-  "D407",
-  "D413",
-  "D415",
-  "E501",
-  "G201",
-]
-line-length = 88
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = [
-  "F401", # unused imports are common in __init__.py for public API exposure
-]
-"tests/*" = [
-  "E501",   # test code may require longer lines for readability
-  "F811",   # pytest fixtures with dependency injection may redefine names
-  "ARG001", # pytest fixtures may receive unused injected dependencies
-  "D101",
-  "D102",   # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
-]
-
-[tool.ruff.lint.isort]
-known-third-party = ["wandb"]
-
 [tool.pylint."messages control"]
 disable = ["logging-fstring-interpolation"] # W1203: allow f-strings in logging
 
