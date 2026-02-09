@@ -4,4 +4,4 @@
 ## Why is it needed?
 
 
-## How do I test it?
+## How was it tested?
