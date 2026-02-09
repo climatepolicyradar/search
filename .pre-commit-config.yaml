@@ -16,6 +16,12 @@ repos:
         types_or: [python, pyi, jupyter]
         args: [--config, ruff.toml]
 
+  - repo: https://github.com/pycqa/isort
+    rev: 7.0.0
+    hooks:
+      - id: isort
+        args: [--settings-path, .isort.cfg]
+
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.8.12
     hooks:

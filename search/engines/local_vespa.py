@@ -1,12 +1,12 @@
 from typing import cast
 
 from pydantic import AnyHttpUrl
+from vespa.application import Vespa
+from vespa.io import VespaQueryResponse
 
 from search.document import Document
 from search.engines import DocumentSearchEngine
 from search.log import get_logger
-from vespa.application import Vespa
-from vespa.io import VespaQueryResponse
 
 logger = get_logger(__name__)
 
