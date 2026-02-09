@@ -1,6 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Generic, Sequence, TypeVar, cast
+from typing import Generic, Sequence, TypeVar
 
 from knowledge_graph.identifiers import Identifier
 from prefect import get_run_logger, task
