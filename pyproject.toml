@@ -5,30 +5,30 @@ description = "Tests for measuring the relevance of our search results"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "boto3>=1.35.0",
-    "duckdb>=1.4.2",
-    "fastapi[standard]>=0.115.0",
-    "knowledge-graph @ git+https://github.com/climatepolicyradar/knowledge-graph@268d1baa221b8da51f88bc7affa31b4860da8dd0",
-    "posthog>=7.5.1",
-    "prefect>=3.4.25",
-    "pydantic>=2.12.4",
-    "python-dotenv>=1.0.0",
-    "pyvespa>=0.62.0",
-    "requests>=2.32.5",
-    "rich>=13.9.4",
-    "typer>=0.15.1",
-    "uvicorn>=0.32.0",
+  "boto3>=1.35.0",
+  "duckdb>=1.4.2",
+  "fastapi[standard]>=0.115.0",
+  "knowledge-graph @ git+https://github.com/climatepolicyradar/knowledge-graph@268d1baa221b8da51f88bc7affa31b4860da8dd0",
+  "posthog>=7.5.1",
+  "prefect>=3.4.25",
+  "pydantic>=2.12.4",
+  "python-dotenv>=1.0.0",
+  "pyvespa>=0.62.0",
+  "requests>=2.32.5",
+  "rich>=13.9.4",
+  "typer>=0.15.1",
+  "uvicorn>=0.32.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "pre-commit>=3.5.0",
-    "pulumi-aws>=7.0.0,<8.0.0",
-    "pulumi-docker>=4.0.0,<5.0.0",
-    "pulumi>=3.0.0,<4.0.0",
-    "pytest>=9.0.1",
-    "ruff>=0.12.9",
-    "hypothesis>=6.0.0",
+  "pre-commit>=3.5.0",
+  "pulumi-aws>=7.0.0,<8.0.0",
+  "pulumi-docker>=4.0.0,<5.0.0",
+  "pulumi>=3.0.0,<4.0.0",
+  "pytest>=9.0.1",
+  "ruff>=0.12.9",
+  "hypothesis>=6.0.0",
 ]
 
 [build-system]
@@ -47,44 +47,46 @@ testpaths = ["tests"]
 [tool.ruff]
 lint.select = ["E", "F", "D", "I", "ARG"]
 lint.ignore = [
-    "D100",
-    "D103",
-    "D104",
-    "D107",
-    "D202",
-    "D203",
-    "D212",
-    "D400",
-    "D401",
-    "D406",
-    "D407",
-    "D413",
-    "D415",
-    "E501",
-    "G201",
+  "D100",
+  "D103",
+  "D104",
+  "D107",
+  "D202",
+  "D203",
+  "D212",
+  "D400",
+  "D401",
+  "D406",
+  "D407",
+  "D413",
+  "D415",
+  "E501",
+  "G201",
 ]
 line-length = 88
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = [
-    "F401",  # unused imports are common in __init__.py for public API exposure
+  "F401", # unused imports are common in __init__.py for public API exposure
 ]
 "tests/*" = [
-    "E501",         # test code may require longer lines for readability
-    "F811",         # pytest fixtures with dependency injection may redefine names
-    "ARG001",       # pytest fixtures may receive unused injected dependencies
-    "D101", "D102", # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
+  "E501",   # test code may require longer lines for readability
+  "F811",   # pytest fixtures with dependency injection may redefine names
+  "ARG001", # pytest fixtures may receive unused injected dependencies
+  "D101",
+  "D102",   # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
 ]
 
 [tool.ruff.lint.isort]
 known-third-party = ["wandb"]
 
 [tool.pylint."messages control"]
-disable = ["logging-fstring-interpolation"]  # W1203: allow f-strings in logging
+disable = ["logging-fstring-interpolation"] # W1203: allow f-strings in logging
 
 [tool.pylint.'tests/*']
 disable = [
-    "C0115", "C0116",  # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
+  "C0115",
+  "C0116", # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
 ]
 
 [tool.typos.files]
