@@ -1,0 +1,43 @@
+[lint]
+# https://docs.astral.sh/ruff/rules/#pydocstyle-d
+# https://docs.astral.sh/ruff/rules/#error-e
+# https://docs.astral.sh/ruff/rules/#pyflakes-f
+# https://docs.astral.sh/ruff/rules/#isort-i
+# https://docs.astral.sh/ruff/rules/#flake8-unused-arguments-arg
+select = ["D", "E", "F", "I", "ARG"]
+
+ignore = [
+  "D100", # https://docs.astral.sh/ruff/rules/undocumented-public-module/
+  "D103", # https://docs.astral.sh/ruff/rules/undocumented-public-function/
+  "D104", # https://docs.astral.sh/ruff/rules/undocumented-public-package/
+  "D107", # https://docs.astral.sh/ruff/rules/undocumented-public-init/
+  "D202", # https://docs.astral.sh/ruff/rules/blank-line-after-function/
+  "D203", # https://docs.astral.sh/ruff/rules/incorrect-blank-line-before-class/
+  "D212", # https://docs.astral.sh/ruff/rules/multi-line-summary-first-line/
+  "D400", # https://docs.astral.sh/ruff/rules/missing-trailing-period/
+  "D401", # https://docs.astral.sh/ruff/rules/non-imperative-mood/
+  "D406", # https://docs.astral.sh/ruff/rules/missing-new-line-after-section-name/
+  "D407", # https://docs.astral.sh/ruff/rules/missing-dashed-underline-after-section/
+  "D413", # https://docs.astral.sh/ruff/rules/missing-blank-line-after-last-section/
+  "D415", # https://docs.astral.sh/ruff/rules/missing-terminal-punctuation/,
+
+  # Never enforce `E501` (line length violations). This should be handled by formatters.
+  "E501", # https://docs.astral.sh/ruff/rules/line-too-long/
+]
+
+[lint.per-file-ignores]
+"tests/*" = [
+  # Pytest fixtures with dependency injection may redefine names
+  "F811", # https://docs.astral.sh/ruff/rules/redefined-while-unused/
+
+  # Pytest fixtures may receive unused injected dependencies
+  "ARG001", # https://docs.astral.sh/ruff/rules/unused-function-argument/
+
+  "D101", # https://docs.astral.sh/ruff/rules/undocumented-public-class/
+
+  # Test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
+  "D102", # https://docs.astral.sh/ruff/rules/undocumented-public-method/
+]
+
+[lint.isort]
+known-third-party = ["wandb"]
