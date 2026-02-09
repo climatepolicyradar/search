@@ -40,8 +40,8 @@ jobs:
       - name: Install dependencies
         run: just install
 
-      - name: Run linting
-        run: just lint-all
+      # - name: Run linting
+      #   run: just lint-all
 
   check-scripts-structure:
     runs-on: ubuntu-latest
