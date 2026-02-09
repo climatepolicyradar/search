@@ -41,6 +41,7 @@ jobs:
         uses: trunk-io/trunk-action@v1
         with:
           arguments: --ci
+
   check-scripts-structure:
     runs-on: ubuntu-latest
     name: "Check scripts directory"
@@ -64,6 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run-tests: ${{ steps.filter-code-changes.outputs.run-tests }}
+      run-pulumi-preview: ${{ steps.filter-code-changes.outputs.run-pulumi-preview }}
 
     steps:
       - uses: actions/checkout@v6
@@ -77,18 +79,36 @@ jobs:
               - 'search/**'
               - 'tests/**'
               - 'vespa/**'
-              - 'uv.lock'
+              - uv.lock
               - pyproject.toml
 
-          # Treat a service as \"changed\" if ANY matching files changed,
+            run-pulumi-preview:
+              - 'infra/**'
+
+          # Treat as \"changed\" if ANY matching files changed,
           # even if other unrelated root-level files changed too.
           predicate-quantifier: some
+
+  no-mixed-infra-and-code:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    if: needs.detect-changes.result == 'success'
+    steps:
+      - name: Fail if PR touches both app code and infra
+        run: |
+          RUN_TESTS='${{ needs.detect-changes.outputs.run-tests }}'
+          RUN_PULUMI_PREVIEW='${{ needs.detect-changes.outputs.run-pulumi-preview }}'
+          # Empty or '[]' means no changes; only fail when BOTH have actual content
+          if [ -n "$RUN_TESTS" ] && [ "$RUN_TESTS" != '[]' ] && [ -n "$RUN_PULUMI_PREVIEW" ] && [ "$RUN_PULUMI_PREVIEW" != '[]' ]; then
+            echo "This PR changes both application code and infrastructure. Split into separate PRs: infra changes and code changes cannot be deployed in the same merge."
+            exit 1
+          fi
 
   test:
     runs-on: ubuntu-latest
     name: "Test"
-    needs: detect-changes
-    if: needs.detect-changes.outputs.run-tests == 'true'
+    needs: [detect-changes, no-mixed-infra-and-code]
+    if: needs.no-mixed-infra-and-code.result == 'success' && needs.detect-changes.outputs.run-tests == 'true'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
@@ -113,3 +133,33 @@ jobs:
 
       - name: Run tests
         run: just test-functional
+
+  pulumi-preview:
+    runs-on: ubuntu-latest
+    name: "Pulumi Preview"
+    needs: [detect-changes, no-mixed-infra-and-code]
+    if: needs.no-mixed-infra-and-code.result == 'success' && needs.detect-changes.outputs.run-pulumi-preview == 'true'
+    strategy:
+      matrix:
+        environment: [labs]
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/navigator-backend-github-actions-deploy
+          role-session-name: GitHub_Pulumi_preview_staging
+          aws-region: eu-west-1
+      - uses: astral-sh/setup-uv@v7
+      - uses: extractions/setup-just@v3
+      - run: just install
+      - name: Install Pulumi
+        uses: pulumi/actions@v6
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Pulumi preview
+        run: |
+          pulumi preview --stack climatepolicyradar/search/${{ matrix.environment }} --suppress-outputs
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
