@@ -5,18 +5,22 @@ repos:
       - id: check-json
       - id: detect-aws-credentials
         args: [--allow-missing-credentials]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.12.9
     hooks:
       - id: ruff-check
         types_or: [python, pyi, jupyter]
-        args: [--fix]
+        args: [--fix, --config, ruff.toml]
       - id: ruff-format
         types_or: [python, pyi, jupyter]
+        args: [--config, ruff.toml]
+
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.8.12
     hooks:
       - id: uv-lock
+
   - repo: https://github.com/crate-ci/typos
     rev: v1.35.5
     hooks:
