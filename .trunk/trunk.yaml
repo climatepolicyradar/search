@@ -18,6 +18,34 @@ plugins:
       ref: v1.7.4
       uri: https://github.com/trunk-io/plugins
 
+downloads:
+  - name: typos
+    downloads:
+      - os:
+          macos: apple-darwin
+        cpu:
+          x86_64: x86_64
+          arm_64: aarch64
+        url: https://github.com/crate-ci/typos/releases/download/v${version}/typos-v${version}-${cpu}-${os}.tar.gz
+      - os:
+          linux: unknown-linux-musl
+        cpu:
+          x86_64: x86_64
+          arm_64: aarch64
+        url: https://github.com/crate-ci/typos/releases/download/v${version}/typos-v${version}-${cpu}-${os}.tar.gz
+      - os:
+          windows: pc-windows-mscvc
+        cpu:
+          x86_64: x86_64
+        url: https://github.com/crate-ci/typos/releases/download/v${version}/typos-v${version}-${cpu}-${os}.tar.gz
+
+tools:
+  definitions:
+    - name: typos
+      download: typos
+      known_good_version: 1.36.2
+      shims: [typos]
+
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
   definitions:
@@ -26,6 +54,22 @@ lint:
       commands:
         - name: lint
           run: bandit --exit-zero -c bandit.yaml --format json --output ${tmpfile} ${target}
+
+    - name: typos
+      files:
+        - python
+        - markdown
+        - xml
+        - shell
+        - java
+        - typescript
+        - javascript
+      tools: [typos]
+      commands:
+        - output: sarif
+          success_codes: [0, 2]
+          run: typos ${target} --format sarif
+          read_output_from: stdout
 
   enabled:
     - actionlint@1.7.10
@@ -41,6 +85,7 @@ lint:
     - taplo@0.8.0
     - terrascan@1.19.9
     - trufflehog@3.93.1
+    - typos@1.36.2
     - yamllint@1.38.0
 actions:
   disabled:
