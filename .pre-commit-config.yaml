@@ -2,9 +2,18 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-docstring-first
       - id: check-json
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: debug-statements
       - id: detect-aws-credentials
         args: [--allow-missing-credentials]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
 
   - repo: https://github.com/pycqa/isort
     rev: 7.0.0

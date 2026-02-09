@@ -113,7 +113,7 @@ any_other_function_with_shell_equals_true:
     - os.spawnlp
     - os.spawnlpe
     - os.spawnv
-    - os.spawnve
+    - os.spawn
     - os.spawnvp
     - os.spawnvpe
     - os.startfile
@@ -161,7 +161,7 @@ linux_commands_wildcard_injection:
     - os.spawnlp
     - os.spawnlpe
     - os.spawnv
-    - os.spawnve
+    - os.spawn
     - os.spawnvp
     - os.spawnvpe
     - os.startfile
@@ -226,7 +226,7 @@ start_process_with_a_shell:
     - os.spawnlp
     - os.spawnlpe
     - os.spawnv
-    - os.spawnve
+    - os.spawn
     - os.spawnvp
     - os.spawnvpe
     - os.startfile
@@ -266,7 +266,7 @@ start_process_with_no_shell:
     - os.spawnlp
     - os.spawnlpe
     - os.spawnv
-    - os.spawnve
+    - os.spawn
     - os.spawnvp
     - os.spawnvpe
     - os.startfile
@@ -306,7 +306,7 @@ start_process_with_partial_path:
     - os.spawnlp
     - os.spawnlpe
     - os.spawnv
-    - os.spawnve
+    - os.spawn
     - os.spawnvp
     - os.spawnvpe
     - os.startfile
@@ -346,7 +346,7 @@ subprocess_popen_with_shell_equals_true:
     - os.spawnlp
     - os.spawnlpe
     - os.spawnv
-    - os.spawnve
+    - os.spawn
     - os.spawnvp
     - os.spawnvpe
     - os.startfile
@@ -386,7 +386,7 @@ subprocess_without_shell_equals_true:
     - os.spawnlp
     - os.spawnlpe
     - os.spawnv
-    - os.spawnve
+    - os.spawn
     - os.spawnvp
     - os.spawnvpe
     - os.startfile
