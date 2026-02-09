@@ -27,10 +27,16 @@ ignore = [
 
 [lint.per-file-ignores]
 "tests/*" = [
-  "F811",   # pytest fixtures with dependency injection may redefine names
-  "ARG001", # pytest fixtures may receive unused injected dependencies
-  "D101",
-  "D102",   # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
+  # Pytest fixtures with dependency injection may redefine names
+  "F811", # https://docs.astral.sh/ruff/rules/redefined-while-unused/
+
+  # Pytest fixtures may receive unused injected dependencies
+  "ARG001", # https://docs.astral.sh/ruff/rules/unused-function-argument/
+
+  "D101", # https://docs.astral.sh/ruff/rules/undocumented-public-class/
+
+  # Test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
+  "D102", # https://docs.astral.sh/ruff/rules/undocumented-public-method/
 ]
 
 [lint.isort]
