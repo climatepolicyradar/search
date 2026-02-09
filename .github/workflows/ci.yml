@@ -11,19 +11,29 @@ permissions:
   contents: write
 
 jobs:
-  # @see: https://github.com/dorny/paths-filter?tab=readme-ov-file#custom-processing-of-changed-files
-  changes: 
+  changes:
     runs-on: ubuntu-latest
     outputs:
-      markdown: ${{ steps.filter.outputs.markdown }}
+      run-test: ${{ steps.filter.outputs.run-test }}
+      run-check-scripts-structure: ${{ steps.filter.outputs.run-check-scripts-structure }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          list-files: shell
           filters: |
-            markdown:
-              - added|modified: '*.md'
+            run-test:
+              - 'api/**'
+              - 'relevance_tests/**'
+              - 'search/**'
+              - 'tests/**'
+              - 'vespa/**'
+              - 'uv.lock'
+              - pyproject.toml
+            run-check-scripts-structure:
+              - 'scripts/**'
+
+          # Run tests if ANY matching files are changed.
+          predicate-quantifier: some
 
   lint:
     permissions:
@@ -55,6 +65,8 @@ jobs:
   check-scripts-structure:
     runs-on: ubuntu-latest
     name: "Check scripts directory"
+    needs: [changes]
+    if: needs.changes.outputs.run-check-scripts-structure == 'true'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
@@ -75,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     name: "Test"
     needs: [changes]
-    if: needs.changes.outputs.markdown == 'false'
+    if: needs.changes.outputs.run-test == 'true'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
@@ -106,10 +118,10 @@ jobs:
   # accumulate the results here.
   tests:
     if: always()
-    needs: [test, lint]
+    needs: [test, check-scripts-structure]
     runs-on: ubuntu-latest
     steps:
-      # possible values
+      # You can see the possible values here:
       # @see: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#jobs-context
       - run: |
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
