@@ -23,4 +23,3 @@ EXPOSE 8080
 # Run the FastAPI server with uvicorn
 # The lifespan event will download data from S3 before starting
 CMD ["uv", "run", "fastapi", "run", "./api/main.py", "--host", "0.0.0.0", "--port", "8080"]
-

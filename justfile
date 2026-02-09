@@ -94,4 +94,3 @@ dev:
     just vespa-deploy
     just vespa-load
     uv run fastapi run ./api/dev.py --port 8080
-
