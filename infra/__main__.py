@@ -3,13 +3,7 @@
 import json
 
 import pulumi
-from pulumi_aws import (
-    apprunner,
-    ecr,
-    get_caller_identity,
-    iam,
-    s3,
-)
+from pulumi_aws import apprunner, ecr, get_caller_identity, iam, s3
 
 from search.config import REPO_ROOT_DIR, get_git_commit_hash
 
