@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from hypothesis import given
+from vespa.io import VespaQueryResponse
 
 from search.engines.vespa import (
     ExactVespaPassageSearchEngine,
@@ -16,7 +17,6 @@ from tests.common_strategies import (
     search_offset_strategy,
     search_terms_strategy,
 )
-from vespa.io import VespaQueryResponse
 
 
 @pytest.fixture
