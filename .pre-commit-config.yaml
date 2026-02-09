@@ -11,9 +11,10 @@ repos:
     hooks:
       - id: ruff-check
         types_or: [python, pyi, jupyter]
-        args: [--fix]
+        args: [--fix, --config, ruff.toml]
       - id: ruff-format
         types_or: [python, pyi, jupyter]
+        args: [--config, ruff.toml]
 
   - repo: https://github.com/pycqa/isort
     rev: 7.0.0
