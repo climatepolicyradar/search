@@ -11,16 +11,16 @@ repos:
     hooks:
       - id: ruff-check
         types_or: [python, pyi, jupyter]
-        args: [--fix, --config, ruff.toml]
+        args: [--fix, --config, .trunk/configs/ruff.toml]
       - id: ruff-format
         types_or: [python, pyi, jupyter]
-        args: [--config, ruff.toml]
+        args: [--config, .trunk/configs/ruff.toml]
 
   - repo: https://github.com/pycqa/isort
     rev: 7.0.0
     hooks:
       - id: isort
-        args: [--settings-path, .isort.cfg]
+        args: [--settings-path, .trunk/configs/.isort.cfg]
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.8.12
