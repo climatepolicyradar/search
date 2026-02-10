@@ -35,7 +35,7 @@ jobs:
     permissions:
       # For trunk to post annotations
       checks: write
-    name: "Lint"
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
@@ -58,10 +58,9 @@ jobs:
         with:
           arguments: --ci
 
-
   test:
     runs-on: ubuntu-latest
-    name: "Test"
+    name: Test
     needs: [changes]
     if: needs.changes.outputs.run-test == 'true'
     steps:
@@ -89,7 +88,6 @@ jobs:
       - name: Run tests
         run: just test-functional
 
-
   # This is the job that is required in our branch protection rules.
   # As `test` runs on a conditional it might not run, so we need to
   # accumulate the results here.
@@ -107,7 +105,7 @@ jobs:
 
   pulumi-up:
     runs-on: ubuntu-latest
-    name: "Pulumi Up"
+    name: Pulumi Up
     needs: [changes]
     if: needs.changes.outputs.run-pulumi-up == 'true'
     strategy:
