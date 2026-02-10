@@ -64,9 +64,9 @@ def test_whether_upload_labels_creates_files(
             assert jsonl_path.exists(), "JSONL file should be created"
             with open(jsonl_path) as f:
                 lines = [line for line in f if line.strip()]
-            assert len(lines) == len(mock_wikibase_concepts), (
-                f"JSONL should contain {len(mock_wikibase_concepts)} labels"
-            )
+            assert len(lines) == len(
+                mock_wikibase_concepts
+            ), f"JSONL should contain {len(mock_wikibase_concepts)} labels"
 
             # Verify first line is valid Label JSON
             first_label = Label.model_validate_json(lines[0])
@@ -77,14 +77,14 @@ def test_whether_upload_labels_creates_files(
             conn = duckdb.connect(str(duckdb_path), read_only=True)
             count = conn.execute("SELECT COUNT(*) FROM labels").fetchone()[0]
             conn.close()
-            assert count == len(mock_wikibase_concepts), (
-                "DuckDB should have same count as JSONL"
-            )
+            assert count == len(
+                mock_wikibase_concepts
+            ), "DuckDB should have same count as JSONL"
 
             # Verify upload_file_to_s3 was called twice
-            assert mock_upload.call_count == 2, (
-                "Should upload both JSONL and DuckDB files"
-            )
+            assert (
+                mock_upload.call_count == 2
+            ), "Should upload both JSONL and DuckDB files"
             uploaded_paths = [call[0][0] for call in mock_upload.call_args_list]
             assert jsonl_path in uploaded_paths, "JSONL path should be uploaded"
             assert duckdb_path in uploaded_paths, "DuckDB path should be uploaded"

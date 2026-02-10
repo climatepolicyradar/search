@@ -1,0 +1,96 @@
+# This file controls the behavior of Trunk: https://docs.trunk.io/cli
+# To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
+version: 0.1
+cli:
+  version: 1.25.0
+
+# Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
+runtimes:
+  enabled:
+    - node@22.16.0
+    - python@3.12.2
+
+# Trunk provides extensibility via plugins.
+# (https://docs.trunk.io/plugins)
+plugins:
+  sources:
+    - id: trunk
+      ref: v1.7.4
+      uri: https://github.com/trunk-io/plugins
+
+downloads:
+  - name: typos
+    downloads:
+      - os:
+          macos: apple-darwin
+        cpu:
+          x86_64: x86_64
+          arm_64: aarch64
+        url: https://github.com/crate-ci/typos/releases/download/v${version}/typos-v${version}-${cpu}-${os}.tar.gz
+      - os:
+          linux: unknown-linux-musl
+        cpu:
+          x86_64: x86_64
+          arm_64: aarch64
+        url: https://github.com/crate-ci/typos/releases/download/v${version}/typos-v${version}-${cpu}-${os}.tar.gz
+      - os:
+          windows: pc-windows-mscvc
+        cpu:
+          x86_64: x86_64
+        url: https://github.com/crate-ci/typos/releases/download/v${version}/typos-v${version}-${cpu}-${os}.tar.gz
+
+tools:
+  definitions:
+    - name: typos
+      download: typos
+      known_good_version: 1.36.2
+      shims: [typos]
+
+# This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
+lint:
+  definitions:
+    - name: bandit
+      direct_configs: [bandit.yaml]
+      commands:
+        - name: lint
+          run: bandit --exit-zero -c bandit.yaml --format json --output ${tmpfile} ${target}
+
+    - name: typos
+      files:
+        - python
+        - markdown
+        - xml
+        - shell
+        - java
+        - typescript
+        - javascript
+      tools: [typos]
+      commands:
+        - output: sarif
+          success_codes: [0, 2]
+          run: typos ${target} --format sarif
+          read_output_from: stdout
+
+  enabled:
+    - actionlint@1.7.10
+    - bandit@1.9.3
+    - black@26.1.0
+    - checkov@3.2.500
+    - git-diff-check
+    - hadolint@2.14.0
+    - isort@7.0.0
+    - markdownlint@0.47.0
+    - prettier@3.8.1
+    - ruff@0.15.0
+    - taplo@0.8.0
+    - terrascan@1.19.9
+    - trufflehog@3.93.1
+    - typos@1.36.2
+    - yamllint@1.38.0
+actions:
+  disabled:
+    - trunk-announce
+    - trunk-check-pre-push
+    - trunk-fmt-pre-commit
+  enabled:
+    - trunk-upgrade-available

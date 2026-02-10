@@ -164,9 +164,9 @@ def test_whether_upload_documents_filters_rows_without_source_url(
                 doc_count = sum(1 for line in f if line.strip())
                 created_documents = [json.loads(line) for line in f]
 
-            assert doc_count == 5, (
-                "Should only create documents for rows with source_url"
-            )
+            assert (
+                doc_count == 5
+            ), "Should only create documents for rows with source_url"
             assert all([doc["source_url"] is not None for doc in created_documents])
 
 
