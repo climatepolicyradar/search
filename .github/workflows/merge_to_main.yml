@@ -1,0 +1,134 @@
+name: Merge to Main
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run-test: ${{ steps.filter.outputs.run-test }}
+      run-pulumi-up: ${{ steps.filter.outputs.run-pulumi-up }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            run-test:
+              - 'api/**'
+              - 'relevance_tests/**'
+              - 'search/**'
+              - 'tests/**'
+              - 'vespa/**'
+              - 'uv.lock'
+              - pyproject.toml
+            run-pulumi-up:
+              - 'infra/**'
+
+  lint:
+    permissions:
+      # For trunk to post annotations
+      checks: write
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Install just
+        uses: extractions/setup-just@v3
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: pyproject.toml
+
+      - name: Install dependencies
+        run: just install
+      - name: Trunk Check
+        uses: trunk-io/trunk-action@v1
+        with:
+          arguments: --ci
+
+  test:
+    runs-on: ubuntu-latest
+    name: Test
+    needs: [changes]
+    if: needs.changes.outputs.run-test == 'true'
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Install python or load from cache with dependencies
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: pyproject.toml
+
+      - name: Install dependencies
+        run: just install
+
+      - name: Run tests
+        run: just test-functional
+
+  # This is the job that is required in our branch protection rules.
+  # As `test` runs on a conditional it might not run, so we need to
+  # accumulate the results here.
+  tests:
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      # You can see the possible values here:
+      # @see: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#jobs-context
+      - run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            exit 1
+          fi
+
+  pulumi-up:
+    runs-on: ubuntu-latest
+    name: Pulumi Up
+    needs: [changes]
+    if: needs.changes.outputs.run-pulumi-up == 'true'
+    strategy:
+      matrix:
+        environment: [production]
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions-deploy
+          role-session-name: GitHub_Pulumi_up_production
+          aws-region: eu-west-1
+      - uses: astral-sh/setup-uv@v7
+      - uses: extractions/setup-just@v3
+      - run: just install
+      - name: Install Pulumi
+        uses: pulumi/actions@v6
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Pulumi up
+        run: |
+          pulumi up --stack climatepolicyradar/search/${{ matrix.environment }} --yes --skip-preview
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
