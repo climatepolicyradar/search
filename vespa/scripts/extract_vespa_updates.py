@@ -124,8 +124,11 @@ def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
             local_dir=PARQUET_DIR,
             token=os.getenv("HUGGINGFACE_TOKEN"),
         )
+    else:
+        print(f"{PARQUET_DIR} already exists. Skipping HuggingFace data extraction.")
 
     if not PASSAGES_CACHE_FILE.exists():
+        print(f"Caching passages to {PASSAGES_CACHE_FILE}...")
         (
             pl.scan_parquet(str(PARQUET_DIR / "**/*.parquet"))
             .select(
@@ -215,6 +218,7 @@ def write_updates_file(
     api_documents: list[Document], passages_map: dict[str, list[HuggingFaceTextBlock]]
 ):
     BATCH_SIZE = 5000
+    print(f"Writing updates to {OUTPUT_FILE}...")
     with OUTPUT_FILE.open("wb") as f:
         count = 0
         batch = []
@@ -268,6 +272,8 @@ def write_updates_file(
 
         if batch:
             f.write(b"\n".join(batch) + b"\n")
+
+    print(f"Wrote {count} updates to {OUTPUT_FILE} in {time.perf_counter() - t_start:.2f}s")
 
 
 def extract_vespa_updates():
