@@ -8,7 +8,7 @@ from pydantic import AnyHttpUrl, BaseModel
 from search.engines import SearchEngine
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
 from search.log import get_logger
-from search.models import Document
+from search.data_in_models import Document
 
 logger = get_logger(__name__)
 
