@@ -1,5 +1,4 @@
 from collections import defaultdict
-from pathlib import Path
 from typing import Generic, Sequence, TypeVar
 
 from knowledge_graph.identifiers import Identifier
@@ -12,7 +11,6 @@ from rich.table import Table
 
 from search.document import Document
 from search.engines import SearchEngine
-from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -32,15 +30,6 @@ class TestResult(BaseModel, Generic[T]):
     passed: bool
     search_engine_id: Identifier
     search_results: list[T]
-
-
-def save_test_results_as_jsonl(test_results: list[TestResult], file_path: Path) -> None:
-    """Save test results to a JSONL file"""
-
-    jsonl_results = serialise_pydantic_list_as_jsonl(test_results)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(jsonl_results)
-    logger.info(f"Saved test results to {file_path}")
 
 
 def generate_test_run_id(
