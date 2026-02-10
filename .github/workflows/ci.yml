@@ -1,8 +1,7 @@
 name: CI
 
 on:
-  pull_request: {}
-  push:
+  pull_request:
     branches:
       - main
   workflow_dispatch:
@@ -16,6 +15,7 @@ jobs:
     outputs:
       run-test: ${{ steps.filter.outputs.run-test }}
       run-check-scripts-structure: ${{ steps.filter.outputs.run-check-scripts-structure }}
+      run-pulumi-preview: ${{ steps.filter.outputs.run-pulumi-preview }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
@@ -31,9 +31,8 @@ jobs:
               - pyproject.toml
             run-check-scripts-structure:
               - 'scripts/**'
-
-          # Run tests if ANY matching files are changed.
-          predicate-quantifier: some
+            run-pulumi-preview:
+              - 'infra/**'
 
   lint:
     permissions:
@@ -83,11 +82,25 @@ jobs:
             echo "✅ No .py files found in scripts/ root directory"
           fi
 
+  no-mixed-infra-and-code:
+    needs: changes
+    runs-on: ubuntu-latest
+    if: needs.changes.result == 'success'
+    steps:
+      - name: Fail if PR touches both app code and infra
+        run: |
+          RUN_TESTS='${{ needs.changes.outputs.run-test }}'
+          RUN_PULUMI_PREVIEW='${{ needs.changes.outputs.run-pulumi-preview }}'
+          if [ "$RUN_TESTS" = 'true' ] && [ "$RUN_PULUMI_PREVIEW" = 'true' ]; then
+            echo "This PR changes both application code and infrastructure. Split into separate PRs: infra changes and code changes cannot be deployed in the same merge."
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
     name: "Test"
-    needs: [changes]
-    if: needs.changes.outputs.run-test == 'true'
+    needs: [changes, no-mixed-infra-and-code]
+    if: needs.no-mixed-infra-and-code.result == 'success' && needs.changes.outputs.run-test == 'true'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
@@ -100,7 +113,7 @@ jobs:
           enable-cache: true
 
       - name: Install just
-        run: pipx install rust-just
+        uses: extractions/setup-just@v3
 
       - name: Install python or load from cache with dependencies
         uses: actions/setup-python@v6
@@ -112,6 +125,36 @@ jobs:
 
       - name: Run tests
         run: just test-functional
+
+  pulumi-preview:
+    runs-on: ubuntu-latest
+    name: Pulumi Preview
+    needs: [changes, no-mixed-infra-and-code]
+    if: needs.no-mixed-infra-and-code.result == 'success' && needs.changes.outputs.run-pulumi-preview == 'true'
+    strategy:
+      matrix:
+        environment: [production]
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions-deploy
+          role-session-name: GitHub_Pulumi_preview_${{ matrix.environment }}
+          aws-region: eu-west-1
+      - uses: astral-sh/setup-uv@v7
+      - uses: extractions/setup-just@v3
+      - run: just install
+      - name: Install Pulumi
+        uses: pulumi/actions@v6
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Pulumi preview
+        run: |
+          pulumi preview --stack climatepolicyradar/search/${{ matrix.environment }} --suppress-outputs
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
   # This is the job that is required in our branch protection rules.
   # As `test` runs on a conditional it might not run, so we need to
