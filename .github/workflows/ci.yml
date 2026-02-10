@@ -141,8 +141,8 @@ jobs:
       - uses: actions/checkout@v6
       - uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/navigator-backend-github-actions-deploy
-          role-session-name: GitHub_Pulumi_preview_staging
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions-deploy
+          role-session-name: GitHub_Pulumi_preview_${{ matrix.environment }}
           aws-region: eu-west-1
       - uses: astral-sh/setup-uv@v7
       - uses: extractions/setup-just@v3
