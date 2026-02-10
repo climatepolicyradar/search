@@ -122,6 +122,7 @@ def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
             repo_type="dataset",
             local_dir=PARQUET_DIR,
             token=os.getenv("HUGGINGFACE_TOKEN"),
+            revision="main",
         )
 
     if not PASSAGES_CACHE_FILE.exists():
