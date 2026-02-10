@@ -36,7 +36,7 @@ jobs:
     permissions:
       # For trunk to post annotations
       checks: write
-    name: "Lint"
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
@@ -61,7 +61,7 @@ jobs:
 
   check-scripts-structure:
     runs-on: ubuntu-latest
-    name: "Check scripts directory"
+    name: Check scripts directory
     needs: [changes]
     if: needs.changes.outputs.run-check-scripts-structure == 'true'
     steps:
@@ -96,7 +96,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    name: "Test"
+    name: Test
     needs: [changes, no-mixed-infra-and-code]
     if: needs.no-mixed-infra-and-code.result == 'success' && needs.changes.outputs.run-test == 'true'
     steps:
