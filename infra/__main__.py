@@ -18,6 +18,16 @@ config = pulumi.Config()
 caller_identity = get_caller_identity()
 account_id = caller_identity.account_id
 stack = pulumi.get_stack()
+environment = pulumi.get_stack()
+name = pulumi.get_project()
+
+tags = {
+    "CPR-Created-By": "pulumi",
+    "CPR-Pulumi-Stack-Name": stack,
+    "CPR-Pulumi-Project-Name": pulumi.get_project(),
+    "CPR-Tag": f"{environment}-{name}",
+    "Environment": environment,
+}
 
 # Get the git commit hash for tagging the image
 GIT_COMMIT_HASH = get_git_commit_hash()
@@ -165,3 +175,71 @@ apprunner_service = apprunner.Service(
 # Export useful outputs
 pulumi.export("bucket_name", bucket.id)
 pulumi.export("apprunner_service_service_url", apprunner_service.service_url)
+
+
+search_api_github_actions_role = iam.Role(
+    f"{name}-{environment}-github-actions",
+    assume_role_policy=json.dumps(
+        {
+            "Statement": [
+                {
+                    "Action": "sts:AssumeRoleWithWebIdentity",
+                    "Condition": {
+                        "StringEquals": {
+                            "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                        },
+                        "StringLike": {
+                            "token.actions.githubusercontent.com:sub": "repo:climatepolicyradar/search"
+                        },
+                    },
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Federated": f"arn:aws:iam::{account_id}:oidc-provider/token.actions.githubusercontent.com"
+                    },
+                }
+            ],
+            "Version": "2012-10-17",
+        }
+    ),
+    inline_policies=[
+        {
+            "name": f"{name}-{environment}-github-actions",
+            "policy": json.dumps(
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Action": [
+                                "ecr:GetAuthorizationToken",
+                                "ecr:InitiateLayerUpload",
+                                "ecr:UploadLayerPart",
+                                "ecr:CompleteLayerUpload",
+                                "ecr:PutImage",
+                                "iam:PassRole",
+                                "ecr:DescribeRepositories",
+                                "ecr:CreateRepository",
+                                "ecr:BatchGetImage",
+                                "ecr:BatchCheckLayerAvailability",
+                                "ecr:DescribeImages",
+                                "ecr:GetDownloadUrlForLayer",
+                                "ecr:ListImages",
+                                "iam:ListAccountAliases",
+                                "iam:GetPolicy",
+                                "iam:GetRole",
+                                "acm:DescribeCertificate",
+                            ],
+                            "Effect": "Allow",
+                            "Resource": "*",
+                        }
+                    ],
+                }
+            ),
+        }
+    ],
+    name=f"{name}-{environment}-github-actions",
+    tags=tags,
+    opts=pulumi.ResourceOptions(protect=True),
+)
+
+pulumi.export("role_arn", search_api_github_actions_role.arn)
+pulumi.export("role_name", search_api_github_actions_role.name)
