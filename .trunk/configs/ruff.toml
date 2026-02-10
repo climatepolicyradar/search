@@ -8,6 +8,7 @@ select = ["D", "E", "F", "I", "ARG"]
 
 ignore = [
   "D100", # https://docs.astral.sh/ruff/rules/undocumented-public-module/
+  "D101", # https://docs.astral.sh/ruff/rules/undocumented-public-class/
   "D103", # https://docs.astral.sh/ruff/rules/undocumented-public-function/
   "D104", # https://docs.astral.sh/ruff/rules/undocumented-public-package/
   "D107", # https://docs.astral.sh/ruff/rules/undocumented-public-init/
@@ -32,8 +33,6 @@ ignore = [
 
   # Pytest fixtures may receive unused injected dependencies
   "ARG001", # https://docs.astral.sh/ruff/rules/unused-function-argument/
-
-  "D101", # https://docs.astral.sh/ruff/rules/undocumented-public-class/
 
   # Test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
   "D102", # https://docs.astral.sh/ruff/rules/undocumented-public-method/
