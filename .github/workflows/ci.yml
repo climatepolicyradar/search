@@ -128,7 +128,7 @@ jobs:
 
   pulumi-preview:
     runs-on: ubuntu-latest
-    name: "Pulumi Preview"
+    name: Pulumi Preview
     needs: [changes, no-mixed-infra-and-code]
     if: needs.no-mixed-infra-and-code.result == 'success' && needs.changes.outputs.run-pulumi-preview == 'true'
     strategy:
