@@ -31,10 +31,11 @@ PARQUET_DIR = (
     / "all-document-text-data-weekly"
 )
 
-PASSAGES_CACHE_FILE = DATA_CACHE_DIR / "extract_vespa_data" / "passages_cache.parquet"
+name = "extract_vespa_updates"
+PASSAGES_CACHE_FILE = DATA_CACHE_DIR / name / "passages_cache.parquet"
 PASSAGES_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-OUTPUT_FILE = DATA_CACHE_DIR / "extract_vespa_data" / "updates.jsonl"
+OUTPUT_FILE = DATA_CACHE_DIR / name / "updates.jsonl"
 OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 load_dotenv()
@@ -270,7 +271,7 @@ def write_updates_file(
             f.write(b"\n".join(batch) + b"\n")
 
 
-def extract_vespa_data():
+def extract_vespa_updates():
     start = time.perf_counter()
 
     print("Extracting data-in-api data...")
@@ -299,4 +300,4 @@ def extract_vespa_data():
 
 
 if __name__ == "__main__":
-    extract_vespa_data()
+    extract_vespa_updates()
