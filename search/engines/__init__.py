@@ -5,9 +5,10 @@ from knowledge_graph.identifiers import Identifier
 
 from search.document import Document
 from search.label import Label
+from search.models import Document as DocumentModel
 from search.passage import Passage
 
-TModel = TypeVar("TModel", Label, Passage, Document)
+TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel)
 
 
 class SearchEngine(ABC, Generic[TModel]):

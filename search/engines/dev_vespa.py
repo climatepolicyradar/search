@@ -1,11 +1,10 @@
 import json
 
 import requests
-from pydantic import AnyHttpUrl
 
-from search.document import Document
-from search.engines import DocumentSearchEngine
+from search.engines import SearchEngine
 from search.log import get_logger
+from search.models import Document, DocumentLabelRelationship, Label
 
 logger = get_logger(__name__)
 
@@ -26,9 +25,11 @@ For now we just use `requests` which yields the same results.
 
 API_TIMEOUT = 1  # seconds
 API_URL = "https://vz0k397ock.execute-api.eu-west-1.amazonaws.com/production"
+# We make this very obvious as it is used for values that should exist
+MISSING_PLACEHOLDER = "MISSING"
 
 
-class DevVespaDocumentSearchEngine(DocumentSearchEngine):
+class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     """Search engine for dev Vespa"""
 
     def __init__(self) -> None:
@@ -60,19 +61,32 @@ class DevVespaDocumentSearchEngine(DocumentSearchEngine):
 
         res = res.json()
         documents = []
+
         for hit in res.get("root").get("children"):
             fields = hit.get("fields", {})
             # Map fields. Note: schema only has title, description.
             # source_url and original_document_id are required by Document.
             # We'll use the doc id for original_document_id and a dummy/empty source_url if missing.
             source = json.loads(fields.get("source"))
+            labels = []
+            for label in source.get("labels", []):
+                labels.append(
+                    DocumentLabelRelationship(
+                        type=label.get("type", MISSING_PLACEHOLDER),
+                        label=Label(
+                            id=label.get("label").get("id", MISSING_PLACEHOLDER),
+                            title=label.get("label").get("title", MISSING_PLACEHOLDER),
+                            type=label.get("label").get("type", MISSING_PLACEHOLDER),
+                        ),
+                        timestamp=label.get("timestamp"),
+                    )
+                )
             documents.append(
                 Document(
+                    id=hit.get("id", "unknown"),
                     title=source.get("title", "No Title"),
-                    description="",
-                    source_url=AnyHttpUrl(API_URL),  # Placeholder as not in schema
-                    original_document_id=hit.get("id", "unknown"),
-                    labels=[],
+                    description=source.get("description"),
+                    labels=labels,
                 )
             )
 
