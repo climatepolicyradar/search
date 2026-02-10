@@ -1,8 +1,7 @@
 name: CI
 
 on:
-  pull_request: {}
-  push:
+  pull_request:
     branches:
       - main
   workflow_dispatch:
@@ -16,6 +15,7 @@ jobs:
     outputs:
       run-test: ${{ steps.filter.outputs.run-test }}
       run-check-scripts-structure: ${{ steps.filter.outputs.run-check-scripts-structure }}
+      run-pulumi-preview: ${{ steps.filter.outputs.run-pulumi-preview }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
@@ -31,9 +31,8 @@ jobs:
               - pyproject.toml
             run-check-scripts-structure:
               - 'scripts/**'
-
-          # Run tests if ANY matching files are changed.
-          predicate-quantifier: some
+            run-pulumi-preview:
+              - 'infra/**'
 
   lint:
     permissions:
@@ -83,43 +82,15 @@ jobs:
             echo "✅ No .py files found in scripts/ root directory"
           fi
 
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      run-tests: ${{ steps.filter-code-changes.outputs.run-tests }}
-      run-pulumi-preview: ${{ steps.filter-code-changes.outputs.run-pulumi-preview }}
-
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        id: filter-code-changes
-        with:
-          filters: |
-            run-tests:
-              - 'api/**'
-              - 'relevance_tests/**'
-              - 'search/**'
-              - 'tests/**'
-              - 'vespa/**'
-              - uv.lock
-              - pyproject.toml
-
-            run-pulumi-preview:
-              - 'infra/**'
-
-          # Treat as \"changed\" if ANY matching files changed,
-          # even if other unrelated root-level files changed too.
-          predicate-quantifier: some
-
   no-mixed-infra-and-code:
-    needs: detect-changes
+    needs: changes
     runs-on: ubuntu-latest
-    if: needs.detect-changes.result == 'success'
+    if: needs.changes.result == 'success'
     steps:
       - name: Fail if PR touches both app code and infra
         run: |
-          RUN_TESTS='${{ needs.detect-changes.outputs.run-tests }}'
-          RUN_PULUMI_PREVIEW='${{ needs.detect-changes.outputs.run-pulumi-preview }}'
+          RUN_TESTS='${{ needs.changes.outputs.run-test }}'
+          RUN_PULUMI_PREVIEW='${{ needs.changes.outputs.run-pulumi-preview }}'
           # Empty or '[]' means no changes; only fail when BOTH have actual content
           if [ -n "$RUN_TESTS" ] && [ "$RUN_TESTS" != '[]' ] && [ -n "$RUN_PULUMI_PREVIEW" ] && [ "$RUN_PULUMI_PREVIEW" != '[]' ]; then
             echo "This PR changes both application code and infrastructure. Split into separate PRs: infra changes and code changes cannot be deployed in the same merge."
@@ -129,8 +100,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: "Test"
-    needs: [detect-changes, no-mixed-infra-and-code]
-    if: needs.no-mixed-infra-and-code.result == 'success' && needs.detect-changes.outputs.run-tests == 'true'
+    needs: [changes, no-mixed-infra-and-code]
+    if: needs.no-mixed-infra-and-code.result == 'success' && needs.changes.outputs.run-test == 'true'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
@@ -159,11 +130,11 @@ jobs:
   pulumi-preview:
     runs-on: ubuntu-latest
     name: "Pulumi Preview"
-    needs: [detect-changes, no-mixed-infra-and-code]
-    if: needs.no-mixed-infra-and-code.result == 'success' && needs.detect-changes.outputs.run-pulumi-preview == 'true'
+    needs: [changes, no-mixed-infra-and-code]
+    if: needs.no-mixed-infra-and-code.result == 'success' && needs.changes.outputs.run-pulumi-preview == 'true'
     strategy:
       matrix:
-        environment: [labs]
+        environment: [production]
       fail-fast: false
     environment: ${{ matrix.environment }}
     steps:
