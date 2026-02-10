@@ -2,7 +2,6 @@ from prefect import flow, get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from relevance_tests import run_relevance_tests_parallel
-from search.config import LABELS_PATH_STEM
 from search.engines.vespa import VespaLabelSearchEngine
 from search.label import Label
 from search.testcase import (

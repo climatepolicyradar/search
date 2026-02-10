@@ -1,4 +1,5 @@
 from collections import defaultdict
+from pathlib import Path
 from typing import Generic, Sequence, TypeVar
 
 from knowledge_graph.identifiers import Identifier
@@ -30,6 +31,24 @@ class TestResult(BaseModel, Generic[T]):
     passed: bool
     search_engine_id: Identifier
     search_results: list[T]
+
+
+def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:
+    """
+    Serialise a list of Pydantic models as JSONL (JSON Lines) format.
+
+    Each model is serialised on a separate line using model_dump_json().
+    """
+    return "\n".join(model.model_dump_json() for model in models)
+
+
+def save_test_results_as_jsonl(test_results: list[TestResult], file_path: Path) -> None:
+    """Save test results to a JSONL file"""
+
+    jsonl_results = serialise_pydantic_list_as_jsonl(test_results)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(jsonl_results)
+    logger.info(f"Saved test results to {file_path}")
 
 
 def generate_test_run_id(

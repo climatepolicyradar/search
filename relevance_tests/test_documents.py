@@ -1,4 +1,4 @@
-from prefect import flow, get_run_logger
+from prefect import flow
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from relevance_tests import run_relevance_tests_parallel
