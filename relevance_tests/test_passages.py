@@ -159,15 +159,8 @@ test_cases = [
 )
 def relevance_tests_passages():
     """Run relevance tests for passages"""
-    from search.aws import download_file_from_s3
-    from search.config import BUCKET_NAME
-
-    logger = get_run_logger()
-    logger.info("Downloading files from s3")
-    download_file_from_s3(BUCKET_NAME, "passages.duckdb", skip_if_present=True)
 
     engines = [
-        # DuckDBPassageSearchEngine(db_path=PASSAGES_PATH_STEM.with_suffix(".duckdb")),
         ExactVespaPassageSearchEngine(),
         HybridVespaPassageSearchEngine(),
     ]

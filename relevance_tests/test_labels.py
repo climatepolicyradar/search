@@ -791,12 +791,6 @@ test_cases = [
 )
 def relevance_tests_labels():
     """Run relevance tests for labels"""
-    from search.aws import download_file_from_s3
-    from search.config import BUCKET_NAME
-
-    logger = get_run_logger()
-    logger.info("Downloading files from s3")
-    download_file_from_s3(BUCKET_NAME, "labels.duckdb", skip_if_present=True)
 
     engines = [
         VespaLabelSearchEngine(),
