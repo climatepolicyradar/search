@@ -8,13 +8,13 @@ deploy:
 
 # Extract the data to load into Vespa
 extract:
-    if [ ! -f "../.data_cache/extract_vespa_data/updates.jsonl" ]; then \
-        uv run python scripts/extract_vespa_data.py; \
+    if [ ! -f "../.data_cache/extract_vespa_updates/updates.jsonl" ]; then \
+        uv run python scripts/extract_vespa_updates.py; \
     fi
 
 # Load data into Vespa
 load:
-    head -100 ../.data_cache/extract_vespa_data/updates.jsonl | vespa feed - --target http://localhost:8080
+    head -100 ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080
 
 # Dev
 dev:
