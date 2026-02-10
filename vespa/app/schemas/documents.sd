@@ -1,0 +1,41 @@
+schema documents {
+    document documents {
+        field id type string {}
+        field title type string {}
+        field description type string {}
+
+        struct label {
+            field id type string {}
+            field type type string {}
+            field title type string {}
+            field timestamp type long {}
+        }
+        field labels type array<label> {}
+
+        struct passage {
+            field text_block_id type string {}
+            field language type string {}
+            field type type string {}
+            field type_confidence type float {}
+            field page_number type int {}
+            field text type string {}
+        }
+        field passages type array<passage> {}
+
+        field source type string {
+            indexing: summary
+        }
+    }
+
+    field label_titles type array<string> {
+        indexing: input labels | for_each { get_field title } | index | summary
+    }
+
+    field passage_texts type array<string> {
+        indexing: input passages | for_each { get_field text } | index | summary
+    }
+
+    fieldset default {
+        fields: title, description, label_titles, passage_texts
+    }
+}

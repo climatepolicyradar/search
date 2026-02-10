@@ -1,0 +1,36 @@
+# Run vespa dev
+up:
+    docker compose up -d
+
+# Deploy Vespa application
+deploy:
+    vespa deploy ./app --target http://localhost:19071/ --wait 300
+
+# Extract the data to load into Vespa
+extract:
+    if [ ! -f "../.data_cache/extract_vespa_data/updates.jsonl" ]; then \
+        uv run python scripts/extract_vespa_data.py; \
+    fi
+
+# Load data into Vespa
+load:
+    head -100 ../.data_cache/extract_vespa_data/updates.jsonl | vespa feed - --target http://localhost:8080
+
+# Dev
+dev:
+    just up
+    just deploy
+    just extract
+    just load
+
+get query="congo":
+    #!/usr/bin/env bash
+    set -e
+    curl -G "http://localhost:8080/search/" \
+     --data-urlencode 'yql=select * from sources documents where userQuery()' \
+     --data-urlencode 'query={{query}}' \
+     --data-urlencode 'hits=10'
+
+# Remove the application
+destroy:
+    curl -X DELETE http://localhost:19071/application/v2/tenant/default/application/default
