@@ -3,7 +3,6 @@
 import json
 
 import pulumi
-import pulumi_aws as aws
 from pulumi_aws import (
     apprunner,
     ecr,
