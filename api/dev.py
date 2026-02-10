@@ -5,7 +5,7 @@ from typing import Annotated, Callable, Generic, TypeVar
 from fastapi import Depends, FastAPI, Query, Request
 from pydantic import AnyHttpUrl, BaseModel
 
-from search.document import Document
+from search.data_in_models import Document
 from search.engines import SearchEngine
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
 from search.log import get_logger
