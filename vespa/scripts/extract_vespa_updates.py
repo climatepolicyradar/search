@@ -72,6 +72,7 @@ class VespaLabel(TypedDict):
     type: str
     title: str
     timestamp: int | None
+    relationship: str
 
 
 class VespaPassage(TypedDict):
@@ -253,6 +254,7 @@ def write_updates_file(
                             "type": label["label"]["type"],
                             "title": label["label"]["title"],
                             "timestamp": _to_unix_timestamp(label.get("timestamp")),
+                            "relationship": label.get("type", "related"),
                         }
                         for label in document.get("labels", [])
                     ],
