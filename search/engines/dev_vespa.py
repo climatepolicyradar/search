@@ -2,9 +2,9 @@ import json
 
 import requests
 
+from search.data_in_models import Document, DocumentLabelRelationship, Label
 from search.engines import SearchEngine
 from search.log import get_logger
-from search.data_in_models import Document, DocumentLabelRelationship, Label
 
 logger = get_logger(__name__)
 

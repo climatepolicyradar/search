@@ -3,9 +3,9 @@ from typing import Generic, TypeVar
 
 from knowledge_graph.identifiers import Identifier
 
+from search.data_in_models import Document as DocumentModel
 from search.document import Document
 from search.label import Label
-from search.models import Document as DocumentModel
 from search.passage import Passage
 
 TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel)
