@@ -136,6 +136,7 @@ eip = aws.ec2.Eip(f"{app_name}-eip", instance=instance.id)
 
 lb = aws.lb.LoadBalancer(
     f"{app_name}-lb",
+    name=f"{app_name}-lb",
     internal=True,
     load_balancer_type="application",
     security_groups=[lb_security_group.id],
@@ -144,6 +145,7 @@ lb = aws.lb.LoadBalancer(
 
 target_group = aws.lb.TargetGroup(
     f"{app_name}-tg",
+    name=f"{app_name}-tg",
     port=8080,
     protocol="HTTP",
     target_type="instance",
@@ -177,6 +179,7 @@ listener = aws.lb.Listener(
 # Config server (port 19071) for deployments
 config_target_group = aws.lb.TargetGroup(
     f"{app_name}-config-tg",
+    name=f"{app_name}-config-tg",
     port=19071,
     protocol="HTTP",
     target_type="instance",
@@ -209,6 +212,7 @@ config_listener = aws.lb.Listener(
 
 vpc_link = aws.apigatewayv2.VpcLink(
     f"{app_name}-vpc-link",
+    name=f"{app_name}-vpc-link",
     security_group_ids=[lb_security_group.id],
     subnet_ids=default_subnets.ids,
 )
@@ -217,12 +221,13 @@ vpc_link = aws.apigatewayv2.VpcLink(
 # region gateway
 api = aws.apigatewayv2.Api(
     f"{app_name}-api",
+    name=f"{app_name}-api",
     protocol_type="HTTP",
 )
 
 # region Gateway
-public_integration = aws.apigatewayv2.Integration(
-    f"{app_name}-public-integration",
+public_search_integration = aws.apigatewayv2.Integration(
+    f"{app_name}-search-integration",
     api_id=api.id,
     integration_type="HTTP_PROXY",
     integration_method="ANY",
@@ -234,32 +239,11 @@ public_integration = aws.apigatewayv2.Integration(
     },
 )
 
-public_route = aws.apigatewayv2.Route(
-    f"{app_name}-public",
+search_route = aws.apigatewayv2.Route(
+    f"{app_name}-search",
     api_id=api.id,
-    route_key="GET /search",
-    target=public_integration.id.apply(lambda id: f"integrations/{id}"),
-    authorization_type="NONE",
-)
-
-public_search_base_integration = aws.apigatewayv2.Integration(
-    f"{app_name}-public-search-base-integration",
-    api_id=api.id,
-    integration_type="HTTP_PROXY",
-    integration_method="ANY",
-    integration_uri=listener.arn,
-    connection_type="VPC_LINK",
-    connection_id=vpc_link.id,
-    request_parameters={
-        "overwrite:path": "/search",
-    },
-)
-
-public_post_route = aws.apigatewayv2.Route(
-    f"{app_name}-public-post",
-    api_id=api.id,
-    route_key="POST /search",
-    target=public_search_base_integration.id.apply(lambda id: f"integrations/{id}"),
+    route_key="ANY /search",
+    target=public_search_integration.id.apply(lambda id: f"integrations/{id}"),
     authorization_type="NONE",
 )
 
