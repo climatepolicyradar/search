@@ -273,7 +273,7 @@ def write_updates_file(
         if batch:
             f.write(b"\n".join(batch) + b"\n")
 
-    print(f"Wrote {count} updates to {OUTPUT_FILE} in {time.perf_counter() - t_start:.2f}s")
+    print(f"Wrote {count} updates to {OUTPUT_FILE}")
 
 
 def extract_vespa_updates():
