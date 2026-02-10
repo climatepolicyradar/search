@@ -7,7 +7,7 @@ from pydantic import AnyHttpUrl, BaseModel
 
 from search.document import Document
 from search.engines import SearchEngine
-from search.engines.local_vespa import LocalVespaDocumentSearchEngine
+from search.engines.dev_vespa import DevVespaDocumentSearchEngine
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -152,5 +152,5 @@ async def root():
 
 
 app.get("/documents", response_model=SearchResponse[Document])(
-    create_search_endpoint(Document, LocalVespaDocumentSearchEngine)
+    create_search_endpoint(Document, DevVespaDocumentSearchEngine)
 )
