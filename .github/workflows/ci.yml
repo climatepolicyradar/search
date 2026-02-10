@@ -91,8 +91,7 @@ jobs:
         run: |
           RUN_TESTS='${{ needs.changes.outputs.run-test }}'
           RUN_PULUMI_PREVIEW='${{ needs.changes.outputs.run-pulumi-preview }}'
-          # Empty or '[]' means no changes; only fail when BOTH have actual content
-          if [ -n "$RUN_TESTS" ] && [ "$RUN_TESTS" != '[]' ] && [ -n "$RUN_PULUMI_PREVIEW" ] && [ "$RUN_PULUMI_PREVIEW" != '[]' ]; then
+          if [ "$RUN_TESTS" = 'true' ] && [ "$RUN_PULUMI_PREVIEW" = 'true' ]; then
             echo "This PR changes both application code and infrastructure. Split into separate PRs: infra changes and code changes cannot be deployed in the same merge."
             exit 1
           fi
