@@ -20,6 +20,9 @@ clean:
 # install dependencies and set up the project
 install +OPTS="":
     GIT_LFS_SKIP_SMUDGE=1 uv sync --locked --group dev {{OPTS}}
+
+# setup the project
+setup: install
     uv run pre-commit install --install-hooks
     uv run ipython kernel install --user
 
