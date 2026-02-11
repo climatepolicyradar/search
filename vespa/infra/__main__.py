@@ -334,7 +334,7 @@ status_route = aws.apigatewayv2.Route(
     authorization_type="AWS_IAM",
 )
 
-stage = aws.apigatewayv2.Stage(
+production_stage = aws.apigatewayv2.Stage(
     f"{app_name}-production",
     api_id=api.id,
     name="production",
@@ -349,5 +349,7 @@ pulumi.export(
     "ssm_command", instance.id.apply(lambda id: f"aws ssm start-session --target {id}")
 )
 pulumi.export("vespa_url", eip.public_ip.apply(lambda ip: f"http://{ip}:8080"))
-pulumi.export("api_url", stage.invoke_url)
+
+# This is part of the public API - edit with caution
+pulumi.export("apigateway_production_stage_invoke_url", production_stage.invoke_url)
 # endregion
