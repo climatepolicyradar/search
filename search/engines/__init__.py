@@ -4,11 +4,12 @@ from typing import Generic, TypeVar
 from knowledge_graph.identifiers import Identifier
 
 from search.data_in_models import Document as DocumentModel
+from search.data_in_models import Label as LabelModel
 from search.document import Document
 from search.label import Label
 from search.passage import Passage
 
-TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel)
+TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel, LabelModel)
 
 
 class SearchEngine(ABC, Generic[TModel]):

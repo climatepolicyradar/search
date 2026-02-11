@@ -45,7 +45,6 @@ destroy:
 remote-deploy:
     #!/usr/bin/env bash
     set -e
-    eval "$(aws configure export-credentials --profile production --format env)"
 
     # Get Instance ID from Pulumi
     pushd infra > /dev/null
@@ -151,3 +150,31 @@ remote-destroy:
     echo "Tunnel established on port 19072"
 
     curl -X DELETE http://localhost:19072/application/v2/tenant/default/application/default
+
+remote-restart:
+    #!/usr/bin/env bash
+    set -e
+
+    # Get Instance ID from Pulumi
+    pushd infra > /dev/null
+    INSTANCE_ID=$(pulumi stack output instance_id)
+    popd > /dev/null
+    echo "Targeting Instance: $INSTANCE_ID"
+
+    # Send command to restart docker container
+    COMMAND_ID=$(aws ssm send-command \
+        --document-name "AWS-RunShellScript" \
+        --targets "Key=instanceids,Values=$INSTANCE_ID" \
+        --parameters 'commands=["docker exec vespa bash -c \"/opt/vespa/bin/vespa-stop-services && /opt/vespa/bin/vespa-start-services\""]' \
+        --query "Command.CommandId" \
+        --output text)
+
+    echo "Sent restart command: $COMMAND_ID"
+    echo "Waiting a moment for command execution..."
+    sleep 5
+    
+    # Check status (optional, but good for feedback)
+    aws ssm list-command-invocations \
+        --command-id "$COMMAND_ID" \
+        --details \
+        --query "CommandInvocations[0].{Status:Status, Output:CommandPlugins[0].Output}"

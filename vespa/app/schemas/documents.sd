@@ -9,6 +9,7 @@ schema documents {
             field type type string {}
             field title type string {}
             field timestamp type long {}
+            field relationship type string {}
         }
         field labels type array<label> {}
 
@@ -27,15 +28,20 @@ schema documents {
         }
     }
 
-    field label_titles type array<string> {
-        indexing: input labels | for_each { get_field title } | index | summary | attribute
+    field labels_title type array<string> {
+        indexing: input labels | for_each { get_field title } | index
     }
 
-    field passage_texts type array<string> {
-        indexing: input passages | for_each { get_field text } | index | summary
+    field labels_title_attribute type array<string> {
+        indexing: input labels | for_each { get_field title } | attribute
+        attribute: fast-search
+    }
+
+    field passages_text type array<string> {
+        indexing: input passages | for_each { get_field text } | index
     }
 
     fieldset default {
-        fields: title, description, label_titles, passage_texts
+        fields: title, description, labels_title, passages_text
     }
 }
