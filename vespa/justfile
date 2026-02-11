@@ -178,3 +178,31 @@ remote-restart:
         --command-id "$COMMAND_ID" \
         --details \
         --query "CommandInvocations[0].{Status:Status, Output:CommandPlugins[0].Output}"
+
+remote-command command:
+    #!/usr/bin/env bash
+    set -e
+
+    # Get Instance ID from Pulumi
+    pushd infra > /dev/null
+    INSTANCE_ID=$(pulumi stack output instance_id)
+    popd > /dev/null
+    echo "Targeting Instance: $INSTANCE_ID"
+
+    # Send command to restart docker container
+    COMMAND_ID=$(aws ssm send-command \
+        --document-name "AWS-RunShellScript" \
+        --targets "Key=instanceids,Values=$INSTANCE_ID" \
+        --parameters 'commands=["{{command}}"]' \
+        --query "Command.CommandId" \
+        --output text)
+
+    echo "Sent command: $COMMAND_ID"
+    echo "Waiting a moment for command execution..."
+    sleep 5
+    
+    # Check status (optional, but good for feedback)
+    aws ssm list-command-invocations \
+        --command-id "$COMMAND_ID" \
+        --details \
+        --query "CommandInvocations[0].{Status:Status, Output:CommandPlugins[0].Output}"
