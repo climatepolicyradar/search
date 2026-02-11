@@ -36,23 +36,17 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     def __init__(self) -> None:
         pass
 
-    def search(
-        self, terms: str, limit: int | None = None, offset: int = 0
-    ) -> list[Document]:
+    def search(self, query: str, limit: int, offset: int = 0) -> list[Document]:
         """Fetch a list of relevant search results."""
-        if limit is None:
-            limit = 10
 
-        yql = "select * from sources documents where userQuery()"
+        yql = f"select * from sources documents where userQuery() limit {limit} offset {offset}"
 
         try:
             res = requests.post(
                 f"{API_URL}/search",
                 json={
                     "yql": yql,
-                    "query": terms,
-                    "hits": limit,
-                    "offset": offset,
+                    "query": query,
                 },
                 timeout=API_TIMEOUT,
             )
@@ -93,27 +87,25 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         return documents
 
-    def count(self, terms: str) -> int:
+    def count(self, query: str) -> int:
         """Return hit count"""
         raise NotImplementedError()
 
 
-class DevVespaLabelSearchEngine(SearchEngine[Label]):
+# We do not inherit from `SearchEngine[Label]` as the searech method does not have `limit: int, offset: int` parameters
+# at least not yet
+class DevVespaLabelSearchEngine:
     """Search engine for dev Vespa"""
 
     def __init__(self) -> None:
         pass
 
-    def search(
-        self, terms: str, limit: int | None = None, offset: int = 0
-    ) -> list[Label]:
+    def search(self, query: str) -> list[Label]:
         """Fetch a list of relevant search results."""
-        if limit is None:
-            limit = 100
 
         # 1) prefix filter the documents list on `labels_title_attribute` to ensure we are grouping by as few documents as possible for performance
         # We use `matches` with a case-insensitive regex pattern `(?i)` because `contains` on attributes is strictly case-sensitive.
-        safe_terms = re.escape(terms)
+        safe_terms = re.escape(query)
         doc_regex = f"(?i)^{safe_terms}.*"
         document_filter_query = f'select * from sources documents where labels_title_attribute matches "{doc_regex}"'
 
@@ -124,7 +116,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
         group_filter_query = f'filter(regex("{doc_regex}", labels_title_attribute))'
 
         # 4) limit and order and output the groups
-        group_order_query = "max(100) order(-count()) each(output(count()))"
+        group_order_query = "order(-count()) each(output(count()))"
 
         yql = f"{document_filter_query} | all({grouping_query} {group_filter_query} {group_order_query})"
 
@@ -133,11 +125,10 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                 f"{API_URL}/search",
                 json={
                     "yql": yql,
-                    "query": terms,
+                    "query": query,
                     # standard practice is "hits": 0 to get only aggregation if possible
                     "hits": 0,
                     "timeout": "5s",
-                    "offset": offset,
                 },
                 timeout=API_TIMEOUT,
             )
@@ -173,6 +164,6 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         return labels
 
-    def count(self, terms: str) -> int:
+    def count(self, query: str) -> int:
         """Return hit count"""
         raise NotImplementedError()
