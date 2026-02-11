@@ -171,12 +171,6 @@ apprunner_service = apprunner.Service(
     ),
 )
 
-
-# Export useful outputs
-pulumi.export("bucket_name", bucket.id)
-pulumi.export("apprunner_service_service_url", apprunner_service.service_url)
-
-
 search_api_github_actions_role = iam.Role(
     f"{name}-{environment}-github-actions",
     assume_role_policy=json.dumps(
@@ -241,5 +235,6 @@ search_api_github_actions_role = iam.Role(
     opts=pulumi.ResourceOptions(protect=True),
 )
 
-pulumi.export("role_arn", search_api_github_actions_role.arn)
-pulumi.export("role_name", search_api_github_actions_role.name)
+# These exports are the public API for this stack, and consumed by external stacks
+# Edit with caution
+pulumi.export("apprunner_service_url", apprunner_service.service_url)

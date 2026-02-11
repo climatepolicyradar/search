@@ -350,6 +350,19 @@ pulumi.export(
 )
 pulumi.export("vespa_url", eip.public_ip.apply(lambda ip: f"http://{ip}:8080"))
 
-# This is part of the public API - edit with caution
-pulumi.export("apigateway_production_stage_invoke_url", production_stage.invoke_url)
-# endregion
+# These exports are the public API for this stack, and consumed by external stacks
+# Edit with caution
+pulumi.export(
+    "apigateway_production_stage_invoke_url",
+    production_stage.invoke_url,
+)
+# We construct this separately as the invoke_url contains the protocol and stage path (e.g. `/production`).
+pulumi.export(
+    "apigateway_production_stage_domain",
+    pulumi.Output.concat(
+        api.id,
+        ".execute-api.",
+        production_stage.region,
+        ".amazonaws.com",
+    ),
+)
