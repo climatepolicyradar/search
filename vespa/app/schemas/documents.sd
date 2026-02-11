@@ -28,7 +28,7 @@ schema documents {
     }
 
     field label_titles type array<string> {
-        indexing: input labels | for_each { get_field title } | index | summary
+        indexing: input labels | for_each { get_field title } | index | summary | attribute
     }
 
     field passage_texts type array<string> {

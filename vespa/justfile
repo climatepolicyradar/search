@@ -74,7 +74,6 @@ remote-deploy:
 remote-load length="100":
     #!/usr/bin/env bash
     set -e
-    eval "$(aws configure export-credentials --profile production --format env)"
 
     # Get Instance ID from Pulumi
     pushd infra > /dev/null
@@ -128,7 +127,6 @@ remote-post query="congo":
 remote-destroy:
     #!/usr/bin/env bash
     set -e
-    eval "$(aws configure export-credentials --profile production --format env)"
 
     # Get Instance ID from Pulumi
     pushd infra > /dev/null
