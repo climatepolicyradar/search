@@ -24,7 +24,7 @@ The secondary URL uses a `+` which matches 1 or more characters. 🤷
 For now we just use `requests` which yields the same results.
 """
 
-API_TIMEOUT = 1  # seconds
+API_TIMEOUT = 5  # seconds
 API_URL = "https://vz0k397ock.execute-api.eu-west-1.amazonaws.com/production"
 # We make this very obvious as it is used for values that should exist
 MISSING_PLACEHOLDER = "MISSING"
