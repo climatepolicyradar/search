@@ -5,9 +5,12 @@ from typing import Annotated, Callable, Generic, TypeVar
 from fastapi import APIRouter, Depends, FastAPI, Query, Request
 from pydantic import AnyHttpUrl, BaseModel
 
-from search.data_in_models import Document
+from search.data_in_models import Document, Label
 from search.engines import SearchEngine
-from search.engines.dev_vespa import DevVespaDocumentSearchEngine
+from search.engines.dev_vespa import (
+    DevVespaDocumentSearchEngine,
+    DevVespaLabelSearchEngine,
+)
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -76,7 +79,7 @@ def create_search_endpoint(
 
     async def search_endpoint(
         request: Request,
-        search_terms: Annotated[
+        query: Annotated[
             str, Query(..., description="What are you looking for?", min_length=1)
         ],
         page: Annotated[int, Query(description="Page number (1 indexed)", ge=1)] = 1,
@@ -95,7 +98,7 @@ def create_search_endpoint(
         if count:
             logger.info("Counting total results...")
             start = time.time()
-            total_results = engine.count(search_terms)
+            total_results = engine.count(query)
             elapsed = time.time() - start
             logger.info(f"{total_results} results found in {elapsed:.1f} seconds")
 
@@ -109,10 +112,10 @@ def create_search_endpoint(
         offset = page_size * (page - 1)
 
         logger.info(
-            f"Running search for {search_terms} with limit {page_size} and offset {offset}..."
+            f"Running search for {query} with limit {page_size} and offset {offset}..."
         )
         start = time.time()
-        paginated_results = engine.search(search_terms, limit=page_size, offset=offset)
+        paginated_results = engine.search(query, limit=page_size, offset=offset)
         elapsed = time.time() - start
         logger.info(f"Search complete in {elapsed:.1f} seconds")
 
@@ -122,13 +125,13 @@ def create_search_endpoint(
         next_page = None
         if next_page_likely_exists:
             next_page = AnyHttpUrl(
-                build_pagination_url(request, search_terms, page + 1, page_size)
+                build_pagination_url(request, query, page + 1, page_size)
             )
 
         previous_page = None
         if page > 1:
             previous_page = AnyHttpUrl(
-                build_pagination_url(request, search_terms, page - 1, page_size)
+                build_pagination_url(request, query, page - 1, page_size)
             )
 
         return SearchResponse[T](
@@ -162,6 +165,10 @@ async def root():
 
 router.get("/documents", response_model=SearchResponse[Document])(
     create_search_endpoint(Document, DevVespaDocumentSearchEngine)
+)
+
+router.get("/labels", response_model=SearchResponse[Label])(
+    create_search_endpoint(Label, DevVespaLabelSearchEngine)
 )
 
 app.include_router(router)
