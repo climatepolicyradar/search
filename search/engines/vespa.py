@@ -118,12 +118,12 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         )
 
     def search(
-        self, terms: str, limit: int | None = None, offset: int = 0
+        self, query: str, limit: int | None = None, offset: int = 0
     ) -> list[TModel]:
         """
         Search Vespa using the configured search strategy.
 
-        :param terms: Search terms from the user
+        :param query: Search query from the user
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip
         :return: List of model objects matching the search.
@@ -138,7 +138,7 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
             self.connect_to_vespa()
             assert self.client is not None
 
-        request_body = self._build_request(terms, limit, offset)
+        request_body = self._build_request(query, limit, offset)
 
         try:
             vespa_response = cast(
@@ -155,11 +155,11 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         return self._parse_vespa_response(vespa_response)
 
     @abstractmethod
-    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
         """
         Build the Vespa query request body.
 
-        :param terms: Search terms from the user
+        :param query: Search query from the user
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip
         :return: Dictionary containing the Vespa query request body.
@@ -176,7 +176,7 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         """
         ...
 
-    def count(self, terms: str) -> int:
+    def count(self, query: str) -> int:
         """
         Count search results.
 
@@ -277,11 +277,11 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
     text matching. Ranking profile: exact_not_stemmed.
     """
 
-    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
         """
         Build request body for exact match search.
 
-        :param terms: Search terms from the user
+        :param query: Search query from the user
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip
         :return: Dictionary containing the Vespa query request body
@@ -296,7 +296,7 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
             "yql": yql,
             "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
             "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
-            "query_string": terms,
+            "query_string": query,
             "ranking.profile": "exact_not_stemmed",
             "summary": self.DEFAULT_SUMMARY,
         }
@@ -315,11 +315,11 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
     DISTANCE_THRESHOLD: float = 0.24
     TARGET_NUM_HITS: int = 1000
 
-    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
         """
         Build request body for hybrid search (text + embeddings).
 
-        :param terms: Search terms from the user
+        :param query: Search query from the user
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip
         :return: Dictionary containing the Vespa query request body
@@ -338,7 +338,7 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
             "yql": yql,
             "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
             "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
-            "query_string": terms,
+            "query_string": query,
             "ranking.profile": "hybrid",
             "input.query(query_embedding)": f"embed({self.EMBEDDING_MODEL}, @query_string)",
             "summary": self.DEFAULT_SUMMARY,
@@ -353,11 +353,11 @@ class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
     field and the ``bm25_document_title`` ranking profile.
     """
 
-    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
         """
         Build request body for BM25 document title search.
 
-        :param terms: Search terms from the user.
+        :param query: Search query from the user.
         :param limit: Maximum number of results to return.
         :param offset: Number of results to skip.
         :return: Dictionary containing the Vespa query request body.
@@ -372,7 +372,7 @@ class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
             "yql": yql,
             "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
             "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
-            "query_string": terms,
+            "query_string": query,
             "ranking.profile": "bm25_document_title",
             "summary": self.DEFAULT_SUMMARY,
         }
@@ -389,7 +389,7 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label], LabelSearchEngine):
 
     model_class = Label
 
-    def _build_request(self, terms: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
         """
         Build request body for concept/label search.
 
@@ -411,7 +411,7 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label], LabelSearchEngine):
             "yql": yql,
             "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
             "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
-            "query_string": terms,
+            "query_string": query,
             "summary": self.DEFAULT_SUMMARY,
         }
 

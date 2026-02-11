@@ -148,20 +148,20 @@ class JSONSearchEngine(SearchEngine, Generic[TModel]):
         }
 
     def search(
-        self, terms: str, limit: int | None = None, offset: int = 0
+        self, query: str, limit: int | None = None, offset: int = 0
     ) -> list[TModel]:
-        """Search for items matching the terms (case-insensitive)."""
+        """Search for items matching the query (case-insensitive)."""
 
         if offset < 0:
             raise ValueError("offset must be non-negative")
         if limit is not None and limit < 1:
             raise ValueError("limit must be at least 1")
 
-        lowercased_terms = terms.lower()
+        lowercased_query = query.lower()
         all_results = [
             item
             for item in self.items
-            if lowercased_terms in self._searchable_strings[item.id]
+            if lowercased_query in self._searchable_strings[item.id]
         ]
 
         if limit is None:
@@ -169,13 +169,13 @@ class JSONSearchEngine(SearchEngine, Generic[TModel]):
         else:
             return all_results[offset : offset + limit]
 
-    def count(self, terms: str) -> int:
-        """Count total number of items matching the search terms."""
-        lowercased_terms = terms.lower()
+    def count(self, query: str) -> int:
+        """Count total number of items matching the search query."""
+        lowercased_query = query.lower()
         return sum(
             1
             for item in self.items
-            if lowercased_terms in self._searchable_strings[item.id]
+            if lowercased_query in self._searchable_strings[item.id]
         )
 
 
