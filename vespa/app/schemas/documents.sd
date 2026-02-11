@@ -37,6 +37,11 @@ schema documents {
         attribute: fast-search
     }
 
+    field labels_type_attribute type array<string> {
+        indexing: input labels | for_each { get_field type } | attribute
+        attribute: fast-search
+    }
+
     field passages_text type array<string> {
         indexing: input passages | for_each { get_field text } | index
     }
