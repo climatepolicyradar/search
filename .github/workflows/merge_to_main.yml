@@ -15,6 +15,7 @@ jobs:
     outputs:
       run-test: ${{ steps.filter.outputs.run-test }}
       run-pulumi-up: ${{ steps.filter.outputs.run-pulumi-up }}
+      run-deploy: ${{ steps.filter.outputs.run-deploy }}
     steps:
       - uses: dorny/paths-filter@v3
         id: filter
@@ -30,6 +31,9 @@ jobs:
               - pyproject.toml
             run-pulumi-up:
               - 'infra/**'
+            run-deploy:
+              - 'api/**'
+              - 'search/**'
 
   lint:
     permissions:
@@ -102,6 +106,27 @@ jobs:
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             exit 1
           fi
+  deploy:
+    needs: [changes, tests]
+    if: needs.changes.outputs.run-deploy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-production-github-actions-deploy
+          role-session-name: Github_merge_to_main_deploy
+          aws-region: eu-west-1
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: extractions/setup-just@v3
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: pyproject.toml
+      - run: build-image
+      - run: push-image
 
   pulumi-up:
     runs-on: ubuntu-latest
