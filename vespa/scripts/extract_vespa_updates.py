@@ -147,7 +147,6 @@ def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
                 ]
             )
             .filter(pl.col("text").is_not_null())
-            .sort(["document_id", "index"])
             .group_by("document_id")
             .agg(
                 pl.struct(
@@ -161,17 +160,18 @@ def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
                         "text",
                         "index",
                     ]
-                ).alias("text_blocks")
+                )
+                .sort_by("index")
+                .alias("text_blocks")
             )
-            .collect()
-            .write_parquet(PASSAGES_CACHE_FILE)
+            .sink_parquet(PASSAGES_CACHE_FILE)
         )
     else:
         print(f"{PASSAGES_CACHE_FILE} already exists. Skipping caching.")
 
-    df = pl.read_parquet(PASSAGES_CACHE_FILE)
+    df = pl.read_parquet(PASSAGES_CACHE_FILE, rechunk=False)
 
-    return {row["document_id"]: row["text_blocks"] for row in df.iter_rows(named=True)}
+    return dict(zip(df["document_id"].to_list(), df["text_blocks"].to_list()))
 
 
 def extract_data_in_api_data() -> list[Document]:
