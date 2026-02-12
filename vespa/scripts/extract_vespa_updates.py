@@ -245,7 +245,7 @@ def write_updates_file(api_documents: list[Document]):
 
     :param api_documents: List of documents from the API.
     """
-    WRITE_BATCH_SIZE = 5000
+    WRITE_BATCH_SIZE = 2000
     CHUNK_SIZE = 1000  # Number of documents to load passages for at once
     print(f"Writing updates to {OUTPUT_FILE}...")
     total_chunks = (len(api_documents) + CHUNK_SIZE - 1) // CHUNK_SIZE
