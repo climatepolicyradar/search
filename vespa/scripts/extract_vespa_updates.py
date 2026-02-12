@@ -117,7 +117,10 @@ class HuggingFaceTextBlock(TypedDict):
 
 # region Extract
 def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
-    if not PARQUET_DIR.exists():
+    parquet_files_exist = len(list(PARQUET_DIR.glob("**/*.parquet"))) > 0
+    if PARQUET_DIR.exists() and parquet_files_exist:
+        print(f"{PARQUET_DIR} already exists. Skipping HuggingFace data extraction.")
+    else:
         PARQUET_DIR.mkdir(parents=True, exist_ok=True)
         snapshot_download(
             repo_id="climatepolicyradar/all-document-text-data-weekly",
@@ -125,8 +128,6 @@ def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
             local_dir=PARQUET_DIR,
             token=os.getenv("HUGGINGFACE_TOKEN"),
         )
-    else:
-        print(f"{PARQUET_DIR} already exists. Skipping HuggingFace data extraction.")
 
     if not PASSAGES_CACHE_FILE.exists():
         print(f"Caching passages to {PASSAGES_CACHE_FILE}...")
