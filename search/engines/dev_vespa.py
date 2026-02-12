@@ -4,7 +4,6 @@ import re
 import requests
 
 from search.data_in_models import Document, DocumentLabelRelationship, Label
-from search.engines import SearchEngine
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -30,16 +29,23 @@ API_URL = "https://vz0k397ock.execute-api.eu-west-1.amazonaws.com/production"
 MISSING_PLACEHOLDER = "MISSING"
 
 
-class DevVespaDocumentSearchEngine(SearchEngine[Document]):
+# We do not inherit from `SearchEngine[Document]` as the search method has different parameters.
+# At least for now.
+class DevVespaDocumentSearchEngine:
     """Search engine for dev Vespa"""
 
     def __init__(self) -> None:
         pass
 
-    def search(self, query: str, limit: int, offset: int = 0) -> list[Document]:
+    def search(
+        self, query: str | None, where: str, limit: int, offset: int = 0
+    ) -> list[Document]:
         """Fetch a list of relevant search results."""
 
-        yql = f"select * from sources documents where userQuery() limit {limit} offset {offset}"
+        yql = f"select * from sources documents where {where}"
+        if query:
+            yql += " and userQuery()"
+        yql += f" limit {limit} offset {offset}"
 
         try:
             res = requests.post(
@@ -47,6 +53,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 json={
                     "yql": yql,
                     "query": query,
+                    "timeout": "5s",
                 },
                 timeout=API_TIMEOUT,
             )
@@ -57,7 +64,11 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         res = res.json()
         documents = []
 
-        for hit in res.get("root").get("children"):
+        print(where)
+        # print(query)
+        # print(res)
+
+        for hit in res.get("root").get("children", []):
             fields = hit.get("fields", {})
             # Map fields. Note: schema only has title, description.
             # source_url and original_document_id are required by Document.
