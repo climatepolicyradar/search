@@ -57,6 +57,7 @@ class SearchResponse[T](BaseModel):
     results: list[T]
 
 
+# region routes
 # We use both routers to make sure we can have /search available publicly
 # and / available to the AppRunner health check.
 @app.get("/")
@@ -77,36 +78,19 @@ def read_documents(
     labels_id_and: list[str] | None = Query(None, alias="labels.label.id"),
     labels_id_or: list[str] | None = Query(None, alias="or:labels.label.id"),
     labels_id_not: list[str] | None = Query(None, alias="not:labels.label.id"),
+    filters_json_string: str | None = Query(None, alias="filters"),
     limit: int = 10,
     offset: int = 0,
 ):
-    where = "true"
-
-    """
-    ?label=a&label=b&-label=c&-label=d&+label=e&+label=f
-    Resolves to
-    (HAS a OR HAS b) AND (HAS e) AND (HAS f)  AND (NOT HAS c) AND (NOT HAS d)
-    """
-
-    if labels_id_or:
-        where += f" and ({' or '.join([f'labels_title_attribute contains \"{label}\"' for label in labels_id_or])})"
-    if labels_id_and:
-        where += "".join(
-            [
-                f' and labels_title_attribute contains "{label}"'
-                for label in labels_id_and
-            ]
-        )
-    if labels_id_not:
-        where += "".join(
-            [
-                f' and ! (labels_title_attribute contains "{label}")'
-                for label in labels_id_not
-            ]
-        )
 
     results = DevVespaDocumentSearchEngine().search(
-        query=query, where=where, limit=limit, offset=offset
+        query=query,
+        labels_id_and=labels_id_and,
+        labels_id_or=labels_id_or,
+        labels_id_not=labels_id_not,
+        filters_json_string=filters_json_string,
+        limit=limit,
+        offset=offset,
     )
 
     # TODO: pagination
@@ -139,5 +123,7 @@ def read_labels(
         results=results,
     )
 
+
+# endregion
 
 app.include_router(router)

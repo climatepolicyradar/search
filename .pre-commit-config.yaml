@@ -21,12 +21,6 @@ repos:
       - id: isort
         args: [--settings-path, .trunk/configs/.isort.cfg]
 
-  - repo: https://github.com/psf/black
-    rev: 26.1.0
-    hooks:
-      - id: black
-        language_version: python3.13
-
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.13
     hooks:
@@ -93,7 +87,6 @@ repos:
     rev: v3.92.5
     hooks:
       - id: trufflehog
-        args: []
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.9.0.6 # trunk: shellcheck@0.9.0 (repo tags are v0.9.0.x)
