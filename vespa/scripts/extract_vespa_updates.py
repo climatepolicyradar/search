@@ -116,7 +116,7 @@ class HuggingFaceTextBlock(TypedDict):
 
 
 # region Extract
-def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
+def extract_huggingface_data() -> pl.LazyFrame:
     if not PARQUET_DIR.exists():
         PARQUET_DIR.mkdir(parents=True, exist_ok=True)
         snapshot_download(
@@ -168,9 +168,9 @@ def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
     else:
         print(f"{PASSAGES_CACHE_FILE} already exists. Skipping caching.")
 
-    df = pl.read_parquet(PASSAGES_CACHE_FILE)
-
-    return {row["document_id"]: row["text_blocks"] for row in df.iter_rows(named=True)}
+    print(f"Loading passages from {PASSAGES_CACHE_FILE}")
+    # Return LazyFrame for optimized querying
+    return pl.scan_parquet(PASSAGES_CACHE_FILE)
 
 
 def extract_data_in_api_data() -> list[Document]:
@@ -185,6 +185,7 @@ def extract_data_in_api_data() -> list[Document]:
 
     with requests.Session() as session:
         while True:
+            print(f"fetching page {page} from data-in api")
             response = session.get(
                 "https://api.climatepolicyradar.org/data-in/documents",
                 params={"page": page, "page_size": 100},
@@ -215,67 +216,95 @@ def _to_unix_timestamp(ts_str):
         return None
 
 
-def write_updates_file(
-    api_documents: list[Document], passages_map: dict[str, list[HuggingFaceTextBlock]]
-):
+def write_updates_file(api_documents: list[Document], passages_lazy: pl.LazyFrame):
     BATCH_SIZE = 5000
     print(f"Writing updates to {OUTPUT_FILE}...")
+
+    if not api_documents:
+        print("No API documents to write.")
+        return
+
     with OUTPUT_FILE.open("wb") as f:
-        count = 0
-        batch = []
+        total_count = 0
 
-        for document in api_documents:
-            document_id = document.get("id")
-            if not document_id:
-                continue
+        # Process in chunks to avoid loading all passages into memory
+        for i in range(0, len(api_documents), BATCH_SIZE):
+            batched_documents = api_documents[i : i + BATCH_SIZE]
+            print(f"Processing batch {i} to {i + len(batched_documents)}...")
 
-            huggingface_passages = passages_map.get(document_id, [])
-            passages: list[VespaPassage] = [
-                VespaPassage(
-                    text_block_id=passage["text_block_id"],
-                    language=passage["language"],
-                    type=passage["type"],
-                    type_confidence=passage["type_confidence"],
-                    page_number=passage["page_number"],
-                    text=passage["text"],
-                )
-                for passage in huggingface_passages
-            ]
+            batched_df = pl.from_dicts(batched_documents)
+            batched_ids = batched_df["id"].to_list()
 
-            update_op: VespaUpdateOp = {
-                # ID Format: id:documents:documents::<doc_id>
-                "put": f"id:documents:documents::{document_id}",
-                "fields": {
-                    "title": document.get("title"),
-                    "description": document.get("description"),
-                    "labels": [
-                        {
-                            "id": label["label"]["id"],
-                            "type": label["label"]["type"],
-                            "title": label["label"]["title"],
-                            "timestamp": _to_unix_timestamp(label.get("timestamp")),
-                            "relationship": label.get("type", "related"),
-                        }
-                        for label in document.get("labels", [])
-                    ],
-                    "passages": passages,
-                    "source": orjson.dumps(
-                        document | {"passages": huggingface_passages}  # type: ignore
-                    ).decode(),
-                },
-            }
+            # Fetch only the passages for the current batch of documents
+            # Using lazy evaluation to optimize I/O
+            passages_batch_df = passages_lazy.filter(
+                pl.col("document_id").is_in(batched_ids)
+            ).collect()
 
-            batch.append(orjson.dumps(update_op))
-            count += 1
+            combined_chunk = batched_df.join(
+                passages_batch_df, left_on="id", right_on="document_id", how="left"
+            )
 
-            if len(batch) >= BATCH_SIZE:
-                f.write(b"\n".join(batch) + b"\n")
-                batch = []
+            batch_output = []
 
-        if batch:
-            f.write(b"\n".join(batch) + b"\n")
+            for row in combined_chunk.iter_rows(named=True):
+                document_id = row.get("id")
+                if not document_id:
+                    continue
 
-    print(f"Wrote {count} updates to {OUTPUT_FILE}")
+                huggingface_passages = row.get("text_blocks")
+                if huggingface_passages is None:
+                    huggingface_passages = []
+
+                passages: list[VespaPassage] = [
+                    VespaPassage(
+                        text_block_id=passage["text_block_id"],
+                        language=passage["language"],
+                        type=passage["type"],
+                        type_confidence=passage["type_confidence"],
+                        page_number=passage["page_number"],
+                        text=passage["text"],
+                    )
+                    for passage in huggingface_passages
+                ]
+
+                update_op: VespaUpdateOp = {
+                    "put": f"id:documents:documents::{document_id}",
+                    "fields": {
+                        "title": row.get("title"),
+                        "description": row.get("description"),
+                        "labels": [
+                            {
+                                "id": label["label"]["id"],
+                                "type": label["label"]["type"],
+                                "title": label["label"]["title"],
+                                "timestamp": _to_unix_timestamp(label.get("timestamp")),
+                                "relationship": label.get("type", "related"),
+                            }
+                            for label in row.get("labels", [])
+                        ],
+                        "passages": passages,
+                        "source": orjson.dumps(
+                            {
+                                "id": document_id,
+                                "title": row.get("title"),
+                                "description": row.get("description"),
+                                "labels": row.get("labels"),
+                                "passages": huggingface_passages,
+                            }
+                        ).decode(),
+                    },
+                }
+
+                batch_output.append(orjson.dumps(update_op))
+                total_count += 1
+
+            if batch_output:
+                f.write(b"\n".join(batch_output) + b"\n")
+
+            print(f"Wrote batch of {len(batch_output)} updates")
+
+    print(f"Wrote total {total_count} updates")
 
 
 def extract_vespa_updates():
@@ -293,12 +322,12 @@ def extract_vespa_updates():
 
     print("Extracting HuggingFace data...")
     t_start = time.perf_counter()
-    passages_map = extract_huggingface_data()
+    passages_lazy = extract_huggingface_data()
     print(f"Extracted HuggingFace data in {time.perf_counter() - t_start:.2f}s")
 
     print(f"Generating updates to {OUTPUT_FILE}...")
     t_start = time.perf_counter()
-    write_updates_file(api_documents, passages_map)
+    write_updates_file(api_documents, passages_lazy)
     print(f"Generated updates to {OUTPUT_FILE} in {time.perf_counter() - t_start:.2f}s")
 
     print(
