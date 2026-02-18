@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, TypeVar
 
 from fastapi import APIRouter, FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AnyHttpUrl, BaseModel
 
 from search.data_in_models import Document, Label
@@ -33,6 +34,13 @@ app = FastAPI(
     redoc_url="/search/redoc",
     openapi_url="/search/openapi.json",
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -49,6 +57,7 @@ class SearchResponse[T](BaseModel):
     results: list[T]
 
 
+# region routes
 # We use both routers to make sure we can have /search available publicly
 # and / available to the AppRunner health check.
 @app.get("/")
@@ -63,15 +72,27 @@ async def root():
 
 @router.get("/documents", response_model=SearchResponse[Document])
 def read_documents(
-    query: Annotated[
-        str, Query(..., description="What are you looking for?", min_length=1)
-    ],
+    query: str | None = Query(None, description="What are you looking for?"),
+    # we used `alias` here as so that the query param follows the JSON path of the response model
+    # and we cannot use `.` in python value names.
+    labels_id_and: list[str] | None = Query(None, alias="labels.label.id"),
+    labels_id_or: list[str] | None = Query(None, alias="or:labels.label.id"),
+    labels_id_not: list[str] | None = Query(None, alias="not:labels.label.id"),
+    filters_json_string: str | None = Query(None, alias="filters"),
     limit: int = 10,
     offset: int = 0,
 ):
+
     results = DevVespaDocumentSearchEngine().search(
-        query=query, limit=limit, offset=offset
+        query=query,
+        labels_id_and=labels_id_and,
+        labels_id_or=labels_id_or,
+        labels_id_not=labels_id_not,
+        filters_json_string=filters_json_string,
+        limit=limit,
+        offset=offset,
     )
+
     # TODO: pagination
     return SearchResponse[Document](
         total_results=len(results),
@@ -102,5 +123,7 @@ def read_labels(
         results=results,
     )
 
+
+# endregion
 
 app.include_router(router)

@@ -1,10 +1,11 @@
 import json
 import re
+from typing import Literal
 
 import requests
+from pydantic import BaseModel, TypeAdapter
 
 from search.data_in_models import Document, DocumentLabelRelationship, Label
-from search.engines import SearchEngine
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -30,23 +31,132 @@ API_URL = "https://vz0k397ock.execute-api.eu-west-1.amazonaws.com/production"
 MISSING_PLACEHOLDER = "MISSING"
 
 
-class DevVespaDocumentSearchEngine(SearchEngine[Document]):
+# region filters
+class FilterCondition(BaseModel):
+    field: Literal["labels.label.id"]
+    operator: Literal["contains", "not_contains"]
+    value: list[str]
+
+
+class Filter(BaseModel):
+    operator: Literal["or", "and"]
+    conditions: list[FilterCondition]
+
+
+def _build_filter_query(filters: list[Filter]) -> str:
+    query_to_search_field_map = {
+        "labels.label.id": "labels_title_attribute",
+    }
+
+    where = ""
+    for filter_group in filters:
+        conditions_list = []
+        for condition in filter_group.conditions:
+            field = query_to_search_field_map.get(condition.field)
+            values = condition.value
+
+            if condition.operator == "not_contains":
+                sub_clauses = [f'!({field} contains "{v}")' for v in values]
+                join_op = " and "
+            else:
+                sub_clauses = [f'{field} contains "{v}"' for v in values]
+                join_op = " or "
+
+            if sub_clauses:
+                clause = (
+                    f"({join_op.join(sub_clauses)})"
+                    if len(sub_clauses) > 1
+                    else sub_clauses[0]
+                )
+                conditions_list.append(clause)
+
+        if conditions_list:
+            join_op = f" {filter_group.operator} "
+            where += f" and ({join_op.join(conditions_list)})"
+
+    return where
+
+
+def _build_labels_label_id_filter(
+    labels_id_and: list[str] | None,
+    labels_id_or: list[str] | None,
+    labels_id_not: list[str] | None,
+):
+    where = ""
+
+    """
+    This query is resolved to:
+    (OR filters) AND (AND filters) AND (...NOT filters)
+    """
+
+    if labels_id_or:
+        where += f" and ({' or '.join([f'labels_title_attribute contains \"{label}\"' for label in labels_id_or])})"
+
+    if labels_id_and:
+        where += "".join(
+            [
+                f' and labels_title_attribute contains "{label}"'
+                for label in labels_id_and
+            ]
+        )
+
+    if labels_id_not:
+        where += "".join(
+            [
+                f' and ! (labels_title_attribute contains "{label}")'
+                for label in labels_id_not
+            ]
+        )
+
+    return where
+
+
+# endregion
+
+
+# We do not inherit from `SearchEngine[Document]` as the search method has different parameters.
+# At least for now.
+class DevVespaDocumentSearchEngine:
     """Search engine for dev Vespa"""
 
     def __init__(self) -> None:
         pass
 
-    def search(self, query: str, limit: int, offset: int = 0) -> list[Document]:
+    def search(
+        self,
+        query: str | None,
+        labels_id_and: list[str] | None,
+        labels_id_or: list[str] | None,
+        labels_id_not: list[str] | None,
+        filters_json_string: str | None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[Document]:
         """Fetch a list of relevant search results."""
+        where = "true "
 
-        yql = f"select * from sources documents where userQuery() limit {limit} offset {offset}"
+        where += _build_labels_label_id_filter(
+            labels_id_and=labels_id_and,
+            labels_id_or=labels_id_or,
+            labels_id_not=labels_id_not,
+        )
 
+        if filters_json_string:
+            filters = TypeAdapter(list[Filter]).validate_json(filters_json_string)
+            where += _build_filter_query(filters)
+
+        yql = f"select * from sources documents where {where}"
+        if query:
+            yql += " and userQuery()"
+        yql += f" limit {limit} offset {offset}"
+        print(f"searching for yql: {yql}")
         try:
             res = requests.post(
                 f"{API_URL}/search",
                 json={
                     "yql": yql,
                     "query": query,
+                    "timeout": "5s",
                 },
                 timeout=API_TIMEOUT,
             )
@@ -57,7 +167,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         res = res.json()
         documents = []
 
-        for hit in res.get("root").get("children"):
+        for hit in res.get("root").get("children", []):
             fields = hit.get("fields", {})
             # Map fields. Note: schema only has title, description.
             # source_url and original_document_id are required by Document.
@@ -78,9 +188,9 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 )
             documents.append(
                 Document(
-                    id=hit.get("id", "unknown"),
-                    title=source.get("title", "No Title"),
-                    description=source.get("description"),
+                    id=hit.get("id", MISSING_PLACEHOLDER),
+                    title=source.get("title", MISSING_PLACEHOLDER),
+                    description=source.get("description", MISSING_PLACEHOLDER),
                     labels=labels,
                 )
             )
