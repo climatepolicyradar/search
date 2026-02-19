@@ -16,6 +16,7 @@ from typing import TypedDict
 
 import orjson
 import polars as pl
+import pyarrow.parquet as pq
 import requests
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
@@ -116,7 +117,7 @@ class HuggingFaceTextBlock(TypedDict):
 
 
 # region Extract
-def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
+def extract_huggingface_data() -> Path:
     if not PARQUET_DIR.exists():
         PARQUET_DIR.mkdir(parents=True, exist_ok=True)
         snapshot_download(
@@ -163,14 +164,13 @@ def extract_huggingface_data() -> dict[str, list[HuggingFaceTextBlock]]:
                 ).alias("text_blocks")
             )
             .collect()
-            .write_parquet(PASSAGES_CACHE_FILE)
+            .write_parquet(PASSAGES_CACHE_FILE, row_group_size=500)
         )
     else:
         print(f"{PASSAGES_CACHE_FILE} already exists. Skipping caching.")
 
-    df = pl.read_parquet(PASSAGES_CACHE_FILE)
-
-    return {row["document_id"]: row["text_blocks"] for row in df.iter_rows(named=True)}
+    print(f"Passages cached at {PASSAGES_CACHE_FILE}")
+    return PASSAGES_CACHE_FILE
 
 
 def extract_data_in_api_data() -> list[Document]:
@@ -185,6 +185,7 @@ def extract_data_in_api_data() -> list[Document]:
 
     with requests.Session() as session:
         while True:
+            print(f"fetching page {page} from data-in api")
             response = session.get(
                 "https://api.climatepolicyradar.org/data-in/documents",
                 params={"page": page, "page_size": 100},
@@ -215,35 +216,78 @@ def _to_unix_timestamp(ts_str):
         return None
 
 
-def write_updates_file(
-    api_documents: list[Document], passages_map: dict[str, list[HuggingFaceTextBlock]]
-):
-    BATCH_SIZE = 5000
+def write_updates_file(api_documents: list[Document], passages_file: Path):
     print(f"Writing updates to {OUTPUT_FILE}...")
+
+    documents_by_id: dict[str, Document] = {doc["id"]: doc for doc in api_documents}
+    remaining_ids = set(documents_by_id.keys())
+
+    pf = pq.ParquetFile(passages_file)
+
     with OUTPUT_FILE.open("wb") as f:
         count = 0
-        batch = []
 
-        for document in api_documents:
-            document_id = document.get("id")
-            if not document_id:
-                continue
+        for rg_idx in range(pf.metadata.num_row_groups):
+            table = pf.read_row_group(rg_idx)
+            chunk_df = pl.from_arrow(table)
+            del table
 
-            huggingface_passages = passages_map.get(document_id, [])
-            passages: list[VespaPassage] = [
-                VespaPassage(
-                    text_block_id=passage["text_block_id"],
-                    language=passage["language"],
-                    type=passage["type"],
-                    type_confidence=passage["type_confidence"],
-                    page_number=passage["page_number"],
-                    text=passage["text"],
-                )
-                for passage in huggingface_passages
-            ]
+            for row in chunk_df.iter_rows(named=True):
+                document_id = row["document_id"]
+                document = documents_by_id.get(document_id)
+                if not document:
+                    continue
 
+                remaining_ids.discard(document_id)
+
+                huggingface_passages = row.get("text_blocks")
+                if huggingface_passages is None:
+                    huggingface_passages = []
+
+                passages: list[VespaPassage] = [
+                    VespaPassage(
+                        text_block_id=passage["text_block_id"],
+                        language=passage["language"],
+                        type=passage["type"],
+                        type_confidence=passage["type_confidence"],
+                        page_number=passage["page_number"],
+                        text=passage["text"],
+                    )
+                    for passage in huggingface_passages
+                ]
+
+                update_op: VespaUpdateOp = {
+                    "put": f"id:documents:documents::{document_id}",
+                    "fields": {
+                        "title": document.get("title"),
+                        "description": document.get("description"),
+                        "labels": [
+                            {
+                                "id": label["label"]["id"],
+                                "type": label["label"]["type"],
+                                "title": label["label"]["title"],
+                                "timestamp": _to_unix_timestamp(label.get("timestamp")),
+                                "relationship": label.get("type", "related"),
+                            }
+                            for label in document.get("labels", [])
+                        ],
+                        "passages": passages,
+                        "source": orjson.dumps(
+                            document | {"passages": huggingface_passages}  # type: ignore
+                        ).decode(),
+                    },
+                }
+
+                f.write(orjson.dumps(update_op) + b"\n")
+                count += 1
+
+            del chunk_df
+            print(f"Processed row group {rg_idx + 1}/{pf.metadata.num_row_groups}")
+
+        # API docs without passages
+        for document_id in remaining_ids:
+            document = documents_by_id[document_id]
             update_op: VespaUpdateOp = {
-                # ID Format: id:documents:documents::<doc_id>
                 "put": f"id:documents:documents::{document_id}",
                 "fields": {
                     "title": document.get("title"),
@@ -258,22 +302,17 @@ def write_updates_file(
                         }
                         for label in document.get("labels", [])
                     ],
-                    "passages": passages,
+                    "passages": [],
                     "source": orjson.dumps(
-                        document | {"passages": huggingface_passages}  # type: ignore
+                        document | {"passages": []}  # type: ignore
                     ).decode(),
                 },
             }
-
-            batch.append(orjson.dumps(update_op))
+            f.write(orjson.dumps(update_op) + b"\n")
             count += 1
 
-            if len(batch) >= BATCH_SIZE:
-                f.write(b"\n".join(batch) + b"\n")
-                batch = []
-
-        if batch:
-            f.write(b"\n".join(batch) + b"\n")
+        if remaining_ids:
+            print(f"Wrote {len(remaining_ids)} API docs without passages")
 
     print(f"Wrote {count} updates to {OUTPUT_FILE}")
 
@@ -293,12 +332,12 @@ def extract_vespa_updates():
 
     print("Extracting HuggingFace data...")
     t_start = time.perf_counter()
-    passages_map = extract_huggingface_data()
+    passages_file = extract_huggingface_data()
     print(f"Extracted HuggingFace data in {time.perf_counter() - t_start:.2f}s")
 
     print(f"Generating updates to {OUTPUT_FILE}...")
     t_start = time.perf_counter()
-    write_updates_file(api_documents, passages_map)
+    write_updates_file(api_documents, passages_file)
     print(f"Generated updates to {OUTPUT_FILE} in {time.perf_counter() - t_start:.2f}s")
 
     print(
