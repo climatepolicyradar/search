@@ -203,6 +203,8 @@ def run_tests_for_engine(
             test_passed, search_results = test_case.run_against(engine)
         except Exception as e:
             logger.info(f"Test case {test_case} failed with exception", exc_info=e)
+            test_passed = False
+            search_results = []
 
         test_result = TestResult(
             test_case=test_case,
