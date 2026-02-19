@@ -78,7 +78,6 @@ lint:
     - checkov@3.2.500
     - git-diff-check
     - hadolint@2.14.0
-    - isort@7.0.0
     - markdownlint@0.47.0
     - prettier@3.8.1
     - ruff@0.15.0
