@@ -2,9 +2,7 @@ from prefect import flow, get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from relevance_tests import run_relevance_tests_parallel
-from search.config import DOCUMENTS_PATH_STEM
 from search.document import Document
-from search.engines.duckdb import DuckDBDocumentSearchEngine
 from search.engines.vespa import BM25TitleVespaDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
@@ -205,7 +203,6 @@ def relevance_tests_documents():
     download_file_from_s3(BUCKET_NAME, "documents.duckdb", skip_if_present=True)
 
     engines = [
-        DuckDBDocumentSearchEngine(db_path=DOCUMENTS_PATH_STEM.with_suffix(".duckdb")),
         BM25TitleVespaDocumentSearchEngine(),
     ]
 

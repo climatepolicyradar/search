@@ -89,11 +89,13 @@ def calculate_test_result_metrics(
         "pass_rate": total_passed / num_test_results if num_test_results > 0 else 0,
     }
 
+    category_pass_rates: list[float] = []
     for category in sorted(results_by_category.keys()):
         results: list[TestResult] = results_by_category[category]
         passed = sum(1 for r in results if r.passed)
         total = len(results)
         pass_rate = passed / total if total > 0 else 0
+        category_pass_rates.append(pass_rate)
 
         metrics[category] = {
             "results": results,
@@ -102,6 +104,15 @@ def calculate_test_result_metrics(
             "total": total,
             "pass_rate": pass_rate,
         }
+
+    macro_avg = (
+        sum(category_pass_rates) / len(category_pass_rates)
+        if category_pass_rates
+        else 0
+    )
+    metrics["macro_average"] = {
+        "pass_rate": macro_avg,
+    }
 
     return metrics
 
@@ -118,7 +129,8 @@ def print_test_results(test_results: list[TestResult]) -> None:
     table.add_column("Total", style="blue", justify="right")
     table.add_column("Pass Rate", style="yellow", justify="right")
 
-    for category in sorted(k for k in metrics.keys() if k != "overall"):
+    excluded_keys = {"overall", "macro_average"}
+    for category in sorted(k for k in metrics.keys() if k not in excluded_keys):
         cat = metrics[category]
         passed = cat["passed"]
         total = cat["total"]
@@ -143,7 +155,7 @@ def print_test_results(test_results: list[TestResult]) -> None:
     console.print()
 
     has_failures = False
-    for category in sorted(k for k in metrics.keys() if k != "overall"):
+    for category in sorted(k for k in metrics.keys() if k not in excluded_keys):
         cat = metrics[category]
         failures = [r for r in cat["results"] if not r.passed]  # type: ignore
 
@@ -191,6 +203,8 @@ def run_tests_for_engine(
             test_passed, search_results = test_case.run_against(engine)
         except Exception as e:
             logger.info(f"Test case {test_case} failed with exception", exc_info=e)
+            test_passed = False
+            search_results = []
 
         test_result = TestResult(
             test_case=test_case,
