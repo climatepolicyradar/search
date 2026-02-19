@@ -120,14 +120,15 @@ class WandbSession:
         )
 
         metrics = calculate_test_result_metrics(test_results)
-        categories = [k for k in metrics if k != "overall"]
+        _non_category_keys = {"overall", "macro_average"}
+        categories = [k for k in metrics if k not in _non_category_keys]
 
         summary_metrics = {
             key: {k: v for k, v in cat_metrics.items() if k != "results"}
             for key, cat_metrics in metrics.items()
         }
         summary_metrics = {
-            (f"category.{k}" if k != "overall" else k): v
+            (f"category.{k}" if k not in _non_category_keys else k): v
             for k, v in summary_metrics.items()
         }
         run.summary.update(summary_metrics)
