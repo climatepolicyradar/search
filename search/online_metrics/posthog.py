@@ -576,9 +576,7 @@ class PostHogSession:
                     event = '$autocapture'
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
-                    AND properties.`position-page` IN ('1', '2', '3', '4', '5')
-                    -- Property 'o' either doesn't exist or equals 0 (ensures first page)
-                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0')
+                    AND properties.`position-total` IN ('1', '2', '3', '4', '5')
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                     AND properties.$host IN {self.cpr_domains}
@@ -655,9 +653,7 @@ class PostHogSession:
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
                     -- Position 1-5 in search results (first page only, offset = 0)
-                    AND properties.`position-page` IN ('1', '2', '3', '4', '5')
-                    -- Property 'o' either doesn't exist or equals 0 (ensures first page)
-                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0')
+                    AND properties.`position-total` IN ('1', '2', '3', '4', '5')
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                     AND properties.$host IN {self.cpr_domains}
