@@ -16,7 +16,7 @@ extract:
 load limit="":
     if [ -z "{{limit}}" ]; then \
         echo "Loading all files into local Vespa"; \
-        cat ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080; \
+        cat ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
     else \
         echo "Loading {{limit}} files into local Vespa"; \
         head -n {{limit}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
