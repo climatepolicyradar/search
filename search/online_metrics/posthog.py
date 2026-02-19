@@ -451,14 +451,14 @@ class PostHogSession:
         date_range: DateRange,
     ) -> OnlineMetricResult:
         """
-        Calculate the percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 10 seconds or more.
+        Calculate the percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 30 seconds or more.
 
-        This is the same as the calculate_click_through_rate_from_search method, but it also includes when users click from to a family then straight to a document in less than 10 seconds, as long as they spend at least 10 seconds on the document.
+        This is the same as the calculate_click_through_rate_from_search method, but it also includes when users click from to a family then straight to a document in less than 30 seconds, as long as they spend at least 30 seconds on the document.
 
         This only includes users where pageview events have the `consent` property set (not null)
 
         :param date_range: DateRange object specifying the inclusive date range
-        :return: Percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 10 seconds or more in the time period as a float
+        :return: Percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 30 seconds or more in the time period as a float
         """
         query = f"""
             WITH ranked_pageviews AS (
@@ -503,14 +503,14 @@ class PostHogSession:
                 WHERE
                     current_url LIKE '%/search%'
                     AND (
-                        -- Direct: search -> document page with 10+ seconds
+                        -- Direct: search -> document page with 30+ seconds
                         ((next_url LIKE '%/document/%' OR next_url LIKE '%/documents/%')
-                        AND next_dwell_time >= 10)
+                        AND next_dwell_time >= 30)
                         OR
-                        -- Two-step: search -> document (family) -> documents with 10+ seconds on documents
+                        -- Two-step: search -> document (family) -> documents with 30+ seconds on documents
                         (next_url LIKE '%/document/%'
                         AND next_next_url LIKE '%/documents/%'
-                        AND next_next_dwell_time >= 10)
+                        AND next_next_dwell_time >= 30)
                     )
             )
 
@@ -523,7 +523,7 @@ class PostHogSession:
         if not results:
             raise PosthogNoResultsException()
         return OnlineMetricResult(
-            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page_with_at_least_10s_dwell_time",
+            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page_with_at_least_30s_dwell_time",
             query=query,
             value=results[0][0],
             date_from=date_range.date_from,
@@ -576,9 +576,7 @@ class PostHogSession:
                     event = '$autocapture'
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
-                    AND properties.`position-page` IN ('1', '2', '3', '4', '5')
-                    -- Property 'o' either doesn't exist or equals 0 (ensures first page)
-                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0')
+                    AND properties.`position-total` IN ('1', '2', '3', '4', '5')
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                     AND properties.$host IN {self.cpr_domains}
@@ -605,10 +603,10 @@ class PostHogSession:
         date_range: DateRange,
     ) -> OnlineMetricResult:
         """
-        Calculate the percentage of users who clicked on a search result in the top 5 to a family page then stayed on that family or one of its documents for 10 seconds or more.
+        Calculate the percentage of users who clicked on a search result in the top 5 to a family page then stayed on that family or one of its documents for 30 seconds or more.
 
         What does this metric measure?
-        It measures the percentage of unique users who clicked on a search result to a family page for the top 5 results and then stayed on that family or one of its documents for 10 seconds or more.  Right now, this ONLY includes clicking directly on a family page link, not clicking to view a document or family after viewing the passage match sidebar. (see https://linear.app/climate-policy-radar/issue/APP-1610/facilitate-better-analytics-by-including-more-context-in-dom-elements).  This is ONLY available for data after the 29th of January 2026.
+        It measures the percentage of unique users who clicked on a search result to a family page for the top 5 results and then stayed on that family or one of its documents for 30 seconds or more.  Right now, this ONLY includes clicking directly on a family page link, not clicking to view a document or family after viewing the passage match sidebar. (see https://linear.app/climate-policy-radar/issue/APP-1610/facilitate-better-analytics-by-including-more-context-in-dom-elements).  This is ONLY available for data after the 29th of January 2026.
 
         This only includes users where pageview events have the `consent` property set (not null)
 
@@ -655,9 +653,7 @@ class PostHogSession:
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
                     -- Position 1-5 in search results (first page only, offset = 0)
-                    AND properties.`position-page` IN ('1', '2', '3', '4', '5')
-                    -- Property 'o' either doesn't exist or equals 0 (ensures first page)
-                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0')
+                    AND properties.`position-total` IN ('1', '2', '3', '4', '5')
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                     AND properties.$host IN {self.cpr_domains}
@@ -682,7 +678,7 @@ class PostHogSession:
                     AND p1.current_url LIKE '%/document/%'
                 GROUP BY ac.distinct_id, ac.click_timestamp
             ),
-            -- Step 5: Determine which clicks resulted in sufficient engagement (10+ second dwell time)
+            -- Step 5: Determine which clicks resulted in sufficient engagement (30+ second dwell time)
             clickthrough_users AS (
                 SELECT DISTINCT c.distinct_id
                 FROM clicks_with_next_pageview c
@@ -693,13 +689,13 @@ class PostHogSession:
                 LEFT JOIN ranked_pageviews p3
                     ON p3.distinct_id = p2.distinct_id AND p3.rn = p2.rn + 1
                 WHERE
-                    -- Scenario 1: User stayed on the /document/ page for 10+ seconds
+                    -- Scenario 1: User stayed on the /document/ page for 30+ seconds
                     -- (Time from landing on /document/ to next pageview or now)
-                    dateDiff('second', c.next_pageview_timestamp, COALESCE(p2.timestamp, now())) >= 10
+                    dateDiff('second', c.next_pageview_timestamp, COALESCE(p2.timestamp, now())) >= 30
                     OR
-                    -- Scenario 2: User went from /document/ to /documents/ and stayed there 10+ seconds
+                    -- Scenario 2: User went from /document/ to /documents/ and stayed there 30+ seconds
                     -- (Even if they left /document/ quickly)
-                    (p2.current_url LIKE '%/documents/%' AND dateDiff('second', p2.timestamp, COALESCE(p3.timestamp, now())) >= 10)
+                    (p2.current_url LIKE '%/documents/%' AND dateDiff('second', p2.timestamp, COALESCE(p3.timestamp, now())) >= 30)
             )
             -- Step 6: Calculate click-through rate as percentage
             SELECT
