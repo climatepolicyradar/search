@@ -16,6 +16,7 @@ from typing import TypedDict
 
 import orjson
 import polars as pl
+import pyarrow.parquet as pq
 import requests
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
@@ -116,7 +117,7 @@ class HuggingFaceTextBlock(TypedDict):
 
 
 # region Extract
-def extract_huggingface_data() -> pl.LazyFrame:
+def extract_huggingface_data() -> Path:
     if not PARQUET_DIR.exists():
         PARQUET_DIR.mkdir(parents=True, exist_ok=True)
         snapshot_download(
@@ -163,14 +164,13 @@ def extract_huggingface_data() -> pl.LazyFrame:
                 ).alias("text_blocks")
             )
             .collect()
-            .write_parquet(PASSAGES_CACHE_FILE)
+            .write_parquet(PASSAGES_CACHE_FILE, row_group_size=500)
         )
     else:
         print(f"{PASSAGES_CACHE_FILE} already exists. Skipping caching.")
 
-    print(f"Loading passages from {PASSAGES_CACHE_FILE}")
-    # Return LazyFrame for optimized querying
-    return pl.scan_parquet(PASSAGES_CACHE_FILE)
+    print(f"Passages cached at {PASSAGES_CACHE_FILE}")
+    return PASSAGES_CACHE_FILE
 
 
 def extract_data_in_api_data() -> list[Document]:
@@ -216,41 +216,29 @@ def _to_unix_timestamp(ts_str):
         return None
 
 
-def write_updates_file(api_documents: list[Document], passages_lazy: pl.LazyFrame):
-    BATCH_SIZE = 5000
+def write_updates_file(api_documents: list[Document], passages_file: Path):
     print(f"Writing updates to {OUTPUT_FILE}...")
 
-    if not api_documents:
-        print("No API documents to write.")
-        return
+    documents_by_id: dict[str, Document] = {doc["id"]: doc for doc in api_documents}
+    remaining_ids = set(documents_by_id.keys())
+
+    pf = pq.ParquetFile(passages_file)
 
     with OUTPUT_FILE.open("wb") as f:
-        total_count = 0
+        count = 0
 
-        # Process in chunks to avoid loading all passages into memory
-        for i in range(0, len(api_documents), BATCH_SIZE):
-            batched_documents = api_documents[i : i + BATCH_SIZE]
-            print(f"Processing batch {i} to {i + len(batched_documents)}...")
+        for rg_idx in range(pf.metadata.num_row_groups):
+            table = pf.read_row_group(rg_idx)
+            chunk_df = pl.from_arrow(table)
+            del table
 
-            batched_df = pl.from_dicts(batched_documents)
-            batched_ids = batched_df["id"].to_list()
-
-            # Fetch only the passages for the current batch of documents
-            # Using lazy evaluation to optimize I/O
-            passages_batch_df = passages_lazy.filter(
-                pl.col("document_id").is_in(batched_ids)
-            ).collect()
-
-            combined_chunk = batched_df.join(
-                passages_batch_df, left_on="id", right_on="document_id", how="left"
-            )
-
-            batch_output = []
-
-            for row in combined_chunk.iter_rows(named=True):
-                document_id = row.get("id")
-                if not document_id:
+            for row in chunk_df.iter_rows(named=True):
+                document_id = row["document_id"]
+                document = documents_by_id.get(document_id)
+                if not document:
                     continue
+
+                remaining_ids.discard(document_id)
 
                 huggingface_passages = row.get("text_blocks")
                 if huggingface_passages is None:
@@ -271,8 +259,8 @@ def write_updates_file(api_documents: list[Document], passages_lazy: pl.LazyFram
                 update_op: VespaUpdateOp = {
                     "put": f"id:documents:documents::{document_id}",
                     "fields": {
-                        "title": row.get("title"),
-                        "description": row.get("description"),
+                        "title": document.get("title"),
+                        "description": document.get("description"),
                         "labels": [
                             {
                                 "id": label["label"]["id"],
@@ -281,30 +269,52 @@ def write_updates_file(api_documents: list[Document], passages_lazy: pl.LazyFram
                                 "timestamp": _to_unix_timestamp(label.get("timestamp")),
                                 "relationship": label.get("type", "related"),
                             }
-                            for label in row.get("labels", [])
+                            for label in document.get("labels", [])
                         ],
                         "passages": passages,
                         "source": orjson.dumps(
-                            {
-                                "id": document_id,
-                                "title": row.get("title"),
-                                "description": row.get("description"),
-                                "labels": row.get("labels"),
-                                "passages": huggingface_passages,
-                            }
+                            document | {"passages": huggingface_passages}  # type: ignore
                         ).decode(),
                     },
                 }
 
-                batch_output.append(orjson.dumps(update_op))
-                total_count += 1
+                f.write(orjson.dumps(update_op) + b"\n")
+                count += 1
 
-            if batch_output:
-                f.write(b"\n".join(batch_output) + b"\n")
+            del chunk_df
+            print(f"Processed row group {rg_idx + 1}/{pf.metadata.num_row_groups}")
 
-            print(f"Wrote batch of {len(batch_output)} updates")
+        # API docs without passages
+        for document_id in remaining_ids:
+            document = documents_by_id[document_id]
+            update_op: VespaUpdateOp = {
+                "put": f"id:documents:documents::{document_id}",
+                "fields": {
+                    "title": document.get("title"),
+                    "description": document.get("description"),
+                    "labels": [
+                        {
+                            "id": label["label"]["id"],
+                            "type": label["label"]["type"],
+                            "title": label["label"]["title"],
+                            "timestamp": _to_unix_timestamp(label.get("timestamp")),
+                            "relationship": label.get("type", "related"),
+                        }
+                        for label in document.get("labels", [])
+                    ],
+                    "passages": [],
+                    "source": orjson.dumps(
+                        document | {"passages": []}  # type: ignore
+                    ).decode(),
+                },
+            }
+            f.write(orjson.dumps(update_op) + b"\n")
+            count += 1
 
-    print(f"Wrote total {total_count} updates")
+        if remaining_ids:
+            print(f"Wrote {len(remaining_ids)} API docs without passages")
+
+    print(f"Wrote {count} updates to {OUTPUT_FILE}")
 
 
 def extract_vespa_updates():
@@ -322,12 +332,12 @@ def extract_vespa_updates():
 
     print("Extracting HuggingFace data...")
     t_start = time.perf_counter()
-    passages_lazy = extract_huggingface_data()
+    passages_file = extract_huggingface_data()
     print(f"Extracted HuggingFace data in {time.perf_counter() - t_start:.2f}s")
 
     print(f"Generating updates to {OUTPUT_FILE}...")
     t_start = time.perf_counter()
-    write_updates_file(api_documents, passages_lazy)
+    write_updates_file(api_documents, passages_file)
     print(f"Generated updates to {OUTPUT_FILE} in {time.perf_counter() - t_start:.2f}s")
 
     print(
