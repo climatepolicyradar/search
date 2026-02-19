@@ -97,7 +97,7 @@ class PostHogSession:
         """
 
         query = f"""
-            SELECT 
+            SELECT
                 count(Distinct(
                     if(
                         properties.$current_url LIKE '%/search%',
@@ -148,11 +148,11 @@ class PostHogSession:
         query = f"""
             WITH consent_set_users AS (
                 SELECT DISTINCT distinct_id
-                FROM events 
+                FROM events
                 WHERE properties.consent IS NOT NULL
             )
 
-            SELECT 
+            SELECT
                 count(DISTINCT(
                     if(
                         properties.$el_text = 'Download' AND properties.$current_url LIKE '%/search%',
@@ -197,7 +197,7 @@ class PostHogSession:
         :return: Percentage of searches with no results in the time period as a float
         """
         query = f"""
-            SELECT 
+            SELECT
                 count(DISTINCT(
                     if(
                         properties.total_family_hits = 0 AND properties.$current_url LIKE '%/search%',
@@ -250,20 +250,20 @@ class PostHogSession:
         query = f"""
         WITH consent_users AS (
             SELECT DISTINCT(distinct_id)
-            FROM events 
+            FROM events
             WHERE properties.consent = true
         ),
 
         search_users AS (
-            SELECT 
+            SELECT
                 events.distinct_id,
                 min(timestamp) as first_search_date,
                 argMin(properties.$session_id, timestamp) as search_session_id
             FROM events
             INNER JOIN consent_users ON events.distinct_id = consent_users.distinct_id
-            WHERE 
+            WHERE
                 properties.$current_url LIKE '%/search%'
-                AND timestamp >= '{date_from} 00:00:00' 
+                AND timestamp >= '{date_from} 00:00:00'
                 AND timestamp < '{date_from} 00:00:00' + interval 1 day
             GROUP BY events.distinct_id
         ),
@@ -279,7 +279,7 @@ class PostHogSession:
             AND events.properties.$host IN {self.cpr_domains}
         )
 
-        SELECT 
+        SELECT
             (SELECT count(DISTINCT(distinct_id)) FROM returning_users) /
             (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as retention_percentage_7_days,
 
@@ -322,20 +322,20 @@ class PostHogSession:
         query = f"""
         WITH consent_users AS (
             SELECT DISTINCT(distinct_id)
-            FROM events 
+            FROM events
             WHERE properties.consent = true
         ),
 
         search_users AS (
-            SELECT 
+            SELECT
                 events.distinct_id,
                 min(timestamp) as first_search_date,
                 argMin(properties.$session_id, timestamp) as search_session_id
             FROM events
             INNER JOIN consent_users ON events.distinct_id = consent_users.distinct_id
-            WHERE 
+            WHERE
                 properties.$current_url LIKE '%/search%'
-                AND timestamp >= '{date_from} 00:00:00' 
+                AND timestamp >= '{date_from} 00:00:00'
                 AND timestamp < '{date_from} 00:00:00' + interval 1 day
             GROUP BY events.distinct_id
         ),
@@ -351,7 +351,7 @@ class PostHogSession:
             AND events.properties.$host IN {self.cpr_domains}
         )
 
-        SELECT 
+        SELECT
             (SELECT count(DISTINCT(distinct_id)) FROM returning_users) /
             (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as retention_percentage_7_days,
 
@@ -390,13 +390,13 @@ class PostHogSession:
         """
         query = f"""
             WITH ranked_pageviews AS (
-            SELECT 
+            SELECT
                 distinct_id,
                 properties.$current_url as current_url,
                 timestamp,
                 row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
             FROM events
-            WHERE 
+            WHERE
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
                 AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
@@ -405,13 +405,13 @@ class PostHogSession:
             ),
 
             pageviews_with_next AS (
-                SELECT 
+                SELECT
                     p1.distinct_id,
                     p1.current_url,
                     p2.current_url as next_url
                 FROM ranked_pageviews p1
-                LEFT JOIN ranked_pageviews p2 
-                    ON p1.distinct_id = p2.distinct_id 
+                LEFT JOIN ranked_pageviews p2
+                    ON p1.distinct_id = p2.distinct_id
                     AND p2.rn = p1.rn + 1
             ),
 
@@ -424,16 +424,16 @@ class PostHogSession:
             clickthrough_users AS (
                 SELECT DISTINCT distinct_id
                 FROM pageviews_with_next
-                WHERE 
+                WHERE
                     current_url LIKE '%/search%'
                     AND (next_url LIKE '%/document/%' OR next_url LIKE '%/documents/%')
             )
 
-            SELECT 
+            SELECT
                 count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
             FROM search_users
             LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
-        
+
         """
         results = self.execute_query(query)
         if not results:
@@ -462,13 +462,13 @@ class PostHogSession:
         """
         query = f"""
             WITH ranked_pageviews AS (
-            SELECT 
+            SELECT
                 distinct_id,
                 properties.$current_url as current_url,
                 timestamp,
                 row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
             FROM events
-            WHERE 
+            WHERE
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
                 AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
@@ -477,7 +477,7 @@ class PostHogSession:
             ),
 
             pageviews_with_next AS (
-                SELECT 
+                SELECT
                     p1.distinct_id,
                     p1.current_url,
                     p2.current_url as next_url,
@@ -500,21 +500,21 @@ class PostHogSession:
             clickthrough_users AS (
                 SELECT DISTINCT distinct_id
                 FROM pageviews_with_next
-                WHERE 
+                WHERE
                     current_url LIKE '%/search%'
                     AND (
                         -- Direct: search -> document page with 10+ seconds
-                        ((next_url LIKE '%/document/%' OR next_url LIKE '%/documents/%') 
+                        ((next_url LIKE '%/document/%' OR next_url LIKE '%/documents/%')
                         AND next_dwell_time >= 10)
                         OR
                         -- Two-step: search -> document (family) -> documents with 10+ seconds on documents
-                        (next_url LIKE '%/document/%' 
-                        AND next_next_url LIKE '%/documents/%' 
+                        (next_url LIKE '%/document/%'
+                        AND next_next_url LIKE '%/documents/%'
                         AND next_next_dwell_time >= 10)
                     )
             )
 
-            SELECT 
+            SELECT
                 count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
             FROM search_users
             LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
@@ -551,13 +551,13 @@ class PostHogSession:
             )
         query = f"""
             WITH ranked_pageviews AS (
-                SELECT 
+                SELECT
                     distinct_id,
                     properties.$current_url as current_url,
                     timestamp,
                     row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
                 FROM events
-                WHERE 
+                WHERE
                     event = '$pageview'
                     AND properties.consent IS NOT NULL
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
@@ -572,22 +572,22 @@ class PostHogSession:
             clickthrough_users AS (
                 SELECT DISTINCT distinct_id
                 FROM events
-                WHERE 
+                WHERE
                     event = '$autocapture'
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
                     AND properties.`position-page` IN ('1', '2', '3', '4', '5')
-                    AND properties.`position-total` = 'NaN'
-                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0' OR properties.o = 0)
+                    -- Property 'o' either doesn't exist or equals 0 (ensures first page)
+                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0')
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                     AND properties.$host IN {self.cpr_domains}
             )
-            SELECT 
+            SELECT
                 count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
             FROM search_users
             LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
-        
+
         """
         results = self.execute_query(query)
         if not results:
@@ -624,14 +624,14 @@ class PostHogSession:
         query = f"""
             -- Step 1: Get all pageviews with row numbers for sequential ordering
             WITH ranked_pageviews AS (
-                SELECT 
+                SELECT
                     distinct_id,
                     properties.$current_url as current_url,
                     timestamp,
                     -- Row number allows us to find the "next" pageview for each user
                     row_number() OVER (PARTITION BY distinct_id ORDER BY timestamp) as rn
                 FROM events
-                WHERE 
+                WHERE
                     event = '$pageview'
                     AND properties.consent IS NOT NULL
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
@@ -646,27 +646,25 @@ class PostHogSession:
             ),
             -- Step 3: Find all qualifying autocapture click events on search pages
             autocapture_clicks AS (
-                SELECT 
+                SELECT
                     distinct_id,
                     timestamp as click_timestamp
                 FROM events
-                WHERE 
+                WHERE
                     event = '$autocapture'
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
-                    -- Position 1-5 in search results
+                    -- Position 1-5 in search results (first page only, offset = 0)
                     AND properties.`position-page` IN ('1', '2', '3', '4', '5')
-                    -- Total count is NaN (stored as string in PostHog)
-                    AND properties.`position-total` = 'NaN'
-                    -- Property 'o' either doesn't exist or equals 0
-                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0' OR properties.o = 0)
+                    -- Property 'o' either doesn't exist or equals 0 (ensures first page)
+                    AND (NOT has(JSONExtractKeys(properties), 'o') OR properties.o = '0')
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                     AND properties.$host IN {self.cpr_domains}
             ),
             -- Step 4: For each click, find the immediate next pageview (must be a /document/ page)
             clicks_with_next_pageview AS (
-                SELECT 
+                SELECT
                     ac.distinct_id,
                     ac.click_timestamp,
                     -- Find the earliest pageview timestamp after the click
@@ -694,22 +692,22 @@ class PostHogSession:
                 -- Join to get the page AFTER p2 (p3) - needed for scenario 2
                 LEFT JOIN ranked_pageviews p3
                     ON p3.distinct_id = p2.distinct_id AND p3.rn = p2.rn + 1
-                WHERE 
+                WHERE
                     -- Scenario 1: User stayed on the /document/ page for 10+ seconds
                     -- (Time from landing on /document/ to next pageview or now)
                     dateDiff('second', c.next_pageview_timestamp, COALESCE(p2.timestamp, now())) >= 10
-                    OR 
+                    OR
                     -- Scenario 2: User went from /document/ to /documents/ and stayed there 10+ seconds
                     -- (Even if they left /document/ quickly)
                     (p2.current_url LIKE '%/documents/%' AND dateDiff('second', p2.timestamp, COALESCE(p3.timestamp, now())) >= 10)
             )
             -- Step 6: Calculate click-through rate as percentage
-            SELECT 
+            SELECT
                 -- Number of users who clicked and engaged / total users who visited search
                 count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
             FROM search_users
             LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
-        
+
         """
         results = self.execute_query(query)
         if not results:
