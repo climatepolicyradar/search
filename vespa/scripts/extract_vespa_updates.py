@@ -217,38 +217,28 @@ def _to_unix_timestamp(ts_str):
 
 
 def write_updates_file(api_documents: list[Document], passages_file: Path):
-    """
-    Write JSONL by iterating passages in bounded row-group chunks.
-
-    :param api_documents: Documents from the data-in API.
-    :param passages_file: Path to the multi-row-group passages parquet cache.
-    """
     print(f"Writing updates to {OUTPUT_FILE}...")
 
-    if not api_documents:
-        print("No API documents to write.")
-        return
-
-    api_docs_by_id: dict[str, Document] = {doc["id"]: doc for doc in api_documents}
-    remaining_ids = set(api_docs_by_id.keys())
+    documents_by_id: dict[str, Document] = {doc["id"]: doc for doc in api_documents}
+    remaining_ids = set(documents_by_id.keys())
 
     pf = pq.ParquetFile(passages_file)
-    total_count = 0
 
     with OUTPUT_FILE.open("wb") as f:
+        count = 0
+
         for rg_idx in range(pf.metadata.num_row_groups):
             table = pf.read_row_group(rg_idx)
             chunk_df = pl.from_arrow(table)
             del table
 
-            batch_count = 0
             for row in chunk_df.iter_rows(named=True):
-                doc_id = row["document_id"]
-                api_doc = api_docs_by_id.get(doc_id)
-                if not api_doc:
+                document_id = row["document_id"]
+                document = documents_by_id.get(document_id)
+                if not document:
                     continue
 
-                remaining_ids.discard(doc_id)
+                remaining_ids.discard(document_id)
 
                 huggingface_passages = row.get("text_blocks")
                 if huggingface_passages is None:
@@ -267,10 +257,10 @@ def write_updates_file(api_documents: list[Document], passages_file: Path):
                 ]
 
                 update_op: VespaUpdateOp = {
-                    "put": f"id:documents:documents::{doc_id}",
+                    "put": f"id:documents:documents::{document_id}",
                     "fields": {
-                        "title": api_doc.get("title"),
-                        "description": api_doc.get("description"),
+                        "title": document.get("title"),
+                        "description": document.get("description"),
                         "labels": [
                             {
                                 "id": label["label"]["id"],
@@ -279,39 +269,29 @@ def write_updates_file(api_documents: list[Document], passages_file: Path):
                                 "timestamp": _to_unix_timestamp(label.get("timestamp")),
                                 "relationship": label.get("type", "related"),
                             }
-                            for label in api_doc.get("labels", [])
+                            for label in document.get("labels", [])
                         ],
                         "passages": passages,
                         "source": orjson.dumps(
-                            {
-                                "id": doc_id,
-                                "title": api_doc.get("title"),
-                                "description": api_doc.get("description"),
-                                "labels": api_doc.get("labels"),
-                                "passages": huggingface_passages,
-                            }
+                            document | {"passages": huggingface_passages}  # type: ignore
                         ).decode(),
                     },
                 }
 
                 f.write(orjson.dumps(update_op) + b"\n")
-                batch_count += 1
-                total_count += 1
+                count += 1
 
             del chunk_df
-            print(
-                f"Processed row group {rg_idx + 1}/{pf.metadata.num_row_groups}"
-                f" ({batch_count} matches)"
-            )
+            print(f"Processed row group {rg_idx + 1}/{pf.metadata.num_row_groups}")
 
-        # API docs without passages (preserves left-join semantics)
-        for doc_id in remaining_ids:
-            api_doc = api_docs_by_id[doc_id]
+        # API docs without passages
+        for document_id in remaining_ids:
+            document = documents_by_id[document_id]
             update_op: VespaUpdateOp = {
-                "put": f"id:documents:documents::{doc_id}",
+                "put": f"id:documents:documents::{document_id}",
                 "fields": {
-                    "title": api_doc.get("title"),
-                    "description": api_doc.get("description"),
+                    "title": document.get("title"),
+                    "description": document.get("description"),
                     "labels": [
                         {
                             "id": label["label"]["id"],
@@ -320,27 +300,21 @@ def write_updates_file(api_documents: list[Document], passages_file: Path):
                             "timestamp": _to_unix_timestamp(label.get("timestamp")),
                             "relationship": label.get("type", "related"),
                         }
-                        for label in api_doc.get("labels", [])
+                        for label in document.get("labels", [])
                     ],
                     "passages": [],
                     "source": orjson.dumps(
-                        {
-                            "id": doc_id,
-                            "title": api_doc.get("title"),
-                            "description": api_doc.get("description"),
-                            "labels": api_doc.get("labels"),
-                            "passages": [],
-                        }
+                        document | {"passages": []}  # type: ignore
                     ).decode(),
                 },
             }
             f.write(orjson.dumps(update_op) + b"\n")
-            total_count += 1
+            count += 1
 
         if remaining_ids:
             print(f"Wrote {len(remaining_ids)} API docs without passages")
 
-    print(f"Wrote total {total_count} updates")
+    print(f"Wrote {count} updates to {OUTPUT_FILE}")
 
 
 def extract_vespa_updates():
