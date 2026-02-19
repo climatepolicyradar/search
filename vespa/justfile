@@ -13,15 +13,21 @@ extract:
     fi
 
 # Load data into Vespa
-load:
-    head -100 ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080
+load limit="":
+    if [ -z "{{limit}}" ]; then \
+        echo "Loading all files into local Vespa"; \
+        cat ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+    else \
+        echo "Loading {{limit}} files into local Vespa"; \
+        head -n {{limit}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+    fi
 
 # Dev
 dev:
     just up
     just deploy
     just extract
-    just load
+    just load 100
 
 get query="congo":
     #!/usr/bin/env bash
@@ -172,7 +178,7 @@ remote-restart:
     echo "Sent restart command: $COMMAND_ID"
     echo "Waiting a moment for command execution..."
     sleep 5
-    
+
     # Check status (optional, but good for feedback)
     aws ssm list-command-invocations \
         --command-id "$COMMAND_ID" \
@@ -200,7 +206,7 @@ remote-command command:
     echo "Sent command: $COMMAND_ID"
     echo "Waiting a moment for command execution..."
     sleep 5
-    
+
     # Check status (optional, but good for feedback)
     aws ssm list-command-invocations \
         --command-id "$COMMAND_ID" \
