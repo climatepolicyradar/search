@@ -38,11 +38,12 @@ class PostHogSession:
         # to filter out internal users mainly, in HogQL queries
         self.cpr_domains = "(" + ", ".join(f"'{d}'" for d in POSTHOG_CPR_DOMAINS) + ")"
 
-    def execute_query(self, hogql_query: str) -> list[list[Any]]:
+    def execute_query(self, hogql_query: str, timeout: int = 20) -> list[list[Any]]:
         """
         Execute a HogQL query and return raw results.
 
         :param hogql_query: Raw HogQL query string
+        :param timeout: Timeout for the request in seconds
         :return: List of result rows
         """
         query = {"kind": "HogQLQuery", "query": hogql_query}
@@ -57,6 +58,7 @@ class PostHogSession:
                 "Authorization": f"Bearer {self.api_key}",
             },
             json=payload,
+            timeout=timeout,
         )
         response.raise_for_status()
         data = response.json()
