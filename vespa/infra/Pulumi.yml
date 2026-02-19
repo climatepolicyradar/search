@@ -1,0 +1,10 @@
+name: search-vespa
+description: A small Vespa stack to rapidly test changes to our vespa schema
+runtime:
+  name: python
+  options:
+    toolchain: uv
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-python

@@ -3,11 +3,13 @@ from typing import Generic, TypeVar
 
 from knowledge_graph.identifiers import Identifier
 
+from search.data_in_models import Document as DocumentModel
+from search.data_in_models import Label as LabelModel
 from search.document import Document
 from search.label import Label
 from search.passage import Passage
 
-TModel = TypeVar("TModel", Label, Passage, Document)
+TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel, LabelModel)
 
 
 class SearchEngine(ABC, Generic[TModel]):
@@ -16,24 +18,22 @@ class SearchEngine(ABC, Generic[TModel]):
     model_class: type[TModel]
 
     @abstractmethod
-    def search(
-        self, terms: str, limit: int | None = None, offset: int = 0
-    ) -> list[TModel]:
+    def search(self, query: str, limit: int, offset: int = 0) -> list[TModel]:
         """
         Fetch a list of relevant search results.
 
-        :param terms: Search terms to match against
-        :param limit: Maximum number of results to return. If None, returns all results.
+        :param query: Search query to match against
+        :param limit: Maximum number of results to return
         :param offset: Number of results to skip (for pagination)
         :return: List of matching items
         """
 
     @abstractmethod
-    def count(self, terms: str) -> int:
+    def count(self, query: str) -> int:
         """
-        Count total number of results matching the search terms.
+        Count total number of results matching the search query.
 
-        More efficient than len(search(terms)) for database-backed engines.
+        More efficient than len(search(query)) for database-backed engines.
 
         :param terms: Search terms to match against
         :return: Total count of matching items
@@ -64,23 +64,23 @@ class DocumentSearchEngine(SearchEngine[Document]):
 
     @abstractmethod
     def search(
-        self, terms: str, limit: int | None = None, offset: int = 0
+        self, query: str, limit: int | None = None, offset: int = 0
     ) -> list[Document]:
         """
         Fetch a list of relevant documents.
 
-        :param terms: Search terms to match against
+        :param query: Search query to match against
         :param limit: Maximum number of results to return. If None, returns all results.
         :param offset: Number of results to skip (for pagination)
         :return: List of matching documents
         """
 
     @abstractmethod
-    def count(self, terms: str) -> int:
+    def count(self, query: str) -> int:
         """
-        Count total number of documents matching the search terms.
+        Count total number of documents matching the search query.
 
-        :param terms: Search terms to match against
+        :param query: Search query to match against
         :return: Total count of matching documents
         """
 
@@ -92,23 +92,23 @@ class PassageSearchEngine(SearchEngine[Passage]):
 
     @abstractmethod
     def search(
-        self, terms: str, limit: int | None = None, offset: int = 0
+        self, query: str, limit: int | None = None, offset: int = 0
     ) -> list[Passage]:
         """
         Fetch a list of relevant passages.
 
-        :param terms: Search terms to match against
+        :param query: Search query to match against
         :param limit: Maximum number of results to return. If None, returns all results.
         :param offset: Number of results to skip (for pagination)
         :return: List of matching passages
         """
 
     @abstractmethod
-    def count(self, terms: str) -> int:
+    def count(self, query: str) -> int:
         """
-        Count total number of passages matching the search terms.
+        Count total number of passages matching the search query.
 
-        :param terms: Search terms to match against
+        :param query: Search query to match against
         :return: Total count of matching passages
         """
 
@@ -120,22 +120,22 @@ class LabelSearchEngine(SearchEngine[Label]):
 
     @abstractmethod
     def search(
-        self, terms: str, limit: int | None = None, offset: int = 0
+        self, query: str, limit: int | None = None, offset: int = 0
     ) -> list[Label]:
         """
         Fetch a list of relevant labels.
 
-        :param terms: Search terms to match against
+        :param query: Search query to match against
         :param limit: Maximum number of results to return. If None, returns all results.
         :param offset: Number of results to skip (for pagination)
         :return: List of matching labels
         """
 
     @abstractmethod
-    def count(self, terms: str) -> int:
+    def count(self, query: str) -> int:
         """
-        Count total number of labels matching the search terms.
+        Count total number of labels matching the search query.
 
-        :param terms: Search terms to match against
+        :param query: Search query to match against
         :return: Total count of matching labels
         """

@@ -391,8 +391,8 @@ class DuckDBLabelSearchEngine(DuckDBSearchEngine[Label], LabelSearchEngine):
         results = self.conn.execute(query, [pattern, pattern, [terms]]).fetchall()
         return [self.schema.build_model(row) for row in results]
 
-    def count(self, terms: str) -> int:
-        """Count total number of labels matching the search terms."""
+    def count(self, query: str) -> int:
+        """Count total number of labels matching the search query."""
 
         query = """
             SELECT COUNT(*) FROM labels
@@ -401,6 +401,6 @@ class DuckDBLabelSearchEngine(DuckDBSearchEngine[Label], LabelSearchEngine):
                 OR list_has_any(alternative_labels, ?)
         """
 
-        pattern = f"%{terms}%"
-        result = self.conn.execute(query, [pattern, pattern, [terms]]).fetchone()
+        pattern = f"%{query}%"
+        result = self.conn.execute(query, [pattern, pattern, [query]]).fetchone()
         return result[0] if result else 0
