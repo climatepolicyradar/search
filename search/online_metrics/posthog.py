@@ -74,6 +74,31 @@ class PostHogSession:
 
         return results
 
+    def _run_metric(
+        self,
+        metric_name: str,
+        query: str,
+        date_from: date,
+        date_to: date | None = None,
+    ) -> OnlineMetricResult:
+        """
+        Execute a HogQL query and wrap the first result in an OnlineMetricResult.
+
+        :param metric_name: Name of the metric being calculated
+        :param query: HogQL query string
+        :param date_from: Start date for the metric
+        :param date_to: Optional end date for the metric
+        :return: OnlineMetricResult with the first scalar value from the query
+        """
+        results = self.execute_query(query)
+        return OnlineMetricResult(
+            metric=metric_name,
+            query=query,
+            value=results[0][0],
+            date_from=date_from,
+            date_to=date_to,
+        )
+
     def calculate_percentage_of_users_who_search(
         self,
         date_range: DateRange,
@@ -122,12 +147,9 @@ class PostHogSession:
                 AND event = '$pageview'
                 AND properties.$host IN {self.cpr_domains_hogql}
         """
-        results = self.execute_query(query)
-
-        return OnlineMetricResult(
-            metric="percentage_of_users_who_search",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_users_who_search",
+            query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
@@ -179,12 +201,9 @@ class PostHogSession:
                 AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                 AND properties.$host IN {self.cpr_domains_hogql}
         """
-        results = self.execute_query(query)
-
-        return OnlineMetricResult(
-            metric="percentage_of_users_who_download_data",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_users_who_download_data",
+            query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
@@ -237,12 +256,9 @@ class PostHogSession:
                 -- the backend.
                 AND event = 'search:results_fetch'
         """
-        results = self.execute_query(query)
-
-        return OnlineMetricResult(
-            metric="percentage_of_searches_with_no_results",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_searches_with_no_results",
+            query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
@@ -309,17 +325,12 @@ class PostHogSession:
 
         SELECT
             (SELECT count(DISTINCT(distinct_id)) FROM returning_users) /
-            (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as retention_percentage_7_days,
-
+            (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as retention_percentage_7_days
 
         """
-        results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
-        return OnlineMetricResult(
-            metric="percentage_of_searchers_who_return_within_7_days",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_searchers_who_return_within_7_days",
+            query,
             date_from=date_from,
         )
 
@@ -384,17 +395,12 @@ class PostHogSession:
 
         SELECT
             (SELECT count(DISTINCT(distinct_id)) FROM returning_users) /
-            (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as retention_percentage_7_days,
-
+            (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as retention_percentage_30_days
 
         """
-        results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
-        return OnlineMetricResult(
-            metric="percentage_of_searchers_who_return_within_30_days",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_searchers_who_return_within_30_days",
+            query,
             date_from=date_from,
         )
 
@@ -470,12 +476,9 @@ class PostHogSession:
             LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
 
         """
-        results = self.execute_query(query)
-
-        return OnlineMetricResult(
-            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
@@ -555,13 +558,9 @@ class PostHogSession:
             FROM search_users
             LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
         """
-        results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
-        return OnlineMetricResult(
-            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page_with_at_least_30s_dwell_time",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page_with_at_least_30s_dwell_time",
+            query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
@@ -630,13 +629,9 @@ class PostHogSession:
             LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
 
         """
-        results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
-        return OnlineMetricResult(
-            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
@@ -748,13 +743,9 @@ class PostHogSession:
             LEFT JOIN clickthrough_users ON search_users.distinct_id = clickthrough_users.distinct_id
 
         """
-        results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
-        return OnlineMetricResult(
-            metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
-            query=query,
-            value=results[0][0],
+        return self._run_metric(
+            "percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
