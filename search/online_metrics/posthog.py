@@ -141,8 +141,8 @@ class PostHogSession:
                     )
                 )) / count(Distinct(distinct_id)) * 100.0 AS search_percentage
             FROM events
-            WHERE timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+            WHERE timestamp >= '{date_range.get_earliest_datetime()}'
+                AND timestamp <= '{date_range.get_latest_datetime()}'
                 AND properties.consent IS NOT NULL
                 AND event = '$pageview'
                 AND properties.$host IN {self.cpr_domains_hogql}
@@ -197,8 +197,8 @@ class PostHogSession:
                 count(DISTINCT(consent_set_users.distinct_id)) * 100.0 AS search_downloaders_percentage
             FROM events
             INNER JOIN consent_set_users ON events.distinct_id = consent_set_users.distinct_id
-            WHERE timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+            WHERE timestamp >= '{date_range.get_earliest_datetime()}'
+                AND timestamp <= '{date_range.get_latest_datetime()}'
                 AND properties.$host IN {self.cpr_domains_hogql}
         """
         return self._run_metric(
@@ -249,8 +249,8 @@ class PostHogSession:
                 )) /
                 count(DISTINCT(distinct_id)) * 100.0 AS zero_results_rate
             FROM events
-            WHERE timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+            WHERE timestamp >= '{date_range.get_earliest_datetime()}'
+                AND timestamp <= '{date_range.get_latest_datetime()}'
                 AND properties.$host IN {self.cpr_domains_hogql}
                 -- This event is sent every time the frontend gets search results from
                 -- the backend.
@@ -392,8 +392,8 @@ class PostHogSession:
             WHERE
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
-                AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                AND timestamp >= '{date_range.get_earliest_datetime()}'
+                AND timestamp <= '{date_range.get_latest_datetime()}'
                 AND properties.$host IN {self.cpr_domains_hogql}
             ),
 
@@ -465,8 +465,8 @@ class PostHogSession:
             WHERE
                 event = '$pageview'
                 AND properties.consent IS NOT NULL
-                AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                AND timestamp >= '{date_range.get_earliest_datetime()}'
+                AND timestamp <= '{date_range.get_latest_datetime()}'
                 AND properties.$host IN {self.cpr_domains_hogql}
             ),
 
@@ -557,8 +557,8 @@ class PostHogSession:
                 WHERE
                     event = '$pageview'
                     AND properties.consent IS NOT NULL
-                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND timestamp >= '{date_range.get_earliest_datetime()}'
+                    AND timestamp <= '{date_range.get_latest_datetime()}'
                     AND properties.$host IN {self.cpr_domains_hogql}
             ),
             search_users AS (
@@ -574,8 +574,8 @@ class PostHogSession:
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
                     AND properties.`position-total` IN ('1', '2', '3', '4', '5')
-                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND timestamp >= '{date_range.get_earliest_datetime()}'
+                    AND timestamp <= '{date_range.get_latest_datetime()}'
                     AND properties.$host IN {self.cpr_domains_hogql}
             )
             SELECT
@@ -625,8 +625,8 @@ class PostHogSession:
                 WHERE
                     event = '$pageview'
                     AND properties.consent IS NOT NULL
-                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND timestamp >= '{date_range.get_earliest_datetime()}'
+                    AND timestamp <= '{date_range.get_latest_datetime()}'
                     AND properties.$host IN {self.cpr_domains_hogql}
             ),
             -- Step 2: Identify all users who visited a search page (our denominator)
@@ -647,8 +647,8 @@ class PostHogSession:
                     AND properties.$current_url LIKE '%/search%'
                     -- Position 1-5 in search results (first page only, offset = 0)
                     AND properties.`position-total` IN ('1', '2', '3', '4', '5')
-                    AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
-                    AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
+                    AND timestamp >= '{date_range.get_earliest_datetime()}'
+                    AND timestamp <= '{date_range.get_latest_datetime()}'
                     AND properties.$host IN {self.cpr_domains_hogql}
             ),
             -- Step 4: For each click, find the immediate next pageview (must be a /document/ page)
