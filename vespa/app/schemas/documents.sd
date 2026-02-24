@@ -1,7 +1,11 @@
 schema documents {
     document documents {
-        field id type string {}
-        field title type string {}
+        field id type string {
+            indexing: summary
+        }
+        field title type string {
+            indexing: summary
+        }
         field description type string {}
 
         struct label {
@@ -43,10 +47,18 @@ schema documents {
     }
 
     field passages_text type array<string> {
-        indexing: input passages | for_each { get_field text } | index
+        indexing: input passages | for_each { get_field text } | index | summary
     }
 
     fieldset default {
         fields: title, description, labels_title, passages_text
+    }
+
+    document-summary debug-text-tokens {
+        summary passages_text type array<string> {}
+        summary passages_text_tokens type array<string> {
+            source: passages_text
+            tokens
+        }
     }
 }
