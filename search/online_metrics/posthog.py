@@ -36,14 +36,20 @@ class PostHogSession:
             var_name="POSTHOG_PROJECT_ID", ssm_name="posthog_project_id"
         )
         # to filter out internal users mainly, in HogQL queries
-        self.cpr_domains = "(" + ", ".join(f"'{d}'" for d in POSTHOG_CPR_DOMAINS) + ")"
+        self.cpr_domains_hogql = (
+            "(" + ", ".join(f"'{d}'" for d in POSTHOG_CPR_DOMAINS) + ")"
+        )
 
-    def execute_query(self, hogql_query: str, timeout: int = 20) -> list[list[Any]]:
+    def execute_query(
+        self, hogql_query: str, timeout: int = 20, raise_on_no_results: bool = True
+    ) -> list[list[Any]]:
         """
         Execute a HogQL query and return raw results.
 
         :param hogql_query: Raw HogQL query string
         :param timeout: Timeout for the request in seconds
+        :param raise_on_no_results: Whether to raise if the Posthog query returns empty
+            results
         :return: List of result rows
         """
         query = {"kind": "HogQLQuery", "query": hogql_query}
@@ -62,8 +68,11 @@ class PostHogSession:
         )
         response.raise_for_status()
         data = response.json()
+        results = data.get("results", [])
+        if raise_on_no_results and not results:
+            raise PosthogNoResultsException()
 
-        return data.get("results", [])
+        return results
 
     def calculate_percentage_of_users_who_search(
         self,
@@ -96,6 +105,7 @@ class PostHogSession:
         :return: Percentage of users who searched in the time period as a float
         """
 
+        # TODO: can we use this query elsewhere?
         query = f"""
             SELECT
                 count(Distinct(
@@ -110,11 +120,9 @@ class PostHogSession:
                 AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
                 AND properties.consent IS NOT NULL
                 AND event = '$pageview'
-                AND properties.$host IN {self.cpr_domains}
+                AND properties.$host IN {self.cpr_domains_hogql}
         """
         results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
 
         return OnlineMetricResult(
             metric="percentage_of_users_who_search",
@@ -124,12 +132,16 @@ class PostHogSession:
             date_to=date_range.date_to,
         )
 
-    def calculate_percentage_of_users_who_download_data(
+    def calculate_percentage_of_users_who_download_search_results(
         self,
         date_range: DateRange,
     ) -> OnlineMetricResult:
         """
-        Calculate the percentage of total users who downloaded data in the time period, inclusive of start and end dates.
+        Calculate the percentage of total users who downloaded the results of their search in the time period, inclusive of start and end dates.
+
+        "The total users" include only those with a pageview where the `consent` boolean is set.
+        This means a user has either clicked 'accept' or 'reject' on the cookie banner, or
+        they've viewed more than one page in a session.
 
         What's a search download?
         It refers specifically to 1. clicking "this search" and then "Download" in the resulting popup on the search results page.
@@ -139,10 +151,8 @@ class PostHogSession:
 
         Note: this IS BREAKABLE if the link text changes.  It is queued to be updated with more robust frontend tracking (see SCI-677).
 
-        "The total users" include only those with a pageview where the `consent` boolean is set.
-
         :param date_range: DateRange object specifying the inclusive date range
-        :return: Percentage of users who downloaded data in the time period as a float
+        :return: Percentage of users who downloaded data in the time period
         """
 
         query = f"""
@@ -154,6 +164,8 @@ class PostHogSession:
 
             SELECT
                 count(DISTINCT(
+                    -- User is on search page and clicks an element with 'Download' text
+                    -- (using Posthog autocapture)
                     if(
                         properties.$el_text = 'Download' AND properties.$current_url LIKE '%/search%',
                         events.distinct_id,
@@ -165,11 +177,9 @@ class PostHogSession:
             INNER JOIN consent_set_users ON events.distinct_id = consent_set_users.distinct_id
             WHERE timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                 AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
-                AND properties.$host IN {self.cpr_domains}
+                AND properties.$host IN {self.cpr_domains_hogql}
         """
         results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
 
         return OnlineMetricResult(
             metric="percentage_of_users_who_download_data",
@@ -187,19 +197,32 @@ class PostHogSession:
         Calculate the percentage of searches with no results in the time period, inclusive of start and end dates.
 
         What's a search with no results?
-        It refers specifically to searches on the main search results page (where properties.$current_url LIKE '%/search%') that return no results.  See 'what is a search' in the calculate_percentage_of_users_who_search method for more details on defining a search.
+            It refers specifically to searches on the main search results page (where
+            properties.$current_url LIKE '%/search%') that return no results.  See 'what is
+            a search' in the calculate_percentage_of_users_who_search method for more details
+            on defining a search.
 
-        Each search event on the main search results page triggers an API request, which we track in PostHog as 'search:results_fetch' with a property 'total_family_hits' as a number.  This event was created in October 2025.
+        Each search event on the main search results page triggers an API request, which we
+        track in PostHog as 'search:results_fetch' with a property 'total_family_hits' as a
+        number.
 
         This is a calculation against the TOTAL number of searches, not a number of users.
 
         :param date_range: DateRange object specifying the inclusive date range
         :return: Percentage of searches with no results in the time period as a float
         """
+
+        if date_range.date_from < date(2025, 10, 1):
+            raise InvalidStartDateException(
+                f"{date_range.date_from} is not a valid start date. Date must be after 2025-10-01, when this metric was created."
+            )
+
         query = f"""
             SELECT
                 count(DISTINCT(
                     if(
+                        -- Include current_url like search here, as search:results_fetch
+                        -- event can be fired again if a user goes to another page.
                         properties.total_family_hits = 0 AND properties.$current_url LIKE '%/search%',
                         distinct_id,
                         NULL
@@ -209,12 +232,13 @@ class PostHogSession:
             FROM events
             WHERE timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                 AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
-                AND properties.$host IN {self.cpr_domains}
+                AND properties.$host IN {self.cpr_domains_hogql}
+                -- This event is sent every time the frontend gets search results from
+                -- the backend.
                 AND event = 'search:results_fetch'
         """
         results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
+
         return OnlineMetricResult(
             metric="percentage_of_searches_with_no_results",
             query=query,
@@ -231,12 +255,16 @@ class PostHogSession:
         Calculate the percentage of [users whose searched] who return within 7 days of an input date.  The input date must be least 7 days before the current date.
 
         What's a searcher?
-        A searcher is a user who has searched in the time period.  See 'what is a search' in the calculate_percentage_of_users_who_search method for more details on defining a search.
+            A searcher is a user who has searched in the time period.  See 'what is a search'
+            in the calculate_percentage_of_users_who_search method for more details on
+            defining a search.
 
-        As only users who accept cookies can be tracked cross-session, this calculation is only available for users with consent = True.
+        As only users who accept cookies can be tracked cross-session, this calculation
+        is only available for users with consent = True.
 
         What's a return?
-        A return is counted if a user's distinct_id is associated with a different session_id within 7 days of the original session.
+        A return is counted if a user's distinct_id is associated with a different
+        session_id within 7 days of the original session.
 
         :param date_from: datetime.date object of the start of the time period (inclusive)
         :return: Percentage of searchers who return within 7 days in the time period as a float
@@ -257,7 +285,7 @@ class PostHogSession:
         search_users AS (
             SELECT
                 events.distinct_id,
-                min(timestamp) as first_search_date,
+                min(timestamp) as first_search_timestamp,
                 argMin(properties.$session_id, timestamp) as search_session_id
             FROM events
             INNER JOIN consent_users ON events.distinct_id = consent_users.distinct_id
@@ -273,10 +301,10 @@ class PostHogSession:
         FROM search_users
         INNER JOIN events on search_users.distinct_id = events.distinct_id
         WHERE
-            events.timestamp < search_users.first_search_date + interval 6 day
-            AND events.timestamp > toStartOfDay(search_users.first_search_date) + interval 1 day
+            events.timestamp < search_users.first_search_timestamp + interval 7 day
+            AND events.timestamp > toStartOfDay(search_users.first_search_timestamp) + interval 1 day
             AND events.$session_id != search_users.search_session_id
-            AND events.properties.$host IN {self.cpr_domains}
+            AND events.properties.$host IN {self.cpr_domains_hogql}
         )
 
         SELECT
@@ -303,9 +331,12 @@ class PostHogSession:
         Calculate the percentage of [users whose searched] who return within 30 days of an input date.  The input date must be least 30 days before the current date.
 
         What's a searcher?
-        A searcher is a user who has searched in the time period.  See 'what is a search' in the calculate_percentage_of_users_who_search method for more details on defining a search.
+        A searcher is a user who has searched in the time period.  See 'what is a search'
+        in the calculate_percentage_of_users_who_search method for more details on
+        defining a search.
 
-        As only users who accept cookies can be tracked cross-session, this calculation is only available for users with consent = True.
+        As only users who accept cookies can be tracked cross-session, this calculation
+        is only available for users with consent = True.
 
         What's a return?
         A return is counted if a user's distinct_id is associated with a different session_id within 30 days of the original session.
@@ -329,7 +360,7 @@ class PostHogSession:
         search_users AS (
             SELECT
                 events.distinct_id,
-                min(timestamp) as first_search_date,
+                min(timestamp) as first_search_timestamp,
                 argMin(properties.$session_id, timestamp) as search_session_id
             FROM events
             INNER JOIN consent_users ON events.distinct_id = consent_users.distinct_id
@@ -345,10 +376,10 @@ class PostHogSession:
         FROM search_users
         INNER JOIN events on search_users.distinct_id = events.distinct_id
         WHERE
-            events.timestamp < search_users.first_search_date + interval 29 day
-            AND events.timestamp > toStartOfDay(search_users.first_search_date) + interval 1 day
+            events.timestamp < search_users.first_search_timestamp + interval 30 day
+            AND events.timestamp > toStartOfDay(search_users.first_search_timestamp) + interval 1 day
             AND events.$session_id != search_users.search_session_id
-            AND events.properties.$host IN {self.cpr_domains}
+            AND events.properties.$host IN {self.cpr_domains_hogql}
         )
 
         SELECT
@@ -386,9 +417,10 @@ class PostHogSession:
         This only includes users where pageview events have the `consent` property set (not null)
 
         :param date_range: DateRange object specifying the inclusive date range
-        :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
+        :return: Percentage of users who clicked on a search result to a document or family page in the time period
         """
         query = f"""
+            -- Get pageviews sorted by timestamp and user
             WITH ranked_pageviews AS (
             SELECT
                 distinct_id,
@@ -401,7 +433,7 @@ class PostHogSession:
                 AND properties.consent IS NOT NULL
                 AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                 AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
-                AND properties.$host IN {self.cpr_domains}
+                AND properties.$host IN {self.cpr_domains_hogql}
             ),
 
             pageviews_with_next AS (
@@ -415,12 +447,15 @@ class PostHogSession:
                     AND p2.rn = p1.rn + 1
             ),
 
+            -- Search users: first pageview is search
             search_users AS (
                 SELECT DISTINCT distinct_id
                 FROM pageviews_with_next
                 WHERE current_url LIKE '%/search%'
             ),
 
+            -- Clickthrough users: first pageview is search, second pageview is
+            -- document or family page
             clickthrough_users AS (
                 SELECT DISTINCT distinct_id
                 FROM pageviews_with_next
@@ -436,8 +471,7 @@ class PostHogSession:
 
         """
         results = self.execute_query(query)
-        if not results:
-            raise PosthogNoResultsException()
+
         return OnlineMetricResult(
             metric="percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
             query=query,
@@ -453,13 +487,15 @@ class PostHogSession:
         """
         Calculate the percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 30 seconds or more.
 
-        This is the same as the calculate_click_through_rate_from_search method, but it also includes when users click from to a family then straight to a document in less than 30 seconds, as long as they spend at least 30 seconds on the document.
+        This is the same as the calculate_click_through_rate_from_search method, but it
+        also includes when users click from to a family then straight to a document in less than 30 seconds, as long as they spend at least 30 seconds on the document.
 
         This only includes users where pageview events have the `consent` property set (not null)
 
         :param date_range: DateRange object specifying the inclusive date range
-        :return: Percentage of users who clicked on a search result to a document or family page and then stayed on that document or family page for 30 seconds or more in the time period as a float
+        :return: CTR with dwell time >=30 seconds
         """
+
         query = f"""
             WITH ranked_pageviews AS (
             SELECT
@@ -473,7 +509,7 @@ class PostHogSession:
                 AND properties.consent IS NOT NULL
                 AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                 AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
-                AND properties.$host IN {self.cpr_domains}
+                AND properties.$host IN {self.cpr_domains_hogql}
             ),
 
             pageviews_with_next AS (
@@ -538,13 +574,20 @@ class PostHogSession:
         Calculate the percentage of users who clicked on a search result in the top 5 to a family page.
 
         What does this metric measure?
-        It measures the percentage of unique users who clicked on a search result to a family page for the top 5 results.  Right now, this ONLY includes clicking directly on a family page link, not clicking to view a document or family after viewing the passage match sidebar. (see https://linear.app/climate-policy-radar/issue/APP-1610/facilitate-better-analytics-by-including-more-context-in-dom-elements).  This is ONLY available for data after the 29th of January 2026.
+        It measures the percentage of unique users who clicked on a search result to a
+        family page for the top 5 results.  Right now, this ONLY includes clicking directly
+        on a family page link, not clicking to view a document or family after viewing the
+        passage match sidebar.
+        (see https://linear.app/climate-policy-radar/issue/APP-1610/facilitate-better-analytics-by-including-more-context-in-dom-elements).
+
+        This is ONLY available for data after the 29th of January 2026.
 
         This only includes users where pageview events have the `consent` property set (not null)
 
         :param date_range: DateRange object specifying the inclusive date range
-        :return: Percentage of users who clicked on a search result to a document or family page in the time period as a float
+        :return: Percentage of users who clicked on a search result to a document or family page in the time period
         """
+
         if date_range.date_from < date(2026, 1, 29):
             raise InvalidStartDateException(
                 f"{date_range.date_from} is not a valid input.  Start date for this metric must be on or after the 29th of January 2026."
@@ -562,7 +605,7 @@ class PostHogSession:
                     AND properties.consent IS NOT NULL
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
-                    AND properties.$host IN {self.cpr_domains}
+                    AND properties.$host IN {self.cpr_domains_hogql}
             ),
             search_users AS (
                 SELECT DISTINCT distinct_id
@@ -579,7 +622,7 @@ class PostHogSession:
                     AND properties.`position-total` IN ('1', '2', '3', '4', '5')
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
-                    AND properties.$host IN {self.cpr_domains}
+                    AND properties.$host IN {self.cpr_domains_hogql}
             )
             SELECT
                 count(DISTINCT clickthrough_users.distinct_id) / count(DISTINCT search_users.distinct_id) * 100.0 AS click_through_rate
@@ -634,7 +677,7 @@ class PostHogSession:
                     AND properties.consent IS NOT NULL
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
-                    AND properties.$host IN {self.cpr_domains}
+                    AND properties.$host IN {self.cpr_domains_hogql}
             ),
             -- Step 2: Identify all users who visited a search page (our denominator)
             search_users AS (
@@ -656,7 +699,7 @@ class PostHogSession:
                     AND properties.`position-total` IN ('1', '2', '3', '4', '5')
                     AND timestamp >= '{date_range.get_earliest_datetime_of_range()}'
                     AND timestamp <= '{date_range.get_latest_datetime_of_range()}'
-                    AND properties.$host IN {self.cpr_domains}
+                    AND properties.$host IN {self.cpr_domains_hogql}
             ),
             -- Step 4: For each click, find the immediate next pageview (must be a /document/ page)
             clicks_with_next_pageview AS (

@@ -99,7 +99,7 @@ def main() -> None:
     )
     run_metric(
         "% users who download data",
-        session.calculate_percentage_of_users_who_download_data,
+        session.calculate_percentage_of_users_who_download_search_results,
         date_range,
     )
     run_metric(
