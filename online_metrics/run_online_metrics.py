@@ -140,6 +140,21 @@ def main() -> None:
         session.calculate_30_day_searcher_retention_rate,
         retention_date,
     )
+    run_metric(
+        "30-day non-searcher retention",
+        session.calculate_30_day_non_searcher_retention_rate,
+        retention_date,
+    )
+    run_metric(
+        "7-day return-to-search retention",
+        session.calculate_7_day_return_to_search_retention_rate,
+        retention_date,
+    )
+    run_metric(
+        "30-day return-to-search retention",
+        session.calculate_30_day_return_to_search_retention_rate,
+        retention_date,
+    )
 
     print()
 
