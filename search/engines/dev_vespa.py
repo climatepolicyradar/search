@@ -101,7 +101,7 @@ ComplexExampleFilter = Filter(
 
 def _build_condition_yql(condition: Condition) -> str:
     """Build YQL for a single condition (labels only for now)."""
-    field = "labels_title_attribute"
+    field = "labels_value_attribute"
     value = condition.value
     if condition.op == "not_contains":
         return f'!({field} contains "{value}")'
@@ -152,12 +152,12 @@ def _build_labels_label_id_filter(
     """
 
     if labels_id_or:
-        where += f" and ({' or '.join([f'labels_title_attribute contains \"{label}\"' for label in labels_id_or])})"
+        where += f" and ({' or '.join([f'labels_value_attribute contains \"{label}\"' for label in labels_id_or])})"
 
     if labels_id_and:
         where += "".join(
             [
-                f' and labels_title_attribute contains "{label}"'
+                f' and labels_value_attribute contains "{label}"'
                 for label in labels_id_and
             ]
         )
@@ -165,7 +165,7 @@ def _build_labels_label_id_filter(
     if labels_id_not:
         where += "".join(
             [
-                f' and ! (labels_title_attribute contains "{label}")'
+                f' and ! (labels_value_attribute contains "{label}")'
                 for label in labels_id_not
             ]
         )
@@ -275,17 +275,17 @@ class DevVespaLabelSearchEngine:
     def search(self, query: str) -> list[Label]:
         """Fetch a list of relevant search results."""
 
-        # 1) prefix filter the documents list on `labels_title_attribute` to ensure we are grouping by as few documents as possible for performance
+        # 1) prefix filter the documents list on `labels_value_attribute` to ensure we are grouping by as few documents as possible for performance
         # We use `matches` with a case-insensitive regex pattern `(?i)` because `contains` on attributes is strictly case-sensitive.
         safe_terms = re.escape(query)
         doc_regex = f"(?i)^{safe_terms}.*"
-        document_filter_query = f'select * from sources documents where labels_title_attribute matches "{doc_regex}"'
+        document_filter_query = f'select * from sources documents where labels_value_attribute matches "{doc_regex}"'
 
-        # 2) group by all `labels_title_attribute` values that match the prefix
-        grouping_query = "group(labels_title_attribute)"
+        # 2) group by all `labels_value_attribute` values that match the prefix
+        grouping_query = "group(labels_value_attribute)"
 
         # 3) filter the group
-        group_filter_query = f'filter(regex("{doc_regex}", labels_title_attribute))'
+        group_filter_query = f'filter(regex("{doc_regex}", labels_value_attribute))'
 
         # 4) limit and order and output the groups
         group_order_query = "order(-count()) each(output(count()))"
@@ -319,7 +319,7 @@ class DevVespaLabelSearchEngine:
             (
                 item.get("children", [])
                 for item in children
-                if item.get("label") == "labels_title_attribute"
+                if item.get("label") == "labels_value_attribute"
             ),
             [],
         )
