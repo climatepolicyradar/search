@@ -22,11 +22,11 @@ class DateRange(BaseModel):
             raise ValueError("Date from must be before date to")
         return self
 
-    def get_earliest_datetime_of_range(self) -> datetime:
+    def get_earliest_datetime(self) -> datetime:
         """Get the earliest datetime of the date range."""
         return datetime.combine(self.date_from, datetime.min.time())
 
-    def get_latest_datetime_of_range(self) -> datetime:
+    def get_latest_datetime(self) -> datetime:
         """Get the latest datetime of the date range."""
         return datetime.combine(self.date_to, datetime.max.time())
 
