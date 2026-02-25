@@ -8,6 +8,7 @@ from vespa.application import Vespa
 from vespa.exceptions import VespaError
 from vespa.io import VespaQueryResponse
 
+from search import config
 from search.aws import get_ssm_parameter
 from search.document import Document
 from search.engines import LabelSearchEngine, SearchEngine, TModel
@@ -91,12 +92,12 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         Saves local files required for auth to cert_dir.
         """
 
-        vespa_instance_url = get_ssm_parameter(self.VESPA_INSTANCE_URL_SSM_PARAMETER)
+        vespa_instance_url = get_ssm_parameter(config.vespa_url_ssm_key)
         vespa_public_cert_encoded = get_ssm_parameter(
-            self.VESPA_PUBLIC_CERT_SSM_PARAMETER
+            config.vespa_public_cert_read_only_ssm_key
         )
         vespa_private_key_encoded = get_ssm_parameter(
-            self.VESPA_PRIVATE_KEY_SSM_PARAMETER
+            config.vespa_private_key_read_only_ssm_key
         )
 
         vespa_public_cert = base64.b64decode(vespa_public_cert_encoded).decode("utf-8")
