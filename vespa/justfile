@@ -37,9 +37,13 @@ get query="congo":
      --data-urlencode 'query={{query}}' \
      --data-urlencode 'hits=10'
 
-# Remove the application
+# Remove the application. To remove data as well, use `reset` below.
 destroy:
     curl -X DELETE http://localhost:19071/application/v2/tenant/default/application/default
+
+# Remove the Vespa container and volume
+reset:
+    docker compose down -v
 
 ###
 # HERE BE DRAGONS
