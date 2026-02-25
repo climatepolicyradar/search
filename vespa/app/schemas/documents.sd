@@ -7,7 +7,7 @@ schema documents {
         struct label {
             field id type string {}
             field type type string {}
-            field title type string {}
+            field value type string {}
             field timestamp type long {}
             field relationship type string {}
         }
@@ -29,11 +29,11 @@ schema documents {
     }
 
     field labels_title type array<string> {
-        indexing: input labels | for_each { get_field title } | index
+        indexing: input labels | for_each { get_field value } | index
     }
 
     field labels_title_attribute type array<string> {
-        indexing: input labels | for_each { get_field title } | attribute
+        indexing: input labels | for_each { get_field value } | attribute
         attribute: fast-search
     }
 
