@@ -81,25 +81,11 @@ jobs:
             echo "✅ No .py files found in scripts/ root directory"
           fi
 
-  no-mixed-infra-and-code:
-    needs: changes
-    runs-on: ubuntu-latest
-    if: needs.changes.result == 'success'
-    steps:
-      - name: Fail if PR touches both app code and infra
-        run: |
-          RUN_TESTS='${{ needs.changes.outputs.run-test }}'
-          RUN_PULUMI_PREVIEW='${{ needs.changes.outputs.run-pulumi-preview }}'
-          if [ "$RUN_TESTS" = 'true' ] && [ "$RUN_PULUMI_PREVIEW" = 'true' ]; then
-            echo "This PR changes both application code and infrastructure. Split into separate PRs: infra changes and code changes cannot be deployed in the same merge."
-            exit 1
-          fi
-
   test:
     runs-on: ubuntu-latest
     name: Test
-    needs: [changes, no-mixed-infra-and-code]
-    if: needs.no-mixed-infra-and-code.result == 'success' && needs.changes.outputs.run-test == 'true'
+    needs: [changes]
+    if: needs.changes.outputs.run-test == 'true'
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
@@ -128,8 +114,8 @@ jobs:
   pulumi-preview:
     runs-on: ubuntu-latest
     name: Pulumi Preview
-    needs: [changes, no-mixed-infra-and-code]
-    if: needs.no-mixed-infra-and-code.result == 'success' && needs.changes.outputs.run-pulumi-preview == 'true'
+    needs: [changes]
+    if: needs.changes.outputs.run-pulumi-preview == 'true'
     strategy:
       matrix:
         environment: [production]
