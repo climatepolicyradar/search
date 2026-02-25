@@ -28,11 +28,11 @@ schema documents {
         }
     }
 
-    field labels_title type array<string> {
+    field labels_value type array<string> {
         indexing: input labels | for_each { get_field value } | index
     }
 
-    field labels_title_attribute type array<string> {
+    field labels_value_attribute type array<string> {
         indexing: input labels | for_each { get_field value } | attribute
         attribute: fast-search
     }
@@ -47,6 +47,6 @@ schema documents {
     }
 
     fieldset default {
-        fields: title, description, labels_title, passages_text
+        fields: title, description, labels_value, passages_text
     }
 }

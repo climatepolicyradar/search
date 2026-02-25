@@ -13,12 +13,12 @@ extract:
     fi
 
 # Load data into Vespa
-load limit="":
+feed limit="":
     if [ -z "{{limit}}" ]; then \
-        echo "Loading all files into local Vespa"; \
+        echo "Feed all files into local Vespa"; \
         cat ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
     else \
-        echo "Loading {{limit}} files into local Vespa"; \
+        echo "Feed {{limit}} files into local Vespa"; \
         head -n {{limit}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
     fi
 
@@ -27,7 +27,7 @@ dev:
     just up
     just deploy
     just extract
-    just load 100
+    just feed 100
 
 get query="congo":
     #!/usr/bin/env bash
@@ -55,164 +55,21 @@ reset:
 remote-deploy:
     #!/usr/bin/env bash
     set -e
+    # read this parameter from aws smm and store it in a variable it's a secret
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa_application=$(aws ssm get-parameter --name "/search/vespa/application" --query "Parameter.Value" --output text --with-decryption)
+    vespa prod deploy ./app --target cloud --application $vespa_application --zone prod.aws-eu-west-1a
 
-    # Get Instance ID from Pulumi
-    pushd infra > /dev/null
-    INSTANCE_ID=$(pulumi stack output instance_id)
-    popd > /dev/null
-    echo "Targeting Instance: $INSTANCE_ID"
-
-    # Start SSM Session in background
-    # Forwarding remote 19071 (config server/deploy) to local 19072
-    aws ssm start-session \
-        --target "$INSTANCE_ID" \
-        --document-name AWS-StartPortForwardingSession \
-        --parameters '{"portNumber":["19071"],"localPortNumber":["19072"]}' > /dev/null &
-    SSM_PID=$!
-
-    # Ensure cleanup on exit
-    trap "kill $SSM_PID" EXIT
-
-    # Wait for port to be ready
-    echo "Waiting for tunnel..."
-    while ! nc -z localhost 19072; do sleep 1; done
-    echo "Tunnel established on port 19072"
-
-    vespa deploy ./app --target http://localhost:19072/ --wait 300
-
-remote-load length="100":
+remote-feed length="100":
     #!/usr/bin/env bash
     set -e
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    head -{{length}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
 
-    # Get Instance ID from Pulumi
-    pushd infra > /dev/null
-    INSTANCE_ID=$(pulumi stack output instance_id)
-    popd > /dev/null
-    echo "Targeting Instance: $INSTANCE_ID"
-
-    # Start SSM Session in background
-    # Using specific parameters to forward remote 8080 to local 8082 to avoid conflicts
-    aws ssm start-session \
-        --target "$INSTANCE_ID" \
-        --document-name AWS-StartPortForwardingSession \
-        --parameters '{"portNumber":["8080"],"localPortNumber":["8082"]}' > /dev/null &
-    SSM_PID=$!
-
-    # Ensure cleanup on exit
-    trap "kill $SSM_PID" EXIT
-
-    # Wait for port to be ready
-    echo "Waiting for tunnel..."
-    while ! nc -z localhost 8082; do sleep 1; done
-    echo "Tunnel established on port 8082"
-
-    # Run Vespa Feed
-    head -{{length}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8082 --connections 1
-
-remote-get query="congo":
+remote-visit:
     #!/usr/bin/env bash
     set -e
-
-    pushd infra > /dev/null
-    API_URL=$(pulumi stack output api_url)
-    popd > /dev/null
-    curl -G "$API_URL/search" \
-     --data-urlencode 'yql=select * from sources documents where userQuery()' \
-     --data-urlencode 'query={{query}}' \
-     --data-urlencode 'hits=10'
-
-remote-post query="congo":
-    #!/usr/bin/env bash
-    set -e
-
-    pushd infra > /dev/null
-    API_URL=$(pulumi stack output api_url)
-    popd > /dev/null
-    curl -X POST "$API_URL/search" \
-     --data-urlencode 'yql=select * from sources documents where userQuery()' \
-     --data-urlencode 'query={{query}}' \
-     --data-urlencode 'hits=10'
-
-remote-destroy:
-    #!/usr/bin/env bash
-    set -e
-
-    # Get Instance ID from Pulumi
-    pushd infra > /dev/null
-    INSTANCE_ID=$(pulumi stack output instance_id)
-    popd > /dev/null
-    echo "Targeting Instance: $INSTANCE_ID"
-
-    # Start SSM Session in background
-    # Forwarding remote 19071 (config server/deploy) to local 19072
-    aws ssm start-session \
-        --target "$INSTANCE_ID" \
-        --document-name AWS-StartPortForwardingSession \
-        --parameters '{"portNumber":["19071"],"localPortNumber":["19072"]}' > /dev/null &
-    SSM_PID=$!
-
-    # Ensure cleanup on exit
-    trap "kill $SSM_PID" EXIT
-
-    # Wait for port to be ready
-    echo "Waiting for tunnel..."
-    while ! nc -z localhost 19072; do sleep 1; done
-    echo "Tunnel established on port 19072"
-
-    curl -X DELETE http://localhost:19072/application/v2/tenant/default/application/default
-
-remote-restart:
-    #!/usr/bin/env bash
-    set -e
-
-    # Get Instance ID from Pulumi
-    pushd infra > /dev/null
-    INSTANCE_ID=$(pulumi stack output instance_id)
-    popd > /dev/null
-    echo "Targeting Instance: $INSTANCE_ID"
-
-    # Send command to restart docker container
-    COMMAND_ID=$(aws ssm send-command \
-        --document-name "AWS-RunShellScript" \
-        --targets "Key=instanceids,Values=$INSTANCE_ID" \
-        --parameters 'commands=["docker exec vespa bash -c \"/opt/vespa/bin/vespa-stop-services && /opt/vespa/bin/vespa-start-services\""]' \
-        --query "Command.CommandId" \
-        --output text)
-
-    echo "Sent restart command: $COMMAND_ID"
-    echo "Waiting a moment for command execution..."
-    sleep 5
-
-    # Check status (optional, but good for feedback)
-    aws ssm list-command-invocations \
-        --command-id "$COMMAND_ID" \
-        --details \
-        --query "CommandInvocations[0].{Status:Status, Output:CommandPlugins[0].Output}"
-
-remote-command command:
-    #!/usr/bin/env bash
-    set -e
-
-    # Get Instance ID from Pulumi
-    pushd infra > /dev/null
-    INSTANCE_ID=$(pulumi stack output instance_id)
-    popd > /dev/null
-    echo "Targeting Instance: $INSTANCE_ID"
-
-    # Send command to restart docker container
-    COMMAND_ID=$(aws ssm send-command \
-        --document-name "AWS-RunShellScript" \
-        --targets "Key=instanceids,Values=$INSTANCE_ID" \
-        --parameters 'commands=["{{command}}"]' \
-        --query "Command.CommandId" \
-        --output text)
-
-    echo "Sent command: $COMMAND_ID"
-    echo "Waiting a moment for command execution..."
-    sleep 5
-
-    # Check status (optional, but good for feedback)
-    aws ssm list-command-invocations \
-        --command-id "$COMMAND_ID" \
-        --details \
-        --query "CommandInvocations[0].{Status:Status, Output:CommandPlugins[0].Output}"
+    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa visit $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"

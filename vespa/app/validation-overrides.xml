@@ -1,0 +1,3 @@
+<validation-overrides>
+    <allow until="2025-06-25" comment="Remove unused pods instance after rag demo sunsetting">deployment-removal</allow>
+</validation-overrides>

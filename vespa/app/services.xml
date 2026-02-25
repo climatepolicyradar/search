@@ -1,27 +1,78 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<services version="1.0">
+<!-- Copyright Yahoo. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root. -->
+<services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
 
-  <container version="1.0">
-    <search />
-    <document-api />
-    <nodes>
-      <node hostalias="node1" />
-    </nodes>
-  </container>
+    <!--
+        A container cluster handles incoming requests to the application and processes those requests,
+        and their results. The processing to do and the API's to expose can be provides by Vespa
+        or by the application through Java components supplied as part of the application.
 
-  <content id="documents" version="1.0">
-    <redundancy>1</redundancy>
-    <documents>
-      <document type="documents" mode="index" />
-    </documents>
-    <nodes>
-      <node hostalias="node1" distribution-key="0" />
-    </nodes>
-    <tuning>
-      <resource-limits>
-        <disk>0.98</disk>
-      </resource-limits>
-    </tuning>
-  </content>
+        See:
+          - Reference: https://docs.vespa.ai/en/reference/services-container.html
+    -->
+    <container id="default" version="1.0">
+        <!--
+            <document-api> tells the container that it should accept documents for indexing. Through the
+            Document REST API you can PUT new documents, UPDATE existing documents, and DELETE documents
+            already in the cluster.
 
+            Documents sent to the Document REST API will be passed through document processors on the way
+            to the content cluster.
+
+            See:
+             - Reference: https://docs.vespa.ai/en/reference/services-container.html#document-api
+             - Operations: https://docs.vespa.ai/en/document-v1-api-guide.html
+        -->
+        <clients>
+            <!-- Token based auth-->
+            <client id="search-production-read" permissions="read">
+                <token id="search-production-read"/>
+            </client>
+            <client id="search-production-write" permissions="read,write">
+                <token id="search-production-write"/>
+            </client>
+
+            <!-- Cert based auth-->
+            <client id="jamesgorrie" permissions="read">
+                <certificate file="security/jamesgorrie.pem"/>
+            </client>
+        </clients>
+        <document-api/>
+
+        <!--
+            <search> tells the container to answers queries and serve results for those queries.
+            Inside the <search /> cluster you can configure chains of "searchers" -
+            Java components processing the query and/or result.
+
+            See:
+             - Reference: https://docs.vespa.ai/en/query-api.html
+             - Searchers: https://docs.vespa.ai/en/searcher-development.html
+        -->
+        <search/>
+
+        <!--
+            <nodes> specifies the nodes that should run this cluster.
+        -->
+        <nodes deploy:instance="search-production" count="2">
+            <resources vcpu="2" memory="8Gb" disk="50Gb"/>
+        </nodes>
+    </container>
+
+    <!--
+        <content/> content clusters store application data, maintain indexes and executes the
+        distributed parts of a query.
+
+        See:
+          - Reference: https://docs.vespa.ai/en/reference/services-content.html
+    -->
+    <content id="search-production" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="documents" mode="index" global="true" />
+        </documents>
+        
+        <nodes deploy:instance="search-production" count="2">
+            <resources vcpu="0.5" memory="8Gb" disk="50Gb"/>
+        </nodes>
+    </content>
 </services>
