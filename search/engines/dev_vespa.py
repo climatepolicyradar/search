@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import json
 import re
 from typing import Literal
 
 import requests
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
 
 from search.data_in_models import Document, DocumentLabelRelationship, Label
 from search.log import get_logger
@@ -31,50 +33,110 @@ API_URL = "https://vz0k397ock.execute-api.eu-west-1.amazonaws.com/production"
 MISSING_PLACEHOLDER = "MISSING"
 
 
-# region filters
-class FilterCondition(BaseModel):
+class LabelsCondition(BaseModel):
     field: Literal["labels.label.id"]
-    operator: Literal["contains", "not_contains"]
-    value: list[str]
+    op: Literal["contains", "not_contains"]
+    value: str
+
+
+Condition = LabelsCondition
 
 
 class Filter(BaseModel):
-    operator: Literal["or", "and"]
-    conditions: list[FilterCondition]
+    """A group of filters combined with AND or OR. Supports arbitrary nesting."""
+
+    op: Literal["and", "or"]
+    filters: list[Condition | Filter]
 
 
-def _build_filter_query(filters: list[Filter]) -> str:
-    query_to_search_field_map = {
-        "labels.label.id": "labels_title_attribute",
-    }
+# Simple example: label contains "Romania"
+SimpleExampleFilter = Filter(
+    op="and",
+    filters=[
+        LabelsCondition(
+            field="labels.label.id",
+            op="contains",
+            value="Romania",
+        ),
+    ],
+)
 
-    where = ""
-    for filter_group in filters:
-        conditions_list = []
-        for condition in filter_group.conditions:
-            field = query_to_search_field_map.get(condition.field)
-            values = condition.value
+# Complex example: ((label contains "Multilateral climate fund project" AND label contain "Principal") OR label contains "UN") AND label contains "Romania"
+ComplexExampleFilter = Filter(
+    op="and",
+    filters=[
+        Filter(
+            op="or",
+            filters=[
+                Filter(
+                    op="and",
+                    filters=[
+                        LabelsCondition(
+                            field="labels.label.id",
+                            op="contains",
+                            value="Multilateral climate fund project",
+                        ),
+                        LabelsCondition(
+                            field="labels.label.id",
+                            op="contains",
+                            value="Principal",
+                        ),
+                    ],
+                ),
+                LabelsCondition(
+                    field="labels.label.id",
+                    op="contains",
+                    value="UN submissions",
+                ),
+            ],
+        ),
+        LabelsCondition(
+            field="labels.label.id",
+            op="contains",
+            value="Romania",
+        ),
+    ],
+)
 
-            if condition.operator == "not_contains":
-                sub_clauses = [f'!({field} contains "{v}")' for v in values]
-                join_op = " and "
-            else:
-                sub_clauses = [f'{field} contains "{v}"' for v in values]
-                join_op = " or "
 
-            if sub_clauses:
-                clause = (
-                    f"({join_op.join(sub_clauses)})"
-                    if len(sub_clauses) > 1
-                    else sub_clauses[0]
-                )
-                conditions_list.append(clause)
+def _build_condition_yql(condition: Condition) -> str:
+    """Build YQL for a single condition (labels only for now)."""
+    field = "labels_title_attribute"
+    value = condition.value
+    if condition.op == "not_contains":
+        return f'!({field} contains "{value}")'
+    else:
+        return f'{field} contains "{value}"'
 
-        if conditions_list:
-            join_op = f" {filter_group.operator} "
-            where += f" and ({join_op.join(conditions_list)})"
 
-    return where
+def _build_filter_yql(filter_group: Filter) -> str:
+    """Recursively build YQL for a filter group."""
+    parts: list[str] = []
+
+    for item in filter_group.filters:
+        if isinstance(item, Filter):
+            # Recurse into nested group
+            parts.append(_build_filter_yql(item))
+        else:
+            # It's a Condition
+            parts.append(_build_condition_yql(item))
+
+    if not parts:
+        return ""
+
+    join_op = f" {filter_group.op} "
+    joined = join_op.join(parts)
+
+    # Wrap in parentheses if multiple parts
+    return f"({joined})" if len(parts) > 1 else joined
+
+
+def _build_filter_query(filter_group: Filter | None) -> str:
+    """Build the WHERE clause from a filter group."""
+    if filter_group is None:
+        return ""
+    yql = _build_filter_yql(filter_group)
+    return f" and {yql}" if yql else ""
 
 
 def _build_labels_label_id_filter(
@@ -142,7 +204,7 @@ class DevVespaDocumentSearchEngine:
         )
 
         if filters_json_string:
-            filters = TypeAdapter(list[Filter]).validate_json(filters_json_string)
+            filters = Filter.model_validate_json(filters_json_string)
             where += _build_filter_query(filters)
 
         yql = f"select * from sources documents where {where}"
