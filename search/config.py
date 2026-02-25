@@ -10,7 +10,7 @@ load_dotenv()
 def get_git_root() -> Path:
     """Get the root directory of the git repository."""
     try:
-        git_root = subprocess.check_output(
+        git_root = subprocess.check_output(  # nosec
             ["git", "rev-parse", "--show-toplevel"], universal_newlines=True
         ).strip()
         return Path(git_root)
@@ -35,7 +35,7 @@ def get_git_commit_hash() -> str:
 
     # If not, try to get it from git
     try:
-        git_commit_hash = subprocess.check_output(
+        git_commit_hash = subprocess.check_output(  # nosec
             ["git", "rev-parse", "--short", "HEAD"], text=True
         ).strip()
         return git_commit_hash
