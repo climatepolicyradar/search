@@ -359,6 +359,224 @@ class PostHogSession:
         """
         return self._calculate_searcher_retention_rate(date_from, retention_days=30)
 
+    def calculate_30_day_non_searcher_retention_rate(
+        self,
+        date_from: date,
+    ) -> OnlineMetricResult:
+        """
+        Calculate the percentage of non-searchers who return within 30 days of an input date.
+
+        A non-searcher is a user who had at least one pageview on ``date_from`` but whose
+        pageviews that day did not include any URL matching ``%/search%``.  Only users who
+        have accepted cookies (``consent = true``) are included, as cross-session tracking
+        requires consent.
+
+        A return is counted if the user's ``distinct_id`` is associated with a different
+        ``$session_id`` after the first day and within 30 days of their first visit.
+
+        :param date_from: The start of the period (inclusive). Must be at least 30 days in the past.
+        :type date_from: datetime.date
+        :return: Retention rate as a float percentage.
+        :rtype: OnlineMetricResult
+        :raises InvalidStartDateException: If ``date_from`` is fewer than 30 days before today.
+        """
+        if date_from > date.today() - timedelta(days=30):
+            raise InvalidStartDateException(
+                f"{date_from} is not a valid input.  Date must be at least 30 days in the past.  Earliest valid date is {date.today() - timedelta(days=30)}."
+            )
+
+        query = f"""
+        WITH consent_users AS (
+            SELECT DISTINCT(distinct_id)
+            FROM events
+            WHERE properties.consent = true
+        ),
+
+        non_search_users AS (
+            SELECT
+                events.distinct_id,
+                min(timestamp) as first_visit_date,
+                argMin(properties.$session_id, timestamp) as visit_session_id
+            FROM events
+            INNER JOIN consent_users ON events.distinct_id = consent_users.distinct_id
+            WHERE
+                event = '$pageview'
+                AND timestamp >= '{date_from} 00:00:00'
+                AND timestamp < '{date_from} 00:00:00' + interval 1 day
+                AND properties.$host IN {self.cpr_domains}
+            GROUP BY events.distinct_id
+            HAVING countIf(properties.$current_url LIKE '%/search%') = 0
+        ),
+
+        returning_users AS (
+            SELECT DISTINCT(non_search_users.distinct_id)
+            FROM non_search_users
+            INNER JOIN events ON non_search_users.distinct_id = events.distinct_id
+            WHERE
+                events.timestamp < non_search_users.first_visit_date + interval 29 day
+                AND events.timestamp > toStartOfDay(non_search_users.first_visit_date) + interval 1 day
+                AND events.$session_id != non_search_users.visit_session_id
+                AND events.properties.$host IN {self.cpr_domains}
+        )
+
+        SELECT
+            (SELECT count(DISTINCT(distinct_id)) FROM returning_users) /
+            (SELECT count(DISTINCT(distinct_id)) FROM non_search_users) * 100.0 as retention_percentage_30_days
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise PosthogNoResultsException()
+        return OnlineMetricResult(
+            metric="percentage_of_non_searchers_who_return_within_30_days",
+            query=query,
+            value=results[0][0],
+            date_from=date_from,
+        )
+
+    def calculate_7_day_return_to_search_retention_rate(
+        self,
+        date_from: date,
+    ) -> OnlineMetricResult:
+        """
+        Calculate the percentage of searchers who return and search again within 7 days.
+
+        Unlike :meth:`calculate_7_day_searcher_retention_rate`, a return is only counted
+        if the user visits a ``/search`` page in a new session.
+
+        Only users with ``consent = true`` are included, as cross-session tracking requires
+        consent.  The input date must be at least 7 days before today.
+
+        :param date_from: The start of the period (inclusive). Must be at least 7 days in the past.
+        :type date_from: datetime.date
+        :return: Percentage of searchers who return to search within 7 days.
+        :rtype: OnlineMetricResult
+        :raises InvalidStartDateException: If ``date_from`` is fewer than 7 days before today.
+        """
+        if date_from > date.today() - timedelta(days=7):
+            raise InvalidStartDateException(
+                f"{date_from} is not a valid input.  Date must be at least 7 days in the past.  Earliest valid date is {date.today() - timedelta(days=7)}."
+            )
+
+        query = f"""
+        WITH consent_users AS (
+            SELECT DISTINCT(distinct_id)
+            FROM events
+            WHERE properties.consent = true
+        ),
+
+        search_users AS (
+            SELECT
+                events.distinct_id,
+                min(timestamp) as first_search_date,
+                argMin(properties.$session_id, timestamp) as search_session_id
+            FROM events
+            INNER JOIN consent_users ON events.distinct_id = consent_users.distinct_id
+            WHERE
+                properties.$current_url LIKE '%/search%'
+                AND timestamp >= '{date_from} 00:00:00'
+                AND timestamp < '{date_from} 00:00:00' + interval 1 day
+            GROUP BY events.distinct_id
+        ),
+
+        returning_users AS (
+            SELECT DISTINCT(search_users.distinct_id)
+            FROM search_users
+            INNER JOIN events ON search_users.distinct_id = events.distinct_id
+            WHERE
+                events.timestamp < search_users.first_search_date + interval 6 day
+                AND events.timestamp > toStartOfDay(search_users.first_search_date) + interval 1 day
+                AND events.$session_id != search_users.search_session_id
+                AND event = '$pageview'
+                AND events.properties.$current_url LIKE '%/search%'
+                AND events.properties.$host IN {self.cpr_domains}
+        )
+
+        SELECT
+            (SELECT count(DISTINCT(distinct_id)) FROM returning_users) /
+            (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as return_to_search_retention_7_days
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise PosthogNoResultsException()
+        return OnlineMetricResult(
+            metric="percentage_of_searchers_who_return_to_search_within_7_days",
+            query=query,
+            value=results[0][0],
+            date_from=date_from,
+        )
+
+    def calculate_30_day_return_to_search_retention_rate(
+        self,
+        date_from: date,
+    ) -> OnlineMetricResult:
+        """
+        Calculate the percentage of searchers who return and search again within 30 days.
+
+        Unlike :meth:`calculate_30_day_searcher_retention_rate`, a return is only counted
+        if the user visits a ``/search`` page in a new session.
+
+        Only users with ``consent = true`` are included, as cross-session tracking requires
+        consent.  The input date must be at least 30 days before today.
+
+        :param date_from: Anchor date (inclusive).  Must be at least 30 days in the past.
+        :type date_from: datetime.date
+        :return: Percentage of searchers who return to search within 30 days.
+        :rtype: OnlineMetricResult
+        :raises InvalidStartDateException: If ``date_from`` is fewer than 30 days before today.
+        """
+        if date_from > date.today() - timedelta(days=30):
+            raise InvalidStartDateException(
+                f"{date_from} is not a valid input.  Date must be at least 30 days in the past.  Earliest valid date is {date.today() - timedelta(days=30)}."
+            )
+
+        query = f"""
+        WITH consent_users AS (
+            SELECT DISTINCT(distinct_id)
+            FROM events
+            WHERE properties.consent = true
+        ),
+
+        search_users AS (
+            SELECT
+                events.distinct_id,
+                min(timestamp) as first_search_date,
+                argMin(properties.$session_id, timestamp) as search_session_id
+            FROM events
+            INNER JOIN consent_users ON events.distinct_id = consent_users.distinct_id
+            WHERE
+                properties.$current_url LIKE '%/search%'
+                AND timestamp >= '{date_from} 00:00:00'
+                AND timestamp < '{date_from} 00:00:00' + interval 1 day
+            GROUP BY events.distinct_id
+        ),
+
+        returning_users AS (
+            SELECT DISTINCT(search_users.distinct_id)
+            FROM search_users
+            INNER JOIN events ON search_users.distinct_id = events.distinct_id
+            WHERE
+                events.timestamp < search_users.first_search_date + interval 29 day
+                AND events.timestamp > toStartOfDay(search_users.first_search_date) + interval 1 day
+                AND events.$session_id != search_users.search_session_id
+                AND event = '$pageview'
+                AND events.properties.$current_url LIKE '%/search%'
+                AND events.properties.$host IN {self.cpr_domains}
+        )
+
+        SELECT
+            (SELECT count(DISTINCT(distinct_id)) FROM returning_users) /
+            (SELECT count(DISTINCT(distinct_id)) FROM search_users) * 100.0 as return_to_search_retention_30_days
+        """
+        results = self.execute_query(query)
+        if not results:
+            raise PosthogNoResultsException()
+        return OnlineMetricResult(
+            metric="percentage_of_searchers_who_return_to_search_within_30_days",
+            query=query,
+            value=results[0][0],
+            date_from=date_from,
+        )
+
     def calculate_click_through_rate_from_search_results_page(
         self,
         date_range: DateRange,
