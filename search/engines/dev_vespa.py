@@ -139,40 +139,6 @@ def _build_filter_query(filter_group: Filter | None) -> str:
     return f" and {yql}" if yql else ""
 
 
-def _build_labels_label_id_filter(
-    labels_id_and: list[str] | None,
-    labels_id_or: list[str] | None,
-    labels_id_not: list[str] | None,
-):
-    where = ""
-
-    """
-    This query is resolved to:
-    (OR filters) AND (AND filters) AND (...NOT filters)
-    """
-
-    if labels_id_or:
-        where += f" and ({' or '.join([f'labels_value_attribute contains \"{label}\"' for label in labels_id_or])})"
-
-    if labels_id_and:
-        where += "".join(
-            [
-                f' and labels_value_attribute contains "{label}"'
-                for label in labels_id_and
-            ]
-        )
-
-    if labels_id_not:
-        where += "".join(
-            [
-                f' and ! (labels_value_attribute contains "{label}")'
-                for label in labels_id_not
-            ]
-        )
-
-    return where
-
-
 # endregion
 
 
@@ -187,21 +153,12 @@ class DevVespaDocumentSearchEngine:
     def search(
         self,
         query: str | None,
-        labels_id_and: list[str] | None,
-        labels_id_or: list[str] | None,
-        labels_id_not: list[str] | None,
         filters_json_string: str | None,
         limit: int = 10,
         offset: int = 0,
     ) -> list[Document]:
         """Fetch a list of relevant search results."""
         where = "true "
-
-        where += _build_labels_label_id_filter(
-            labels_id_and=labels_id_and,
-            labels_id_or=labels_id_or,
-            labels_id_not=labels_id_not,
-        )
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)

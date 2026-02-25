@@ -73,11 +73,6 @@ async def root():
 @router.get("/documents", response_model=SearchResponse[Document])
 def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
-    # we used `alias` here as so that the query param follows the JSON path of the response model
-    # and we cannot use `.` in python value names.
-    labels_id_and: list[str] | None = Query(None, alias="labels.label.id"),
-    labels_id_or: list[str] | None = Query(None, alias="or:labels.label.id"),
-    labels_id_not: list[str] | None = Query(None, alias="not:labels.label.id"),
     filters_json_string: str | None = Query(None, alias="filters"),
     limit: int = 10,
     offset: int = 0,
@@ -85,9 +80,6 @@ def read_documents(
 
     results = DevVespaDocumentSearchEngine().search(
         query=query,
-        labels_id_and=labels_id_and,
-        labels_id_or=labels_id_or,
-        labels_id_not=labels_id_not,
         filters_json_string=filters_json_string,
         limit=limit,
         offset=offset,
