@@ -15,7 +15,7 @@ def get_aws_session() -> boto3.Session:
     """
     Get a boto3 session configured with the AWS profile and region from config.
 
-    In local development, uses the AWS_PROFILE (default: "labs").
+    In local development, uses the AWS_PROFILE
     In containerized environments (ECS), uses the task IAM role (profile_name=None).
     """
     return boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
