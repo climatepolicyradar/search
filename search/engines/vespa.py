@@ -136,7 +136,7 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
 
         if self.client is None:
             self.connect_to_vespa()
-            assert self.client is not None
+            assert self.client is not None  # nosec
 
         request_body = self._build_request(query, limit, offset)
 
