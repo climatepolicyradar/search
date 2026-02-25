@@ -7,7 +7,7 @@ from typing import Literal
 import requests
 from pydantic import BaseModel
 
-from search.data_in_models import Document, DocumentLabelRelationship, Label
+from search.data_in_models import Document, Label, LabelRelationship
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -238,11 +238,11 @@ class DevVespaDocumentSearchEngine:
             labels = []
             for label in source.get("labels", []):
                 labels.append(
-                    DocumentLabelRelationship(
+                    LabelRelationship(
                         type=label.get("type", MISSING_PLACEHOLDER),
-                        label=Label(
+                        value=Label(
                             id=label.get("label").get("id", MISSING_PLACEHOLDER),
-                            title=label.get("label").get("title", MISSING_PLACEHOLDER),
+                            value=label.get("label").get("title", MISSING_PLACEHOLDER),
                             type=label.get("label").get("type", MISSING_PLACEHOLDER),
                         ),
                         timestamp=label.get("timestamp"),
@@ -329,7 +329,7 @@ class DevVespaLabelSearchEngine:
             labels.append(
                 Label(
                     id=label_title,
-                    title=label_title,
+                    value=label_title,
                     type="aggregated",  # Type is lost in aggregation
                 )
             )

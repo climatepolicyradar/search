@@ -53,19 +53,19 @@ class TextBlock(TypedDict):
 class Label(TypedDict):
     id: int
     type: str
-    title: str
+    value: str
 
 
-class DocumentLabelRelationship(TypedDict):
-    label: Label
+class LabelRelationship(TypedDict):
+    value: Label
     timestamp: str | None
 
 
-class Document(TypedDict, total=False):
+class Document(TypedDict):
     id: str
     title: str | None
     description: str | None
-    labels: list[DocumentLabelRelationship]
+    labels: list[LabelRelationship]
 
 
 class VespaLabel(TypedDict):
@@ -232,7 +232,7 @@ def write_updates_file(api_documents: list[Document], passages_file: Path):
             chunk_df = pl.from_arrow(table)
             del table
 
-            for row in chunk_df.iter_rows(named=True):
+            for row in chunk_df.iter_rows(named=True):  # type: ignore
                 document_id = row["document_id"]
                 document = documents_by_id.get(document_id)
                 if not document:
@@ -263,9 +263,9 @@ def write_updates_file(api_documents: list[Document], passages_file: Path):
                         "description": document.get("description"),
                         "labels": [
                             {
-                                "id": label["label"]["id"],
-                                "type": label["label"]["type"],
-                                "title": label["label"]["title"],
+                                "id": label["value"]["id"],
+                                "type": label["value"]["type"],
+                                "title": label["value"]["value"],
                                 "timestamp": _to_unix_timestamp(label.get("timestamp")),
                                 "relationship": label.get("type", "related"),
                             }
@@ -294,9 +294,9 @@ def write_updates_file(api_documents: list[Document], passages_file: Path):
                     "description": document.get("description"),
                     "labels": [
                         {
-                            "id": label["label"]["id"],
-                            "type": label["label"]["type"],
-                            "title": label["label"]["title"],
+                            "id": label["value"]["id"],
+                            "type": label["value"]["type"],
+                            "title": label["value"]["value"],
                             "timestamp": _to_unix_timestamp(label.get("timestamp")),
                             "relationship": label.get("type", "related"),
                         }

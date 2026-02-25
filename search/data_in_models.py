@@ -1,23 +1,30 @@
 """
 Taken from the upstream data-in-api.
 
-@see: https://github.com/climatepolicyradar/navigator-backend/blob/f12a1bcda05928a731d7a580ea7455eb8d9a7651/data-in-models/src/data_in_models/models.py
+@see: https://github.com/climatepolicyradar/navigator-backend/blob/main/data-in-models/src/data_in_models/models.py
 """
+
+from __future__ import annotations
 
 from datetime import datetime
 
 from pydantic import BaseModel
 
 
-class Label(BaseModel):
+class WithRelationships(BaseModel):
+    labels: list[LabelRelationship] = []
+    documents: list[DocumentRelationship] = []
+
+
+class Label(WithRelationships):
     id: str
-    title: str
     type: str
+    value: str
 
 
-class DocumentLabelRelationship(BaseModel):
+class LabelRelationship(BaseModel):
     type: str
-    label: Label
+    value: Label
     timestamp: datetime | None = None
 
 
@@ -29,19 +36,18 @@ class BaseDocument(BaseModel):
     id: str
     title: str
     description: str | None = None
-    labels: list[DocumentLabelRelationship] = []
     items: list[Item] = []
 
 
-class DocumentDocumentRelationship(BaseModel):
+class DocumentRelationship(BaseModel):
     type: str
-    document: "DocumentWithoutRelationships"
+    value: DocumentWithoutRelationships
     timestamp: datetime | None = None
 
 
-class Document(BaseDocument):
-    relationships: list[DocumentDocumentRelationship] = []
+class Document(BaseDocument, WithRelationships):
+    pass
 
 
 class DocumentWithoutRelationships(BaseDocument):
-    pass
+    labels: list[LabelRelationship] = []
