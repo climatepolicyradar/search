@@ -58,7 +58,7 @@ def create_deployment(
     **kwargs,
 ) -> None:
     """
-    Create a deployment for the specified flow in the labs environment.
+    Create a deployment for the specified flow in the production environment.
 
     Parameters
     ----------
@@ -81,11 +81,11 @@ def create_deployment(
     docker_repository = os.getenv("DOCKER_REPOSITORY", "search")
     image_name = os.path.join(docker_registry, docker_repository)
 
-    work_pool_name = "mvp-labs-ecs"
-    default_job_variables = JSON.load("default-job-variables-prefect-mvp-labs").value
+    work_pool_name = "mvp-prod-ecs"
+    default_job_variables = JSON.load("default-job-variables-prefect-mvp-prod").value
 
     job_variables = {**default_job_variables, **flow_variables}
-    tags = [f"repo:{docker_repository}", "awsenv:labs"] + extra_tags
+    tags = [f"repo:{docker_repository}", "awsenv:prod"] + extra_tags
 
     try:
         result = subprocess.run(
@@ -122,7 +122,7 @@ def create_deployment(
     )
 
     _ = flow.deploy(
-        f"search-{flow_name}-labs",
+        f"search-{flow_name}-prod",
         work_pool_name=work_pool_name,
         version=version,
         image=DockerImage(
