@@ -12,6 +12,13 @@ extract:
         uv run python scripts/extract_vespa_updates.py; \
     fi
 
+extract_from_s3:
+    # this is a way of sharing the output of `extract_vespa_updates` step as it is a very long running process
+    aws s3 cp s3://cpr-cache/search/.data_cache/extract_vespa_updates/updates.jsonl ../.data_cache/extract_vespa_updates/updates.jsonl
+
+update_extract_from_s3:
+    aws s3 cp ../.data_cache/extract_vespa_updates/updates.jsonl s3://cpr-cache/search/.data_cache/extract_vespa_updates/updates.jsonl
+
 # Load data into Vespa
 feed limit="":
     if [ -z "{{limit}}" ]; then \
@@ -26,7 +33,6 @@ feed limit="":
 dev:
     just up
     just deploy
-    just extract
     just feed 100
 
 get query="congo":
@@ -45,12 +51,6 @@ destroy:
 reset:
     docker compose down -v
 
-###
-# HERE BE DRAGONS
-# This is for remote schema and data management.
-# This allows us to start surfacing data to the UI ASAP.
-###
-
 # remote command
 remote-deploy:
     #!/usr/bin/env bash
@@ -66,6 +66,13 @@ remote-feed length="100":
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write-token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     head -{{length}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
+
+remote-feed-all:
+    #!/usr/bin/env bash
+    set -e
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa feed ../.data_cache/extract_vespa_updates/updates.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-visit:
     #!/usr/bin/env bash

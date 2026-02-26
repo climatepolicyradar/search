@@ -24,17 +24,16 @@
              - Operations: https://docs.vespa.ai/en/document-v1-api-guide.html
         -->
         <clients>
+            <!-- Certificate based auth (required by Vespa Cloud) -->
+            <client id="default" permissions="read,write">
+                <certificate file="security/clients.pem"/>
+            </client>
             <!-- Token based auth-->
             <client id="search-production-read" permissions="read">
                 <token id="search-production-read"/>
             </client>
             <client id="search-production-write" permissions="read,write">
                 <token id="search-production-write"/>
-            </client>
-
-            <!-- Cert based auth-->
-            <client id="jamesgorrie" permissions="read">
-                <certificate file="security/jamesgorrie.pem"/>
             </client>
         </clients>
         <document-api/>
