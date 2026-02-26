@@ -6,6 +6,7 @@ from typing import Literal
 
 import requests
 from pydantic import BaseModel
+from pydantic.networks import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from search.data_in_models import Document, Label, LabelRelationship
@@ -35,7 +36,7 @@ MISSING_PLACEHOLDER = "MISSING"
 
 # region Settings
 class Settings(BaseSettings):
-    vespa_endpoint: str
+    vespa_endpoint: AnyHttpUrl
     vespa_read_token: str
     model_config = SettingsConfigDict(env_file="api/.env")
 

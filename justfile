@@ -80,7 +80,8 @@ get-version:
     @grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/'
 
 # Dev
-bootstrap:
+setup-api:
+    # this recipe is needed to get you initially setup, but does not need to run continuously
     just gen-api-env
 
 dev:
