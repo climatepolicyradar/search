@@ -72,7 +72,7 @@ remote-feed-all:
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write-token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/extract_vespa_updates/updates.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
+    vespa feed ../.data_cache/extract_vespa_updates/updates.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-visit:
     #!/usr/bin/env bash
