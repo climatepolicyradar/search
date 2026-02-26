@@ -57,7 +57,7 @@ class TextBlock(TypedDict):
 class SourceLabel(TypedDict):
     id: str
     type: str
-    title: str
+    value: str
 
 
 class SourceLabelRelationship(TypedDict):
@@ -241,7 +241,7 @@ def _to_api_document(document: dict) -> SourceDocument:
                 "label": {
                     "id": label["value"]["id"],
                     "type": label["value"]["type"],
-                    "title": label["value"]["value"],
+                    "value": label["value"]["value"],
                 },
                 "timestamp": label.get("timestamp"),
             }
