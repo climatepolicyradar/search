@@ -82,7 +82,7 @@ def create_deployment(
     image_name = os.path.join(docker_registry, docker_repository)
 
     work_pool_name = "mvp-prod-ecs"
-    default_job_variables_name = "default-job-variables-prefect-mvp-prod"
+    default_job_variables_name = "ecs-default-job-variables-prefect-mvp-prod"
     default_job_variables = Variable.get(default_job_variables_name)
 
     if not isinstance(default_job_variables, dict):
