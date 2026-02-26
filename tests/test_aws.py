@@ -18,8 +18,8 @@ from search.aws import (
     "profile,region",
     [
         (None, "eu-west-1"),
-        ("labs", "eu-west-1"),
-        ("labs", "us-east-1"),
+        ("production", "eu-west-1"),
+        ("production", "us-east-1"),
     ],
 )
 def test_whether_get_aws_session_creates_session_with_correct_profile_and_region(

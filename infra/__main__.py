@@ -9,9 +9,16 @@ from pulumi_aws import (
     get_caller_identity,
     iam,
     s3,
+    ssm,
 )
 
-from search.config import REPO_ROOT_DIR, get_git_commit_hash
+from search.config import (
+    REPO_ROOT_DIR,
+    get_git_commit_hash,
+    vespa_private_key_read_only_ssm_key,
+    vespa_public_cert_read_only_ssm_key,
+    vespa_url_ssm_key,
+)
 
 # pulumi config
 config = pulumi.Config()
@@ -233,6 +240,31 @@ search_api_github_actions_role = iam.Role(
     name=f"{name}-{environment}-github-actions",
     tags=tags,
     opts=pulumi.ResourceOptions(protect=True),
+)
+
+# -----
+# SSM
+# -----
+
+vespa_url_ssm = ssm.Parameter(
+    vespa_url_ssm_key,
+    name=vespa_url_ssm_key,
+    type=ssm.ParameterType.SECURE_STRING,
+    value=config.get("VESPA_URL"),
+)
+
+vespa_private_key_read_only_ssm = ssm.Parameter(
+    vespa_private_key_read_only_ssm_key,
+    name=vespa_private_key_read_only_ssm_key,
+    type=ssm.ParameterType.SECURE_STRING,
+    value=config.get("VESPA_PRIVATE_KEY_READ_ONLY"),
+)
+
+vespa_public_cert_read_only_ssm = ssm.Parameter(
+    vespa_public_cert_read_only_ssm_key,
+    name=vespa_public_cert_read_only_ssm_key,
+    type=ssm.ParameterType.SECURE_STRING,
+    value=config.get("VESPA_PUBLIC_CERT_READ_ONLY"),
 )
 
 # These exports are the public API for this stack, and consumed by external stacks

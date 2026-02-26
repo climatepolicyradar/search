@@ -58,6 +58,7 @@ def is_truthy(value: str | bool) -> bool:
     return value == "1" or value.lower() == "true"
 
 
+PROJECT_NAME = "search"
 REPO_ROOT_DIR = get_git_root()
 
 # DATA_DIR depends on the environment:
@@ -133,3 +134,27 @@ POSTHOG_CPR_DOMAINS = [
 
 # Grafana
 GRAFANA_LABELS = 'span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER", job="navigator-backend", span_name="POST /api/v1/searches", environment=~"production"'
+
+
+# SSM keys
+def generate_secret_key(project: str, aws_service: str, name: str):
+    return f"/{project}/{aws_service}/{name}"
+
+
+vespa_url_ssm_key = generate_secret_key(
+    project=PROJECT_NAME,
+    aws_service="prefect",
+    name="VESPA_URL",
+)
+
+vespa_private_key_read_only_ssm_key = generate_secret_key(
+    project=PROJECT_NAME,
+    aws_service="prefect",
+    name="VESPA_PRIVATE_KEY_READ_ONLY",
+)
+
+vespa_public_cert_read_only_ssm_key = generate_secret_key(
+    project=PROJECT_NAME,
+    aws_service="prefect",
+    name="VESPA_PUBLIC_CERT_READ_ONLY",
+)
