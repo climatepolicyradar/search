@@ -1,13 +1,12 @@
 name: Deploy
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: write
+  # needed for reading the OIDC token and assuming the role
+  id-token: write
 
 jobs:
   test:

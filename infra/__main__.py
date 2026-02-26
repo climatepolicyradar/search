@@ -240,7 +240,7 @@ search_api_github_actions_role = iam.Role(
                             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                         },
                         "StringLike": {
-                            "token.actions.githubusercontent.com:sub": "repo:climatepolicyradar/search"
+                            "token.actions.githubusercontent.com:sub": "repo:climatepolicyradar/search:*"
                         },
                     },
                     "Effect": "Allow",
