@@ -45,6 +45,11 @@ app.add_middleware(
 T = TypeVar("T", bound=BaseModel)
 
 
+class Aggregation(BaseModel):
+    field: str
+    values: list[str]
+
+
 class SearchResponse[T](BaseModel):
     """Response model for search results"""
 
@@ -55,6 +60,7 @@ class SearchResponse[T](BaseModel):
     next_page: AnyHttpUrl | None = None
     previous_page: AnyHttpUrl | None = None
     results: list[T]
+    aggregations: list[Aggregation] = []
 
 
 # region routes
@@ -94,6 +100,7 @@ def read_documents(
         next_page=None,
         previous_page=None,
         results=results,
+        aggregations=[],
     )
 
 
@@ -105,6 +112,8 @@ def read_labels(
     type: str | None = None,
 ):
     results = DevVespaLabelSearchEngine().search(query=query, label_type=type)
+    label_types = DevVespaLabelSearchEngine().all_label_types()
+
     # TODO: pagination
     return SearchResponse[Label](
         total_results=len(results),
@@ -114,6 +123,12 @@ def read_labels(
         next_page=None,
         previous_page=None,
         results=results,
+        aggregations=[
+            Aggregation(
+                field="type",
+                values=label_types,
+            )
+        ],
     )
 
 

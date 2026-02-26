@@ -320,6 +320,50 @@ class DevVespaLabelSearchEngine:
 
         return labels
 
+    def all_label_types(self) -> list[str]:
+        """Fetch all distinct label types (unfiltered)."""
+        yql = (
+            "select * from sources documents where true "
+            "| all(group(labels_type_attribute) "
+            "order(-count()) each(output(count())))"
+        )
+
+        try:
+            res = requests.post(
+                f"{settings.vespa_endpoint}/search",
+                json={
+                    "yql": yql,
+                    "hits": 0,
+                    "timeout": "5s",
+                },
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa all_label_types query failed")
+            return []
+
+        res = res.json()
+        types: list[str] = []
+
+        root = res.get("root", {})
+        children = root.get("children", [{}])[0].get("children", [])
+        group_list = next(
+            (
+                item.get("children", [])
+                for item in children
+                if item.get("label") == "labels_type_attribute"
+            ),
+            [],
+        )
+
+        for group in group_list:
+            types.append(group.get("value", ""))
+
+        return types
+
     def count(self, query: str) -> int:
         """Return hit count"""
         raise NotImplementedError()
