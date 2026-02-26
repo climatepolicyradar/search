@@ -63,20 +63,20 @@ remote-deploy:
 remote-feed length="100":
     #!/usr/bin/env bash
     set -e
-    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     head -{{length}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
 
 remote-feed-all:
     #!/usr/bin/env bash
     set -e
-    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     vespa feed ../.data_cache/extract_vespa_updates/updates.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-visit:
     #!/usr/bin/env bash
     set -e
-    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     vespa visit $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"

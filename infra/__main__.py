@@ -98,6 +98,7 @@ apprunner_ecr_role_policy = iam.RolePolicy(
         ]
     ).json,
 )
+
 apprunner_instance_role = iam.Role(
     f"{application_name}-apprunner-instance-role",
     name=f"{application_name}-apprunner-instance-role",
@@ -112,10 +113,54 @@ apprunner_instance_role = iam.Role(
                     )
                 ],
                 actions=["sts:AssumeRole"],
-            )
+            ),
         ]
     ).json,
 )
+vespa_endpoint = ssm.Parameter(
+    "vespa-endpoint",
+    name="/search/vespa/endpoint",
+    type=ssm.ParameterType.SECURE_STRING,
+    value=config.get("vespa_endpoint"),
+)
+
+vespa_read_token = ssm.Parameter(
+    "vespa-read-token",
+    name="/search/vespa/read_token",
+    type=ssm.ParameterType.SECURE_STRING,
+    value=config.get("vespa_read_token"),
+)
+apprunner_ssm_parameter_policy = iam.RolePolicy(
+    f"{application_name}-ssm-parameter-policy",
+    name=f"{application_name}-ssm-parameter-policy",
+    role=apprunner_instance_role.name,
+    policy=pulumi.Output.all(
+        vespa_endpoint_arn=vespa_endpoint.arn,
+        vespa_read_token_arn=vespa_read_token.arn,
+    ).apply(
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ssm:GetParameter",
+                            "ssm:GetParameters",
+                            "ssm:DescribeParameters",
+                        ],
+                        "Resource": [
+                            args["vespa_endpoint_arn"],
+                            args["vespa_read_token_arn"],
+                        ],
+                    }
+                ],
+            }
+        )
+    ),
+)
+
+
 apprunner_read_s3_policy = iam.Policy(
     f"{application_name}-read-s3-policy",
     name=f"{application_name}-read-s3-policy",
@@ -141,6 +186,7 @@ apprunner_read_s3_policy_attachment = iam.RolePolicyAttachment(
     policy_arn=apprunner_read_s3_policy.arn,
 )
 
+
 apprunner_service = apprunner.Service(
     f"{application_name}-apprunner-service",
     service_name=f"{application_name}",
@@ -155,6 +201,10 @@ apprunner_service = apprunner.Service(
                 port="8080",
                 runtime_environment_variables={
                     "BUCKET_NAME": bucket.bucket,
+                },
+                runtime_environment_secrets={
+                    "VESPA_ENDPOINT": vespa_endpoint.arn,
+                    "VESPA_READ_TOKEN": vespa_read_token.arn,
                 },
             ),
         ),
