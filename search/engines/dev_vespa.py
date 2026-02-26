@@ -314,7 +314,7 @@ class DevVespaLabelSearchEngine:
                 Label(
                     id=label_type_value,
                     value=label_value,
-                    type=label_type,
+                    type=label_type or MISSING_PLACEHOLDER,
                 )
             )
 
