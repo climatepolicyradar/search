@@ -2,6 +2,7 @@ name: Deploy
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: write
@@ -9,23 +10,6 @@ permissions:
   id-token: write
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    if: false
-    steps:
-      - name: Check out repository code
-        uses: actions/checkout@v6
-        with:
-          lfs: true
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-      - uses: extractions/setup-just@v3
-      - uses: actions/setup-python@v6
-        with:
-          python-version-file: pyproject.toml
-      - run: just install
-      - run: just test-functional
   deploy:
     runs-on: ubuntu-latest
     environment: production
