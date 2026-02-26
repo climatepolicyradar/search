@@ -25,15 +25,14 @@ config = pulumi.Config()
 caller_identity = get_caller_identity()
 account_id = caller_identity.account_id
 stack = pulumi.get_stack()
-environment = pulumi.get_stack()
 name = pulumi.get_project()
 
 tags = {
     "CPR-Created-By": "pulumi",
     "CPR-Pulumi-Stack-Name": stack,
     "CPR-Pulumi-Project-Name": pulumi.get_project(),
-    "CPR-Tag": f"{environment}-{name}",
-    "Environment": environment,
+    "CPR-Tag": f"{stack}-{name}",
+    "Environment": stack,
 }
 
 # Get the git commit hash for tagging the image
@@ -229,7 +228,7 @@ apprunner_service = apprunner.Service(
 )
 
 search_api_github_actions_role = iam.Role(
-    f"{name}-{environment}-github-actions",
+    f"{name}-{stack}-github-actions",
     assume_role_policy=json.dumps(
         {
             "Statement": [
@@ -254,7 +253,7 @@ search_api_github_actions_role = iam.Role(
     ),
     inline_policies=[
         {
-            "name": f"{name}-{environment}-github-actions",
+            "name": f"{name}-{stack}-github-actions",
             "policy": json.dumps(
                 {
                     "Version": "2012-10-17",
@@ -287,7 +286,7 @@ search_api_github_actions_role = iam.Role(
             ),
         }
     ],
-    name=f"{name}-{environment}-github-actions",
+    name=f"{name}-{stack}-github-actions",
     tags=tags,
     opts=pulumi.ResourceOptions(protect=True),
 )
