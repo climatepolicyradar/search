@@ -100,6 +100,9 @@ class VespaFields(TypedDict):
     labels: list[VespaLabel]
     passages: list[VespaPassage]
     source: str
+    attributes_double: dict[str, float]
+    attributes_string: dict[str, str]
+    attributes_bool: dict[str, bool]
 
 
 class VespaUpdateOp(TypedDict):
@@ -312,6 +315,27 @@ def write_updates_file(api_documents: pl.DataFrame):
                             }
                             for label in (row.get("labels") or [])
                         ],
+                        "attributes_string": {
+                            key: str(attr["value"])
+                            for key, attr in row.get("attributes", {}).items()
+                            if isinstance(attr["value"], str)
+                        },
+                        "attributes_double": {
+                            key: float(attr["value"])
+                            for key, attr in row.get("attributes", {}).items()
+                            if isinstance(attr["value"], (int, float))
+                            # this is needed because
+                            # >>> isinstance(True, int)
+                            # True
+                            # >>> isinstance(False, int)
+                            # True
+                            and not isinstance(attr["value"], bool)
+                        },
+                        "attributes_bool": {
+                            key: bool(attr["value"])
+                            for key, attr in row.get("attributes", {}).items()
+                            if isinstance(attr["value"], bool)
+                        },
                         "passages": passages,
                         "source": orjson.dumps(
                             _to_api_document(row) | {"passages": huggingface_passages}

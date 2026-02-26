@@ -13,6 +13,23 @@ schema documents {
         }
         field labels type array<label> {}
 
+        struct attribute {
+            field type type string {}
+            field key type string {}
+            field value type string {}
+        }
+        field attributes type array<attribute> {}
+
+        field attributes_number type map<string, double> {
+            indexing: attribute
+        }
+        field attributes_string type map<string, string> {
+            indexing: attribute
+        }
+        field attributes_boolean type map<string, bool> {
+            indexing: attribute
+        }
+
         struct passage {
             field text_block_id type string {}
             field language type string {}
@@ -37,10 +54,6 @@ schema documents {
         attribute: fast-search
     }
 
-    field labels_type_attribute type array<string> {
-        indexing: input labels | for_each { get_field type } | attribute
-        attribute: fast-search
-    }
 
     field passages_text type array<string> {
         indexing: input passages | for_each { get_field text } | index
