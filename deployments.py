@@ -11,10 +11,10 @@ import os
 import subprocess
 from typing import Any, ParamSpec, TypeVar
 
-from prefect.blocks.system import JSON
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron
+from prefect.variables import Variable
 
 from relevance_tests import test_documents, test_labels, test_passages
 from scripts.data_uploaders.upload_documents import upload_documents_databases
@@ -82,7 +82,13 @@ def create_deployment(
     image_name = os.path.join(docker_registry, docker_repository)
 
     work_pool_name = "mvp-prod-ecs"
-    default_job_variables = JSON.load("default-job-variables-prefect-mvp-prod").value
+    default_job_variables_name = "ecs-default-job-variables-prefect-mvp-prod"
+    default_job_variables = Variable.get(default_job_variables_name)
+
+    if not isinstance(default_job_variables, dict):
+        raise ValueError(
+            f"Variable {default_job_variables_name} not found or is not a dict in Prefect"
+        )
 
     job_variables = {**default_job_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", "awsenv:prod"] + extra_tags
