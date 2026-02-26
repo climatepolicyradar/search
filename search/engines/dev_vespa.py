@@ -6,6 +6,8 @@ from typing import Literal
 
 import requests
 from pydantic import BaseModel
+from pydantic.networks import AnyHttpUrl
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from search.data_in_models import Document, Label, LabelRelationship
 from search.log import get_logger
@@ -28,11 +30,24 @@ For now we just use `requests` which yields the same results.
 """
 
 API_TIMEOUT = 5  # seconds
-API_URL = "https://vz0k397ock.execute-api.eu-west-1.amazonaws.com/production"
 # We make this very obvious as it is used for values that should exist
 MISSING_PLACEHOLDER = "MISSING"
 
 
+# region Settings
+class Settings(BaseSettings):
+    vespa_endpoint: AnyHttpUrl
+    vespa_read_token: str
+    model_config = SettingsConfigDict(env_file="api/.env")
+
+
+# @see: https://github.com/pydantic/pydantic-settings/issues/201
+settings = Settings()  # pyright: ignore[reportCallIssue]
+
+# endregion
+
+
+# region Filters
 class LabelsCondition(BaseModel):
     field: Literal["labels.label.id"]
     op: Literal["contains", "not_contains"]
@@ -214,13 +229,16 @@ class DevVespaDocumentSearchEngine:
         print(f"searching for yql: {yql}")
         try:
             res = requests.post(
-                f"{API_URL}/search",
+                f"{settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "query": query,
                     "timeout": "5s",
                 },
                 timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                },
             )
         except Exception:
             logger.exception("Vespa query failed")
@@ -242,7 +260,7 @@ class DevVespaDocumentSearchEngine:
                         type=label.get("type", MISSING_PLACEHOLDER),
                         value=Label(
                             id=label.get("label").get("id", MISSING_PLACEHOLDER),
-                            value=label.get("label").get("title", MISSING_PLACEHOLDER),
+                            value=label.get("label").get("value", MISSING_PLACEHOLDER),
                             type=label.get("label").get("type", MISSING_PLACEHOLDER),
                         ),
                         timestamp=label.get("timestamp"),
@@ -294,7 +312,7 @@ class DevVespaLabelSearchEngine:
 
         try:
             res = requests.post(
-                f"{API_URL}/search",
+                f"{settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "query": query,
@@ -303,6 +321,9 @@ class DevVespaLabelSearchEngine:
                     "timeout": "5s",
                 },
                 timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                },
             )
         except Exception:
             logger.exception("Vespa query failed")
