@@ -6,11 +6,10 @@ from typing import Literal
 
 import requests
 from pydantic import BaseModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from search.data_in_models import Document, Label, LabelRelationship
 from search.log import get_logger
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = get_logger(__name__)
 
@@ -260,7 +259,7 @@ class DevVespaDocumentSearchEngine:
                         type=label.get("type", MISSING_PLACEHOLDER),
                         value=Label(
                             id=label.get("label").get("id", MISSING_PLACEHOLDER),
-                            value=label.get("label").get("title", MISSING_PLACEHOLDER),
+                            value=label.get("label").get("value", MISSING_PLACEHOLDER),
                             type=label.get("label").get("type", MISSING_PLACEHOLDER),
                         ),
                         timestamp=label.get("timestamp"),
