@@ -79,4 +79,6 @@ remote-visit:
     set -e
     vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa visit $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
+    mkdir -p ../.data_cache/vespa
+    vespa visit --target "$vespa_endpoint" --header "Authorization: Bearer $vespa_read_token" > "../.data_cache/vespa/documents-cloud.jsonl"
+    echo "Exported to ../.data_cache/vespa/documents-cloud.jsonl"

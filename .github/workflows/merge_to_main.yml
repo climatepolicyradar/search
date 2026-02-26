@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: write
+  # needed for reading the OIDC token and assuming the role
+  id-token: write
 
 jobs:
   changes:
@@ -108,26 +110,10 @@ jobs:
             exit 1
           fi
   deploy:
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-deploy == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: aws-actions/configure-aws-credentials@v5
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-production-github-actions
-          role-session-name: Github_merge_to_main_deploy
-          aws-region: eu-west-1
-      - uses: aws-actions/amazon-ecr-login@v2
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-      - uses: extractions/setup-just@v3
-      - uses: actions/setup-python@v6
-        with:
-          python-version-file: pyproject.toml
-      - run: build-image
-      - run: push-image
 
   pulumi-up:
     runs-on: ubuntu-latest

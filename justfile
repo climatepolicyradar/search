@@ -54,11 +54,11 @@ serve-api:
 
 # Build Docker image for deployment
 build-image:
-    docker build --file api/Dockerfile --platform=linux/amd64 --progress=plain -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} .
+    docker build --file api/Dockerfile --platform=linux/amd64 --progress=plain -t ${DOCKER_REGISTRY}/search-api:latest .
 
 # Run Docker image locally
 run-image cmd="sh":
-    docker run --rm -it ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} {{cmd}}
+    docker run --rm -it ${DOCKER_REGISTRY}/search-api:latest {{cmd}}
 
 # Login to AWS ECR
 ecr-login:
@@ -66,11 +66,11 @@ ecr-login:
 
 # Push Docker image to ECR
 push-image:
-    docker push ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION}
+    docker push ${DOCKER_REGISTRY}/search-api:latest
 
 # Deploy flows to Prefect Cloud (build, push, and register)
 deploy-flows-from-local:
-    echo building ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${VERSION} in region: ${AWS_REGION}
+    echo building ${DOCKER_REGISTRY}/search-api:latest in region: ${AWS_REGION}
     just ecr-login
     just build-image
     just push-image
