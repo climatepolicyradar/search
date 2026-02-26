@@ -12,6 +12,13 @@ extract:
         uv run python scripts/extract_vespa_updates.py; \
     fi
 
+extract_from_s3:
+    # this is a way of sharing the output of `extract_vespa_updates` step as it is a very long running process
+    aws s3 cp s3://cpr-cache/search/.data_cache/extract_vespa_updates/updates.jsonl ../.data_cache/extract_vespa_updates/updates.jsonl
+
+update_extract_from_s3:
+    aws s3 cp ../.data_cache/extract_vespa_updates/updates.jsonl s3://cpr-cache/search/.data_cache/extract_vespa_updates/updates.jsonl
+
 # Load data into Vespa
 feed limit="":
     if [ -z "{{limit}}" ]; then \
@@ -26,7 +33,6 @@ feed limit="":
 dev:
     just up
     just deploy
-    just extract
     just feed 100
 
 get query="congo":
@@ -44,12 +50,6 @@ destroy:
 # Remove the Vespa container and volume
 reset:
     docker compose down -v
-
-###
-# HERE BE DRAGONS
-# This is for remote schema and data management.
-# This allows us to start surfacing data to the UI ASAP.
-###
 
 # remote command
 remote-deploy:
