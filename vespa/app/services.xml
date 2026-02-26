@@ -31,11 +31,6 @@
             <client id="search-production-write" permissions="read,write">
                 <token id="search-production-write"/>
             </client>
-
-            <!-- Cert based auth-->
-            <client id="jamesgorrie" permissions="read">
-                <certificate file="security/jamesgorrie.pem"/>
-            </client>
         </clients>
         <document-api/>
 
