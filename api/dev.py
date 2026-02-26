@@ -102,8 +102,9 @@ def read_labels(
     query: Annotated[
         str, Query(..., description="What are you looking for?", min_length=1)
     ],
+    type: str | None = None,
 ):
-    results = DevVespaLabelSearchEngine().search(query=query)
+    results = DevVespaLabelSearchEngine().search(query=query, label_type=type)
     # TODO: pagination
     return SearchResponse[Label](
         total_results=len(results),

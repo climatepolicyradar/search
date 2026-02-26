@@ -247,13 +247,15 @@ class DevVespaLabelSearchEngine:
     def __init__(self) -> None:
         pass
 
-    def search(self, query: str) -> list[Label]:
+    def search(self, query: str, label_type: str | None) -> list[Label]:
         """Fetch a list of relevant search results."""
 
         # 1) prefix filter the documents list on `labels_type_value_attribute` to ensure we are grouping by as few documents as possible for performance
         # We use `matches` with a case-insensitive regex pattern `(?i)` because `contains` on attributes is strictly case-sensitive.
         safe_terms = re.escape(query)
-        doc_regex = f"(?i)^[^:]*::{safe_terms}.*"
+        safe_label_type = re.escape(label_type) if label_type else ""
+
+        doc_regex = f"(?i)^{safe_label_type or "[^:]*"}::{safe_terms}.*"
         document_filter_query = f'select * from sources documents where labels_type_value_attribute matches "{doc_regex}"'
 
         # 2) group by all `labels_type_value_attribute` values that match the prefix
