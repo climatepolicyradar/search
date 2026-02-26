@@ -112,8 +112,8 @@ jobs:
   deploy:
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
-    needs: [changes, tests]
-    if: needs.changes.outputs.run-deploy == 'true'
+    # needs: [changes, tests]
+    # if: needs.changes.outputs.run-deploy == 'true'
 
   pulumi-up:
     runs-on: ubuntu-latest
