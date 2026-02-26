@@ -250,17 +250,20 @@ class DevVespaLabelSearchEngine:
     def search(self, query: str) -> list[Label]:
         """Fetch a list of relevant search results."""
 
-        # 1) prefix filter the documents list on `labels_value_attribute` to ensure we are grouping by as few documents as possible for performance
+        # 1) prefix filter the documents list on `labels_type_value_attribute` to ensure we are grouping by as few documents as possible for performance
         # We use `matches` with a case-insensitive regex pattern `(?i)` because `contains` on attributes is strictly case-sensitive.
         safe_terms = re.escape(query)
-        doc_regex = f"(?i)^{safe_terms}.*"
-        document_filter_query = f'select * from sources documents where labels_value_attribute matches "{doc_regex}"'
+        doc_regex = f"(?i)^[^:]*::{safe_terms}.*"
+        document_filter_query = f'select * from sources documents where labels_type_value_attribute matches "{doc_regex}"'
 
-        # 2) group by all `labels_value_attribute` values that match the prefix
-        grouping_query = "group(labels_value_attribute)"
+        # 2) group by all `labels_type_value_attribute` values that match the prefix
+        grouping_query = "group(labels_type_value_attribute)"
 
         # 3) filter the group
-        group_filter_query = f'filter(regex("{doc_regex}", labels_value_attribute))'
+        group_filter_query = (
+            f'filter(regex("{doc_regex}", labels_type_value_attribute))'
+        )
+        # group_filter_query = ""
 
         # 4) limit and order and output the groups
         group_order_query = "order(-count()) each(output(count()))"
@@ -297,18 +300,19 @@ class DevVespaLabelSearchEngine:
             (
                 item.get("children", [])
                 for item in children
-                if item.get("label") == "labels_value_attribute"
+                if item.get("label") == "labels_type_value_attribute"
             ),
             [],
         )
 
         for group in group_list:
-            label_title = group.get("value", "")
+            label_type_value = group.get("value", "")
+            label_type, _, label_value = label_type_value.partition("::")
             labels.append(
                 Label(
-                    id=label_title,
-                    value=label_title,
-                    type="aggregated",  # Type is lost in aggregation
+                    id=label_type_value,
+                    value=label_value,
+                    type=label_type,
                 )
             )
 
