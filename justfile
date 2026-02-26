@@ -90,7 +90,7 @@ dev:
 gen-api-env:
     #!/usr/bin/env bash
     set -euxo pipefail
-    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     echo "VESPA_READ_TOKEN=$vespa_read_token" > ./api/.env
     echo "VESPA_ENDPOINT=$vespa_endpoint" >> ./api/.env
