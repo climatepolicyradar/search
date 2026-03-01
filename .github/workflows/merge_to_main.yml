@@ -127,7 +127,7 @@ jobs:
     environment: ${{ matrix.environment }}
     steps:
       - uses: actions/checkout@v6
-      - uses: aws-actions/configure-aws-credentials@v5
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions
           role-session-name: GitHub_Pulumi_up_production
