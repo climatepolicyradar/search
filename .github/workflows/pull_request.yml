@@ -15,7 +15,7 @@ jobs:
       run-check-scripts-structure: ${{ steps.filter.outputs.run-check-scripts-structure }}
       run-pulumi-preview: ${{ steps.filter.outputs.run-pulumi-preview }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
