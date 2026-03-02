@@ -56,3 +56,6 @@ Thumbs.db
 docs/
 *.md
 !README.md
+
+# cache
+.data_cache/

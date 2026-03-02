@@ -21,9 +21,11 @@ schema documents {
             field page_number type int {}
             field text type string {}
         }
-        field passages type array<passage> {}
+        field passages type array<passage> {
+            indexing: summary
+        }
 
-        field source type string {
+        field document_source type string {
             indexing: summary
         }
     }

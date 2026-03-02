@@ -2,6 +2,7 @@
 
 import json
 
+import components.aws as components_aws
 import pulumi
 from pulumi_aws import (
     apprunner,
@@ -319,3 +320,22 @@ vespa_public_cert_read_only_ssm = ssm.Parameter(
 # These exports are the public API for this stack, and consumed by external stacks
 # Edit with caution
 pulumi.export("apprunner_service_url", apprunner_service.service_url)
+
+# region Prefect
+ecr_repository = components_aws.ecr.Repository(
+    name=f"{name}-prefect-ecr-repository",
+    aws_ecr_repository_args=ecr.RepositoryArgs(
+        name=f"{name}-prefect",
+        encryption_configurations=[
+            ecr.RepositoryEncryptionConfigurationArgs(
+                encryption_type="AES256",
+            )
+        ],
+        image_scanning_configuration=ecr.RepositoryImageScanningConfigurationArgs(
+            scan_on_push=False,
+        ),
+        image_tag_mutability="MUTABLE",
+    ),
+)
+
+# endregion
