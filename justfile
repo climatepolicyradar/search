@@ -95,3 +95,13 @@ gen-api-env:
     echo "VESPA_READ_TOKEN=$vespa_read_token" > ./api/.env
     echo "VESPA_ENDPOINT=$vespa_endpoint" >> ./api/.env
 
+# region prefect
+prefect-build:
+    docker build --file ./prefect/Dockerfile --platform=linux/amd64 --progress=plain -t ${DOCKER_REGISTRY}/search-prefect:latest .
+
+prefect-push:
+    docker push ${DOCKER_REGISTRY}/search-prefect:latest
+
+prefect-deploy:
+    uv run python deployments
+# endregion
