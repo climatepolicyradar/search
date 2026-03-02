@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  # needed for reading the OIDC token and assuming the role
+  id-token: write
 
 jobs:
   changes:
@@ -126,7 +128,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions
-          role-session-name: GitHub_Pulumi_preview_${{ matrix.environment }}
+          role-session-name: GitHub_Pulumi_up_${{ matrix.environment }}
           aws-region: eu-west-1
       - uses: astral-sh/setup-uv@v7
       - uses: extractions/setup-just@v3
