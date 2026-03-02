@@ -1,5 +1,5 @@
 # Extract the data to load into Vespa
-extract-documements:
+extract-documents:
     aws s3 cp s3://cpr-cache/search/materialize_vespa_updates/from_data_in_api.jsonl ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl
 
 feed-documents limit="":
