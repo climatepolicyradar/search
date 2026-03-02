@@ -201,7 +201,7 @@ if __name__ == "__main__":
     # Materializers
     create_deployment(
         flow=materialize_vespa_updates_from_indexer_input,
-        description="Materialize Vespa update ops from indexer input",
+        description="Materialize Vespa update ops from indexer input bucket",
         schedule="0 3 * * *",  # daily at 3am
         flow_variables=DEFAULT_FLOW_VARIABLES
         | {"ephemeralStorage": {"sizeInGiB": 60}},  # bump storage for 40GB
