@@ -851,6 +851,18 @@ wheels = [
 ]
 
 [[package]]
+name = "components"
+version = "1.0.3"
+source = { git = "https://github.com/climatepolicyradar/infra?subdirectory=components&tag=v1.0.5#c8482ca808af1f58b54d5144112275b6815746dc" }
+dependencies = [
+    { name = "pulumi" },
+    { name = "pulumi-aws" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "typing-extensions" },
+]
+
+[[package]]
 name = "contourpy"
 version = "1.3.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1336,6 +1348,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/0d/3f/337f278b70ba339c618a490f6b8033b7006c583bd197a897f12fbc468c51/fabric-3.2.2.tar.gz", hash = "sha256:8783ca42e3b0076f08b26901aac6b9d9b1f19c410074e7accfab902c184ff4a3", size = 183215, upload-time = "2023-08-31T01:42:05.55Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d6/1f/e99e23ee01847147fa194e8d41cfcf2535a2dbfcb51414c541cadb15c5d7/fabric-3.2.2-py3-none-any.whl", hash = "sha256:91c47c0be68b14936c88b34da8a1f55e5710fd28397dac5d4ff2e21558113a6f", size = 59417, upload-time = "2023-08-31T01:42:03.917Z" },
+]
+
+[[package]]
+name = "faker"
+version = "40.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/03/2a/96fff3edcb10f6505143448a4b91535f77b74865cec45be52690ee280443/faker-40.5.1.tar.gz", hash = "sha256:70222361cd82aa10cb86066d1a4e8f47f2bcdc919615c412045a69c4e6da0cd3", size = 1952684, upload-time = "2026-02-23T21:34:38.362Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/a9/1eed4db92d0aec2f9bfdf1faae0ab0418b5e121dda5701f118a7a4f0cd6a/faker-40.5.1-py3-none-any.whl", hash = "sha256:c69640c1e13bad49b4bcebcbf1b52f9f1a872b6ea186c248ada34d798f1661bf", size = 1987053, upload-time = "2026-02-23T21:34:36.418Z" },
 ]
 
 [[package]]
@@ -3809,6 +3833,19 @@ wheels = [
 ]
 
 [[package]]
+name = "polyfactory"
+version = "3.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "faker" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/85/68/7717bd9e63ed254617a7d3dc9260904fb736d6ea203e58ffddcb186c64e4/polyfactory-3.3.0.tar.gz", hash = "sha256:237258b6ff43edf362ffd1f68086bb796466f786adfa002b0ac256dbf2246e9a", size = 348668, upload-time = "2026-02-22T09:46:28.01Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/34/b6f19941adcdaf415b5e8a8d577499f5b6a76b59cbae37f9b125a9ffe9f2/polyfactory-3.3.0-py3-none-any.whl", hash = "sha256:686abcaa761930d3df87b91e95b26b8d8cb9fdbbbe0b03d5f918acff5c72606e", size = 62707, upload-time = "2026-02-22T09:46:25.985Z" },
+]
+
+[[package]]
 name = "posthog"
 version = "7.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -5328,9 +5365,11 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
+    { name = "components" },
     { name = "duckdb" },
     { name = "fastapi", extra = ["standard"] },
     { name = "knowledge-graph" },
+    { name = "polyfactory" },
     { name = "posthog" },
     { name = "prefect" },
     { name = "pydantic" },
@@ -5357,9 +5396,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.35.0" },
+    { name = "components", git = "https://github.com/climatepolicyradar/infra?subdirectory=components&tag=v1.0.5" },
     { name = "duckdb", specifier = ">=1.4.2" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.0" },
     { name = "knowledge-graph", git = "https://github.com/climatepolicyradar/knowledge-graph?rev=268d1baa221b8da51f88bc7affa31b4860da8dd0" },
+    { name = "polyfactory", specifier = ">=3.3.0" },
     { name = "posthog", specifier = ">=7.5.1" },
     { name = "prefect", specifier = ">=3.4.25" },
     { name = "pydantic", specifier = ">=2.12.4" },

@@ -2,6 +2,7 @@
 
 import json
 
+import components.aws as components_aws
 import pulumi
 from pulumi_aws import (
     apprunner,
@@ -25,15 +26,14 @@ config = pulumi.Config()
 caller_identity = get_caller_identity()
 account_id = caller_identity.account_id
 stack = pulumi.get_stack()
-environment = pulumi.get_stack()
 name = pulumi.get_project()
 
 tags = {
     "CPR-Created-By": "pulumi",
     "CPR-Pulumi-Stack-Name": stack,
     "CPR-Pulumi-Project-Name": pulumi.get_project(),
-    "CPR-Tag": f"{environment}-{name}",
-    "Environment": environment,
+    "CPR-Tag": f"{stack}-{name}",
+    "Environment": stack,
 }
 
 # Get the git commit hash for tagging the image
@@ -98,6 +98,7 @@ apprunner_ecr_role_policy = iam.RolePolicy(
         ]
     ).json,
 )
+
 apprunner_instance_role = iam.Role(
     f"{application_name}-apprunner-instance-role",
     name=f"{application_name}-apprunner-instance-role",
@@ -112,10 +113,54 @@ apprunner_instance_role = iam.Role(
                     )
                 ],
                 actions=["sts:AssumeRole"],
-            )
+            ),
         ]
     ).json,
 )
+vespa_endpoint = ssm.Parameter(
+    "vespa-endpoint",
+    name="/search/vespa/endpoint",
+    type=ssm.ParameterType.SECURE_STRING,
+    value=config.get("vespa_endpoint"),
+)
+
+vespa_read_token = ssm.Parameter(
+    "vespa-read-token",
+    name="/search/vespa/read_token",
+    type=ssm.ParameterType.SECURE_STRING,
+    value=config.get("vespa_read_token"),
+)
+apprunner_ssm_parameter_policy = iam.RolePolicy(
+    f"{application_name}-ssm-parameter-policy",
+    name=f"{application_name}-ssm-parameter-policy",
+    role=apprunner_instance_role.name,
+    policy=pulumi.Output.all(
+        vespa_endpoint_arn=vespa_endpoint.arn,
+        vespa_read_token_arn=vespa_read_token.arn,
+    ).apply(
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ssm:GetParameter",
+                            "ssm:GetParameters",
+                            "ssm:DescribeParameters",
+                        ],
+                        "Resource": [
+                            args["vespa_endpoint_arn"],
+                            args["vespa_read_token_arn"],
+                        ],
+                    }
+                ],
+            }
+        )
+    ),
+)
+
+
 apprunner_read_s3_policy = iam.Policy(
     f"{application_name}-read-s3-policy",
     name=f"{application_name}-read-s3-policy",
@@ -141,6 +186,7 @@ apprunner_read_s3_policy_attachment = iam.RolePolicyAttachment(
     policy_arn=apprunner_read_s3_policy.arn,
 )
 
+
 apprunner_service = apprunner.Service(
     f"{application_name}-apprunner-service",
     service_name=f"{application_name}",
@@ -155,6 +201,10 @@ apprunner_service = apprunner.Service(
                 port="8080",
                 runtime_environment_variables={
                     "BUCKET_NAME": bucket.bucket,
+                },
+                runtime_environment_secrets={
+                    "VESPA_ENDPOINT": vespa_endpoint.arn,
+                    "VESPA_READ_TOKEN": vespa_read_token.arn,
                 },
             ),
         ),
@@ -179,7 +229,7 @@ apprunner_service = apprunner.Service(
 )
 
 search_api_github_actions_role = iam.Role(
-    f"{name}-{environment}-github-actions",
+    f"{name}-{stack}-github-actions",
     assume_role_policy=json.dumps(
         {
             "Statement": [
@@ -190,7 +240,7 @@ search_api_github_actions_role = iam.Role(
                             "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                         },
                         "StringLike": {
-                            "token.actions.githubusercontent.com:sub": "repo:climatepolicyradar/search"
+                            "token.actions.githubusercontent.com:sub": "repo:climatepolicyradar/search:*"
                         },
                     },
                     "Effect": "Allow",
@@ -204,7 +254,7 @@ search_api_github_actions_role = iam.Role(
     ),
     inline_policies=[
         {
-            "name": f"{name}-{environment}-github-actions",
+            "name": f"{name}-{stack}-github-actions",
             "policy": json.dumps(
                 {
                     "Version": "2012-10-17",
@@ -237,7 +287,7 @@ search_api_github_actions_role = iam.Role(
             ),
         }
     ],
-    name=f"{name}-{environment}-github-actions",
+    name=f"{name}-{stack}-github-actions",
     tags=tags,
     opts=pulumi.ResourceOptions(protect=True),
 )
@@ -270,3 +320,22 @@ vespa_public_cert_read_only_ssm = ssm.Parameter(
 # These exports are the public API for this stack, and consumed by external stacks
 # Edit with caution
 pulumi.export("apprunner_service_url", apprunner_service.service_url)
+
+# region Prefect
+ecr_repository = components_aws.ecr.Repository(
+    name=f"{name}-prefect-ecr-repository",
+    aws_ecr_repository_args=ecr.RepositoryArgs(
+        name=f"{name}-prefect",
+        encryption_configurations=[
+            ecr.RepositoryEncryptionConfigurationArgs(
+                encryption_type="AES256",
+            )
+        ],
+        image_scanning_configuration=ecr.RepositoryImageScanningConfigurationArgs(
+            scan_on_push=False,
+        ),
+        image_tag_mutability="MUTABLE",
+    ),
+)
+
+# endregion

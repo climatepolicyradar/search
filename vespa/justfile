@@ -1,3 +1,28 @@
+# Extract the data to load into Vespa
+extract-documents:
+    aws s3 cp s3://cpr-cache/search/materialize_vespa_updates/from_data_in_api.jsonl ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl
+
+feed-documents limit="":
+    if [ -z "{{limit}}" ]; then \
+        echo "Feed all files into local Vespa"; \
+        cat ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+    else \
+        echo "Feed {{limit}} files into local Vespa"; \
+        head -n {{limit}} ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+    fi
+
+extract-passages:
+    aws s3 cp s3://cpr-cache/search/materialize_vespa_updates/from_indexer_input.jsonl ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl
+
+feed-passages limit="":
+    if [ -z "{{limit}}" ]; then \
+        echo "Feed all files into local Vespa"; \
+        cat ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+    else \
+        echo "Feed {{limit}} files into local Vespa"; \
+        head -n {{limit}} ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+    fi
+
 # Run vespa dev
 up:
     docker compose up -d
@@ -6,27 +31,16 @@ up:
 deploy:
     vespa deploy ./app --target http://localhost:19071/ --wait 300
 
-# Extract the data to load into Vespa
-extract:
-    if [ ! -f "../.data_cache/extract_vespa_updates/updates.jsonl" ]; then \
-        uv run python scripts/extract_vespa_updates.py; \
-    fi
-
-extract_from_s3:
-    # this is a way of sharing the output of `extract_vespa_updates` step as it is a very long running process
-    aws s3 cp s3://cpr-cache/search/.data_cache/extract_vespa_updates/updates.jsonl ../.data_cache/extract_vespa_updates/updates.jsonl
-
-update_extract_from_s3:
-    aws s3 cp ../.data_cache/extract_vespa_updates/updates.jsonl s3://cpr-cache/search/.data_cache/extract_vespa_updates/updates.jsonl
-
 # Load data into Vespa
 feed limit="":
     if [ -z "{{limit}}" ]; then \
         echo "Feed all files into local Vespa"; \
-        cat ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+        cat ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+        cat ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
     else \
         echo "Feed {{limit}} files into local Vespa"; \
-        head -n {{limit}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+        head -n {{limit}} ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
+        head -n {{limit}} ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
     fi
 
 # Dev
@@ -63,20 +77,22 @@ remote-deploy:
 remote-feed length="100":
     #!/usr/bin/env bash
     set -e
-    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     head -{{length}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
 
 remote-feed-all:
     #!/usr/bin/env bash
     set -e
-    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     vespa feed ../.data_cache/extract_vespa_updates/updates.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-visit:
     #!/usr/bin/env bash
     set -e
-    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read-token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa visit $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
+    mkdir -p ../.data_cache/vespa
+    vespa visit --target "$vespa_endpoint" --header "Authorization: Bearer $vespa_read_token" > "../.data_cache/vespa/documents-cloud.jsonl"
+    echo "Exported to ../.data_cache/vespa/documents-cloud.jsonl"

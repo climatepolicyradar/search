@@ -45,6 +45,11 @@ app.add_middleware(
 T = TypeVar("T", bound=BaseModel)
 
 
+class Aggregation(BaseModel):
+    field: str
+    values: list[str]
+
+
 class SearchResponse[T](BaseModel):
     """Response model for search results"""
 
@@ -55,6 +60,7 @@ class SearchResponse[T](BaseModel):
     next_page: AnyHttpUrl | None = None
     previous_page: AnyHttpUrl | None = None
     results: list[T]
+    aggregations: list[Aggregation] = []
 
 
 # region routes
@@ -73,11 +79,6 @@ async def root():
 @router.get("/documents", response_model=SearchResponse[Document])
 def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
-    # we used `alias` here as so that the query param follows the JSON path of the response model
-    # and we cannot use `.` in python value names.
-    labels_id_and: list[str] | None = Query(None, alias="labels.label.id"),
-    labels_id_or: list[str] | None = Query(None, alias="or:labels.label.id"),
-    labels_id_not: list[str] | None = Query(None, alias="not:labels.label.id"),
     filters_json_string: str | None = Query(None, alias="filters"),
     limit: int = 10,
     offset: int = 0,
@@ -85,9 +86,6 @@ def read_documents(
 
     results = DevVespaDocumentSearchEngine().search(
         query=query,
-        labels_id_and=labels_id_and,
-        labels_id_or=labels_id_or,
-        labels_id_not=labels_id_not,
         filters_json_string=filters_json_string,
         limit=limit,
         offset=offset,
@@ -102,6 +100,7 @@ def read_documents(
         next_page=None,
         previous_page=None,
         results=results,
+        aggregations=[],
     )
 
 
@@ -110,8 +109,11 @@ def read_labels(
     query: Annotated[
         str, Query(..., description="What are you looking for?", min_length=1)
     ],
+    type: str | None = None,
 ):
-    results = DevVespaLabelSearchEngine().search(query=query)
+    results = DevVespaLabelSearchEngine().search(query=query, label_type=type)
+    label_types = DevVespaLabelSearchEngine().all_label_types()
+
     # TODO: pagination
     return SearchResponse[Label](
         total_results=len(results),
@@ -121,6 +123,12 @@ def read_labels(
         next_page=None,
         previous_page=None,
         results=results,
+        aggregations=[
+            Aggregation(
+                field="type",
+                values=label_types,
+            )
+        ],
     )
 
 

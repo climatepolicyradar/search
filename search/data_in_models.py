@@ -16,15 +16,10 @@ class WithRelationships(BaseModel):
     documents: list[DocumentRelationship] = []
 
 
-class Attribute(BaseModel):
-    type: str
-    value: str | float | bool
-
-
 class WithAttributes(BaseModel):
     # the `key` of the `dict` will probably be managed via our knowledge managers
     # and not be a free for all
-    attributes: dict[str, Attribute] = {}
+    attributes: dict[str, str | float | bool] = {}
 
 
 class Label(BaseModel):

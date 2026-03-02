@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 # @see: https://github.com/pydantic/pydantic-settings/issues/201
 settings = Settings()  # pyright: ignore[reportCallIssue]
 
-# endregion
+# endregion Settings
 
 
 # region Filters
@@ -54,7 +54,14 @@ class LabelsCondition(BaseModel):
     value: str
 
 
-Condition = LabelsCondition
+class AttributesCondition(BaseModel):
+    field: Literal["attributes_string", "attributes_double", "attributes_boolean"]
+    key: str
+    op: Literal["eq", "not_eq"]
+    value: str | float | bool
+
+
+Condition = LabelsCondition | AttributesCondition
 
 
 class Filter(BaseModel):
@@ -110,18 +117,49 @@ ComplexExampleFilter = Filter(
             op="contains",
             value="Romania",
         ),
+        AttributesCondition(
+            field="attributes_double",
+            key="project_cost_usd",
+            op="eq",
+            value=1000000.0,
+        ),
     ],
 )
 
 
+def _format_value(value: str | float | bool) -> str:
+    """Format a value for YQL: strings get quotes, numbers do not, bools become 1/0 (byte)."""
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return f'"{value}"'
+
+
 def _build_condition_yql(condition: Condition) -> str:
-    """Build YQL for a single condition (labels only for now)."""
-    field = "labels_value_attribute"
-    value = condition.value
-    if condition.op == "not_contains":
-        return f'!({field} contains "{value}")'
-    else:
-        return f'{field} contains "{value}"'
+    match condition:
+        case AttributesCondition():
+            # Using `sameElement`, string fields use `contains`
+            # while numeric/bool fields use comparison operators.
+            # @see: https://docs.vespa.ai/en/querying/query-language.html#map
+            value = condition.value
+            if isinstance(value, str):
+                inner = f'key contains "{condition.key}", value contains "{value}"'
+            else:
+                inner = (
+                    f'key contains "{condition.key}", value = {_format_value(value)}'
+                )
+            expr = f"{condition.field} contains sameElement({inner})"
+            if condition.op == "not_eq":
+                return f"!({expr})"
+            return expr
+
+        case LabelsCondition():
+            field = "labels_value_attribute"
+            value = condition.value
+            if condition.op == "not_contains":
+                return f'!({field} contains "{value}")'
+            return f'{field} contains "{value}"'
 
 
 def _build_filter_yql(filter_group: Filter) -> str:
@@ -154,41 +192,7 @@ def _build_filter_query(filter_group: Filter | None) -> str:
     return f" and {yql}" if yql else ""
 
 
-def _build_labels_label_id_filter(
-    labels_id_and: list[str] | None,
-    labels_id_or: list[str] | None,
-    labels_id_not: list[str] | None,
-):
-    where = ""
-
-    """
-    This query is resolved to:
-    (OR filters) AND (AND filters) AND (...NOT filters)
-    """
-
-    if labels_id_or:
-        where += f" and ({' or '.join([f'labels_value_attribute contains \"{label}\"' for label in labels_id_or])})"
-
-    if labels_id_and:
-        where += "".join(
-            [
-                f' and labels_value_attribute contains "{label}"'
-                for label in labels_id_and
-            ]
-        )
-
-    if labels_id_not:
-        where += "".join(
-            [
-                f' and ! (labels_value_attribute contains "{label}")'
-                for label in labels_id_not
-            ]
-        )
-
-    return where
-
-
-# endregion
+# endregion Filters
 
 
 # We do not inherit from `SearchEngine[Document]` as the search method has different parameters.
@@ -202,21 +206,12 @@ class DevVespaDocumentSearchEngine:
     def search(
         self,
         query: str | None,
-        labels_id_and: list[str] | None,
-        labels_id_or: list[str] | None,
-        labels_id_not: list[str] | None,
         filters_json_string: str | None,
         limit: int = 10,
         offset: int = 0,
     ) -> list[Document]:
         """Fetch a list of relevant search results."""
         where = "true "
-
-        where += _build_labels_label_id_filter(
-            labels_id_and=labels_id_and,
-            labels_id_or=labels_id_or,
-            labels_id_not=labels_id_not,
-        )
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
@@ -290,20 +285,25 @@ class DevVespaLabelSearchEngine:
     def __init__(self) -> None:
         pass
 
-    def search(self, query: str) -> list[Label]:
+    def search(self, query: str, label_type: str | None) -> list[Label]:
         """Fetch a list of relevant search results."""
 
-        # 1) prefix filter the documents list on `labels_value_attribute` to ensure we are grouping by as few documents as possible for performance
+        # 1) prefix filter the documents list on `labels_type_value_attribute` to ensure we are grouping by as few documents as possible for performance
         # We use `matches` with a case-insensitive regex pattern `(?i)` because `contains` on attributes is strictly case-sensitive.
         safe_terms = re.escape(query)
-        doc_regex = f"(?i)^{safe_terms}.*"
-        document_filter_query = f'select * from sources documents where labels_value_attribute matches "{doc_regex}"'
+        safe_label_type = re.escape(label_type) if label_type else ""
 
-        # 2) group by all `labels_value_attribute` values that match the prefix
-        grouping_query = "group(labels_value_attribute)"
+        doc_regex = f"(?i)^{safe_label_type or "[^:]*"}::{safe_terms}.*"
+        document_filter_query = f'select * from sources documents where labels_type_value_attribute matches "{doc_regex}"'
+
+        # 2) group by all `labels_type_value_attribute` values that match the prefix
+        grouping_query = "group(labels_type_value_attribute)"
 
         # 3) filter the group
-        group_filter_query = f'filter(regex("{doc_regex}", labels_value_attribute))'
+        group_filter_query = (
+            f'filter(regex("{doc_regex}", labels_type_value_attribute))'
+        )
+        # group_filter_query = ""
 
         # 4) limit and order and output the groups
         group_order_query = "order(-count()) each(output(count()))"
@@ -340,22 +340,67 @@ class DevVespaLabelSearchEngine:
             (
                 item.get("children", [])
                 for item in children
-                if item.get("label") == "labels_value_attribute"
+                if item.get("label") == "labels_type_value_attribute"
             ),
             [],
         )
 
         for group in group_list:
-            label_title = group.get("value", "")
+            label_type_value = group.get("value", "")
+            label_type, _, label_value = label_type_value.partition("::")
             labels.append(
                 Label(
-                    id=label_title,
-                    value=label_title,
-                    type="aggregated",  # Type is lost in aggregation
+                    id=label_type_value,
+                    value=label_value,
+                    type=label_type or MISSING_PLACEHOLDER,
                 )
             )
 
         return labels
+
+    def all_label_types(self) -> list[str]:
+        """Fetch all distinct label types (unfiltered)."""
+        yql = (
+            "select * from sources documents where true "
+            "| all(group(labels_type_attribute) "
+            "order(-count()) each(output(count())))"
+        )
+
+        try:
+            res = requests.post(
+                f"{settings.vespa_endpoint}/search",
+                json={
+                    "yql": yql,
+                    "hits": 0,
+                    "timeout": "5s",
+                },
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa all_label_types query failed")
+            return []
+
+        res = res.json()
+        types: list[str] = []
+
+        root = res.get("root", {})
+        children = root.get("children", [{}])[0].get("children", [])
+        group_list = next(
+            (
+                item.get("children", [])
+                for item in children
+                if item.get("label") == "labels_type_attribute"
+            ),
+            [],
+        )
+
+        for group in group_list:
+            types.append(group.get("value", ""))
+
+        return types
 
     def count(self, query: str) -> int:
         """Return hit count"""

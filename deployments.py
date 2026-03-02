@@ -11,15 +11,21 @@ import os
 import subprocess
 from typing import Any, ParamSpec, TypeVar
 
-from prefect.blocks.system import JSON
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron
+from prefect.variables import Variable
 
 from relevance_tests import test_documents, test_labels, test_passages
 from scripts.data_uploaders.upload_documents import upload_documents_databases
 from scripts.data_uploaders.upload_labels import upload_labels_databases
 from scripts.data_uploaders.upload_passages import upload_passages_databases
+from scripts.materialize_vespa_updates.from_data_in_api import (
+    materialize_vespa_updates_from_data_in_api,
+)
+from scripts.materialize_vespa_updates.from_indexer_input import (
+    materialize_vespa_updates_from_indexer_input,
+)
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {
@@ -78,11 +84,17 @@ def create_deployment(
     version = importlib.metadata.version("search")
     flow_name = flow.name
     docker_registry = os.environ["DOCKER_REGISTRY"]
-    docker_repository = os.getenv("DOCKER_REPOSITORY", "search")
-    image_name = os.path.join(docker_registry, docker_repository)
+    docker_repository = "search-prefect"
+    image_name = f"{docker_registry}/{docker_repository}"
 
     work_pool_name = "mvp-prod-ecs"
-    default_job_variables = JSON.load("default-job-variables-prefect-mvp-prod").value
+    default_job_variables_name = "ecs-default-job-variables-prefect-mvp-prod"
+    default_job_variables = Variable.get(default_job_variables_name)
+
+    if not isinstance(default_job_variables, dict):
+        raise ValueError(
+            f"Variable {default_job_variables_name} not found or is not a dict in Prefect"
+        )
 
     job_variables = {**default_job_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", "awsenv:prod"] + extra_tags
@@ -127,8 +139,8 @@ def create_deployment(
         version=version,
         image=DockerImage(
             name=image_name,
-            tag=version,
-            dockerfile="Dockerfile",
+            tag="latest",
+            dockerfile="prefect/Dockerfile",
         ),
         job_variables=job_variables,
         tags=tags,
@@ -184,4 +196,20 @@ if __name__ == "__main__":
         flow=test_passages.relevance_tests_passages,  # type: ignore
         description="Run relevance tests for passages",
         rrule=rrule_relevance_tests,
+    )
+
+    # Materializers
+    create_deployment(
+        flow=materialize_vespa_updates_from_indexer_input,
+        description="Materialize Vespa update ops from indexer input bucket",
+        schedule="0 3 * * *",  # daily at 3am
+        flow_variables=DEFAULT_FLOW_VARIABLES
+        | {"ephemeralStorage": {"sizeInGiB": 60}},  # bump storage for 40GB
+    )
+
+    create_deployment(
+        flow=materialize_vespa_updates_from_data_in_api,
+        description="Materialize Vespa update ops from data-in API",
+        schedule="0 3 * * *",  # daily at 3am
+        flow_variables=DEFAULT_FLOW_VARIABLES,
     )
