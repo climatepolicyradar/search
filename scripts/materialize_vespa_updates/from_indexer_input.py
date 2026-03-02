@@ -25,6 +25,7 @@ class Passage(TypedDict):
     type: str
     type_confidence: float
     page_number: int
+    heading_id: str | None
 
     # These need work
     # pages: list[dict] | None
@@ -101,6 +102,7 @@ def materialize_vespa_updates_from_indexer_input():
                             "type_confidence": text_block["type_confidence"],
                             "page_number": text_block["page_number"],
                             "text": ". ".join(text_block["text"]),
+                            "heading_id": text_block.get("heading_id"),
                         }
                     )
 

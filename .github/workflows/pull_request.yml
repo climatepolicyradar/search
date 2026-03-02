@@ -137,8 +137,9 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - working-directory: ./infra
+        # we reset the aws:profile as the above uses AWS env variables set in the `aws-actions/configure-aws-credentials@v5` step
         run: |
-          pulumi preview --stack climatepolicyradar/search/${{ matrix.environment }} --suppress-outputs
+          pulumi preview --stack climatepolicyradar/search/${{ matrix.environment }} --suppress-outputs --config aws:profile=
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
