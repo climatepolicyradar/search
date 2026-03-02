@@ -13,7 +13,7 @@ from prefect import flow
 REPO_ROOT_DIR = Path(__file__).resolve().parents[1]
 
 DATA_CACHE_DIR = (
-    REPO_ROOT_DIR / ".data_cache" / "materialize_vespa_updates_from_data_in_api"
+    REPO_ROOT_DIR / ".data_cache" / "materialize_vespa_updates/from_data_in_api"
 )
 DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -20,10 +20,10 @@ from relevance_tests import test_documents, test_labels, test_passages
 from scripts.data_uploaders.upload_documents import upload_documents_databases
 from scripts.data_uploaders.upload_labels import upload_labels_databases
 from scripts.data_uploaders.upload_passages import upload_passages_databases
-from scripts.materialize_vespa_updates_from_data_in_api import (
+from scripts.materialize_vespa_updates.from_data_in_api import (
     materialize_vespa_updates_from_data_in_api,
 )
-from scripts.materialize_vespa_updates_from_indexer_input import (
+from scripts.materialize_vespa_updates.from_indexer_input import (
     materialize_vespa_updates_from_indexer_input,
 )
 
