@@ -133,11 +133,10 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - uses: extractions/setup-just@v3
       - run: just install
-      - name: Install Pulumi
-        uses: pulumi/actions@v6
+      - uses: pulumi/actions@v6
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - name: Pulumi preview
+      - working-directory: ./infra
         run: |
           pulumi preview --stack climatepolicyradar/search/${{ matrix.environment }} --suppress-outputs
         env:
