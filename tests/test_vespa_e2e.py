@@ -28,7 +28,7 @@ from vespa.io import VespaQueryResponse
 
 from search.data_in_models import Document
 from search.engines.dev_vespa import AttributesCondition, Filter, _build_filter_query
-from search.vespa.document_to_update_operation import document_to_vespa_update_operation
+from search.vespa.indexer import document_to_vespa_update
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 _PORT = 8090
@@ -101,7 +101,7 @@ def clean_docs(vespa_app: Vespa):
 
 def _feed_document(app: Vespa, document: Document) -> None:
     """Feed a document as an update operation — same format as JSONL feed."""
-    op = document_to_vespa_update_operation(document)
+    op = document_to_vespa_update(document)
     r = req.put(
         f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
         json={**op, "create": True},

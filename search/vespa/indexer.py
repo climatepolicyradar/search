@@ -68,7 +68,7 @@ class SourceDocument(TypedDict, total=False):
     attributes: dict[str, str | float | bool]
 
 
-class VespaUpdateOperation(TypedDict):
+class VespaUpdate(TypedDict):
     update: str
     fields: VespaUpdateFields
 
@@ -83,10 +83,10 @@ def _to_unix_timestamp(ts_str: str | None) -> int | None:
         return None
 
 
-def typeddict_document_to_vespa_update_operation(
+def typeddict_document_to_vespa_update(
     document: SourceDocument,
-) -> VespaUpdateOperation:
-    """To be used in systems where using Pydantic models would be hindered by performance. Otherwise prefer document_to_update_operation."""
+) -> VespaUpdate:
+    """To be used in systems where using Pydantic models would be hindered by performance. Otherwise prefer document_to_vespa_update."""
 
     attrs = document.get("attributes") or {}
     fields: VespaUpdateFields = {
@@ -131,8 +131,8 @@ def typeddict_document_to_vespa_update_operation(
     }
 
 
-def document_to_vespa_update_operation(document: Document) -> VespaUpdateOperation:
-    return typeddict_document_to_vespa_update_operation(
+def document_to_vespa_update(document: Document) -> VespaUpdate:
+    return typeddict_document_to_vespa_update(
         # We know these types are identical, so cast is __OK__ here.
         # We could use something like PydanType, but it feels like overkill for
         # a piece of the system that is non-production.

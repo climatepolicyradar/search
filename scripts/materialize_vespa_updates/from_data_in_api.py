@@ -6,9 +6,9 @@ import orjson
 import polars as pl
 
 from prefect import flow
-from search.vespa.document_to_update_operation import (
+from search.vespa.indexer import (
     SourceDocument,
-    typeddict_document_to_vespa_update_operation,
+    typeddict_document_to_vespa_update,
 )
 
 # Paths
@@ -75,9 +75,7 @@ def materialize_vespa_updates_from_data_in_api():
     start = time.time()
     with OUTPUT_FILE.open("wb") as f:
         for i, document in enumerate(data.iter_rows(named=True)):
-            update_op = typeddict_document_to_vespa_update_operation(
-                _to_api_document(document)
-            )
+            update_op = typeddict_document_to_vespa_update(_to_api_document(document))
             f.write(orjson.dumps(update_op) + b"\n")
 
             if i % 1000 == 0:
