@@ -19,7 +19,7 @@ jobs:
       run-pulumi-up: ${{ steps.filter.outputs.run-pulumi-up }}
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         with:
