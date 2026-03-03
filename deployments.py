@@ -17,9 +17,6 @@ from prefect.schedules import Cron
 from prefect.variables import Variable
 
 from relevance_tests import test_documents, test_labels, test_passages
-from scripts.data_uploaders.upload_documents import upload_documents_databases
-from scripts.data_uploaders.upload_labels import upload_labels_databases
-from scripts.data_uploaders.upload_passages import upload_passages_databases
 from scripts.materialize_vespa_updates.from_data_in_api import (
     materialize_vespa_updates_from_data_in_api,
 )
@@ -159,25 +156,6 @@ if __name__ == "__main__":
     document_passage_flow_variables = DEFAULT_FLOW_VARIABLES | {
         "ephemeralStorage": {"sizeInGiB": 30}
     }
-
-    # Uploading jsonl and duckdb for dev search endpoints
-    create_deployment(
-        flow=upload_documents_databases,
-        description="Upload documents from HuggingFace to S3 as jsonl and duckdb",
-        schedule="0 18 * * SUN",
-        flow_variables=document_passage_flow_variables,
-    )
-    create_deployment(
-        flow=upload_labels_databases,
-        description="Upload labels from Wikibase to S3 as jsonl and duckdb",
-        schedule="0 18 * * SUN",
-    )
-    create_deployment(
-        flow=upload_passages_databases,
-        description="Upload passages from HuggingFace to S3 as jsonl and duckdb",
-        schedule="0 18 * * SUN",
-        flow_variables=document_passage_flow_variables,
-    )
 
     # Running relevance tests
     rrule_relevance_tests = "RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=-1MO;BYHOUR=21;BYMINUTE=0"  # last Monday of every month at 21:00
