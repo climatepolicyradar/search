@@ -1,6 +1,6 @@
-from prefect import flow, get_run_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 
+from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.document import Document
 from search.engines.vespa import BM25TitleVespaDocumentSearchEngine
@@ -195,12 +195,6 @@ test_cases = [
 )
 def relevance_tests_documents():
     """Run relevance tests for documents"""
-    from search.aws import download_file_from_s3
-    from search.config import BUCKET_NAME
-
-    logger = get_run_logger()
-    logger.info("Downloading files from s3")
-    download_file_from_s3(BUCKET_NAME, "documents.duckdb", skip_if_present=True)
 
     engines = [
         BM25TitleVespaDocumentSearchEngine(),
