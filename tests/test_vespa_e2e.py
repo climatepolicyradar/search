@@ -1,4 +1,5 @@
-"""E2E test: AttributesCondition filters documents correctly.
+"""
+E2E test: AttributesCondition filters documents correctly.
 
 Spins up an isolated Vespa container, feeds two documents (one with a
 country attribute, one without), then verifies the filter returns only
@@ -117,9 +118,9 @@ def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = DocumentFactory.build(
         attributes={"country": "UK"},
     )
-    document_without_matching_attribut = DocumentFactory.build(attributes={})
+    document_without_matching_attribute = DocumentFactory.build(attributes={})
     _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribut)
+    _feed_document(vespa_app, document_without_matching_attribute)
 
     f = Filter(
         op="and",
@@ -131,16 +132,16 @@ def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
     )
     ids = _ids(vespa_app, f)
     assert document_with_matching_attribute.id in ids
-    assert document_without_matching_attribut.id not in ids
+    assert document_without_matching_attribute.id not in ids
 
 
 def test_attribute_string_not_eq_excludes_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = DocumentFactory.build(
         attributes={"country": "UK"},
     )
-    document_without_matching_attribut = DocumentFactory.build(attributes={})
+    document_without_matching_attribute = DocumentFactory.build(attributes={})
     _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribut)
+    _feed_document(vespa_app, document_without_matching_attribute)
 
     f = Filter(
         op="and",
@@ -152,7 +153,7 @@ def test_attribute_string_not_eq_excludes_matching_doc(vespa_app: Vespa):
     )
     ids = _ids(vespa_app, f)
     assert document_with_matching_attribute.id not in ids
-    assert document_without_matching_attribut.id in ids
+    assert document_without_matching_attribute.id in ids
 
 
 def test_attribute_double_eq_returns_matching_doc(vespa_app: Vespa):

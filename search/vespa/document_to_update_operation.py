@@ -1,6 +1,5 @@
 from datetime import datetime
-from typing import TypedDict
-from typing import cast
+from typing import TypedDict, cast
 
 import orjson
 
@@ -87,10 +86,8 @@ def _to_unix_timestamp(ts_str: str | None) -> int | None:
 def typeddict_document_to_vespa_update_operation(
     document: SourceDocument,
 ) -> VespaUpdateOperation:
-    """
-    This method should only be used in systems where using Pydantic models
-    would be hindered by performance. Otherwise prefer document_to_update_operation.
-    """
+    """To be used in systems where using Pydantic models would be hindered by performance. Otherwise prefer document_to_update_operation."""
+
     attrs = document.get("attributes") or {}
     fields: VespaUpdateFields = {
         "title": {"assign": document.get("title")},
