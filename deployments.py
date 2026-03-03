@@ -16,6 +16,7 @@ from prefect.flows import Flow
 from prefect.schedules import Cron
 from prefect.variables import Variable
 
+from online_metrics.online_metrics_flow import collect_online_metrics
 from relevance_tests import test_documents, test_labels, test_passages
 from scripts.data_uploaders.upload_documents import upload_documents_databases
 from scripts.data_uploaders.upload_labels import upload_labels_databases
@@ -195,6 +196,13 @@ if __name__ == "__main__":
     create_deployment(
         flow=test_passages.relevance_tests_passages,  # type: ignore
         description="Run relevance tests for passages",
+        rrule=rrule_relevance_tests,
+    )
+
+    # Online metrics
+    create_deployment(
+        flow=collect_online_metrics,
+        description="Collect online metrics",
         rrule=rrule_relevance_tests,
     )
 

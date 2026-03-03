@@ -17,8 +17,8 @@ from pathlib import Path
 import duckdb
 from dotenv import load_dotenv
 from huggingface_hub import snapshot_download
-from prefect import flow, get_run_logger, task
 
+from prefect import flow, get_run_logger, task
 from search.aws import upload_file_to_s3
 from search.config import (
     DATASET_NAME,

@@ -255,7 +255,7 @@ class DevVespaLabelSearchEngine:
         safe_terms = re.escape(query)
         safe_label_type = re.escape(label_type) if label_type else ""
 
-        doc_regex = f"(?i)^{safe_label_type or "[^:]*"}::{safe_terms}.*"
+        doc_regex = f"(?i)^{safe_label_type or '[^:]*'}::{safe_terms}.*"
         document_filter_query = f'select * from sources documents where labels_type_value_attribute matches "{doc_regex}"'
 
         # 2) group by all `labels_type_value_attribute` values that match the prefix

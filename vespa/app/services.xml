@@ -69,7 +69,7 @@
         <documents>
             <document type="documents" mode="index" global="true" />
         </documents>
-        
+
         <nodes deploy:instance="search-production" count="2">
             <resources vcpu="0.5" memory="8Gb" disk="50Gb"/>
         </nodes>

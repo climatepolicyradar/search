@@ -83,7 +83,6 @@ def read_documents(
     limit: int = 10,
     offset: int = 0,
 ):
-
     results = DevVespaDocumentSearchEngine().search(
         query=query,
         filters_json_string=filters_json_string,

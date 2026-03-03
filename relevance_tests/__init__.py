@@ -3,13 +3,13 @@ from pathlib import Path
 from typing import Generic, Sequence, TypeVar
 
 from knowledge_graph.identifiers import Identifier
-from prefect import get_run_logger, task
 from prefect.cache_policies import NO_CACHE
 from prefect.futures import wait
 from pydantic import BaseModel
 from rich.console import Console
 from rich.table import Table
 
+from prefect import get_run_logger, task
 from search.document import Document
 from search.engines import SearchEngine
 from search.engines.json import serialise_pydantic_list_as_jsonl

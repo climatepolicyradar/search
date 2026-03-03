@@ -11,8 +11,8 @@ environment variable.
 
 from dotenv import load_dotenv
 from knowledge_graph.wikibase import WikibaseSession
-from prefect import flow, get_run_logger, task
 
+from prefect import flow, get_run_logger, task
 from search.aws import get_ssm_parameter, upload_file_to_s3
 from search.config import LABELS_PATH_STEM
 from search.engines.duckdb import create_labels_duckdb_table
