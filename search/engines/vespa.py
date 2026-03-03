@@ -10,6 +10,8 @@ from vespa.io import VespaQueryResponse
 
 from search import config
 from search.aws import get_ssm_parameter
+from search.data_in_models import Document as DocumentModel
+from search.data_in_models import Item
 from search.document import Document
 from search.engines import LabelSearchEngine, SearchEngine, TModel
 from search.label import Label
@@ -186,18 +188,19 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         raise NotImplementedError()
 
 
-class VespaDocumentSearchEngine(VespaSearchEngine[Document], ABC):
+class VespaDocumentSearchEngine(VespaSearchEngine[DocumentModel], ABC):
     """
     Abstract base class for Vespa document search engines.
 
-    Searches the ``family_document`` schema in Vespa, returning
-    :class:`~search.document.Document` instances. Subclasses must implement
+    Searches the ``family_document`` schema in Vespa. Subclasses must implement
     :meth:`_build_request` to define their search strategy.
     """
 
-    model_class = Document
+    model_class = DocumentModel
 
-    def _parse_vespa_response(self, response: VespaQueryResponse) -> list[Document]:
+    def _parse_vespa_response(
+        self, response: VespaQueryResponse
+    ) -> list[DocumentModel]:
         """Parse a Vespa query response into Document objects."""
         documents = []
 
@@ -207,17 +210,16 @@ class VespaDocumentSearchEngine(VespaSearchEngine[Document], ABC):
         for child in children:
             fields = child.get("fields", {})
 
-            family_name = fields.get("family_name", "")
+            document_title = fields.get("document_title", "")
             family_description = fields.get("family_description", "")
             document_source_url = fields.get("document_source_url", "")
             document_import_id = fields.get("document_import_id", "")
 
-            document = Document(
-                title=family_name,
-                source_url=document_source_url,
+            document = DocumentModel(
+                title=document_title,
+                items=[Item(url=document_source_url)],
                 description=family_description,
-                original_document_id=document_import_id,
-                labels=[],
+                id=document_import_id,
             )
             documents.append(document)
 
