@@ -79,24 +79,24 @@ def test_generate_test_run_id_changes_when_engine_changes(
 ):
     """Test that generate_test_run_id produces different IDs when the engine changes."""
 
-    class JSONEngine:
+    class FirstEngine:
         @property
         def name(self):
-            return "JSONLabelSearchEngine"
+            return "MyFirstSearchEngine"
 
-    class DuckDBEngine:
+    class SecondEngine:
         @property
         def name(self):
-            return "DuckDBLabelSearchEngine"
+            return "MySecondSearchEngine"
 
-    json_engine = JSONEngine()
-    duckdb_engine = DuckDBEngine()
+    first_engine = FirstEngine()
+    second_engine = SecondEngine()
 
     test_cases = [simple_test_case]
     test_results = [simple_test_result]
 
-    id1 = generate_test_run_id(json_engine, test_cases, test_results)  # type: ignore
-    id2 = generate_test_run_id(duckdb_engine, test_cases, test_results)  # type: ignore
+    id1 = generate_test_run_id(first_engine, test_cases, test_results)  # type: ignore
+    id2 = generate_test_run_id(second_engine, test_cases, test_results)  # type: ignore
 
     assert id1 != id2
     assert isinstance(id1, Identifier)
