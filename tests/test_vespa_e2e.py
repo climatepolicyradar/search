@@ -56,7 +56,9 @@ class DocumentFactory(ModelFactory):
 def _vespa_ready() -> bool:
     try:
         return (
-            req.get(f"http://localhost:{_PORT}/state/v1/health", timeout=2).status_code
+            req.get(
+                f"{os.environ['VESPA_ENDPOINT']}/state/v1/health", timeout=2
+            ).status_code
             == req.codes.ok
         )
     except Exception:
@@ -65,6 +67,7 @@ def _vespa_ready() -> bool:
 
 @pytest.fixture(scope="module")
 def vespa_app() -> Generator[Vespa, None, None]:
+    os.environ["VESPA_ENDPOINT"] = f"http://localhost:{_PORT}/"
     remove_container = bool(os.environ.get("TEST_VESPA_REMOVE_CONTAINER"))
     vespa_docker = None
     app_dir = None
