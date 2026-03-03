@@ -67,7 +67,6 @@ def _vespa_ready() -> bool:
 
 @pytest.fixture(scope="module")
 def vespa_app() -> Generator[Vespa, None, None]:
-    os.environ["VESPA_ENDPOINT"] = f"http://localhost:{_PORT}/"
     remove_container = bool(os.environ.get("TEST_VESPA_REMOVE_CONTAINER"))
     vespa_docker = None
     app_dir = None

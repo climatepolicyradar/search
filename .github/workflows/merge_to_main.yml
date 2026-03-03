@@ -94,6 +94,9 @@ jobs:
 
       - name: Run tests
         run: just test-functional
+        env:
+          VESPA_ENDPOINT: http://localhost:8080/
+          VESPA_READ_TOKEN: ""
 
   # This is the job that is required in our branch protection rules.
   # As `test` runs on a conditional it might not run, so we need to

@@ -112,6 +112,9 @@ jobs:
 
       - name: Run tests
         run: just test-functional
+        env:
+          VESPA_ENDPOINT: http://localhost:8080/
+          VESPA_READ_TOKEN: ""
 
   pulumi-preview:
     runs-on: ubuntu-latest
