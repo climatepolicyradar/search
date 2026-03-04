@@ -249,6 +249,9 @@ class DevVespaDocumentSearchEngine:
             # source_url and original_document_id are required by Document.
             # We'll use the doc id for original_document_id and a dummy/empty source_url if missing.
             source = json.loads(fields.get("document_source"))
+            if not source:
+                logger.warning(f"Document source is missing for {hit.get("id")}")
+                continue
             labels: list[LabelRelationship] = []
             for label in source.get("labels", []):
                 labels.append(
