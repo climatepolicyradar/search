@@ -1,4 +1,3 @@
-from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, computed_field
 
 
@@ -14,12 +13,9 @@ class Label(BaseModel):
 
     @computed_field
     @property
-    def id(self) -> Identifier:
-        """Return a unique ID for the concept"""
-        return Identifier.generate(
-            self.source,
-            self.id_at_source,
-        )
+    def id(self) -> str:
+        """Return a unique ID for the concept."""
+        return f"{self.source}:{self.id_at_source}"
 
     @computed_field
     @property
