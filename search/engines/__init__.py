@@ -57,15 +57,15 @@ class SearchEngine(ABC, Generic[TModel]):
         )
 
 
-class DocumentSearchEngine(SearchEngine[Document]):
+class DocumentSearchEngine(SearchEngine[DocumentModel]):
     """A search engine that searches for documents"""
 
-    model_class = Document
+    model_class = DocumentModel
 
     @abstractmethod
     def search(
         self, query: str, limit: int | None = None, offset: int = 0
-    ) -> list[Document]:
+    ) -> list[DocumentModel]:
         """
         Fetch a list of relevant documents.
 
