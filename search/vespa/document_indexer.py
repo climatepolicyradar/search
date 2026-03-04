@@ -68,8 +68,9 @@ class SourceDocument(TypedDict, total=False):
     attributes: dict[str, str | float | bool]
 
 
-class VespaUpdate(TypedDict):
+class VespaUpdate(TypedDict, total=False):
     update: str
+    create: bool
     fields: VespaUpdateFields
 
 
@@ -127,6 +128,7 @@ def typeddict_document_to_vespa_update(
     }
     return {
         "update": f"id:documents:documents::{document.get('id')}",
+        "create": True,
         "fields": fields,
     }
 
