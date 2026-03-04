@@ -12,7 +12,6 @@ from rich.table import Table
 from prefect import get_run_logger, task
 from search.document import Document
 from search.engines import SearchEngine
-from search.engines.json import serialise_pydantic_list_as_jsonl
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -32,6 +31,10 @@ class TestResult(BaseModel, Generic[T]):
     passed: bool
     search_engine_id: Identifier
     search_results: list[T]
+
+
+def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:
+    return "\n".join(model.model_dump_json() for model in models)
 
 
 def save_test_results_as_jsonl(test_results: list[TestResult], file_path: Path) -> None:

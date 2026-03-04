@@ -74,19 +74,19 @@ remote-deploy:
     vespa_application=$(aws ssm get-parameter --name "/search/vespa/application" --query "Parameter.Value" --output text --with-decryption)
     vespa prod deploy ./app --target cloud --application $vespa_application --zone prod.aws-eu-west-1a
 
-remote-feed length="100":
+remote-feed-documents:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    head -{{length}} ../.data_cache/extract_vespa_updates/updates.jsonl | vespa feed - --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
+    vespa feed ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
-remote-feed-all:
+remote-feed-passages:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/extract_vespa_updates/updates.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    vespa feed ../.data_cache/materialize_v`espa_updates/from_indexer_input.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-visit:
     #!/usr/bin/env bash

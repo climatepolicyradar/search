@@ -1,3 +1,21 @@
+"""
+Dev vespa API
+
+Should be using the Vespa Client, but we are having problems
+connecting to the remote server because of the way API Gateway
+handles trailing slashes.
+
+i.e.
+VespaClient connects to `/search/`.
+This isn't a viable URL for API Gatewayway, you can use
+- `/search`
+- `/search/{proxy+}`
+
+The secondary URL uses a `+` which matches 1 or more characters. 🤷
+
+For now we just use `requests` which yields the same results.
+"""
+
 from __future__ import annotations
 
 import json
@@ -14,20 +32,6 @@ from search.log import get_logger
 
 logger = get_logger(__name__)
 
-"""
-This class should be using the Vespa Client, but we are having problems connecting to the remote server
-because of the way API Gateway handles trailing slashes.
-
-i.e.
-VespaClient connects to `/search/`.
-This isn't a viable URL for API Gatewayway, you can use
-- `/search`
-- `/search/{proxy+}`
-
-The secondary URL uses a `+` which matches 1 or more characters. 🤷
-
-For now we just use `requests` which yields the same results.
-"""
 
 API_TIMEOUT = 5  # seconds
 # We make this very obvious as it is used for values that should exist
@@ -209,7 +213,7 @@ class DevVespaDocumentSearchEngine:
             # Map fields. Note: schema only has title, description.
             # source_url and original_document_id are required by Document.
             # We'll use the doc id for original_document_id and a dummy/empty source_url if missing.
-            source = json.loads(fields.get("source"))
+            source = json.loads(fields.get("document_source"))
             labels = []
             for label in source.get("labels", []):
                 labels.append(
