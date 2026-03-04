@@ -15,7 +15,28 @@ schema documents {
             field timestamp type long {}
             field relationship type string {}
         }
-        field labels type array<label> {}
+        field labels type array<label> {
+            struct-field id {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field type {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field value {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field timestamp {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field relationship {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+        }
 
         struct passage {
             field text_block_id type string {}
