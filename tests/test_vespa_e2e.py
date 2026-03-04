@@ -24,14 +24,17 @@ import requests as req
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
-from vespa.io import VespaQueryResponse
 
 from search.data_in_models import Document
-from search.engines.dev_vespa import AttributesCondition, Filter, _build_filter_query
+from search.engines.dev_vespa import (
+    AttributesCondition,
+    DevVespaDocumentSearchEngine,
+    Filter,
+)
 from search.vespa.document_indexer import document_to_vespa_update
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
-_PORT = 8090
+_PORT = 8080
 _SERVICES_XML = """\
 <?xml version="1.0" encoding="utf-8" ?>
 <services version="1.0">
@@ -110,10 +113,10 @@ def _feed_document(app: Vespa, document: Document) -> None:
     r.raise_for_status()
 
 
-def _ids(app: Vespa, filter_: Filter) -> set[str]:
-    yql = f"select * from sources documents where true{_build_filter_query(filter_)}"
-    resp: VespaQueryResponse = app.query(body={"yql": yql})  # type: ignore[assignment]
-    return {hit["id"].split("::")[-1] for hit in resp.hits}
+def _ids(filter_: Filter) -> set[str]:
+    engine = DevVespaDocumentSearchEngine()
+    docs = engine.search(query=None, filters_json_string=filter_.model_dump_json())
+    return {doc.id for doc in docs}
 
 
 def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
@@ -132,7 +135,7 @@ def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
             )
         ],
     )
-    ids = _ids(vespa_app, f)
+    ids = _ids(f)
     assert document_with_matching_attribute.id in ids
     assert document_without_matching_attribute.id not in ids
 
@@ -153,7 +156,7 @@ def test_attribute_string_not_eq_excludes_matching_doc(vespa_app: Vespa):
             )
         ],
     )
-    ids = _ids(vespa_app, f)
+    ids = _ids(f)
     assert document_with_matching_attribute.id not in ids
     assert document_without_matching_attribute.id in ids
 
@@ -177,7 +180,7 @@ def test_attribute_double_eq_returns_matching_doc(vespa_app: Vespa):
             )
         ],
     )
-    ids = _ids(vespa_app, f)
+    ids = _ids(f)
     assert document_with_matching_attribute.id in ids
     assert document_without_matching_attribute.id not in ids
 
@@ -201,7 +204,7 @@ def test_attribute_double_not_eq_excludes_matching_doc(vespa_app: Vespa):
             )
         ],
     )
-    ids = _ids(vespa_app, f)
+    ids = _ids(f)
     assert document_with_matching_attribute.id not in ids
     assert document_without_matching_attribute.id in ids
 
@@ -222,7 +225,7 @@ def test_attribute_bool_eq_returns_matching_doc(vespa_app: Vespa):
             )
         ],
     )
-    ids = _ids(vespa_app, f)
+    ids = _ids(f)
     assert document_with_matching_attribute.id in ids
     assert document_without_matching_attribute.id not in ids
 
@@ -243,6 +246,6 @@ def test_attribute_bool_not_eq_excludes_matching_doc(vespa_app: Vespa):
             )
         ],
     )
-    ids = _ids(vespa_app, f)
+    ids = _ids(f)
     assert document_with_matching_attribute.id not in ids
     assert document_without_matching_attribute.id in ids

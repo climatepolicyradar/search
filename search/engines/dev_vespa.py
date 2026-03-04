@@ -254,16 +254,16 @@ class DevVespaDocumentSearchEngine:
                     LabelRelationship(
                         type=label.get("type", MISSING_PLACEHOLDER),
                         value=Label(
-                            id=label.get("label").get("id", MISSING_PLACEHOLDER),
-                            value=label.get("label").get("value", MISSING_PLACEHOLDER),
-                            type=label.get("label").get("type", MISSING_PLACEHOLDER),
+                            id=label.get("value").get("id", MISSING_PLACEHOLDER),
+                            value=label.get("value").get("value", MISSING_PLACEHOLDER),
+                            type=label.get("value").get("type", MISSING_PLACEHOLDER),
                         ),
                         timestamp=label.get("timestamp"),
                     )
                 )
             documents.append(
                 Document(
-                    id=hit.get("id", MISSING_PLACEHOLDER),
+                    id=source.get("id", MISSING_PLACEHOLDER),
                     title=source.get("title", MISSING_PLACEHOLDER),
                     description=source.get("description", MISSING_PLACEHOLDER),
                     labels=labels,
