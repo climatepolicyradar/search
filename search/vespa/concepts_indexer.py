@@ -21,7 +21,7 @@ class VespaLabelField(TypedDict):
     id: str
     type: str
     value: str
-    # 👇 These aexperimentaltal and should not be relied on
+    # 👇 These are experimental  and should not be relied on
     passages_id: str | None
     count: int | None
 
