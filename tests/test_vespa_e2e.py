@@ -25,8 +25,7 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
-from search.data_in_models import Document
-from search.data_in_models import Label, LabelRelationship
+from search.data_in_models import Document, Label, LabelRelationship
 from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
