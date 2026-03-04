@@ -23,6 +23,12 @@ feed-passages limit="":
         head -n {{limit}} ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
     fi
 
+extract-concepts:
+    aws s3 cp s3://cpr-cache/search/materialize_vespa_updates/from_inference_results.jsonl ../.data_cache/materialize_vespa_updates/from_inference_results.jsonl
+
+feed-concepts:
+    vespa feed ../.data_cache/materialize_vespa_updates/from_inference_results.jsonl --target http://localhost:8080 --progress 30
+
 # Run vespa dev
 up:
     docker compose up -d
@@ -81,12 +87,19 @@ remote-feed-documents:
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     vespa feed ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
+remote-feed-concepts:
+    #!/usr/bin/env bash
+    set -e
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa feed ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+
 remote-feed-passages:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/materialize_v`espa_updates/from_indexer_input.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    vespa feed ../.data_cache/materialize_vespa_updates/from_inference_results.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-visit:
     #!/usr/bin/env bash

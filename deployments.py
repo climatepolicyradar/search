@@ -23,6 +23,9 @@ from scripts.materialize_vespa_updates.from_data_in_api import (
 from scripts.materialize_vespa_updates.from_indexer_input import (
     materialize_vespa_updates_from_indexer_input,
 )
+from scripts.materialize_vespa_updates.from_inference_results import (
+    materialize_vespa_updates_from_inference_results,
+)
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {
@@ -190,4 +193,12 @@ if __name__ == "__main__":
         description="Materialize Vespa update ops from data-in API",
         schedule="0 3 * * *",  # daily at 3am
         flow_variables=DEFAULT_FLOW_VARIABLES,
+    )
+
+    create_deployment(
+        flow=materialize_vespa_updates_from_inference_results,
+        description="Materialize Vespa update ops from inference results bucket",
+        schedule="0 3 * * *",  # daily at 3am
+        flow_variables=DEFAULT_FLOW_VARIABLES
+        | {"ephemeralStorage": {"sizeInGiB": 60}},  # bump storage for 40GB
     )

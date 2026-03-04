@@ -155,11 +155,12 @@ def _build_condition_yql(condition: Condition) -> str:
             return expr
 
         case LabelsCondition():
-            field = "labels.id"
             value = condition.value
+            labels_expr = f'labels.id contains "{value}"'
+            concepts_expr = f'concepts.value contains "{value}"'
             if condition.op == "not_contains":
-                return f'!({field} contains "{value}")'
-            return f'{field} contains "{value}"'
+                return f"!({labels_expr} or {concepts_expr})"
+            return f"({labels_expr} or {concepts_expr})"
 
 
 def _build_filter_yql(filter_group: Filter) -> str:
@@ -248,7 +249,7 @@ class DevVespaDocumentSearchEngine:
             # source_url and original_document_id are required by Document.
             # We'll use the doc id for original_document_id and a dummy/empty source_url if missing.
             source = json.loads(fields.get("document_source"))
-            labels = []
+            labels: list[LabelRelationship] = []
             for label in source.get("labels", []):
                 labels.append(
                     LabelRelationship(
@@ -261,6 +262,21 @@ class DevVespaDocumentSearchEngine:
                         timestamp=label.get("timestamp"),
                     )
                 )
+
+            for concept in fields.get("concepts", []):
+                labels.append(
+                    LabelRelationship(
+                        type="concept",
+                        value=Label(
+                            id=concept.get("id", MISSING_PLACEHOLDER),
+                            type="concept",
+                            value=concept.get("value", MISSING_PLACEHOLDER),
+                        ),
+                        passages_id=concept.get("passages_id", MISSING_PLACEHOLDER),
+                        count=concept.get("count", MISSING_PLACEHOLDER),
+                    )
+                )
+
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
