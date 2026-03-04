@@ -247,7 +247,7 @@ class DevVespaDocumentSearchEngine:
             # Map fields. Note: schema only has title, description.
             # source_url and original_document_id are required by Document.
             # We'll use the doc id for original_document_id and a dummy/empty source_url if missing.
-            source = json.loads(fields.get("source"))
+            source = json.loads(fields.get("document_source"))
             labels = []
             for label in source.get("labels", []):
                 labels.append(

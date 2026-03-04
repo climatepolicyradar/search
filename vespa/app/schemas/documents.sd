@@ -1,8 +1,12 @@
 schema documents {
     document documents {
         field id type string {}
-        field title type string {}
-        field description type string {}
+        field title type string {
+            indexing: index | summary
+        }
+        field description type string {
+            indexing: index | summary
+        }
 
         struct label {
             field id type string {}
@@ -34,6 +38,7 @@ schema documents {
             field page_number type int {}
             field text type string {}
         }
+
         field passages type array<passage> {
             indexing: summary
         }
@@ -68,5 +73,11 @@ schema documents {
 
     fieldset default {
         fields: title, description, labels_value, passages_text
+    }
+
+    rank-profile default {
+        first-phase {
+            expression: nativeRank(title) * 3 + nativeRank(description) + nativeRank(passages_text)
+        }
     }
 }
