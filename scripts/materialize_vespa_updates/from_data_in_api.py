@@ -6,7 +6,7 @@ import orjson
 import polars as pl
 
 from prefect import flow
-from search.vespa.indexer import (
+from search.vespa.document_indexer import (
     SourceDocument,
     typeddict_document_to_vespa_update,
 )

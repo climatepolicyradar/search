@@ -86,7 +86,7 @@ def _to_unix_timestamp(ts_str: str | None) -> int | None:
 def typeddict_document_to_vespa_update(
     document: SourceDocument,
 ) -> VespaUpdate:
-    """To be used in systems where using Pydantic models would be hindered by performance. Otherwise prefer document_to_vespa_update."""
+    """To be used in systems where using Pydantic models would hinder performance. Otherwise prefer document_to_vespa_update."""
 
     attrs = document.get("attributes") or {}
     fields: VespaUpdateFields = {

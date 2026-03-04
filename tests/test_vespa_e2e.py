@@ -28,7 +28,7 @@ from vespa.io import VespaQueryResponse
 
 from search.data_in_models import Document
 from search.engines.dev_vespa import AttributesCondition, Filter, _build_filter_query
-from search.vespa.indexer import document_to_vespa_update
+from search.vespa.document_indexer import document_to_vespa_update
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 _PORT = 8090
