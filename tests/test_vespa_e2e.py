@@ -32,6 +32,8 @@ from search.engines.dev_vespa import (
     Filter,
     LabelsCondition,
 )
+from search.vespa.concepts_indexer import InferenceResultInput
+from search.vespa.concepts_indexer import index as index_concepts
 from search.vespa.document_indexer import document_to_vespa_update
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
@@ -83,7 +85,7 @@ def vespa_app() -> Generator[Vespa, None, None]:
         (app_dir / "services.xml").write_text(_SERVICES_XML)
         vespa_docker = VespaDocker(port=_PORT)
         app = vespa_docker.deploy_from_disk(
-            application_name="testattrfilter",
+            application_name="searchtestvespae2e",
             application_root=app_dir,
         )
 
@@ -333,3 +335,108 @@ def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
 
 
 # endregion Labels
+
+# region Concepts
+
+
+def _feed_concepts(
+    app: Vespa, document: Document, concept_id: str, concept_name: str
+) -> None:
+    """Update an existing document with a single concept."""
+    inference_input: InferenceResultInput = {
+        "passage_1": [
+            {
+                "id": concept_id,
+                "name": concept_name,
+                "parent_concepts": [],
+                "parent_concept_ids_flat": "",
+                "model": "test",
+                "end": 0,
+                "start": 0,
+                "timestamp": "2024-01-01T00:00:00Z",
+            }
+        ]
+    }
+    op = index_concepts(document.id, inference_input)
+    r = req.put(
+        f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
+        json={"fields": op["fields"]},
+        timeout=5,
+    )
+    r.raise_for_status()
+
+
+def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
+    doc_with_concept = DocumentFactory.build(labels=[])
+    doc_without_concept = DocumentFactory.build(labels=[])
+    _feed_document(vespa_app, doc_with_concept)
+    _feed_document(vespa_app, doc_without_concept)
+    _feed_concepts(vespa_app, doc_with_concept, "Romania", "Romania")
+
+    f = Filter(
+        op="and",
+        filters=[
+            LabelsCondition(field="labels.value.id", op="contains", value="Romania")
+        ],
+    )
+    ids = _ids(f)
+    assert doc_with_concept.id in ids
+    assert doc_without_concept.id not in ids
+
+
+def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
+    doc_with_different_concept = DocumentFactory.build(labels=[])
+    doc_without_concept = DocumentFactory.build(labels=[])
+    _feed_document(vespa_app, doc_with_different_concept)
+    _feed_document(vespa_app, doc_without_concept)
+    _feed_concepts(vespa_app, doc_with_different_concept, "France", "France")
+
+    f = Filter(
+        op="and",
+        filters=[
+            LabelsCondition(field="labels.value.id", op="contains", value="Romania")
+        ],
+    )
+    ids = _ids(f)
+    assert doc_with_different_concept.id not in ids
+    assert doc_without_concept.id not in ids
+
+
+def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
+    doc_with_concept = DocumentFactory.build(labels=[])
+    doc_without_concept = DocumentFactory.build(labels=[])
+    _feed_document(vespa_app, doc_with_concept)
+    _feed_document(vespa_app, doc_without_concept)
+    _feed_concepts(vespa_app, doc_with_concept, "Romania", "Romania")
+
+    f = Filter(
+        op="and",
+        filters=[
+            LabelsCondition(field="labels.value.id", op="not_contains", value="Romania")
+        ],
+    )
+    ids = _ids(f)
+    assert doc_with_concept.id not in ids
+    assert doc_without_concept.id in ids
+
+
+def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
+    doc_with_different_concept = DocumentFactory.build(labels=[])
+    doc_with_matching_concept = DocumentFactory.build(labels=[])
+    _feed_document(vespa_app, doc_with_different_concept)
+    _feed_document(vespa_app, doc_with_matching_concept)
+    _feed_concepts(vespa_app, doc_with_different_concept, "France", "France")
+    _feed_concepts(vespa_app, doc_with_matching_concept, "Romania", "Romania")
+
+    f = Filter(
+        op="and",
+        filters=[
+            LabelsCondition(field="labels.value.id", op="not_contains", value="Romania")
+        ],
+    )
+    ids = _ids(f)
+    assert doc_with_different_concept.id in ids
+    assert doc_with_matching_concept.id not in ids
+
+
+# endregion Concepts

@@ -12,7 +12,7 @@ from search.vespa.document_indexer import (
 )
 
 # Paths
-REPO_ROOT_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
 
 DATA_CACHE_DIR = (
     REPO_ROOT_DIR / ".data_cache" / "materialize_vespa_updates/from_data_in_api"

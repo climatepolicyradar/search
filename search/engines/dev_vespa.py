@@ -155,11 +155,12 @@ def _build_condition_yql(condition: Condition) -> str:
             return expr
 
         case LabelsCondition():
-            field = "labels.id"
             value = condition.value
+            labels_expr = f'labels.id contains "{value}"'
+            concepts_expr = f'concepts.value contains "{value}"'
             if condition.op == "not_contains":
-                return f'!({field} contains "{value}")'
-            return f'{field} contains "{value}"'
+                return f"!({labels_expr} or {concepts_expr})"
+            return f"({labels_expr} or {concepts_expr})"
 
 
 def _build_filter_yql(filter_group: Filter) -> str:
@@ -261,6 +262,18 @@ class DevVespaDocumentSearchEngine:
                         timestamp=label.get("timestamp"),
                     )
                 )
+
+            for concept in fields.get("concepts", []):
+                labels.append(
+                    Label(
+                        id=concept.get("id", MISSING_PLACEHOLDER),
+                        type="concept",
+                        value=concept.get("value", MISSING_PLACEHOLDER),
+                        count=concept.get("count", MISSING_PLACEHOLDER),
+                        passages_id=concept.get("passages_id", MISSING_PLACEHOLDER),
+                    )
+                )
+
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
