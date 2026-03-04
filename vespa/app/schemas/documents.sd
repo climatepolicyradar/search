@@ -38,6 +38,19 @@ schema documents {
             }
         }
 
+        field attributes_double type map<string, double> {
+            struct-field key { indexing: attribute }
+            struct-field value { indexing: attribute }
+        }
+        field attributes_string type map<string, string> {
+            struct-field key { indexing: attribute }
+            struct-field value { indexing: attribute }
+        }
+        field attributes_boolean type map<string, byte> {
+            struct-field key { indexing: attribute }
+            struct-field value { indexing: attribute }
+        }
+
         struct passage {
             field text_block_id type string {}
             field language type string {}
