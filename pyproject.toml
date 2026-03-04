@@ -20,6 +20,7 @@ dependencies = [
   "typer>=0.15.1",
   "uvicorn>=0.32.0",
   "components>=1.0.5",
+  "polyfactory>=3.3.0",
 ]
 
 [dependency-groups]

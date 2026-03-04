@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 # @see: https://github.com/pydantic/pydantic-settings/issues/201
 settings = Settings()  # pyright: ignore[reportCallIssue]
 
-# endregion
+# endregion Settings
 
 
 # region Filters
@@ -54,7 +54,14 @@ class LabelsCondition(BaseModel):
     value: str
 
 
-Condition = LabelsCondition
+class AttributesCondition(BaseModel):
+    field: Literal["attributes_string", "attributes_double", "attributes_boolean"]
+    key: str
+    op: Literal["eq", "not_eq"]
+    value: str | float | bool
+
+
+Condition = LabelsCondition | AttributesCondition
 
 
 class Filter(BaseModel):
@@ -110,18 +117,49 @@ ComplexExampleFilter = Filter(
             op="contains",
             value="Romania",
         ),
+        AttributesCondition(
+            field="attributes_double",
+            key="project_cost_usd",
+            op="eq",
+            value=1000000.0,
+        ),
     ],
 )
 
 
+def _format_value(value: str | float | bool) -> str:
+    """Format a value for YQL: strings get quotes, numbers do not, bools become 1/0 (byte)."""
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return f'"{value}"'
+
+
 def _build_condition_yql(condition: Condition) -> str:
-    """Build YQL for a single condition (labels only for now)."""
-    field = "labels_value_attribute"
-    value = condition.value
-    if condition.op == "not_contains":
-        return f'!({field} contains "{value}")'
-    else:
-        return f'{field} contains "{value}"'
+    match condition:
+        case AttributesCondition():
+            # Using `sameElement`, string fields use `contains`
+            # while numeric/bool fields use comparison operators.
+            # @see: https://docs.vespa.ai/en/querying/query-language.html#map
+            value = condition.value
+            if isinstance(value, str):
+                inner = f'key contains "{condition.key}", value contains "{value}"'
+            else:
+                inner = (
+                    f'key contains "{condition.key}", value = {_format_value(value)}'
+                )
+            expr = f"{condition.field} contains sameElement({inner})"
+            if condition.op == "not_eq":
+                return f"!({expr})"
+            return expr
+
+        case LabelsCondition():
+            field = "labels_value_attribute"
+            value = condition.value
+            if condition.op == "not_contains":
+                return f'!({field} contains "{value}")'
+            return f'{field} contains "{value}"'
 
 
 def _build_filter_yql(filter_group: Filter) -> str:
@@ -154,7 +192,7 @@ def _build_filter_query(filter_group: Filter | None) -> str:
     return f" and {yql}" if yql else ""
 
 
-# endregion
+# endregion Filters
 
 
 # We do not inherit from `SearchEngine[Document]` as the search method has different parameters.
@@ -216,16 +254,16 @@ class DevVespaDocumentSearchEngine:
                     LabelRelationship(
                         type=label.get("type", MISSING_PLACEHOLDER),
                         value=Label(
-                            id=label.get("label").get("id", MISSING_PLACEHOLDER),
-                            value=label.get("label").get("value", MISSING_PLACEHOLDER),
-                            type=label.get("label").get("type", MISSING_PLACEHOLDER),
+                            id=label.get("value").get("id", MISSING_PLACEHOLDER),
+                            value=label.get("value").get("value", MISSING_PLACEHOLDER),
+                            type=label.get("value").get("type", MISSING_PLACEHOLDER),
                         ),
                         timestamp=label.get("timestamp"),
                     )
                 )
             documents.append(
                 Document(
-                    id=hit.get("id", MISSING_PLACEHOLDER),
+                    id=source.get("id", MISSING_PLACEHOLDER),
                     title=source.get("title", MISSING_PLACEHOLDER),
                     description=source.get("description", MISSING_PLACEHOLDER),
                     labels=labels,

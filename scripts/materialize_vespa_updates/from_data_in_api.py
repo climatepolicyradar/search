@@ -1,13 +1,15 @@
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import TypedDict
 
 import boto3
 import orjson
 import polars as pl
 
 from prefect import flow
+from search.vespa.document_indexer import (
+    SourceDocument,
+    typeddict_document_to_vespa_update,
+)
 
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -19,48 +21,6 @@ DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 API_CACHE_FILE = DATA_CACHE_DIR / "documents-latest.parquet"
 OUTPUT_FILE = DATA_CACHE_DIR / "documents-updates.jsonl"
-
-DATA_IN_DOCUMENTS_SCHEMA = pl.Schema(
-    {
-        "labels": pl.List(
-            pl.Struct(
-                {
-                    "timestamp": pl.String,
-                    "type": pl.String,
-                    "value": pl.Struct(
-                        {
-                            "id": pl.String,
-                            "type": pl.String,
-                            "value": pl.String,
-                        }
-                    ),
-                }
-            )
-        ),
-        "id": pl.String,
-        "title": pl.String,
-        "description": pl.String,
-    }
-)
-
-
-class SourceLabel(TypedDict):
-    id: str
-    type: str
-    value: str
-
-
-class SourceLabelRelationship(TypedDict):
-    type: str
-    label: SourceLabel
-    timestamp: str | None
-
-
-class SourceDocument(TypedDict):
-    id: str
-    title: str
-    description: str
-    labels: list[SourceLabelRelationship]
 
 
 def _extract_data() -> pl.DataFrame:
@@ -88,7 +48,7 @@ def _to_api_document(document: dict) -> SourceDocument:
         "labels": [
             {
                 "type": label.get("type", "related"),
-                "label": {
+                "value": {
                     "id": label["value"]["id"],
                     "type": label["value"]["type"],
                     "value": label["value"]["value"],
@@ -98,16 +58,6 @@ def _to_api_document(document: dict) -> SourceDocument:
             for label in (document.get("labels") or [])
         ],
     }
-
-
-def _to_unix_timestamp(ts_str):
-    """Safely convert ISO string to int, returns None if invalid/missing."""
-    if not ts_str:
-        return None
-    try:
-        return int(datetime.fromisoformat(ts_str).timestamp())
-    except (ValueError, TypeError):
-        return None
 
 
 @flow(log_prints=True)
@@ -125,28 +75,7 @@ def materialize_vespa_updates_from_data_in_api():
     start = time.time()
     with OUTPUT_FILE.open("wb") as f:
         for i, document in enumerate(data.iter_rows(named=True)):
-            update_op = {
-                "update": f"id:documents:documents::{document.get('id')}",
-                "fields": {
-                    "title": {"assign": document.get("title")},
-                    "description": {"assign": document.get("description")},
-                    "labels": {
-                        "assign": [
-                            {
-                                "id": label["value"]["id"],
-                                "type": label["value"]["type"],
-                                "value": label["value"]["value"],
-                                "timestamp": _to_unix_timestamp(label.get("timestamp")),
-                                "relationship": label.get("type", "related"),
-                            }
-                            for label in (document.get("labels") or [])
-                        ]
-                    },
-                    "document_source": {
-                        "assign": orjson.dumps(_to_api_document(document)).decode()
-                    },
-                },
-            }
+            update_op = typeddict_document_to_vespa_update(_to_api_document(document))
             f.write(orjson.dumps(update_op) + b"\n")
 
             if i % 1000 == 0:
