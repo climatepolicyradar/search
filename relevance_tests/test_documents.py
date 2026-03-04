@@ -2,7 +2,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
-from search.document import Document
+from search.data_in_models import Document
 from search.engines.vespa import BM25TitleVespaDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
@@ -30,25 +30,28 @@ test_cases = [
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="obligation to provide renewable fuels 2005",
+        # FIXME: i have no idea what the document in this original test was
         expected_result_ids=["q7xu8hd9"],
         description="Searching for a document title where the words are in a different order.",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="National Climate Change Strategy 2021-2026",
+        # FIXME: i have no idea what the document in this original test was
         expected_result_ids=["zkarxnpf"],
         description="Searching for the document title should return the correct document.",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="fca rules of tcfd",
+        # FIXME: i have no idea what the document in this original test was
         expected_result_ids=["f3b2qeh6"],
         description="Acronyms in document titles",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="power up britain",
-        expected_result_ids=["jcrp5cka", "dq5aty3a"],
+        expected_result_ids=["CCLW.executive.11174.6586", "CCLW.executive.11174.6588"],
         description="Stemmed words in document titles",
     ),
     PrecisionTestCase[Document](
@@ -145,9 +148,8 @@ test_cases = [
         k=5,
     ),
     PrecisionTestCase[Document](
-        category="BROKEN entity name",
+        category="entity name",
         search_terms="Municipalities of Puerto Rico v. Exxon Mobil Corp.",
-        # FIXME: need to fill in the ID once litigation is in the sample dataset
         expected_result_ids=[],
         description="Searching for 'Municipalities of Puerto Rico v. Exxon Mobil Corp.' should return case Commonwealth of Puerto Rico v. Exxon Mobil Corp.",
     ),
@@ -159,7 +161,7 @@ test_cases = [
         )
         # FIXME: should use document metadata field here instead
         and any(
-            term in document.title.lower() or term in document.description.lower()
+            term in document.title.lower() or term in str(document.description).lower()
             for term in ["croatia", "croatian"]
         ),
         description="Search for 'what is the croatias climate strategy' should return documents titled 'climate strategy' from with 'croatia' in the description. TODO: filter for croatia instead",

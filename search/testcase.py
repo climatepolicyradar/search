@@ -5,7 +5,7 @@ from typing import Callable, Generic, Literal, TypeVar
 from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from search.document import Document
+from search.data_in_models import Document
 from search.engines import SearchEngine
 from search.label import Label
 from search.passage import Passage
