@@ -26,15 +26,15 @@ class Label(BaseModel):
     id: str
     type: str
     value: str
-    # 👇 These are experimental and should not be relied on
-    passages_id: str | None = None
-    count: int | None = None
 
 
 class LabelRelationship(BaseModel):
     type: str
     value: Label
     timestamp: datetime | None = None
+    # 👇 These are experimental and should not be relied on
+    passages_id: str | None = None
+    count: int | None = None
 
 
 class Item(BaseModel):

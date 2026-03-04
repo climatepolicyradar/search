@@ -249,7 +249,7 @@ class DevVespaDocumentSearchEngine:
             # source_url and original_document_id are required by Document.
             # We'll use the doc id for original_document_id and a dummy/empty source_url if missing.
             source = json.loads(fields.get("document_source"))
-            labels = []
+            labels: list[LabelRelationship] = []
             for label in source.get("labels", []):
                 labels.append(
                     LabelRelationship(
@@ -265,12 +265,15 @@ class DevVespaDocumentSearchEngine:
 
             for concept in fields.get("concepts", []):
                 labels.append(
-                    Label(
-                        id=concept.get("id", MISSING_PLACEHOLDER),
+                    LabelRelationship(
                         type="concept",
-                        value=concept.get("value", MISSING_PLACEHOLDER),
-                        count=concept.get("count", MISSING_PLACEHOLDER),
+                        value=Label(
+                            id=concept.get("id", MISSING_PLACEHOLDER),
+                            type="concept",
+                            value=concept.get("value", MISSING_PLACEHOLDER),
+                        ),
                         passages_id=concept.get("passages_id", MISSING_PLACEHOLDER),
+                        count=concept.get("count", MISSING_PLACEHOLDER),
                     )
                 )
 
