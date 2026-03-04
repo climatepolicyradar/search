@@ -25,11 +25,12 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
-from search.data_in_models import Document
+from search.data_in_models import Document, Label, LabelRelationship
 from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
     Filter,
+    LabelsCondition,
 )
 from search.vespa.document_indexer import document_to_vespa_update
 
@@ -119,6 +120,7 @@ def _ids(filter_: Filter) -> set[str]:
     return {doc.id for doc in docs}
 
 
+# region Attributes
 def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = DocumentFactory.build(
         attributes={"country": "UK"},
@@ -249,3 +251,85 @@ def test_attribute_bool_not_eq_excludes_matching_doc(vespa_app: Vespa):
     ids = _ids(f)
     assert document_with_matching_attribute.id not in ids
     assert document_without_matching_attribute.id in ids
+
+
+# endregion Attributes
+
+
+# region Labels
+def _make_label(label_id: str) -> LabelRelationship:
+    return LabelRelationship(
+        type="entity_type",
+        value=Label(id=label_id, value=label_id, type="entity_type"),
+    )
+
+
+def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
+    doc_with_label = DocumentFactory.build(labels=[_make_label("Romania")])
+    doc_without_label = DocumentFactory.build(labels=[])
+    _feed_document(vespa_app, doc_with_label)
+    _feed_document(vespa_app, doc_without_label)
+
+    f = Filter(
+        op="and",
+        filters=[
+            LabelsCondition(field="labels.value.id", op="contains", value="Romania")
+        ],
+    )
+    ids = _ids(f)
+    assert doc_with_label.id in ids
+    assert doc_without_label.id not in ids
+
+
+def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
+    doc_with_different_label = DocumentFactory.build(labels=[_make_label("France")])
+    doc_without_label = DocumentFactory.build(labels=[])
+    _feed_document(vespa_app, doc_with_different_label)
+    _feed_document(vespa_app, doc_without_label)
+
+    f = Filter(
+        op="and",
+        filters=[
+            LabelsCondition(field="labels.value.id", op="contains", value="Romania")
+        ],
+    )
+    ids = _ids(f)
+    assert doc_with_different_label.id not in ids
+    assert doc_without_label.id not in ids
+
+
+def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
+    doc_with_label = DocumentFactory.build(labels=[_make_label("Romania")])
+    doc_without_label = DocumentFactory.build(labels=[])
+    _feed_document(vespa_app, doc_with_label)
+    _feed_document(vespa_app, doc_without_label)
+
+    f = Filter(
+        op="and",
+        filters=[
+            LabelsCondition(field="labels.value.id", op="not_contains", value="Romania")
+        ],
+    )
+    ids = _ids(f)
+    assert doc_with_label.id not in ids
+    assert doc_without_label.id in ids
+
+
+def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
+    doc_with_different_label = DocumentFactory.build(labels=[_make_label("France")])
+    doc_with_matching_label = DocumentFactory.build(labels=[_make_label("Romania")])
+    _feed_document(vespa_app, doc_with_different_label)
+    _feed_document(vespa_app, doc_with_matching_label)
+
+    f = Filter(
+        op="and",
+        filters=[
+            LabelsCondition(field="labels.value.id", op="not_contains", value="Romania")
+        ],
+    )
+    ids = _ids(f)
+    assert doc_with_different_label.id in ids
+    assert doc_with_matching_label.id not in ids
+
+
+# endregion Labels

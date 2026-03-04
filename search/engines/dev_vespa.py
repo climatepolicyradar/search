@@ -49,7 +49,7 @@ settings = Settings()  # pyright: ignore[reportCallIssue]
 
 # region Filters
 class LabelsCondition(BaseModel):
-    field: Literal["labels.label.id"]
+    field: Literal["labels.value.id"]
     op: Literal["contains", "not_contains"]
     value: str
 
@@ -76,7 +76,7 @@ SimpleExampleFilter = Filter(
     op="and",
     filters=[
         LabelsCondition(
-            field="labels.label.id",
+            field="labels.value.id",
             op="contains",
             value="Romania",
         ),
@@ -94,26 +94,26 @@ ComplexExampleFilter = Filter(
                     op="and",
                     filters=[
                         LabelsCondition(
-                            field="labels.label.id",
+                            field="labels.value.id",
                             op="contains",
                             value="Multilateral climate fund project",
                         ),
                         LabelsCondition(
-                            field="labels.label.id",
+                            field="labels.value.id",
                             op="contains",
                             value="Principal",
                         ),
                     ],
                 ),
                 LabelsCondition(
-                    field="labels.label.id",
+                    field="labels.value.id",
                     op="contains",
                     value="UN submissions",
                 ),
             ],
         ),
         LabelsCondition(
-            field="labels.label.id",
+            field="labels.value.id",
             op="contains",
             value="Romania",
         ),
@@ -155,7 +155,7 @@ def _build_condition_yql(condition: Condition) -> str:
             return expr
 
         case LabelsCondition():
-            field = "labels_value_attribute"
+            field = "labels.id"
             value = condition.value
             if condition.op == "not_contains":
                 return f'!({field} contains "{value}")'
