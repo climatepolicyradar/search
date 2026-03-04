@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from prefect import get_run_logger, task
-from search.document import Document
+from search.data_in_models import Document
 from search.engines import SearchEngine
 from search.label import Label
 from search.log import get_logger
