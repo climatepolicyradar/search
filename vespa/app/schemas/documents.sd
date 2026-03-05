@@ -99,7 +99,7 @@ schema documents {
     }
 
     field labels_value type array<string> {
-        indexing: input labels | for_each { get_field value } | index
+        indexing: input labels | for_each { get_field value } | index | summary
     }
 
     field labels_value_attribute type array<string> {
@@ -122,7 +122,7 @@ schema documents {
     }
 
     field concepts_value type array<string> {
-        indexing: input concepts | for_each { get_field value } | index
+        indexing: input concepts | for_each { get_field value } | index | summary
     }
     field concepts_value_attribute type array<string> {
         indexing: input concepts | for_each { get_field value } | attribute
