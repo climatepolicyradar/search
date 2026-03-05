@@ -53,7 +53,8 @@ def materialize_vespa_updates_from_inference_results():
     start = time.time()
     with OUTPUT_FILE.open("wb") as f:
         for i, file in enumerate(data):
-            document_id = file.stem
+            # This is appended for translated documents
+            document_id = file.stem.replace("_translated_en", "")
 
             with open(file, "rb") as inference_file:
                 concepts = orjson.loads(inference_file.read())
