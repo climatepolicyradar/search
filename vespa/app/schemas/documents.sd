@@ -143,4 +143,10 @@ schema documents {
             expression: nativeRank(title) * 3 + nativeRank(description) + nativeRank(passages_text)
         }
     }
+
+    rank-profile bm25-lurking-eel {
+        first-phase {
+            expression: bm25(title) * 3 + bm25(description) + bm25(passages_text)
+        }
+    }
 }

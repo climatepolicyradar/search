@@ -214,6 +214,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         filters_json_string: str | None = None,
         limit: int = 10,
         offset: int = 0,
+        ranking_profile: str | None = None,
     ) -> list[Document]:
         """Fetch a list of relevant search results."""
         where = "true "
@@ -234,6 +235,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                     "yql": yql,
                     "query": query,
                     "timeout": "5s",
+                    "rankingProfile": ranking_profile,
                 },
                 timeout=API_TIMEOUT,
                 headers={

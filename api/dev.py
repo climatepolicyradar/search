@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 from fastapi import APIRouter, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,6 +82,7 @@ def read_documents(
     filters_json_string: str | None = Query(None, alias="filters"),
     limit: int = 10,
     offset: int = 0,
+    ranking_profile: str | None = None,
 ):
 
     results = DevVespaDocumentSearchEngine().search(
@@ -89,6 +90,7 @@ def read_documents(
         filters_json_string=filters_json_string,
         limit=limit,
         offset=offset,
+        ranking_profile=ranking_profile,
     )
 
     # TODO: pagination
