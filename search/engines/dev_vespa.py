@@ -183,13 +183,10 @@ def _build_filter_query(filter_group: Filter | None) -> str:
 # endregion Filters
 
 
-# We do not inherit from `SearchEngine[Document]` as the search method has different parameters.
-# At least for now.
-class DevVespaDocumentSearchEngine:
-    """Search engine for dev Vespa"""
+class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     """
     Search engine for dev Vespa
-    
+
     This class should be using the Vespa Client, but we are having problems connecting to the remote server
     because of the way API Gateway handles trailing slashes.
 
@@ -203,6 +200,8 @@ class DevVespaDocumentSearchEngine:
 
     For now we just use `requests` which yields the same results.
     """
+
+    model_class = Document
 
     def __init__(self) -> None:
         pass
