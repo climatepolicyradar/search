@@ -101,24 +101,17 @@ schema documents {
     field labels_value type array<string> {
         indexing: input labels | for_each { get_field value } | index
     }
-
     field labels_value_attribute type array<string> {
         indexing: input labels | for_each { get_field value } | attribute
         attribute: fast-search
     }
-
-    field labels_type_value_attribute type array<string> {
-        indexing: input labels | for_each { get_field type . "::". get_field value } | attribute
-        attribute: fast-search
-    }
-
     field labels_type_attribute type array<string> {
         indexing: input labels | for_each { get_field type } | attribute
         attribute: fast-search
     }
-
-    field passages_text type array<string> {
-        indexing: input passages | for_each { get_field text } | index
+    field labels_type_value_attribute type array<string> {
+        indexing: input labels | for_each { get_field type . "::". get_field value } | attribute
+        attribute: fast-search
     }
 
     field concepts_value type array<string> {
@@ -128,9 +121,17 @@ schema documents {
         indexing: input concepts | for_each { get_field value } | attribute
         attribute: fast-search
     }
-    field concepts_id_attribute type array<string> {
-        indexing: input concepts | for_each { get_field id } | attribute
+    field concepts_type_attribute type array<string> {
+        indexing: input concepts | for_each { get_field type } | attribute
         attribute: fast-search
+    }
+    field concepts_type_value_attribute type array<string> {
+        indexing: input concepts | for_each { get_field type . "::". get_field value } | attribute
+        attribute: fast-search
+    }
+
+    field passages_text type array<string> {
+        indexing: input passages | for_each { get_field text } | index
     }
 
     fieldset default {

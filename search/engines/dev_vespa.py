@@ -8,6 +8,8 @@ import requests
 from pydantic import BaseModel
 from pydantic.networks import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from vespa.querybuilder import Grouping as G
+from vespa.querybuilder.builder.builder import Q, QueryField
 
 from search.data_in_models import Document, Label, LabelRelationship
 from search.engines import SearchEngine
@@ -143,7 +145,7 @@ def _build_condition_yql(condition: Condition) -> str:
 
         case LabelsCondition():
             value = condition.value
-            labels_expr = f'labels.id contains "{value}"'
+            labels_expr = f'labels.value contains "{value}"'
             concepts_expr = f'concepts.value contains "{value}"'
             if condition.op == "not_contains":
                 return f"!({labels_expr} or {concepts_expr})"
@@ -307,30 +309,44 @@ class DevVespaLabelSearchEngine:
     def __init__(self) -> None:
         pass
 
-    def search(self, query: str, label_type: str | None) -> list[Label]:
-        """Fetch a list of relevant search results."""
+    def search(self, query: str | None, label_type: str | None):
+        """Returns unique values for concepts and labels in the documents"""
+        labels_field = QueryField("labels_type_value_attribute")
+        concepts_field = QueryField("concepts_type_value_attribute")
 
-        # 1) prefix filter the documents list on `labels_type_value_attribute` to ensure we are grouping by as few documents as possible for performance
-        # We use `matches` with a case-insensitive regex pattern `(?i)` because `contains` on attributes is strictly case-sensitive.
-        safe_terms = re.escape(query)
-        safe_label_type = re.escape(label_type) if label_type else ""
+        safe_terms = re.escape(query) if query else "[^:]*"
+        safe_label_type = re.escape(label_type) if label_type else "[^:]*"
+        doc_regex = f"(?i)^{safe_label_type}::{safe_terms}.*"
 
-        doc_regex = f"(?i)^{safe_label_type or '[^:]*'}::{safe_terms}.*"
-        document_filter_query = f'select * from sources documents where labels_type_value_attribute matches "{doc_regex}"'
+        # Filter the documents that only have matching labels or concepts
+        where = labels_field.matches(doc_regex) | concepts_field.matches(doc_regex)
 
-        # 2) group by all `labels_type_value_attribute` values that match the prefix
-        grouping_query = "group(labels_type_value_attribute)"
-
-        # 3) filter the group
-        group_filter_query = (
-            f'filter(regex("{doc_regex}", labels_type_value_attribute))'
+        # Create the two groups, filtered and ordered
+        grouping = G.all(
+            G.all(
+                G.group("labels_type_value_attribute"),
+                f'filter(regex("{doc_regex}", labels_type_value_attribute))',
+                G.max(5000),
+                G.order(-G.count()),
+                G.each(G.output(G.count())),
+            ),
+            G.all(
+                G.group("concepts_type_value_attribute"),
+                f'filter(regex("{doc_regex}", concepts_type_value_attribute))',
+                G.max(5000),
+                G.order(-G.count()),
+                G.each(G.output(G.count())),
+            ),
         )
-        # group_filter_query = ""
 
-        # 4) limit and order and output the groups
-        group_order_query = "order(-count()) each(output(count()))"
-
-        yql = f"{document_filter_query} | all({grouping_query} {group_filter_query} {group_order_query})"
+        # Generate the YQL query
+        yql = (
+            Q.select(["labels_type_value_attribute", "concepts_type_value_attribute"])
+            .from_("documents")
+            .where(where)
+            .groupby(grouping)
+            .build()
+        )
 
         try:
             res = requests.post(
@@ -351,24 +367,20 @@ class DevVespaLabelSearchEngine:
             logger.exception("Vespa query failed")
             return []
 
-        res = res.json()
-        labels = []
+        # Parse the groups & transform => Labels
+        # You can read more about grouping @see: https://docs.vespa.ai/en/querying/grouping.html
+        # And there is an example of the response type @see: https://docs.vespa.ai/en/querying/grouping.html#pagination
+        # I do wish this was typed
+        root = res.json().get("root", {})
+        groups = root.get("children", [{}])[0].get("children", [])
 
-        # From the YQL above - the structure is typically: `root.children[0].children[0].children[]`
-        root = res.get("root", {})
+        group_values = []
+        for group in groups:
+            group_values.extend(group.get("children", []))
 
-        children = root.get("children", [{}])[0].get("children", [])
-        group_list = next(
-            (
-                item.get("children", [])
-                for item in children
-                if item.get("label") == "labels_type_value_attribute"
-            ),
-            [],
-        )
-
-        for group in group_list:
-            label_type_value = group.get("value", "")
+        labels: list[Label] = []
+        for group_value in group_values:
+            label_type_value = group_value.get("value", "")
             label_type, _, label_value = label_type_value.partition("::")
             labels.append(
                 Label(
@@ -377,7 +389,6 @@ class DevVespaLabelSearchEngine:
                     type=label_type or MISSING_PLACEHOLDER,
                 )
             )
-
         return labels
 
     def all_label_types(self) -> list[str]:
