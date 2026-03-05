@@ -18,11 +18,14 @@ class SearchEngine(ABC, Generic[TModel]):
     model_class: type[TModel]
 
     @abstractmethod
-    def search(self, query: str, limit: int, offset: int = 0) -> list[TModel]:
+    def search(
+        self, query: str, filters_json_string: str | None, limit: int, offset: int = 0
+    ) -> list[TModel]:
         """
         Fetch a list of relevant search results.
 
         :param query: Search query to match against
+        :param filters_json_string: JSON string of AND/OR filters
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip (for pagination)
         :return: List of matching items

@@ -3,7 +3,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.data_in_models import Document
-from search.engines.vespa import BM25TitleVespaDocumentSearchEngine
+from search.engines.dev_vespa import DevVespaDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
@@ -203,7 +203,8 @@ def relevance_tests_documents():
     """Run relevance tests for documents"""
 
     engines = [
-        BM25TitleVespaDocumentSearchEngine(),
+        # BM25TitleVespaDocumentSearchEngine(),
+        DevVespaDocumentSearchEngine(),
     ]
 
     run_relevance_tests_parallel(
