@@ -1,4 +1,3 @@
-from knowledge_graph.identifiers import Identifier
 from pydantic import AnyHttpUrl, BaseModel, Field, computed_field
 
 
@@ -16,7 +15,7 @@ class Document(BaseModel):
             "e.g. a document's ID in the main CPR apps"
         )
     )
-    labels: list[Identifier] = Field(
+    labels: list[str] = Field(
         default=[],
         description=(
             "List of identifiers of labels which are associated with this "
@@ -26,9 +25,9 @@ class Document(BaseModel):
 
     @computed_field
     @property
-    def id(self) -> Identifier:
-        """A canonical identifier for the document"""
-        return Identifier.generate(self.source_url)
+    def id(self) -> str:
+        """The document's original ID from the source system."""
+        return self.original_document_id
 
     @classmethod
     def from_huggingface_row(cls, row: dict) -> "Document":
