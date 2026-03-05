@@ -13,7 +13,7 @@ from search.aws import get_ssm_parameter
 from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Item
 from search.document import Document
-from search.engines import LabelSearchEngine, SearchEngine, TModel
+from search.engines import SearchEngine, TModel
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -381,7 +381,7 @@ class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
         }
 
 
-class VespaLabelSearchEngine(VespaSearchEngine[Label], LabelSearchEngine):
+class VespaLabelSearchEngine(VespaSearchEngine[Label]):
     """
     Vespa search engine for label search.
 
