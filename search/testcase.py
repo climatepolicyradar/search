@@ -53,7 +53,7 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
 class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
     """Dictates which should be the top results for a given search"""
 
-    expected_result_ids: list[Identifier | str] = Field(
+    expected_result_ids: list[str] = Field(
         description="The expected IDs for the top results."
     )
     strict_order: bool = Field(
@@ -62,22 +62,6 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
         ),
         default=False,
     )
-
-    @field_validator("expected_result_ids", mode="before")
-    @classmethod
-    def coerce_identifiers(
-        cls, value: list[str | Identifier] | None
-    ) -> list[Identifier] | None:
-        """
-        Coerce string identifiers to Identifier objects.
-
-        This validator allows strings to be passed in to `expected_result_ids`.
-        """
-
-        if value is None:
-            return value
-
-        return [Identifier(item) if isinstance(item, str) else item for item in value]
 
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
@@ -118,10 +102,10 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
 class RecallTestCase(TestCase[TModel], Generic[TModel]):
     """Dictates which results should be anywhere in the top K results for a given search."""
 
-    expected_result_ids: list[Identifier | str] = Field(
+    expected_result_ids: list[str] = Field(
         description="IDs which should appear in the top k results."
     )
-    forbidden_result_ids: list[Identifier | str] | None = Field(
+    forbidden_result_ids: list[str] | None = Field(
         description="IDs which should not appear in the top k results.",
         default=None,
     )
@@ -130,22 +114,6 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         default=20,
         gt=0,
     )
-
-    @field_validator("expected_result_ids", "forbidden_result_ids", mode="before")
-    @classmethod
-    def coerce_identifiers(
-        cls, value: list[str | Identifier] | None
-    ) -> list[Identifier] | None:
-        """
-        Coerce string identifiers to Identifier objects.
-
-        This validator allows strings to be passed in to `expected_result_ids`.
-        """
-
-        if value is None:
-            return value
-
-        return [Identifier(item) if isinstance(item, str) else item for item in value]
 
     @model_validator(mode="after")
     def check_expected_result_ids_unique(self):

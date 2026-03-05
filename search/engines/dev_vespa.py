@@ -12,24 +12,11 @@ from vespa.querybuilder import Grouping as G
 from vespa.querybuilder.builder.builder import Q, QueryField
 
 from search.data_in_models import Document, Label, LabelRelationship
+from search.engines import SearchEngine
 from search.log import get_logger
 
 logger = get_logger(__name__)
 
-"""
-This class should be using the Vespa Client, but we are having problems connecting to the remote server
-because of the way API Gateway handles trailing slashes.
-
-i.e.
-VespaClient connects to `/search/`.
-This isn't a viable URL for API Gatewayway, you can use
-- `/search`
-- `/search/{proxy+}`
-
-The secondary URL uses a `+` which matches 1 or more characters. 🤷
-
-For now we just use `requests` which yields the same results.
-"""
 
 API_TIMEOUT = 5  # seconds
 # We make this very obvious as it is used for values that should exist
@@ -198,10 +185,25 @@ def _build_filter_query(filter_group: Filter | None) -> str:
 # endregion Filters
 
 
-# We do not inherit from `SearchEngine[Document]` as the search method has different parameters.
-# At least for now.
-class DevVespaDocumentSearchEngine:
-    """Search engine for dev Vespa"""
+class DevVespaDocumentSearchEngine(SearchEngine[Document]):
+    """
+    Search engine for dev Vespa
+
+    This class should be using the Vespa Client, but we are having problems connecting to the remote server
+    because of the way API Gateway handles trailing slashes.
+
+    i.e.
+    VespaClient connects to `/search/`.
+    This isn't a viable URL for API Gatewayway, you can use
+    - `/search`
+    - `/search/{proxy+}`
+
+    The secondary URL uses a `+` which matches 1 or more characters. 🤷
+
+    For now we just use `requests` which yields the same results.
+    """
+
+    model_class = Document
 
     def __init__(self) -> None:
         pass
@@ -209,7 +211,7 @@ class DevVespaDocumentSearchEngine:
     def search(
         self,
         query: str | None,
-        filters_json_string: str | None,
+        filters_json_string: str | None = None,
         limit: int = 10,
         offset: int = 0,
     ) -> list[Document]:
@@ -253,7 +255,7 @@ class DevVespaDocumentSearchEngine:
             try:
                 source = json.loads(fields.get("document_source"))
             except Exception:
-                logger.warning(f"Document source is missing for {hit.get("id")}")
+                logger.warning(f"Document source is missing for {hit.get('id')}")
                 continue
             labels: list[LabelRelationship] = []
             for label in source.get("labels", []):
