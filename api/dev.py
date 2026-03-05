@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import Annotated, TypeVar
+from typing import TypeVar
 
 from fastapi import APIRouter, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -106,9 +106,7 @@ def read_documents(
 
 @router.get("/labels", response_model=SearchResponse[Label])
 def read_labels(
-    query: Annotated[
-        str, Query(..., description="What are you looking for?", min_length=1)
-    ],
+    query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
 ):
     results = DevVespaLabelSearchEngine().search(query=query, label_type=type)
