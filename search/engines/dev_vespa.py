@@ -209,7 +209,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     def search(
         self,
         query: str | None,
-        filters_json_string: str | None,
+        filters_json_string: str | None = None,
         limit: int = 10,
         offset: int = 0,
     ) -> list[Document]:
