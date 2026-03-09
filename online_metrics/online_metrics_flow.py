@@ -1,8 +1,9 @@
-"""Prefect flow for collecting online metrics from PostHog and logging to W&B."""
+"""Prefect flow for collecting online metrics from PostHog and Grafana and logging to W&B."""
 
 from datetime import date, timedelta
 
 from prefect import flow, get_run_logger
+from search.date_utils import determine_prefect_flow_retention_anchor_date
 from search.online_metrics import OnlineMetricResult
 from search.online_metrics.date_utils import DateRange, InvalidStartDateException
 from search.online_metrics.posthog import PosthogNoResultsException, PostHogSession
@@ -19,9 +20,15 @@ def collect_online_metrics(
     logger = get_run_logger()
 
     today = date.today()
-    date_from = date_from or today.replace(day=1)
-    date_to = date_to or (today - timedelta(days=1))
-    retention_date = retention_date or (today - timedelta(days=30))
+    date_from = date_from or (today.replace(day=1) - timedelta(days=1)).replace(
+        day=1
+    )  # start of previous calendar month
+    date_to = date_to or (
+        today.replace(day=1) - timedelta(days=1)
+    )  # end of previous calendar month
+    retention_date = retention_date or determine_prefect_flow_retention_anchor_date(
+        today
+    )
 
     date_range = DateRange(date_from=date_from, date_to=date_to)
 

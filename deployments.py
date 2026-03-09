@@ -164,6 +164,8 @@ if __name__ == "__main__":
     # Running relevance tests
     rrule_relevance_tests = "RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=-1MO;BYHOUR=21;BYMINUTE=0"  # last Monday of every month at 21:00
 
+    rrule_online_metrics = "RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=1MO;BYHOUR=21;BYMINUTE=0"  # first Monday of every month at 21:00
+
     create_deployment(
         flow=test_documents.relevance_tests_documents,  # type: ignore
         description="Run relevance tests for documents",
@@ -184,7 +186,7 @@ if __name__ == "__main__":
     create_deployment(
         flow=collect_online_metrics,
         description="Collect online metrics",
-        rrule=rrule_relevance_tests,
+        rrule=rrule_online_metrics,
     )
 
     # Materializers

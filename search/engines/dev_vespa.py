@@ -255,7 +255,7 @@ class DevVespaDocumentSearchEngine:
             try:
                 source = json.loads(fields.get("document_source"))
             except Exception:
-                logger.warning(f"Document source is missing for {hit.get("id")}")
+                logger.warning(f"Document source is missing for {hit.get('id')}")
                 continue
             labels: list[LabelRelationship] = []
             for label in source.get("labels", []):
