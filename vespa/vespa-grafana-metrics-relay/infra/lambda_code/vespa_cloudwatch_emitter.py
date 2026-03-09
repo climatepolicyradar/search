@@ -14,8 +14,80 @@ log.setLevel(logging.INFO)
 
 
 class VespaCloudwatchEmitter:
-
     chunks_sent = 0
+
+    # See: https://docs.vespa.ai/en/reference/operations/metrics/vespa-metric-set.html
+    METRICS_ALLOWLIST = {
+        "queries.rate",
+        "content.proton.documentdb.feeding.commit.operations.rate",
+        "content.proton.documentdb.documents.total.last",
+        "content.proton.documentdb.documents.total.max",
+        "query_latency.95percentile",
+        "query_latency.99percentile",
+        "query_latency.average",
+        "query_latency.count",
+        "query_latency.max",
+        "query_latency.sum",
+        "http.status.2xx",
+        "http.status.4xx",
+        "http.status.5xx",
+        "feed.http-requests",
+        "content.proton.documentdb.disk_usage.last",
+        "content.proton.documentdb.disk_usage.average",
+        "content.proton.resource_usage.disk.average",
+        "content.proton.resource_usage.memory.average",
+        "cpu",  # note, this one appears to be undocumented
+    }
+
+    DIMENSIONS_ALLOWLIST = {
+        "applicationId",
+        "documenttype",
+        # "cluster",
+        # "clusterId",
+        # "controller-index",
+        # "didWork",
+        # "hostname",
+        # "serviceId",
+        # "workId",
+        # "zone",
+        # "httpMethod",
+        # "protocol",
+        # "requestType",
+        # "statusCode",
+        # "serverName",
+        # "serverPort",
+        # "api",
+        # "operation",
+        # "status",
+        # "node-type",
+        # "destination",
+        # "embedder",
+        # "language",
+        # "endpoint",
+        # "handler",
+        # "handler-name",
+        # "chain",
+        # "docproc",
+        # "rankProfile",
+        # "reason",
+        # "context",
+        # "host",
+        # "parentHostname",
+        # "field",
+        # "flavor",
+        # "interface",
+        # "loglevel",
+        # "service",
+        # "mime",
+        # "renderer",
+        # "mode",
+        # "violation",
+        # "client-version",
+        # "gcName",
+        # "source",
+        # "threadpool",
+        # "vendor",
+    }
 
     def __init__(self):
         # User constants
@@ -173,6 +245,8 @@ class VespaCloudwatchEmitter:
         metric_data = []
         dimensions = self._get_dimensions(metrics_elem)
         for name, value in metrics_elem["values"].items():
+            if name not in self.METRICS_ALLOWLIST:
+                continue
             metric_data.append(
                 {
                     "MetricName": name,
@@ -186,8 +260,9 @@ class VespaCloudwatchEmitter:
     def _get_dimensions(self, metrics):
         dimensions = []
         if "dimensions" in metrics:
-            dimensions_json = metrics["dimensions"]
-            for dim, dim_val in dimensions_json.items():
+            for dim, dim_val in metrics["dimensions"].items():
+                if dim not in self.DIMENSIONS_ALLOWLIST:
+                    continue
                 dimensions.append({"Name": dim, "Value": dim_val})
         return dimensions
 
