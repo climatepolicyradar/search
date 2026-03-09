@@ -121,4 +121,21 @@ def collect_online_metrics(
 
 
 if __name__ == "__main__":
-    collect_online_metrics()
+    import typer
+
+    def main(
+        date_from: str | None = typer.Option(None, help="Start date (YYYY-MM-DD)"),
+        date_to: str | None = typer.Option(None, help="End date (YYYY-MM-DD)"),
+        retention_date: str | None = typer.Option(
+            None, help="Retention anchor date (YYYY-MM-DD)"
+        ),
+    ):
+        collect_online_metrics(
+            date_from=date.fromisoformat(date_from) if date_from else None,
+            date_to=date.fromisoformat(date_to) if date_to else None,
+            retention_date=date.fromisoformat(retention_date)
+            if retention_date
+            else None,
+        )
+
+    typer.run(main)
