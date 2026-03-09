@@ -18,11 +18,14 @@ class SearchEngine(ABC, Generic[TModel]):
     model_class: type[TModel]
 
     @abstractmethod
-    def search(self, query: str, limit: int, offset: int = 0) -> list[TModel]:
+    def search(
+        self, query: str, filters_json_string: str | None, limit: int, offset: int = 0
+    ) -> list[TModel]:
         """
         Fetch a list of relevant search results.
 
         :param query: Search query to match against
+        :param filters_json_string: JSON string of AND/OR filters
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip (for pagination)
         :return: List of matching items
@@ -55,87 +58,3 @@ class SearchEngine(ABC, Generic[TModel]):
         return Identifier.generate(
             str(self),
         )
-
-
-class DocumentSearchEngine(SearchEngine[DocumentModel]):
-    """A search engine that searches for documents"""
-
-    model_class = DocumentModel
-
-    @abstractmethod
-    def search(
-        self, query: str, limit: int | None = None, offset: int = 0
-    ) -> list[DocumentModel]:
-        """
-        Fetch a list of relevant documents.
-
-        :param query: Search query to match against
-        :param limit: Maximum number of results to return. If None, returns all results.
-        :param offset: Number of results to skip (for pagination)
-        :return: List of matching documents
-        """
-
-    @abstractmethod
-    def count(self, query: str) -> int:
-        """
-        Count total number of documents matching the search query.
-
-        :param query: Search query to match against
-        :return: Total count of matching documents
-        """
-
-
-class PassageSearchEngine(SearchEngine[Passage]):
-    """A search engine that searches for passages"""
-
-    model_class = Passage
-
-    @abstractmethod
-    def search(
-        self, query: str, limit: int | None = None, offset: int = 0
-    ) -> list[Passage]:
-        """
-        Fetch a list of relevant passages.
-
-        :param query: Search query to match against
-        :param limit: Maximum number of results to return. If None, returns all results.
-        :param offset: Number of results to skip (for pagination)
-        :return: List of matching passages
-        """
-
-    @abstractmethod
-    def count(self, query: str) -> int:
-        """
-        Count total number of passages matching the search query.
-
-        :param query: Search query to match against
-        :return: Total count of matching passages
-        """
-
-
-class LabelSearchEngine(SearchEngine[Label]):
-    """A search engine that searches for labels"""
-
-    model_class = Label
-
-    @abstractmethod
-    def search(
-        self, query: str, limit: int | None = None, offset: int = 0
-    ) -> list[Label]:
-        """
-        Fetch a list of relevant labels.
-
-        :param query: Search query to match against
-        :param limit: Maximum number of results to return. If None, returns all results.
-        :param offset: Number of results to skip (for pagination)
-        :return: List of matching labels
-        """
-
-    @abstractmethod
-    def count(self, query: str) -> int:
-        """
-        Count total number of labels matching the search query.
-
-        :param query: Search query to match against
-        :return: Total count of matching labels
-        """

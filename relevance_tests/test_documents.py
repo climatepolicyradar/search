@@ -3,7 +3,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.data_in_models import Document
-from search.engines.vespa import BM25TitleVespaDocumentSearchEngine
+from search.engines.dev_vespa import DevVespaDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
@@ -24,28 +24,25 @@ test_cases = [
     PrecisionTestCase[Document](
         category="punctuation",
         search_terms="Directive (EU) 2022/2464 amending Regulation (EU) No 537/2014 and others, as regards corporate sustainability reporting (Corporate Sustainability Reporting Directive or CSRD)",
-        expected_result_ids=["buhkvq82"],
+        expected_result_ids=["CCLW.legislative.11041.6337"],
         description="Searching for a document title should return the correct document, where the title has brackets.",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="obligation to provide renewable fuels 2005",
-        # FIXME: i have no idea what the document in this original test was
-        expected_result_ids=["q7xu8hd9"],
+        expected_result_ids=["CCLW.legislative.11173.6585"],
         description="Searching for a document title where the words are in a different order.",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="National Climate Change Strategy 2021-2026",
-        # FIXME: i have no idea what the document in this original test was
-        expected_result_ids=["zkarxnpf"],
+        expected_result_ids=["CCLW.executive.1704.1595"],
         description="Searching for the document title should return the correct document.",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="fca rules of tcfd",
-        # FIXME: i have no idea what the document in this original test was
-        expected_result_ids=["f3b2qeh6"],
+        expected_result_ids=["CCLW.executive.9956.4413"],
         description="Acronyms in document titles",
     ),
     PrecisionTestCase[Document](
@@ -57,13 +54,16 @@ test_cases = [
     PrecisionTestCase[Document](
         category="document name + geography",
         search_terms="UK Climate Change Act",
-        expected_result_ids=["dqk29nuc"],
+        expected_result_ids=[
+            "CCLW.legislative.1755.2260",
+            "CCLW.legislative.1755.rtl_71",
+        ],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Climate Change Act 2008)",
     ),
     PrecisionTestCase[Document](
         category="document name + geography",
         search_terms="energy policy act us",
-        expected_result_ids=["p3rnnyee"],
+        expected_result_ids=["CCLW.legislative.1776.2144"],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Energy Policy Act 2005 (Energy Bill))",
     ),
     FieldCharacteristicsTestCase[Document](
@@ -105,7 +105,7 @@ test_cases = [
     PrecisionTestCase[Document](
         category="document name",
         search_terms="Law No. 018/2022 ratifying Ordinance No. 019/PR/2021 relating to climate change",
-        expected_result_ids=["872jfyqv"],
+        expected_result_ids=["CCLW.legislative.11091.6395"],
         description="Searching for exact law title should return the correct document",
     ),
     FieldCharacteristicsTestCase[Document](
@@ -120,7 +120,7 @@ test_cases = [
     PrecisionTestCase[Document](
         category="document name",
         search_terms="argentina LT-LEDS",
-        expected_result_ids=["xjeh5fts"],
+        expected_result_ids=["UNFCCC.document.i00002622.n0000"],
         description="Searching for 'argentina LT-LEDS' should return Argentina's long-term low greenhouse gas emission development strategy",
     ),
     FieldCharacteristicsTestCase[Document](
@@ -173,19 +173,23 @@ test_cases = [
     PrecisionTestCase[Document](
         category="docket number",
         search_terms="1:25-cv-02214",
-        expected_result_ids=["nk5qx7pk", "8hm35kjn", "f3858m3m"],
+        expected_result_ids=[
+            "Sabin.document.130975.130977",
+            "Sabin.document.130975.130978",
+            "Sabin.document.130975.130979",
+        ],
         description="Searching for docket number of US case should return all the documents from the case first.",
     ),
     PrecisionTestCase[Document](
         category="docket number",
         search_terms="13-1820",
-        expected_result_ids=["3w4yvv5b"],
+        expected_result_ids=["Sabin.document.1221.3369"],
         description="Searching for docket number of US case should return all the documents from the case first.",
     ),
     PrecisionTestCase[Document](
         category="docket number",
         search_terms="24-3397",
-        expected_result_ids=["3ftsndpa"],
+        expected_result_ids=["Sabin.document.69198.69199"],
         description="Searching for docket number of US case should return all the documents from the case first.",
     ),
 ]
@@ -199,7 +203,8 @@ def relevance_tests_documents():
     """Run relevance tests for documents"""
 
     engines = [
-        BM25TitleVespaDocumentSearchEngine(),
+        # BM25TitleVespaDocumentSearchEngine(),
+        DevVespaDocumentSearchEngine(),
     ]
 
     run_relevance_tests_parallel(

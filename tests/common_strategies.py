@@ -2,7 +2,6 @@
 
 from hypothesis import provisional
 from hypothesis import strategies as st
-from knowledge_graph.identifiers import Identifier
 
 from search.document import Document
 from search.label import Label
@@ -129,11 +128,9 @@ def document_strategy(draw) -> Document:
 @st.composite
 def passage_data_strategy(draw) -> dict:
     """Generate input data for Passage model."""
-    document_id = Identifier.generate(draw(text_strategy), draw(url_strategy))
-
     return {
         "text": draw(text_strategy),
-        "document_id": document_id,
+        "document_id": draw(document_id_strategy),
         "original_passage_id": draw(text_block_id_strategy),
         "labels": [],
     }

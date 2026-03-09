@@ -3,7 +3,6 @@
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from knowledge_graph.identifiers import Identifier
 
 from search.label import Label
 from tests.common_strategies import label_data_strategy, label_strategy, text_strategy
@@ -14,7 +13,7 @@ def test_whether_label_id_is_deterministic_for_same_inputs(label_data):
     label1 = Label(**label_data)
     label2 = Label(**label_data)
     assert label1.id == label2.id
-    assert isinstance(label1.id, Identifier)
+    assert isinstance(label1.id, str)
 
 
 @given(label=label_strategy(), new_source=text_strategy)
@@ -63,4 +62,4 @@ def test_whether_label_id_is_invariant_to_field_changes(
 @given(label=label_strategy())
 def test_whether_labels_can_be_created_with_a_missing_description(label):
     label_with_none_description = label.model_copy(update={"description": None})
-    assert isinstance(label_with_none_description.id, Identifier)
+    assert isinstance(label_with_none_description.id, str)
