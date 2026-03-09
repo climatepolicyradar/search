@@ -113,11 +113,10 @@ def collect_online_metrics(
         retention_date,
     )
 
-    # Now log all results to W&B (after all PostHog queries complete)
+    # Now log all results to W&B (after all PostHog and Grafanaqueries complete)
     logger.info(f"Logging {len(results)} metrics to Weights & Biases")
     wb = WandbSession()
-    for result in results:
-        wb.log_online_metric_result(result)
+    wb.log_online_metric_results(results, date_from, date_to, retention_date)
     logger.info("Finished logging to W&B")
 
 

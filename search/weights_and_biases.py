@@ -1,5 +1,6 @@
 """Helpers for interacting with Weights & Biases"""
 
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -191,4 +192,37 @@ class WandbSession:
 
         logger.info(f"Logged online metric '{online_metric_result.metric}' to W&B")
 
+        run.finish()
+
+    def log_online_metric_results(
+        self,
+        results: list[OnlineMetricResult],
+        date_from: date,
+        date_to: date | None = None,
+        retention_date: date | None = None,
+    ) -> None:
+        """Log a list of online metric results to Weights & Biases."""
+
+        config = {"date_from": date_from}
+        if date_to:
+            config["date_to"] = date_to
+        if retention_date:
+            config["retention_anchor_date"] = retention_date
+        config["calendar_month"] = date_from.month
+        config["year"] = date_from.year
+        run = self.new_run(
+            project=self.online_metrics_project,
+            config=config,
+        )
+
+        for result in results:
+            result_name = result.metric
+            result_dict = result.model_dump(mode="python")
+            result_dict = {
+                f"{result_name}.{k}": v for k, v in result_dict.items() if k != "metric"
+            }
+
+            run.summary.update(result_dict)
+
+        logger.info(f"Logged {len(results)} online metrics as summary to W&B")
         run.finish()
