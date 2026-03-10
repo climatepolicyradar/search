@@ -309,11 +309,23 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             )
 
             if self.debug:
-                _STANDARD_FIELDS = {"document_source", "sddocname", "documentid"}
+                # NOTE: these are all fields that are stored as type summary in the index.
+                # This is because overriding the default summary in the schema adds fields
+                # to it, rather than redefining the schema from scratch.
+                _STANDARD_FIELDS = {
+                    "document_source",
+                    "sddocname",
+                    "documentid",
+                    "summaryfeatures",
+                    "title",
+                    "description",
+                    "labels",
+                }
                 hit_debug = {
                     k: v for k, v in fields.items() if k not in _STANDARD_FIELDS
                 }
                 hit_debug["relevance"] = hit.get("relevance")
+                hit_debug["summaryfeatures"] = fields.get("summaryfeatures")
                 debug_info.append(hit_debug)
 
         self.last_debug_info = debug_info
