@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Literal
+from typing import Any, Literal
 
 import requests
 from pydantic import BaseModel
@@ -205,8 +205,16 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
     model_class = Document
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, debug: bool = False) -> None:
+        """
+        Initialise the search engine.
+
+        :param debug: When ``True``, request the ``debug-summary`` document
+            summary from Vespa and store per-hit token information in
+            :attr:`last_debug_info`.
+        """
+        self.debug = debug
+        self.last_debug_info: list[dict[str, Any]] = []
 
     def search(
         self,
@@ -226,15 +234,20 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         if query:
             yql += " and userQuery()"
         yql += f" limit {limit} offset {offset}"
-        print(f"searching for yql: {yql}")
+        logger.info(f"searching for yql: {yql}")
+
+        request_body: dict[str, Any] = {
+            "yql": yql,
+            "query": query,
+            "timeout": "5s",
+        }
+        if self.debug:
+            request_body["presentation.summary"] = "debug-summary"
+
         try:
             res = requests.post(
                 f"{settings.vespa_endpoint}/search",
-                json={
-                    "yql": yql,
-                    "query": query,
-                    "timeout": "5s",
-                },
+                json=request_body,
                 timeout=API_TIMEOUT,
                 headers={
                     "Authorization": f"Bearer {settings.vespa_read_token}",
@@ -246,6 +259,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         res = res.json()
         documents = []
+        debug_info: list[dict[str, Any]] = []
 
         for hit in res.get("root").get("children", []):
             fields = hit.get("fields", {})
@@ -292,6 +306,22 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                     description=source.get("description", MISSING_PLACEHOLDER),
                     labels=labels,
                 )
+            )
+
+            if self.debug:
+                _STANDARD_FIELDS = {"document_source", "sddocname", "documentid"}
+                hit_debug = {
+                    k: v for k, v in fields.items() if k not in _STANDARD_FIELDS
+                }
+                hit_debug["relevance"] = hit.get("relevance")
+                debug_info.append(hit_debug)
+
+        self.last_debug_info = debug_info
+        if self.debug and debug_info:
+            logger.info(
+                "Debug info for %d hits:\n%s",
+                len(debug_info),
+                json.dumps(debug_info, indent=2),
             )
 
         return documents
