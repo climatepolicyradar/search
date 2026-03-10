@@ -39,6 +39,10 @@ class VespaCloudwatchEmitter:
         "cpu",  # note, this one appears to be undocumented
     }
 
+# Adding a new dimension will increase the cost exponentially.
+# We should only use dimensions with low cardinality to avoid cost-explosions.
+# "CloudWatch treats each unique combination of dimensions as a separate metric, even if the metrics have the same metric name."
+# @see: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_concepts.html#dimension-combinations
     DIMENSIONS_ALLOWLIST = {
         "applicationId",
         "documenttype",
