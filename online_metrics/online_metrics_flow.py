@@ -133,9 +133,9 @@ if __name__ == "__main__":
         collect_online_metrics(
             date_from=date.fromisoformat(date_from) if date_from else None,
             date_to=date.fromisoformat(date_to) if date_to else None,
-            retention_date=date.fromisoformat(retention_date)
-            if retention_date
-            else None,
+            retention_date=(
+                date.fromisoformat(retention_date) if retention_date else None
+            ),
         )
 
     typer.run(main)
