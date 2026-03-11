@@ -3,7 +3,6 @@ from pathlib import Path
 
 import boto3
 import orjson
-import polars as pl
 
 from prefect import flow
 from search.vespa.document_indexer import (
@@ -19,45 +18,23 @@ DATA_CACHE_DIR = (
 )
 DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-API_CACHE_FILE = DATA_CACHE_DIR / "documents-latest.parquet"
+API_CACHE_FILE = DATA_CACHE_DIR / "documents-latest.jsonl"
 OUTPUT_FILE = DATA_CACHE_DIR / "documents-updates.jsonl"
 
 
-def _extract_data() -> pl.DataFrame:
+def _extract_data() -> list[SourceDocument]:
     if not API_CACHE_FILE.exists():
         s3 = boto3.client("s3")
         s3.download_file(
             "cpr-cache",
-            "pipelines/data-in-pipeline/navigator_family/documents-latest.parquet",
+            "pipelines/data-in-pipeline/navigator_family/documents-latest.jsonl",
             str(API_CACHE_FILE),
         )
     else:
         print(f"{API_CACHE_FILE} already exists. Skipping download.")
 
-    return pl.read_parquet(
-        API_CACHE_FILE, columns=["id", "title", "description", "labels"]
-    )
-
-
-def _to_api_document(document: dict) -> SourceDocument:
-    """Reshape a parquet row into the API document format for the source field."""
-    return {
-        "id": document["id"],
-        "title": document.get("title", "MISSING"),
-        "description": document.get("description", "MISSING"),
-        "labels": [
-            {
-                "type": label.get("type", "related"),
-                "value": {
-                    "id": label["value"]["id"],
-                    "type": label["value"]["type"],
-                    "value": label["value"]["value"],
-                },
-                "timestamp": label.get("timestamp"),
-            }
-            for label in (document.get("labels") or [])
-        ],
-    }
+    with API_CACHE_FILE.open("rb") as f:
+        return [orjson.loads(line) for line in f if line.strip()]
 
 
 @flow(log_prints=True)
@@ -74,8 +51,8 @@ def materialize_vespa_updates_from_data_in_api():
     print(f"Writing {total} update_ops to {OUTPUT_FILE}...")
     start = time.time()
     with OUTPUT_FILE.open("wb") as f:
-        for i, document in enumerate(data.iter_rows(named=True)):
-            update_op = typeddict_document_to_vespa_update(_to_api_document(document))
+        for i, document in enumerate(data):
+            update_op = typeddict_document_to_vespa_update(document)
             f.write(orjson.dumps(update_op) + b"\n")
 
             if i % 1000 == 0:
