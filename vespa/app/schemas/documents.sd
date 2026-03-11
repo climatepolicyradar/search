@@ -107,7 +107,7 @@ schema documents {
     }
 
     field labels_value type array<string> {
-        indexing: input labels | for_each { get_field value } | index
+        indexing: input labels | for_each { get_field value } | index | summary
         stemming: none
         linguistics {
             profile: label_analysis
@@ -127,7 +127,7 @@ schema documents {
     }
 
     field concepts_value type array<string> {
-        indexing: input concepts | for_each { get_field value } | index
+        indexing: input concepts | for_each { get_field value } | index | summary
         stemming: none
         linguistics {
             profile: label_analysis
