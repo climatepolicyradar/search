@@ -35,6 +35,15 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
         """The name of the test case type (its class name)"""
         return self.__class__.__name__
 
+    def diagnose(self, search_results: list[TModel]) -> str:  # noqa: ARG002
+        """
+        Return a diagnostic string explaining a test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A human-readable string describing why the test likely failed.
+        """
+        return ""
+
     @abstractmethod
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
@@ -77,6 +86,36 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
             passed = sorted(self.expected_result_ids) == sorted(result_ids_limited)
 
         return passed, search_results
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a precision test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing where expected IDs actually ranked.
+        """
+        result_ids = [result.id for result in search_results]
+        id_to_rank = {rid: i + 1 for i, rid in enumerate(result_ids)}
+        n = len(self.expected_result_ids)
+
+        lines = [f"Expected top {n} results (strict_order={self.strict_order}):"]
+        for i, expected_id in enumerate(self.expected_result_ids):
+            expected_rank = i + 1
+            actual_rank = id_to_rank.get(expected_id)
+            if actual_rank is None:
+                lines.append(
+                    f"  '{expected_id}': expected rank {expected_rank}, "
+                    f"not found in results"
+                )
+            else:
+                lines.append(
+                    f"  '{expected_id}': expected rank {expected_rank}, "
+                    f"found at rank {actual_rank}"
+                )
+
+        actual_top = result_ids[:n]
+        lines.append(f"Actual top {n}: {actual_top}")
+        return "\n".join(lines)
 
     @model_validator(mode="after")
     def check_expected_result_ids_unique(self):
@@ -130,6 +169,50 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         ) != len(set(self.forbidden_result_ids)):
             raise ValueError("forbidden_result_ids must be unique")
         return self
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a recall test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing which expected IDs were found or missing,
+            and any forbidden IDs that appeared.
+        """
+        result_ids = [result.id for result in search_results]
+        id_to_rank = {rid: i + 1 for i, rid in enumerate(result_ids)}
+
+        lines = [f"Recall check in top {self.k} results ({len(result_ids)} returned):"]
+
+        missing = []
+        found = []
+        for expected_id in self.expected_result_ids:
+            rank = id_to_rank.get(expected_id)
+            if rank is None:
+                missing.append(expected_id)
+            else:
+                found.append((expected_id, rank))
+
+        if found:
+            lines.append("  Found:")
+            for eid, rank in found:
+                lines.append(f"    '{eid}' at rank {rank}")
+        if missing:
+            lines.append("  Missing:")
+            for eid in missing:
+                lines.append(f"    '{eid}'")
+
+        if self.forbidden_result_ids:
+            forbidden_present = [
+                (fid, id_to_rank[fid])
+                for fid in self.forbidden_result_ids
+                if fid in id_to_rank
+            ]
+            if forbidden_present:
+                lines.append("  Forbidden IDs present:")
+                for fid, rank in forbidden_present:
+                    lines.append(f"    '{fid}' at rank {rank}")
+
+        return "\n".join(lines)
 
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
@@ -186,6 +269,28 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
         description="Whether to assert that results should be returned for a search. Checks that more than 0 results are returned.",
         default=False,
     )
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a field characteristics test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing how many results passed or failed the
+            characteristics test.
+        """
+        total = len(search_results)
+        passing = sum(1 for r in search_results if self.characteristics_test(r))
+        failing = total - passing
+
+        lines = [
+            f"Characteristics test ({self.all_or_any} of {self.k}): "
+            f"{passing}/{total} passed, {failing}/{total} failed"
+        ]
+
+        if self.assert_results and total == 0:
+            lines.append("  No results returned (assert_results=True)")
+
+        return "\n".join(lines)
 
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
@@ -256,6 +361,25 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
                 "search_terms and search_terms_to_compare must be different"
             )
         return self
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a search comparison test failure.
+
+        :param search_results: The search results from the first query.
+            The second query's results are not available for diagnosis.
+        :returns: A string showing comparison metadata and the first
+            query's result IDs.
+        """
+        result_ids_1 = [r.id for r in search_results[: self.k]]
+        lines = [
+            f"Comparison: '{self.search_terms}' vs '{self.search_terms_to_compare}'",
+            f"  Required overlap: {self.minimum_overlap:.0%} of top {self.k} "
+            f"(strict_order={self.strict_order})",
+            f"  Results for '{self.search_terms}': {result_ids_1}",
+            "  (Second query results not stored; re-run to inspect)",
+        ]
+        return "\n".join(lines)
 
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
