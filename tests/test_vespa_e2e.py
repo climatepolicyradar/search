@@ -14,6 +14,7 @@ Run with: pytest tests/test_attribute_filter_e2e.py
 """
 
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Generator
@@ -39,48 +40,22 @@ from search.vespa.document_indexer import document_to_vespa_update
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 _PORT = 8080
-_SERVICES_XML = """\
+
+
+def _build_services_xml() -> str:
+    """Build a test services.xml, extracting the Lucene component from the real one."""
+    real_services = (VESPA_APP_DIR / "services.xml").read_text()
+    match = re.search(
+        r"(<component\s+id=\"com\.yahoo\.language\.lucene\.LuceneLinguistics\".*?</component>)",
+        real_services,
+        re.DOTALL,
+    )
+    lucene_component = match.group(1) if match else ""
+    return f"""\
 <?xml version="1.0" encoding="utf-8" ?>
 <services version="1.0">
     <container id="default" version="1.0">
-        <component id="com.yahoo.language.lucene.LuceneLinguistics"
-                   bundle="lucene-linguistics">
-            <config name="com.yahoo.language.lucene.lucene-analysis">
-                <configDir>lucene-linguistics</configDir>
-                <analysis>
-                    <item key="profile=title_analysis;language=en">
-                        <tokenizer><name>standard</name></tokenizer>
-                        <tokenFilters>
-                            <item><name>lowercase</name></item>
-                            <item><name>snowballPorter</name>
-                                <conf><item key="language">English</item></conf>
-                            </item>
-                        </tokenFilters>
-                    </item>
-                    <item key="profile=passage_analysis;language=en">
-                        <tokenizer><name>standard</name></tokenizer>
-                        <tokenFilters>
-                            <item><name>lowercase</name></item>
-                            <item><name>stop</name>
-                                <conf>
-                                    <item key="words">en/stopwords.txt</item>
-                                    <item key="ignoreCase">true</item>
-                                </conf>
-                            </item>
-                            <item><name>snowballPorter</name>
-                                <conf><item key="language">English</item></conf>
-                            </item>
-                        </tokenFilters>
-                    </item>
-                    <item key="profile=label_analysis;language=en">
-                        <tokenizer><name>standard</name></tokenizer>
-                        <tokenFilters>
-                            <item><name>lowercase</name></item>
-                        </tokenFilters>
-                    </item>
-                </analysis>
-            </config>
-        </component>
+        {lucene_component}
         <document-api/>
         <search/>
     </container>
@@ -125,7 +100,7 @@ def vespa_app() -> Generator[Vespa, None, None]:
             VESPA_APP_DIR / "lucene-linguistics",
             app_dir / "lucene-linguistics",
         )
-        (app_dir / "services.xml").write_text(_SERVICES_XML)
+        (app_dir / "services.xml").write_text(_build_services_xml())
         vespa_docker = VespaDocker(port=_PORT)
         app = vespa_docker.deploy_from_disk(
             application_name="searchtestvespae2e",
