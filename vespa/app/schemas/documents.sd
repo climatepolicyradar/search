@@ -142,5 +142,30 @@ schema documents {
         first-phase {
             expression: nativeRank(title) * 3 + nativeRank(description) + nativeRank(passages_text)
         }
+        summary-features: nativeRank(title) nativeRank(description) nativeRank(passages_text)
+    }
+
+    document-summary default {
+        summary document_source {}
+        from-disk
+    }
+
+    document-summary debug-summary inherits default {
+        summary title_tokens {
+            source: title
+            tokens
+        }
+        summary description_tokens {
+            source: description
+            tokens
+        }
+        summary labels_value {}
+        summary labels_value_tokens {
+            source: labels_value
+            tokens
+        }
+        summary labels_type_value_attribute {}
+        summary concepts_value {}
+        from-disk
     }
 }
