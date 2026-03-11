@@ -240,6 +240,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             "yql": yql,
             "query": query,
             "timeout": "5s",
+            "model.language": "en",
         }
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
