@@ -51,7 +51,7 @@ class Aggregation(BaseModel):
 
 
 class SearchResponse[T](BaseModel):
-    """Response model for search results"""
+    """Response model for search results."""
 
     total_results: int | None = None
     page: int
@@ -61,6 +61,7 @@ class SearchResponse[T](BaseModel):
     previous_page: AnyHttpUrl | None = None
     results: list[T]
     aggregations: list[Aggregation] = []
+    debug_info: list[dict] | None = None
 
 
 # region routes
@@ -82,9 +83,10 @@ def read_documents(
     filters_json_string: str | None = Query(None, alias="filters"),
     limit: int = 10,
     offset: int = 0,
+    debug: bool = False,
 ):
-
-    results = DevVespaDocumentSearchEngine().search(
+    engine = DevVespaDocumentSearchEngine(debug=debug)
+    results = engine.search(
         query=query,
         filters_json_string=filters_json_string,
         limit=limit,
@@ -101,6 +103,7 @@ def read_documents(
         previous_page=None,
         results=results,
         aggregations=[],
+        debug_info=engine.last_debug_info if debug else None,
     )
 
 

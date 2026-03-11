@@ -170,6 +170,11 @@ def print_test_results(test_results: list[TestResult]) -> None:
                     f"  • [yellow]{failure.test_case.name}[/yellow]: {failure.test_case.search_terms}"
                 )
                 console.print(f"    Description: {failure.test_case.description}")
+                diagnosis = failure.test_case.diagnose(failure.search_results)
+                if diagnosis:
+                    console.print("    Diagnosis:")
+                    for line in diagnosis.split("\n"):
+                        console.print(f"      {line}")
                 console.print()
 
     if not has_failures:
