@@ -3,11 +3,26 @@
 from datetime import date, timedelta
 
 from prefect import flow, get_run_logger
-from search.date_utils import determine_prefect_flow_retention_anchor_date
 from search.online_metrics import OnlineMetricResult
 from search.online_metrics.date_utils import DateRange, InvalidStartDateException
 from search.online_metrics.posthog import PosthogNoResultsException, PostHogSession
 from search.weights_and_biases import WandbSession
+
+
+def determine_prefect_flow_retention_anchor_date(date: date) -> date:
+    """
+    Determine the anchor date for retention metrics for automating in Prefect.
+
+    The first of the previous month is the default anchor date.  If the first of the previous month is a weekend, the anchor date is the day before.
+    """
+    anchor_date = (date.replace(day=1) - timedelta(days=1)).replace(
+        day=1
+    )  # first day of previous month
+    if anchor_date.weekday() == 5:  # Saturday
+        anchor_date -= timedelta(days=1)
+    elif anchor_date.weekday() == 6:  # Sunday
+        anchor_date -= timedelta(days=2)
+    return anchor_date
 
 
 @flow(name="collect_online_metrics")
@@ -16,7 +31,13 @@ def collect_online_metrics(
     date_to: date | None = None,
     retention_date: date | None = None,
 ):
-    """Collect all PostHog online metrics and log to Weights & Biases."""
+    """
+    Collect all PostHog and Grafanaonline metrics and log to Weights & Biases.
+
+    date_from: The start date for the metrics. As a default, the start of the previous calendar month is used.
+    date_to: The end date for the metrics. As a default, the end of the previous calendar month is used.
+    retention_date: The anchor date for the retention metrics. As a default, the first of the previous month is used unless the first of the previous month is a weekend, in which case most recent preceding weekday is used.
+    """
     logger = get_run_logger()
 
     today = date.today()
