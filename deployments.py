@@ -16,6 +16,7 @@ from prefect.flows import Flow
 from prefect.schedules import Cron
 from prefect.variables import Variable
 
+from online_metrics.online_metrics_flow import collect_online_metrics
 from relevance_tests import test_documents, test_labels, test_passages
 from scripts.materialize_vespa_updates.from_data_in_api import (
     materialize_vespa_updates_from_data_in_api,
@@ -163,6 +164,8 @@ if __name__ == "__main__":
     # Running relevance tests
     rrule_relevance_tests = "RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=-1MO;BYHOUR=21;BYMINUTE=0"  # last Monday of every month at 21:00
 
+    rrule_online_metrics = "RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=1MO;BYHOUR=21;BYMINUTE=0"  # first Monday of every month at 21:00
+
     create_deployment(
         flow=test_documents.relevance_tests_documents,  # type: ignore
         description="Run relevance tests for documents",
@@ -177,6 +180,13 @@ if __name__ == "__main__":
         flow=test_passages.relevance_tests_passages,  # type: ignore
         description="Run relevance tests for passages",
         rrule=rrule_relevance_tests,
+    )
+
+    # Online metrics
+    create_deployment(
+        flow=collect_online_metrics,
+        description="Collect online metrics",
+        rrule=rrule_online_metrics,
     )
 
     # Materializers

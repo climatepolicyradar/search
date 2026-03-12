@@ -29,7 +29,9 @@ class GrafanaSession:
             var_name="GRAFANA_USER_ID", ssm_name="/Grafana/MetricUserId"
         )
 
-    def execute_query(self, query: str, start_time: datetime, end_time: datetime):
+    def execute_query(
+        self, query: str, start_time: datetime, end_time: datetime, timeout: int = 40
+    ):
         """Execute a Grafana query and return raw results"""
         response = requests.get(
             f"{self.url}/api/v1/query_range",
@@ -40,6 +42,7 @@ class GrafanaSession:
                 "step": "1h",
             },
             auth=(self.user_id, self.api_key),
+            timeout=timeout,
         )
         data = response.json()
         if data["status"] == "success" and data["data"]["result"]:

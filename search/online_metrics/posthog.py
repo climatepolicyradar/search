@@ -41,7 +41,7 @@ class PostHogSession:
         )
 
     def execute_query(
-        self, hogql_query: str, timeout: int = 20, raise_on_no_results: bool = True
+        self, hogql_query: str, timeout: int = 40, raise_on_no_results: bool = True
     ) -> list[list[Any]]:
         """
         Execute a HogQL query and return raw results.
@@ -403,7 +403,7 @@ class PostHogSession:
                 event = '$pageview'
                 AND timestamp >= '{date_from} 00:00:00'
                 AND timestamp < '{date_from} 00:00:00' + interval 1 day
-                AND properties.$host IN {self.cpr_domains}
+                AND properties.$host IN {self.cpr_domains_hogql}
             GROUP BY events.distinct_id
             HAVING countIf(properties.$current_url LIKE '%/search%') = 0
         ),
@@ -416,7 +416,7 @@ class PostHogSession:
                 events.timestamp < non_search_users.first_visit_date + interval 29 day
                 AND events.timestamp > toStartOfDay(non_search_users.first_visit_date) + interval 1 day
                 AND events.$session_id != non_search_users.visit_session_id
-                AND events.properties.$host IN {self.cpr_domains}
+                AND events.properties.$host IN {self.cpr_domains_hogql}
         )
 
         SELECT
@@ -488,7 +488,7 @@ class PostHogSession:
                 AND events.$session_id != search_users.search_session_id
                 AND event = '$pageview'
                 AND events.properties.$current_url LIKE '%/search%'
-                AND events.properties.$host IN {self.cpr_domains}
+                AND events.properties.$host IN {self.cpr_domains_hogql}
         )
 
         SELECT
@@ -560,7 +560,7 @@ class PostHogSession:
                 AND events.$session_id != search_users.search_session_id
                 AND event = '$pageview'
                 AND events.properties.$current_url LIKE '%/search%'
-                AND events.properties.$host IN {self.cpr_domains}
+                AND events.properties.$host IN {self.cpr_domains_hogql}
         )
 
         SELECT
