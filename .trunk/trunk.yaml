@@ -74,7 +74,6 @@ lint:
   enabled:
     - actionlint@1.7.10
     - bandit@1.9.3
-    - black@26.1.0
     - checkov@3.2.500
     - git-diff-check
     - hadolint@2.14.0

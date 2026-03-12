@@ -1,5 +1,6 @@
 """Helpers for interacting with Weights & Biases"""
 
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -43,7 +44,7 @@ class WandbSession:
         self.offline_tests_project_prefix = config.WANDB_PROJECT_PREFIX_OFFLINE_TESTS
         self.online_metrics_project = config.WANDB_PROJECT_ONLINE_METRICS
 
-        if not config.WANDB_SKIP_SSM_AUTH:
+        if not config.WANDB_SKIP_SSM_AUTH and not self.disable:
             logger.info(
                 "Using Weights and Biases credentials from SSM. This will overwrite any login you have locally for the duration of the session."
             )
@@ -164,31 +165,35 @@ class WandbSession:
 
         run.finish()
 
-    def log_online_metric_result(
+    def log_online_metric_results(
         self,
-        online_metric_result: OnlineMetricResult,
+        results: list[OnlineMetricResult],
+        date_from: date,
+        date_to: date | None = None,
+        retention_date: date | None = None,
     ) -> None:
-        """Log a single online metric result to Weights & Biases."""
+        """Log a list of online metric results to Weights & Biases."""
 
-        # TODO: remove the query from the table / add canonical id for query and date/date range?
-        # TODO: right now each run is for a single metric and creates a new table.  Do we want that?
-
-        config = {"metric": online_metric_result.metric}
-        config["date_from"] = online_metric_result.date_from
-        if online_metric_result.date_to:
-            config["date_to"] = online_metric_result.date_to
-
+        config = {"date_from": date_from}
+        if date_to:
+            config["date_to"] = date_to
+        if retention_date:
+            config["retention_anchor_date"] = retention_date
+        config["calendar_month"] = date_from.month
+        config["year"] = date_from.year
         run = self.new_run(
             project=self.online_metrics_project,
             config=config,
         )
 
-        metric_model_dump = online_metric_result.model_dump()
+        for result in results:
+            result_name = result.metric
+            result_dict = result.model_dump(mode="python")
+            result_dict = {
+                f"{result_name}.{k}": v for k, v in result_dict.items() if k != "metric"
+            }
 
-        metric_table = wandb.Table(dataframe=pd.DataFrame([metric_model_dump]))
+            run.summary.update(result_dict)
 
-        run.log({"metric_table": metric_table})
-
-        logger.info(f"Logged online metric '{online_metric_result.metric}' to W&B")
-
+        logger.info(f"Logged {len(results)} online metrics as summary to W&B")
         run.finish()
