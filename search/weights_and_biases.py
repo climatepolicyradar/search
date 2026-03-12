@@ -44,7 +44,7 @@ class WandbSession:
         self.offline_tests_project_prefix = config.WANDB_PROJECT_PREFIX_OFFLINE_TESTS
         self.online_metrics_project = config.WANDB_PROJECT_ONLINE_METRICS
 
-        if not config.WANDB_SKIP_SSM_AUTH:
+        if not config.WANDB_SKIP_SSM_AUTH and not self.disable:
             logger.info(
                 "Using Weights and Biases credentials from SSM. This will overwrite any login you have locally for the duration of the session."
             )
