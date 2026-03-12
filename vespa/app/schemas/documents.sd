@@ -3,9 +3,17 @@ schema documents {
         field id type string {}
         field title type string {
             indexing: index | summary
+            stemming: multiple
+            linguistics {
+                profile: passage_analysis
+            }
         }
         field description type string {
             indexing: index | summary
+            stemming: multiple
+            linguistics {
+                profile: passage_analysis
+            }
         }
 
         struct label {
@@ -99,7 +107,11 @@ schema documents {
     }
 
     field labels_value type array<string> {
-        indexing: input labels | for_each { get_field value } | index
+        indexing: input labels | for_each { get_field value } | index | summary
+        stemming: none
+        linguistics {
+            profile: label_analysis
+        }
     }
     field labels_value_attribute type array<string> {
         indexing: input labels | for_each { get_field value } | attribute
@@ -115,7 +127,11 @@ schema documents {
     }
 
     field concepts_value type array<string> {
-        indexing: input concepts | for_each { get_field value } | index
+        indexing: input concepts | for_each { get_field value } | index | summary
+        stemming: none
+        linguistics {
+            profile: label_analysis
+        }
     }
     field concepts_value_attribute type array<string> {
         indexing: input concepts | for_each { get_field value } | attribute
@@ -132,15 +148,48 @@ schema documents {
 
     field passages_text type array<string> {
         indexing: input passages | for_each { get_field text } | index
+        stemming: multiple
+        linguistics {
+            profile: passage_analysis
+        }
     }
 
     fieldset default {
-        fields: title, description, labels_value, passages_text
+        fields: title, description, passages_text
+    }
+
+    fieldset labels_fieldset {
+        fields: labels_value
     }
 
     rank-profile default {
         first-phase {
             expression: nativeRank(title) * 3 + nativeRank(description) + nativeRank(passages_text)
         }
+        summary-features: nativeRank(title) nativeRank(description) nativeRank(passages_text)
+    }
+
+    document-summary default {
+        summary document_source {}
+        from-disk
+    }
+
+    document-summary debug-summary inherits default {
+        summary title_tokens {
+            source: title
+            tokens
+        }
+        summary description_tokens {
+            source: description
+            tokens
+        }
+        summary labels_value {}
+        summary labels_value_tokens {
+            source: labels_value
+            tokens
+        }
+        summary labels_type_value_attribute {}
+        summary concepts_value {}
+        from-disk
     }
 }

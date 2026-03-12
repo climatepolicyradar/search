@@ -11,6 +11,69 @@
           - Reference: https://docs.vespa.ai/en/reference/services-container.html
     -->
     <container id="default" version="1.0">
+
+        <!-- Lucene Linguistics: per-field analyzer profiles -->
+        <component id="com.yahoo.language.lucene.LuceneLinguistics"
+                   bundle="lucene-linguistics">
+            <config name="com.yahoo.language.lucene.lucene-analysis">
+                <configDir>lucene-linguistics</configDir>
+                <analysis>
+                    <!-- title_analysis: stem but keep all tokens (no stop words) -->
+                    <item key="profile=title_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <!-- passage_analysis: stop words + stemming for long-form text -->
+                    <item key="profile=passage_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>stop</name>
+                                <conf>
+                                    <item key="words">en/stopwords.txt</item>
+                                    <item key="ignoreCase">true</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <!-- label_analysis: lowercase only, no stemming -->
+                    <item key="profile=label_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                </analysis>
+            </config>
+        </component>
+
         <!--
             <document-api> tells the container that it should accept documents for indexing. Through the
             Document REST API you can PUT new documents, UPDATE existing documents, and DELETE documents
