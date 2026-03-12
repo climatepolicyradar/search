@@ -324,6 +324,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                     title=source.get("title", MISSING_PLACEHOLDER),
                     description=source.get("description", MISSING_PLACEHOLDER),
                     labels=labels,
+                    attributes=source.get("attributes", {}),
                 )
             )
 
