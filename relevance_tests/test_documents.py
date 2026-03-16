@@ -24,19 +24,32 @@ test_cases = [
     PrecisionTestCase[Document](
         category="punctuation",
         search_terms="Directive (EU) 2022/2464 amending Regulation (EU) No 537/2014 and others, as regards corporate sustainability reporting (Corporate Sustainability Reporting Directive or CSRD)",
-        expected_result_ids=["CCLW.legislative.11041.6337"],
+        expected_result_ids=[
+            "CCLW.family.11041.0",
+            "CCLW.legislative.11041.6337",
+        ],
         description="Searching for a document title should return the correct document, where the title has brackets.",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="obligation to provide renewable fuels 2005",
-        expected_result_ids=["CCLW.legislative.11173.6585"],
+        expected_result_ids=[
+            # Act (2005:1248) on the obligation to provide renewable fuels
+            "CCLW.family.11173.0",
+            "CCLW.legislative.11173.6585",
+            # Act on the obligation to provide renewable fuels (2005:1248)
+            "CCLW.family.i00006852.n0000",
+            "CCLW.document.i00006853.n0000",
+        ],
         description="Searching for a document title where the words are in a different order.",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="National Climate Change Strategy 2021-2026",
-        expected_result_ids=["CCLW.executive.1704.1595"],
+        expected_result_ids=[
+            "CCLW.family.1704.0",
+            "CCLW.executive.1704.1595",
+        ],
         description="Searching for the document title should return the correct document.",
     ),
     PrecisionTestCase[Document](
@@ -48,7 +61,12 @@ test_cases = [
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="power up britain",
-        expected_result_ids=["CCLW.executive.11174.6586", "CCLW.executive.11174.6588"],
+        expected_result_ids=[
+            "CCLW.executive.11174.6586",
+            "CCLW.executive.11174.6588",
+            "CCLW.family.11174.2",
+            "CCLW.collection.11174.0",
+        ],
         description="Stemmed words in document titles",
     ),
     PrecisionTestCase[Document](
@@ -63,7 +81,10 @@ test_cases = [
     PrecisionTestCase[Document](
         category="document name + geography",
         search_terms="energy policy act us",
-        expected_result_ids=["CCLW.legislative.1776.2144"],
+        expected_result_ids=[
+            "CCLW.family.1776.0",
+            "CCLW.legislative.1776.2144",
+        ],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Energy Policy Act 2005 (Energy Bill))",
     ),
     FieldCharacteristicsTestCase[Document](
@@ -105,7 +126,10 @@ test_cases = [
     PrecisionTestCase[Document](
         category="document name",
         search_terms="Law No. 018/2022 ratifying Ordinance No. 019/PR/2021 relating to climate change",
-        expected_result_ids=["CCLW.legislative.11091.6395"],
+        expected_result_ids=[
+            "CCLW.family.11091.1",
+            "CCLW.legislative.11091.6395",
+        ],
         description="Searching for exact law title should return the correct document",
     ),
     FieldCharacteristicsTestCase[Document](
