@@ -178,15 +178,14 @@ test_cases = [
         description="Searching for 'Municipalities of Puerto Rico v. Exxon Mobil Corp.' should return case Commonwealth of Puerto Rico v. Exxon Mobil Corp.",
     ),
     FieldCharacteristicsTestCase[Document](
-        category="BROKEN question",
+        category="question",
         search_terms="what is the croatias climate strategy",
         characteristics_test=lambda document: all_words_in_string(
             ["climate", "strategy"], document.title
         )
-        # FIXME: should use document metadata field here instead
         and any(
-            term in document.title.lower() or term in str(document.description).lower()
-            for term in ["croatia", "croatian"]
+            (relationship.value.value == "Croatia" and relationship.type == "geography")
+            for relationship in document.labels
         ),
         description="Search for 'what is the croatias climate strategy' should return documents titled 'climate strategy' from with 'croatia' in the description. TODO: filter for croatia instead",
         k=5,
