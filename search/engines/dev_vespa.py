@@ -378,7 +378,7 @@ class DevVespaLabelSearchEngine:
 
         safe_terms = re.escape(query) if query else "[^:]*"
         safe_label_type = re.escape(label_type) if label_type else "[^:]*"
-        doc_regex = f"(?i)^{safe_label_type}::{safe_terms}.*"
+        doc_regex = f"(?i)^{safe_label_type}::.*{safe_terms}.*"
 
         # Filter the documents that only have matching labels or concepts
         where = labels_field.matches(doc_regex) | concepts_field.matches(doc_regex)
