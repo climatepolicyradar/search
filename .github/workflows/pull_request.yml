@@ -160,3 +160,11 @@ jobs:
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             exit 1
           fi
+
+  dependabot:
+    name: Dependabot Auto-pilot
+    needs: [lint, test, tests, check-scripts-structure]
+    permissions:
+      pull-requests: write
+      contents: write
+    uses: climatepolicyradar/reusable-workflows/.github/workflows/dependabot-autopilot.yml@v22
