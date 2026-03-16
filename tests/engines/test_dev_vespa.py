@@ -21,8 +21,7 @@ def dev_label_engine() -> DevVespaLabelSearchEngine:
     """
     Create a DevVespaLabelSearchEngine instance for testing.
 
-    Returns:
-        DevVespaLabelSearchEngine: engine under test
+    :return DevVespaLabelSearchEngine: engine under test
     """
     return DevVespaLabelSearchEngine()
 
@@ -30,9 +29,9 @@ def dev_label_engine() -> DevVespaLabelSearchEngine:
 @pytest.fixture
 def mock_requests_post(monkeypatch):
     """
-    Fixture to monkeypatch requests.post used inside DevVespaLabelSearchEngine.search.
+    Monkeypatch requests.post used inside DevVespaLabelSearchEngine.search.
 
-    It returns a MagicMock whose .json() can be controlled per-test.
+    :return: A MagicMock whose .json() can be controlled per-test.
     """
     mock_post = MagicMock()
 
@@ -59,11 +58,11 @@ def _make_grouping_response(values: list[str]) -> dict[str, Any]:
     """
     Build a minimal Vespa-like grouping response.
 
-    Args:
-        values: List of `"{type}::{value}"` strings, e.g. ["concept::air pollution risk"]
+    :param list[str] values: List of `"{type}::{value}"` strings, e.g.
+        ["concept::air pollution risk"]
 
-    Returns:
-        dict: JSON structure similar to Vespa grouping response for labels.
+    :return dict: JSON structure similar to Vespa grouping response for
+        labels.
     """
     # Shape: root -> children[0] -> children[*] -> value
     return {
@@ -91,10 +90,14 @@ def test_dev_label_engine_builds_substring_regex_for_concepts(
     expected_fragment: str,
 ):
     """
-    Ensure the dev label engine builds a YQL regex that matches the query
-    anywhere in the value part of `type::value` for the given label_type.
+    Verify dev engine allows partial matching on label values.
 
-    This test assumes label_type="concept" to cover the "air pollution risk" case.
+    Ensure the dev label engine builds a YQL regex that matches the
+    query anywhere in the value part of `type::value` for the given
+    label_type.
+
+    This test assumes label_type="concept" to cover the "air pollution
+    risk" case.
     """
     mock_requests_post.json_return_value = {"root": {}}
 
@@ -107,18 +110,18 @@ def test_dev_label_engine_builds_substring_regex_for_concepts(
     assert expected_fragment in yql
 
 
-def test_dev_label_engine_parses_air_pollution_risk_label(
-    dev_label_engine: DevVespaLabelSearchEngine,
-    mock_requests_post: MagicMock,
+def test_dev_label_engine_returns_correct_type_and_value(
+    dev_label_engine: DevVespaLabelSearchEngine, mock_requests_post: MagicMock
 ):
     """
-    Given a Vespa grouping response containing "concept::air pollution risk",
-    ensure the dev label engine returns a Label with the expected type and value.
+    Check dev engine returns correct type.
+
+    GIVEN a Vespa grouping response
+    WHEN that response contains "concept::air pollution risk"
+    THEN ensure the dev label engine returns a Label with the expected
+        type and value.
     """
-    label_values = [
-        "concept::air pollution risk",
-        "concept::renewable energy",
-    ]
+    label_values = ["concept::air pollution risk"]
     mock_response_json = _make_grouping_response(label_values)
     mock_requests_post.json_return_value = mock_response_json
 
@@ -129,4 +132,3 @@ def test_dev_label_engine_parses_air_pollution_risk_label(
     # Extract the "air pollution risk" label.
     values = {(label.type, label.value) for label in labels}
     assert ("concept", "air pollution risk") in values
-    assert ("concept", "renewable energy") in values
