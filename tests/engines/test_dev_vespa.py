@@ -49,7 +49,7 @@ def mock_requests_post(monkeypatch):
         return response
 
     mock_post.side_effect = _fake_post
-    monkeypatch.patch.object(requests, "post", mock_post)
+    monkeypatch.setattr(requests, "post", mock_post)
 
     return mock_post
 
