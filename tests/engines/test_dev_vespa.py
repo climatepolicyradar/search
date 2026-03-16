@@ -80,7 +80,7 @@ def _make_grouping_response(values: list[str]) -> dict[str, Any]:
         # NOTE: keep these in sync with the regex logic in DevVespaLabelSearchEngine.search
         # @related: DevVespaLabelSearchEngine.search
         ("air", r"(?i)^concept::.*air.*"),
-        ("air pollution", r"(?i)^concept::.*air pollution.*"),
+        ("air pollution", r"(?i)^concept::.*air\ pollution.*"),
         ("pollution", r"(?i)^concept::.*pollution.*"),
         ("risk", r"(?i)^concept::.*risk.*"),
     ],
