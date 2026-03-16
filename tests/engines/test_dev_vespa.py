@@ -58,16 +58,18 @@ def _make_grouping_response(values: list[str]) -> dict[str, Any]:
     """
     Build a minimal Vespa-like grouping response.
 
+    Expected shape for DevVespaLabelSearchEngine:
+    root -> children[0] -> children (groups) -> children (values) -> value
+
     :param list[str] values: List of `"{type}::{value}"` strings, e.g.
         ["concept::air pollution risk"]
 
     :return dict: JSON structure similar to Vespa grouping response for
         labels.
     """
-    # Shape: root -> children[0] -> children[*] -> value
     return {
         "root": {
-            "children": [{"children": [{"value": v, "children": []} for v in values]}]
+            "children": [{"children": [{"children": [{"value": v} for v in values]}]}]
         }
     }
 
