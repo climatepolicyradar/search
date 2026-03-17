@@ -259,6 +259,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             "query": query,
             "timeout": "5s",
             "model.language": "en",
+            "ranking.profile": "nativerank",
         }
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
