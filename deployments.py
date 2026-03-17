@@ -27,6 +27,7 @@ from scripts.materialize_vespa_updates.from_indexer_input import (
 from scripts.materialize_vespa_updates.from_inference_results import (
     materialize_vespa_updates_from_inference_results,
 )
+from search.vespa.labels_feed_flow import labels_feed_flow
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {
@@ -189,7 +190,15 @@ if __name__ == "__main__":
         rrule=rrule_online_metrics,
     )
 
-    # Materializers
+    # Feeds
+    create_deployment(
+        flow=labels_feed_flow,
+        description="Materialize labels feed",
+        schedule="0 3 * * *",  # daily at 3am
+        flow_variables=DEFAULT_FLOW_VARIABLES,
+    )
+
+    # Materializers (to be deprecated with feed)
     create_deployment(
         flow=materialize_vespa_updates_from_indexer_input,
         description="Materialize Vespa update ops from indexer input bucket",
