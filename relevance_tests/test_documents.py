@@ -108,18 +108,16 @@ test_cases = [
     FieldCharacteristicsTestCase[Document](
         category="document type",
         search_terms="national communication",
-        characteristics_test=lambda document: all_words_in_string(
-            ["national", "communication"], document.title
-        ),
+        characteristics_test=lambda document: "national communication"
+        in document.title.lower(),
         description="Search for 'National Communication' should contain at least 5 national communications first.",
         k=5,
     ),
     FieldCharacteristicsTestCase[Document](
         category="document type",
         search_terms="national communication",
-        characteristics_test=lambda document: all_words_in_string(
-            ["national", "communication"], document.title
-        ),
+        characteristics_test=lambda document: "national communication"
+        in document.title.lower(),
         description="Search for 'National Communication' should contain at least 20 national communications first.",
         k=20,
     ),
