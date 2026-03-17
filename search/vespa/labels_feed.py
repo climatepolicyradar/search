@@ -11,10 +11,10 @@ from search.vespa.sources.inference_results import read as read_inference_result
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
 
-DATA_CACHE_DIR = REPO_ROOT_DIR / ".data_cache" / "vespa" / "labels_feed"
+DATA_CACHE_DIR = REPO_ROOT_DIR / ".data_cache" / "vespa" / "labels_feed_materializer"
 DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-OUTPUT_FILE = DATA_CACHE_DIR / "vespa" / "labels_feed.jsonl"
+OUTPUT_FILE = DATA_CACHE_DIR / "vespa" / "labels_feed_materializer.jsonl"
 
 
 class VespaLabel(TypedDict):
@@ -29,8 +29,7 @@ class VespaLabelUpdate(TypedDict):
     value: VespaAssign[str]
 
 
-# @flow(log_prints=True)
-def labels_feed():
+def labels_feed_materializer():
     labels: dict[str, VespaLabel] = {}
 
     documents = read_documents()
@@ -76,10 +75,10 @@ def labels_feed():
     boto3.client("s3").upload_file(
         str(OUTPUT_FILE),
         "cpr-cache",
-        "search/vespa/labels_feed.jsonl",
+        "search/vespa/labels_feed_materializer.jsonl",
     )
     print(f"Uploaded {len(labels)} labels to S3.")
 
 
 if __name__ == "__main__":
-    labels_feed()
+    labels_feed_materializer()
