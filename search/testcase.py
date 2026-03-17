@@ -287,6 +287,9 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             f"{passing}/{total} passed, {failing}/{total} failed"
         ]
 
+        if self.k > len(search_results):
+            "`k` chosen for test is greater than the number of search results returned. This will automatically fail this test."
+
         if self.assert_results and total == 0:
             lines.append("  No results returned (assert_results=True)")
 
@@ -295,10 +298,19 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
 
-        search_results = engine.search(self.search_terms)
-        passing_results = [
-            result for result in search_results if self.characteristics_test(result)
-        ]
+        search_results = engine.search(
+            self.search_terms,
+            limit=self.k,
+        )
+
+        if self.k > len(search_results):
+            # self.diagnose handles reporting this kind of issue
+            return False, search_results
+        else:
+            search_results = search_results[: self.k]
+            passing_results = [
+                result for result in search_results if self.characteristics_test(result)
+            ]
 
         if self.all_or_any == "all":
             passed = len(passing_results) == len(search_results)
