@@ -172,7 +172,7 @@ schema documents {
 
     rank-profile nativerank inherits default {
         function title_score () {
-            expression: query(title_weight) * nativeRank(title)
+            expression: query(title_weight) * nativeRank(title) + nativeProximity(title)
         }
         function description_score () {
             expression: query(description_weight) * nativeRank(description)
@@ -184,7 +184,7 @@ schema documents {
         first-phase {
             expression: title_score() + description_score() + passages_score()
         }
-        summary-features: title_score() description_score() passages_score() nativeRank(title) nativeRank(description) nativeRank(passages_text)
+        summary-features: title_score() description_score() passages_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title)
     }
 
     document-summary default {
