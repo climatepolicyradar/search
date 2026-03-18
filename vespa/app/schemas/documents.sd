@@ -163,10 +163,28 @@ schema documents {
     }
 
     rank-profile default {
-        first-phase {
-            expression: nativeRank(title) * 3 + nativeRank(description) + nativeRank(passages_text)
+        inputs {
+            query(title_weight) double: 3.0
+            query(description_weight) double: 1.0
+            query(passages_weight) double: 1.0
         }
-        summary-features: nativeRank(title) nativeRank(description) nativeRank(passages_text)
+    }
+
+    rank-profile nativerank inherits default {
+        function title_score () {
+            expression: query(title_weight) * nativeRank(title)
+        }
+        function description_score () {
+            expression: query(description_weight) * nativeRank(description)
+        }
+        function passages_score () {
+            expression: query(passages_score_weight) * nativeRank(passages_text)
+        }
+
+        first-phase {
+            expression: title_score() + description_score() + passages_score()
+        }
+        summary-features: title_score() description_score() passages_score() nativeRank(title) nativeRank(description) nativeRank(passages_text)
     }
 
     document-summary default {
