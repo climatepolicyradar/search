@@ -250,7 +250,10 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         yql = f"select * from sources documents where {where}"
         if query:
-            yql += " and (userQuery() or geographies contains @query)"
+            yql += (
+                " and (userQuery() or geographies contains @query"
+                ' or ({defaultIndex: "title_synonyms"}userInput(@query)))'
+            )
         yql += f" limit {limit} offset {offset}"
         logger.info(f"searching for yql: {yql}")
 
