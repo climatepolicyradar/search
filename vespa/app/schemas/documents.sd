@@ -46,6 +46,11 @@ schema documents {
             }
         }
 
+        field geographies type array<string> {
+            indexing: index | attribute | summary
+            stemming: none
+        }
+
         struct concept {
             field id type string {}
             field type type string {}
