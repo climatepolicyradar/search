@@ -48,7 +48,12 @@ schema documents {
 
         field geographies type array<string> {
             indexing: index | attribute | summary
-            stemming: none
+            linguistics {
+                profile {
+                    index: geo_analysis
+                    search: geo_analysis_search
+                }
+            }
         }
 
         struct concept {
