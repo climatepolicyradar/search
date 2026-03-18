@@ -546,4 +546,55 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
     )
 
 
+def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
+    """
+    Test geography synonym expansion using lucene linguistics.
+
+    Note: this test could end up *not* applying to the DevVespaDocumentSearchEngine
+    for valid reasons. In that case, we could remove this test or apply it to a specific
+    SearchEngine.
+
+    See: https://github.com/vespa-engine/sample-apps/tree/master/examples/lucene-linguistics/multiple-profiles
+    """
+    doc_uk = DocumentFactory.build(
+        title="xyzzygeotestuk document",
+        description="A climate policy document",
+        labels=[
+            LabelRelationship(
+                type="geography",
+                value=Label(
+                    id="united-kingdom", value="United Kingdom", type="geography"
+                ),
+            )
+        ],
+    )
+    doc_us = DocumentFactory.build(
+        title="xyzzygeotestus document",
+        description="A US environmental policy document",
+        labels=[
+            LabelRelationship(
+                type="geography",
+                value=Label(
+                    id="united-states", value="United States", type="geography"
+                ),
+            )
+        ],
+    )
+    _feed_document(vespa_app, doc_uk)
+    _feed_document(vespa_app, doc_us)
+
+    engine = DevVespaDocumentSearchEngine(debug=True)
+    results = engine.search(query="UK", limit=50)
+    result_ids = {doc.id for doc in results}
+
+    assert doc_uk.id in result_ids, (
+        f"Expected doc with geography 'United Kingdom' to match 'UK', "
+        f"got ids: {result_ids}"
+    )
+    assert doc_us.id not in result_ids, (
+        f"Doc with geography 'United States' should NOT match 'UK', "
+        f"got ids: {result_ids}"
+    )
+
+
 # endregion Linguistics

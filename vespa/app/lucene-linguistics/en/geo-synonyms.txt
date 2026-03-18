@@ -1,0 +1,13 @@
+uk => united kingdom
+us, usa => united states
+eu => european union
+nz => new zealand
+uae => united arab emirates
+brasil => brazil
+south korea => korea republic of
+burma => myanmar
+holland => netherlands
+ivory coast => côte d'ivoire
+czech republic => czechia
+swaziland => eswatini
+cape verde => cabo verde
