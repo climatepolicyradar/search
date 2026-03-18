@@ -29,6 +29,12 @@ extract-concepts:
 feed-concepts:
     vespa feed ../.data_cache/materialize_vespa_updates/from_inference_results.jsonl --target http://localhost:8080 --progress 30
 
+extract-labels:
+    aws s3 cp s3://cpr-cache/search/vespa/labels_feed_materializer.jsonl ../.data_cache/vespa/labels_feed_materializer.jsonl
+
+feed-labels:
+    vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target http://localhost:8080 --progress 30
+
 # Run vespa dev
 up:
     docker compose up -d
