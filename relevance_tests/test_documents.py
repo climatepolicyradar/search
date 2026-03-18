@@ -73,6 +73,10 @@ test_cases = [
         category="document name + geography",
         search_terms="UK Climate Change Act",
         expected_result_ids=[
+            # "UK Climate Change Act" with no geography
+            "CCLW.collection.1755.0",
+            # "Climate Change Act 2008" from "United Kingdom"
+            "CCLW.family.1755.0",
             "CCLW.legislative.1755.2260",
             "CCLW.legislative.1755.rtl_71",
         ],
