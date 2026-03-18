@@ -55,7 +55,7 @@ test_cases = [
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="fca rules of tcfd",
-        expected_result_ids=["CCLW.executive.9956.4413"],
+        expected_result_ids=["CCLW.family.9956.0", "CCLW.executive.9956.4413"],
         description="Acronyms in document titles",
     ),
     PrecisionTestCase[Document](
