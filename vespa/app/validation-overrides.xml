@@ -1,5 +1,6 @@
 <validation-overrides>
-    <allow until="2026-03-15" comment="Replacing old data plane certificate with new one">certificate-removal</allow>
-    <allow until='2026-03-15'>indexing-change</allow>
-    <allow until='2026-03-15'>content-cluster-removal</allow>
+    <allow until="2026-04-15">certificate-removal</allow>
+    <allow until='2026-04-15'>indexing-change</allow>
+    <allow until='2026-04-15'>content-cluster-removal</allow>
+    <allow until='2026-04-15'>indexing-change</allow>
 </validation-overrides>

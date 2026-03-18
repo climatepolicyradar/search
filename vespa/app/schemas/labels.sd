@@ -1,0 +1,17 @@
+schema labels {
+    document labels {
+        field id type string {
+            indexing: index | attribute | summary
+        }
+        field type type string {
+            indexing: index | attribute | summary
+        }
+        field value type string {
+            indexing: index | attribute | summary
+        }
+    }
+
+    fieldset default {
+        fields: id, type, value
+    }
+}
