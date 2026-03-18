@@ -1,5 +1,5 @@
 from prefect import flow
-from search.vespa.labels_feed import labels_feed_materializer
+from search.vespa.labels_feed_materializer import labels_feed_materializer
 
 
 @flow(log_prints=True)
