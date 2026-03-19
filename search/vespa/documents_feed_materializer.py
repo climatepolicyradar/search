@@ -8,6 +8,7 @@ import boto3
 import orjson
 
 from search.vespa.models import VespaAssign, VespaUpdate
+from search.vespa.sources.data_in_api import SourceDocument
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
 
@@ -31,6 +32,7 @@ class VespaLabelField(TypedDict):
 class VespaDocument(TypedDict):
     title: VespaAssign[str]
     description: VespaAssign[str | None]
+    description_index: VespaAssign[str | None]
     labels: VespaAssign[list[VespaLabelField]]
     geographies: VespaAssign[list[str]]
     document_source: VespaAssign[str]
@@ -53,8 +55,24 @@ def _to_unix_timestamp(ts_str: str | None) -> int | None:
         return None
 
 
+def _build_family_description_map(documents: list[SourceDocument]) -> dict[str, str]:
+    child_to_family_desc: dict[str, str] = {}
+    for doc in documents:
+        family_desc = _strip_control_chars(doc.get("description") or "")
+        if not family_desc:
+            continue
+        for rel in doc.get("documents") or []:
+            if rel.get("type") not in ("has_version", "has_member"):
+                continue
+            child_id = (rel.get("value") or {}).get("id")
+            if child_id:
+                child_to_family_desc[child_id] = family_desc
+    return child_to_family_desc
+
+
 def documents_feed_materializer():
-    documents = read_documents()
+    documents = list(read_documents())
+    family_desc_map = _build_family_description_map(documents)
     length = 0
 
     output_file = OUTPUT_CACHE_DIR / "documents_feed_materializer.jsonl"
@@ -72,6 +90,13 @@ def documents_feed_materializer():
                         )
                         if document.get("description")
                         else None
+                    },
+                    "description_index": {
+                        "assign": (
+                            _strip_control_chars(document.get("description") or "")
+                            or family_desc_map.get(document["id"], "")
+                        )
+                        or None
                     },
                     "labels": {
                         "assign": [
