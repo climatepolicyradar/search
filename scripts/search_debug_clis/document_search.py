@@ -42,10 +42,12 @@ def search(
     for i, doc in enumerate(results):
         relevance = None
         summaryfeatures = None
+        geographies = None
         if debug and i < len(engine.last_debug_info):
             info = engine.last_debug_info[i]
             relevance = info.get("relevance")
             summaryfeatures = info.get("summaryfeatures")
+            geographies = info.get("geographies")
 
         # Header table with core fields
         table = Table(show_header=False, box=None, padding=(0, 1))
@@ -57,6 +59,8 @@ def search(
             table.add_row("description", highlight(doc.description))
         if doc.attributes:
             table.add_row("attributes", json.dumps(doc.attributes, default=str))
+        if geographies:
+            table.add_row("geographies", highlight(", ".join(geographies)))
         if relevance is not None:
             table.add_row("relevance", str(relevance))
 

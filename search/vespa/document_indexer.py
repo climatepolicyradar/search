@@ -1,16 +1,15 @@
+"""
+We use TypedDicts over Pydantic models here for performance when running through large datasets.
+
+We use the Pydantic models for tests and probably would in live systems for parsing at the edge.
+"""
+
 from datetime import datetime
 from typing import TypedDict, cast
 
 import orjson
 
 from search.data_in_models import Document
-
-"""
-We use TypedDicts over Pydantic models here
-for performance when running through large data sets.
-We use the Pydantic models for tests
-and probably would in liver systems for parsing at the edge.
-"""
 
 
 class VespaLabelField(TypedDict):
@@ -37,10 +36,15 @@ class VespaAssignMapOp[T](TypedDict):
     assign: dict[str, T]
 
 
+class VespaAssignArrayOp[T](TypedDict):
+    assign: list[T]
+
+
 class VespaUpdateFields(TypedDict, total=False):
     title: VespaAssignOp
     description: VespaAssignOp
     labels: VespaAssignLabelsOp
+    geographies: VespaAssignArrayOp[str]
     document_source: VespaAssignStrOp
     attributes_string: VespaAssignMapOp[str]
     attributes_double: VespaAssignMapOp[float]
@@ -103,6 +107,13 @@ def typeddict_document_to_vespa_update(
                     "relationship": label.get("type", "related"),
                 }
                 for label in (document.get("labels") or [])
+            ]
+        },
+        "geographies": {
+            "assign": [
+                label["value"]["value"]
+                for label in (document.get("labels") or [])
+                if label.get("type") == "geography"
             ]
         },
         "document_source": {"assign": orjson.dumps(document).decode()},

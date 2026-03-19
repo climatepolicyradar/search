@@ -70,6 +70,34 @@
                             </item>
                         </tokenFilters>
                     </item>
+                    <!-- geo_analysis: lowercase only, for index time -->
+                    <item key="profile=geo_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <!-- geo_analysis_search: lowercase + geography synonyms, for search time -->
+                    <item key="profile=geo_analysis_search;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>synonymGraph</name>
+                                <conf>
+                                    <item key="synonyms">en/geo-synonyms.txt</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
                 </analysis>
             </config>
         </component>
