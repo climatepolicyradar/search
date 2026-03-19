@@ -189,7 +189,7 @@ test_cases = [
             (relationship.value.value == "Croatia" and relationship.type == "geography")
             for relationship in document.labels
         ),
-        description="Search for 'what is the croatias climate strategy' should return documents titled 'climate strategy' from with 'croatia' in the description. TODO: filter for croatia instead",
+        description="Search for 'what is the croatias climate strategy' should return documents with titles indicating they're climate strategies with geography 'Croatia'",
         k=5,
     ),
     # TODO (all docket number tests): making these FieldCharacteristicsTestCases would mean they're much easier parametrisable
