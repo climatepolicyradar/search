@@ -1,21 +1,15 @@
 # Extract the data to load into Vespa
 extract-documents:
-    aws s3 cp s3://cpr-cache/search/materialize_vespa_updates/from_data_in_api.jsonl ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl
+    aws s3 cp s3://cpr-cache/search/vespa/documents_feed_materializer.jsonl ../.data_cache/vespa/documents_feed_materializer.jsonl
 
-feed-documents limit="":
-    if [ -z "{{limit}}" ]; then \
-        echo "Feed all files into local Vespa"; \
-        cat ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
-    else \
-        echo "Feed {{limit}} files into local Vespa"; \
-        head -n {{limit}} ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
-    fi
+feed-documents:
+    vespa feed ../.data_cache/vespa/documents_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
-extract-concepts:
-    aws s3 cp s3://cpr-cache/search/materialize_vespa_updates/from_inference_results.jsonl ../.data_cache/materialize_vespa_updates/from_inference_results.jsonl
+extract-documents-concepts:
+    aws s3 cp s3://cpr-cache/search/vespa/documents_concepts_feed_materializer.jsonl ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl
 
-feed-concepts:
-    vespa feed ../.data_cache/materialize_vespa_updates/from_inference_results.jsonl --target http://localhost:8080 --progress 30
+feed-documents-concepts:
+    vespa feed ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 extract-labels:
     aws s3 cp s3://cpr-cache/search/vespa/labels_feed_materializer.jsonl ../.data_cache/vespa/labels_feed_materializer.jsonl
@@ -36,18 +30,6 @@ up:
 # Deploy Vespa application
 deploy:
     vespa deploy ./app --target http://localhost:19071/ --wait 300
-
-# Load data into Vespa
-feed limit="":
-    if [ -z "{{limit}}" ]; then \
-        echo "Feed all files into local Vespa"; \
-        cat ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
-        cat ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
-    else \
-        echo "Feed {{limit}} files into local Vespa"; \
-        head -n {{limit}} ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
-        head -n {{limit}} ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl | vespa feed - --target http://localhost:8080 --progress 30; \
-    fi
 
 # Dev
 dev:
@@ -88,21 +70,28 @@ remote-feed-documents:
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/materialize_vespa_updates/from_data_in_api.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    vespa feed ../.data_cache/vespa/documents_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
-remote-feed-concepts:
+remote-feed-documents-concepts:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/materialize_vespa_updates/from_inference_results.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    vespa feed ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+
+remote-feed-labels:
+    #!/usr/bin/env bash
+    set -e
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-feed-passages:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/materialize_vespa_updates/from_indexer_input.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    vespa feed ../.data_cache/vespa/passages_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-visit:
     #!/usr/bin/env bash

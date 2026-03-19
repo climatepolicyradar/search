@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TypedDict
+from typing import Required, TypedDict
 
 import boto3
 import orjson
@@ -30,9 +30,9 @@ class SourceLabelRelationship(TypedDict):
 
 
 class SourceDocument(TypedDict, total=False):
-    id: str
-    title: str
-    description: str
+    id: Required[str]
+    title: Required[str]
+    description: str | None
     labels: list[SourceLabelRelationship]
 
 
@@ -47,6 +47,7 @@ def extract() -> Path:
             "pipelines/data-in-pipeline/navigator_family/documents-latest.jsonl",
             str(DATA_CACHE_FILE),
         )
+        print(f"Downloaded {DATA_CACHE_FILE} from S3.")
     else:
         print(f"{DATA_CACHE_FILE} already exists. Using cached file.")
 

@@ -10,11 +10,8 @@ from search.vespa.sources.inference_results import read as read_inference_result
 
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
-
-DATA_CACHE_DIR = REPO_ROOT_DIR / ".data_cache" / "vespa" / "labels_feed_materializer"
-DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-OUTPUT_FILE = DATA_CACHE_DIR / "vespa" / "labels_feed_materializer.jsonl"
+OUTPUT_CACHE_DIR = REPO_ROOT_DIR / ".data_cache" / "vespa"
+OUTPUT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class VespaLabel(TypedDict):
@@ -58,8 +55,8 @@ def labels_feed_materializer():
 
     print(f"Collected {len(unique_labels)} unique labels.")
 
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with OUTPUT_FILE.open("wb") as f:
+    output_file = OUTPUT_CACHE_DIR / "labels_feed_materializer.jsonl"
+    with output_file.open("wb") as f:
         for label in unique_labels:
             vespa_update: VespaUpdate[VespaLabelUpdate] = {
                 "update": f"id:labels:labels::{label.get('id')}",
@@ -73,7 +70,7 @@ def labels_feed_materializer():
             f.write(orjson.dumps(vespa_update) + b"\n")
 
     boto3.client("s3").upload_file(
-        str(OUTPUT_FILE),
+        str(output_file),
         "cpr-cache",
         "search/vespa/labels_feed_materializer.jsonl",
     )
