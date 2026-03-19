@@ -22,6 +22,8 @@ schema documents {
             field value type string {}
             field timestamp type long {}
             field relationship type string {}
+            field count type int {}
+            field passages_id type string {}
         }
         field labels type array<label> {
             struct-field id {
