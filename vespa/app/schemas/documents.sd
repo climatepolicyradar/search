@@ -15,6 +15,13 @@ schema documents {
                 profile: passage_analysis
             }
         }
+        field description_index type string {
+            indexing: index | summary
+            stemming: multiple
+            linguistics {
+                profile: passage_analysis
+            }
+        }
 
         struct label {
             field id type string {}
@@ -178,7 +185,7 @@ schema documents {
     }
 
     fieldset default {
-        fields: title, description, passages_text
+        fields: title, description, passages_text, description_index
     }
 
     fieldset geographies {
@@ -207,7 +214,7 @@ schema documents {
             expression: query(title_weight) * nativeRank(title) + nativeProximity(title)
         }
         function description_score () {
-            expression: query(description_weight) * nativeRank(description)
+            expression: query(description_weight) * nativeRank(description_index)
         }
         function passages_score () {
             expression: query(passages_weight) * nativeRank(passages_text)
@@ -237,6 +244,10 @@ schema documents {
         }
         summary description_tokens {
             source: description
+            tokens
+        }
+        summary description_index_tokens {
+            source: description_index
             tokens
         }
         summary labels_value {}
