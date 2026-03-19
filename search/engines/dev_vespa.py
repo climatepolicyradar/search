@@ -255,8 +255,8 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 # As geographies and title_synonyms use different Lucene analyzers
                 # to the default fieldset, they're referenced explicitly in the query
                 # so they can be searched.
-                "or geographies contains @query"
                 # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
+                ' or ({defaultIndex: "geographies"}userInput(@query))'
                 ' or ({defaultIndex: "title_synonyms"}userInput(@query)))'
             )
         yql += f" limit {limit} offset {offset}"
