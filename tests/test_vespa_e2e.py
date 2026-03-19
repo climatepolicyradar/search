@@ -597,4 +597,36 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
     )
 
 
+def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
+    """
+    Test title synonym expansion using lucene linguistics.
+
+    Searching for acronyms like "fca" or "tcfd" should match documents whose
+    titles contain the expanded forms ("Financial Conduct Authority",
+    "Task Force on Climate-related Financial Disclosures").
+    """
+    doc_with_full_forms = DocumentFactory.build(
+        title="Financial Conduct Authority rules on Task Force on Climate-related Financial Disclosures",
+        description="A climate disclosure document",
+    )
+    doc_without_match = DocumentFactory.build(
+        title="xyzzytitlesyntest unrelated environmental policy",
+        description="An unrelated document",
+    )
+    _feed_document(vespa_app, doc_with_full_forms)
+    _feed_document(vespa_app, doc_without_match)
+
+    engine = DevVespaDocumentSearchEngine(debug=True)
+    results = engine.search(query="fca rules tcfd", limit=50)
+    result_ids = {doc.id for doc in results}
+
+    assert doc_with_full_forms.id in result_ids, (
+        f"Expected doc with expanded title to match acronym search 'fca rules tcfd', "
+        f"got ids: {result_ids}"
+    )
+    assert doc_without_match.id not in result_ids, (
+        f"Unrelated doc should NOT match 'fca rules tcfd', got ids: {result_ids}"
+    )
+
+
 # endregion Linguistics

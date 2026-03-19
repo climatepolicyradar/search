@@ -164,12 +164,27 @@ schema documents {
         }
     }
 
+    field title_synonyms type string {
+        indexing: input title | index
+        stemming: multiple
+        linguistics {
+            profile {
+                index: title_analysis
+                search: title_synonym_analysis_search
+            }
+        }
+    }
+
     fieldset default {
         fields: title, description, passages_text
     }
 
     fieldset geographies {
         fields: geographies
+    }
+
+    fieldset title_synonyms_fieldset {
+        fields: title_synonyms
     }
 
     fieldset labels_fieldset {
@@ -198,11 +213,14 @@ schema documents {
         function geographies_score () {
             expression: query(geographies_weight) * nativeRank(geographies)
         }
+        function title_synonyms_score () {
+            expression: nativeRank(title_synonyms)
+        }
 
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score()
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score()
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title)
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
     }
 
     document-summary default {
@@ -228,6 +246,10 @@ schema documents {
         summary concepts_value {}
         summary geographies_tokens {
             source: geographies
+            tokens
+        }
+        summary title_synonyms_tokens {
+            source: title_synonyms
             tokens
         }
         from-disk
