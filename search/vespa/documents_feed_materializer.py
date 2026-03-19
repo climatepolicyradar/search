@@ -14,6 +14,7 @@ from search.vespa.sources.inference_results import read as read_inference_result
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
 OUTPUT_CACHE_DIR = REPO_ROOT_DIR / ".data_cache" / "vespa"
+OUTPUT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class VespaLabelField(TypedDict):
@@ -56,8 +57,6 @@ def documents_feed_materializer():
     length = 0
 
     output_file = OUTPUT_CACHE_DIR / "documents_feed_materializer.jsonl"
-
-    output_file.parent.mkdir(parents=True, exist_ok=True)
     with output_file.open("wb") as f:
         for document in documents:
             attrs = document.get("attributes") or {}
@@ -133,8 +132,6 @@ def documents_concepts_feed_materializer():
     length = 0
 
     output_file = OUTPUT_CACHE_DIR / "documents_concepts_feed_materializer.jsonl"
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-
     with output_file.open("wb") as f:
         for document_id, inference_result_input in inference_results_input:
             concept_counts: Counter[str] = Counter()
