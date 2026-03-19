@@ -32,6 +32,7 @@ class VespaDocument(TypedDict):
     title: VespaAssign[str]
     description: VespaAssign[str | None]
     labels: VespaAssign[list[VespaLabelField]]
+    geographies: VespaAssign[list[str]]
     document_source: VespaAssign[str]
     attributes_string: VespaAssign[dict[str, str]]
     attributes_double: VespaAssign[dict[str, float]]
@@ -84,6 +85,13 @@ def documents_feed_materializer():
                                 "passages_id": None,
                             }
                             for label in (document.get("labels") or [])
+                        ]
+                    },
+                    "geographies": {
+                        "assign": [
+                            label["value"]["value"]
+                            for label in (document.get("labels") or [])
+                            if label.get("type") == "geography"
                         ]
                     },
                     "document_source": {"assign": orjson.dumps(document).decode()},
