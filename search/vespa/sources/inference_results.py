@@ -46,6 +46,7 @@ def extract() -> list[Path]:
             ],
             check=True,
         )
+        print(f"Downloaded {DATA_CACHE_DIR} from S3.")
     else:
         print(f"{DATA_CACHE_DIR} already exists. Using cached files.")
 

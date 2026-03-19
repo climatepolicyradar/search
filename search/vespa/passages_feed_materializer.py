@@ -43,7 +43,12 @@ def passages_feed_materializer():
 
     with OUTPUT_FILE.open("wb") as f:
         for document_id, inference_result in read_embeddings_input_v2():
-            for block in inference_result["pdf_data"]["text_blocks"]:
+            pdf_data = inference_result.get("pdf_data")
+            text_blocks = pdf_data.get("text_blocks") if pdf_data is not None else None
+            if text_blocks is None:
+                continue
+
+            for block in text_blocks:
                 passage: VespaPassage = {
                     "id": block["id"],
                     "idx": block["idx"],

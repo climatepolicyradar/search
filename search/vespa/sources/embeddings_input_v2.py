@@ -36,12 +36,12 @@ class TextBlock(TypedDict):
 
 
 class PdfData(TypedDict):
-    text_blocks: list[TextBlock]
+    text_blocks: list[TextBlock] | None
 
 
 class EmbeddingsInputV2(TypedDict):
     document_id: str
-    pdf_data: PdfData
+    pdf_data: PdfData | None
 
 
 def extract() -> list[Path]:
@@ -63,6 +63,7 @@ def extract() -> list[Path]:
             ],
             check=True,
         )
+        print(f"Downloaded {DATA_CACHE_DIR} from S3.")
     else:
         print(f"{DATA_CACHE_DIR} already exists. Using cached files.")
 

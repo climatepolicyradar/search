@@ -27,7 +27,9 @@ from scripts.materialize_vespa_updates.from_indexer_input import (
 from scripts.materialize_vespa_updates.from_inference_results import (
     materialize_vespa_updates_from_inference_results,
 )
+from search.vespa.documents_feed_flow import documents_feed_flow
 from search.vespa.labels_feed_flow import labels_feed_flow
+from search.vespa.passages_feed_flow import passages_feed_flow
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {
@@ -192,10 +194,24 @@ if __name__ == "__main__":
 
     # Feeds
     create_deployment(
+        flow=documents_feed_flow,
+        description="Materialize documents feed",
+        schedule="0 3 * * *",  # daily at 3am
+        flow_variables=DEFAULT_FLOW_VARIABLES,
+    )
+    create_deployment(
         flow=labels_feed_flow,
         description="Materialize labels feed",
         schedule="0 3 * * *",  # daily at 3am
         flow_variables=DEFAULT_FLOW_VARIABLES,
+    )
+
+    create_deployment(
+        flow=passages_feed_flow,
+        description="Materialize passages feed",
+        schedule="0 3 * * 1",  # weekly on Mondays at 3am
+        flow_variables=DEFAULT_FLOW_VARIABLES
+        | {"ephemeralStorage": {"sizeInGiB": 100}},  # bump storage for 100GB
     )
 
     # Materializers (to be deprecated with feed)
