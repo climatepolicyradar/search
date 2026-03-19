@@ -208,7 +208,7 @@ schema documents {
             expression: query(description_weight) * nativeRank(description)
         }
         function passages_score () {
-            expression: query(passages_score_weight) * nativeRank(passages_text)
+            expression: query(passages_weight) * nativeRank(passages_text)
         }
         function geographies_score () {
             expression: query(geographies_weight) * nativeRank(geographies)
