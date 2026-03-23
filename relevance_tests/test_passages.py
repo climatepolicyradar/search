@@ -215,7 +215,7 @@ test_cases = [
     category="related phrases",
         search_terms="human rights",
         characteristics_test=(lambda passage: "rights-based approach" in passage.text.lower() #Again not sure if this is the best order - human rights is more common
-        and not "human right" in passage.text.lower()),
+        and "human right" not in passage.text.lower()),
         description="Results for closely-related phrases (human rights -> rights-based approach) should be found, even if the search phrase itself is not mentioned in the same paragraph",
         k=100,
         all_or_any="any",
