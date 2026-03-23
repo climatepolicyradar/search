@@ -118,11 +118,45 @@ test_cases = [
     FieldCharacteristicsTestCase[Passage](
         category="acronym",
         search_terms="nationally determined contribution",
+        # TODO: Maybe this should be reversed? Feels like users are more likely to search for NDC than type it out in full
         characteristics_test=lambda passage: "NDC" in passage.text
         and not all_words_in_string(
             ["nationally", "determined", "contribution"], passage.text
         ),
         description="Acronyms: search for nationally determined contribution should return NDC.",
+        k=100,
+        all_or_any="any",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="acronym",
+        search_terms="nature-based solution",
+        characteristics_test=lambda passage: "nbs" in passage.text.lower()
+        and not all_words_in_string(["nature", "based", "solution"], passage.text),
+        description="Acronyms: search for nature-based solution should return NbS.",
+        k=100,
+        all_or_any="any",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="acronym",
+        search_terms="gga",
+        characteristics_test=lambda passage: all_words_in_string(
+            ["global", "goal", "adaptation"], passage.text
+        )
+        and "gga" not in passage.text.lower(),
+        description="Acronyms: search for GGA should include global goal on adaptation.",
+        k=100,
+        all_or_any="any",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="shortened phrase",
+        # Anne observed a user do this and be very confused
+        search_terms="action climate empowerment",
+        characteristics_test=lambda passage: "action for climate empowerment"
+        in passage.text.lower(),
+        description="shortened phrase: leaving out 'for' in 'action for climate empowerment' should still return the passage",
         k=100,
         all_or_any="any",
         assert_results=True,
@@ -148,6 +182,70 @@ test_cases = [
         description="OR logic in search.",
         k=20,
         all_or_any="all",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="related phrases",
+        search_terms="EVs",
+        characteristics_test=(
+            lambda passage: "electric car" in passage.text.lower()
+            and not any_words_in_string(["ev", "evs"], passage.text)
+        ),
+        description="Results for closely-related phrases (EVs -> electric car) should be found, even if the search phrase itself is not mentioned in the same paragraph",
+        k=100,
+        all_or_any="any",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="related phrases",
+        search_terms="Ecosystem-based approaches",
+        characteristics_test=(
+            lambda passage: "nbs" in passage.text.lower()
+            and "ecosystem-based" not in passage.text.lower()
+        ),  # "approaches" seems pretty generic; it's the nature->ecosystem part that matters
+        description="Results for closely-related phrases (Ecosystem-based approaches -> nbs) should be found, even if the search phrase itself is not mentioned in the same paragraph",
+        k=100,
+        all_or_any="any",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="related phrases",
+        search_terms="peatland rehabilitation",
+        characteristics_test=(
+            lambda passage: all_words_in_string(
+                ["peatland", "restoration"], passage.text
+            )
+            and "rehabilitation" not in passage.text.lower()
+        ),
+        description="Results for closely-related phrases (peatland rehabilitation -> peatland restoration) should be found, even if the search phrase itself is not mentioned in the same paragraph",
+        k=100,
+        all_or_any="any",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="related phrases",
+        search_terms="human rights",
+        characteristics_test=(
+            lambda passage: "rights-based approach"
+            in passage.text.lower()  # Again not sure if this is the best order - human rights is more common
+            and "human right" not in passage.text.lower()
+        ),
+        description="Results for closely-related phrases (human rights -> rights-based approach) should be found, even if the search phrase itself is not mentioned in the same paragraph",
+        k=100,
+        all_or_any="any",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="related phrases",
+        search_terms="public health infrastructure",
+        characteristics_test=(
+            lambda passage: "hospital"
+            in passage.text.lower()  # Maybe these should be reversed? From a user perspective, either is plausible
+            and "public health infrastructure" not in passage.text.lower()
+        ),
+        description="Results for closely-related phrases (public health infrastructure -> hospital) should be found, even if the search phrase itself is not mentioned in the same paragraph",
+        k=200,  # This is a hard one so makes sense to increase this
+        all_or_any="any",
         assert_results=True,
     ),
 ]
