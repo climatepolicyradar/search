@@ -5,12 +5,13 @@ from fastapi import APIRouter, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AnyHttpUrl, BaseModel
 
-from search.data_in_models import Document, Label
+from search.data_in_models import Document
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
-    DevVespaLabelSearchEngine,
+    DevVespaLabelTypeaheadSearchEngine,
     DevVespaPassageSearchEngine,
 )
+from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
 
@@ -114,10 +115,10 @@ def read_labels(
     query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
 ):
-    results = DevVespaLabelSearchEngine().search(query=query, label_type=type)
-    label_types = DevVespaLabelSearchEngine().all_label_types()
+    engine = DevVespaLabelTypeaheadSearchEngine()
+    results = engine.search(query=query, label_type=type)
+    label_types = engine.all_label_types()
 
-    # TODO: pagination
     return SearchResponse[Label](
         total_results=len(results),
         page=0,
