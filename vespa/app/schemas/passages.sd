@@ -15,6 +15,6 @@ schema passages {
     }
 
     fieldset default {
-        fields: id, idx, language, text
+        fields: text
     }
 }
