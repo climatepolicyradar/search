@@ -405,7 +405,7 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
         """
         yql = (
             f"select * from sources concept where "
-            f"userInput(@query_string) "
+            f"(preferred_label contains @query_string or description contains @query_string) "
             f"limit {limit} offset {offset}"
         )
 
@@ -434,23 +434,10 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
 
         for child in children:
             fields = child.get("fields", {})
-
-            preferred_label = fields.get("preferred_label", "")
-            alternative_labels = fields.get("alternative_labels", [])
-            negative_labels = fields.get("negative_labels", [])
-            description = fields.get("description")
-            id_at_source = fields.get("id", "")
-
-            if description == "":
-                description = None
-
             label = Label(
-                preferred_label=preferred_label,
-                alternative_labels=alternative_labels,
-                negative_labels=negative_labels,
-                description=description,
-                source="wikibase",
-                id_at_source=id_at_source,
+                id=fields.get("id", ""),
+                type="",
+                value=fields.get("preferred_label", ""),
             )
             labels.append(label)
 
