@@ -129,10 +129,14 @@ def document_strategy(draw) -> Document:
 def passage_data_strategy(draw) -> dict:
     """Generate input data for Passage model."""
     return {
+        "text_block_id": draw(text_block_id_strategy),
         "text": draw(text_strategy),
+        "language": draw(st.sampled_from(["en", "fr", "es", "de", "pt"])),
+        "type": draw(st.sampled_from(["Text", "Title", "Table", "Figure"])),
+        "type_confidence": draw(st.floats(min_value=0.0, max_value=1.0)),
+        "page_number": draw(st.integers(min_value=0, max_value=1000)),
+        "heading_id": draw(st.one_of(st.none(), text_block_id_strategy)),
         "document_id": draw(document_id_strategy),
-        "original_passage_id": draw(text_block_id_strategy),
-        "labels": [],
     }
 
 
