@@ -9,8 +9,10 @@ from search.data_in_models import Document, Label
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
+    DevVespaPassageSearchEngine,
 )
 from search.log import get_logger
+from search.passage import Passage
 
 logger = get_logger(__name__)
 
@@ -130,6 +132,31 @@ def read_labels(
                 values=label_types,
             )
         ],
+    )
+
+
+@router.get("/passages", response_model=SearchResponse[Passage])
+def read_passages(
+    query: str | None = Query(None, description="What are you looking for?"),
+    limit: int = 10,
+    offset: int = 0,
+):
+    engine = DevVespaPassageSearchEngine()
+    results = engine.search(
+        query=query,
+        limit=limit,
+        offset=offset,
+    )
+
+    return SearchResponse[Passage](
+        total_results=len(results),
+        page=0,
+        page_size=0,
+        total_pages=0,
+        next_page=None,
+        previous_page=None,
+        results=results,
+        aggregations=[],
     )
 
 
