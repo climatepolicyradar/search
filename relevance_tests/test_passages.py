@@ -2,6 +2,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
+from search.engines.dev_vespa import DevVespaPassageSearchEngine
 from search.engines.vespa import (
     ExactVespaPassageSearchEngine,
     HybridVespaPassageSearchEngine,
@@ -259,6 +260,7 @@ def relevance_tests_passages():
     """Run relevance tests for passages"""
 
     engines = [
+        DevVespaPassageSearchEngine(),
         ExactVespaPassageSearchEngine(),
         HybridVespaPassageSearchEngine(),
     ]
