@@ -29,8 +29,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from vespa.querybuilder import Grouping as G
 from vespa.querybuilder.builder.builder import Q, QueryField
 
-from search.data_in_models import Document, Label, LabelRelationship
+from search.data_in_models import Document, LabelRelationship
+from search.data_in_models import Label as DataInLabel
 from search.engines import SearchEngine
+from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
 
@@ -305,7 +307,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 labels.append(
                     LabelRelationship(
                         type=label.get("type", MISSING_PLACEHOLDER),
-                        value=Label(
+                        value=DataInLabel(
                             id=label.get("value").get("id", MISSING_PLACEHOLDER),
                             value=label.get("value").get("value", MISSING_PLACEHOLDER),
                             type=label.get("value").get("type", MISSING_PLACEHOLDER),
@@ -318,7 +320,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 labels.append(
                     LabelRelationship(
                         type="concept",
-                        value=Label(
+                        value=DataInLabel(
                             id=concept.get("id", MISSING_PLACEHOLDER),
                             type="concept",
                             value=concept.get("value", MISSING_PLACEHOLDER),
@@ -437,15 +439,17 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         raise NotImplementedError()
 
 
-# We do not inherit from `SearchEngine[Label]` as the searech method does not have `limit: int, offset: int` parameters
-# at least not yet
 class DevVespaLabelSearchEngine:
     """Search engine for dev Vespa"""
 
     def __init__(self) -> None:
         pass
 
-    def search(self, query: str | None, label_type: str | None):
+    def search(
+        self,
+        query: str | None,
+        label_type: str | None = None,
+    ) -> list[Label]:
         """Returns unique values for concepts and labels in the documents"""
         labels_field = QueryField("labels_type_value_attribute")
         concepts_field = QueryField("concepts_type_value_attribute")
