@@ -23,7 +23,7 @@ import re
 from typing import Any, Literal
 
 import requests
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from pydantic.networks import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from vespa.querybuilder import Grouping as G
@@ -330,6 +330,10 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                     )
                 )
 
+            document_relationships = TypeAdapter(
+                list[DocumentRelationship]
+            ).validate_python(source.get("documents", []))
+
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
@@ -337,6 +341,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                     description=source.get("description", MISSING_PLACEHOLDER),
                     labels=labels,
                     attributes=source.get("attributes", {}),
+                    documents=document_relationships,
                 )
             )
 
