@@ -405,7 +405,7 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
         """
         yql = (
             f"select * from sources concept where "
-            f"userInput(@query_string) "
+            f"(preferred_label contains @query_string or description contains @query_string) "
             f"limit {limit} offset {offset}"
         )
 
