@@ -11,11 +11,9 @@ from moto import mock_aws
 
 from relevance_tests import TestResult
 from search import Primitive
-from search.label import Label
 from search.testcase import RecallTestCase
 from tests.common_strategies import (
     document_strategy,
-    label_data_strategy,
     label_strategy,
     passage_strategy,
 )
@@ -24,10 +22,10 @@ from tests.common_strategies import (
 @pytest.fixture(scope="function")
 def mock_aws_creds():
     """Mocked AWS Credentials for moto."""
-    os.environ["AWS_ACCESS_KEY_ID"] = "test"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "test"
-    os.environ["AWS_SECURITY_TOKEN"] = "test"
-    os.environ["AWS_SESSION_TOKEN"] = "test"
+    os.environ["AWS_ACCESS_KEY_ID"] = "test"  # nosec B105
+    os.environ["AWS_SECRET_ACCESS_KEY"] = "test"  # nosec B105
+    os.environ["AWS_SECURITY_TOKEN"] = "test"  # nosec B105
+    os.environ["AWS_SESSION_TOKEN"] = "test"  # nosec B105
 
 
 @pytest.fixture
@@ -66,28 +64,7 @@ def _generate_test_data() -> dict[str, list[Primitive]]:
     if "passages" not in _test_data_cache:
         _test_data_cache["passages"] = _generate_items(passage_strategy, n_test_items)
     if "labels" not in _test_data_cache:
-        # Generate labels, ensuring at least one has alternative_labels and description
-        labels = _generate_items(label_strategy, n_test_items)
-        # Ensure at least one label has alternative_labels
-        if not any(label.alternative_labels for label in labels):
-            label_with_alts = Label(
-                **find(
-                    label_data_strategy(),
-                    lambda data: len(data.get("alternative_labels", [])) > 0,
-                )
-            )
-            labels[0] = label_with_alts
-        # Ensure at least one label has description
-        if not any(label.description for label in labels):
-            label_with_desc = Label(
-                **find(
-                    label_data_strategy(),
-                    lambda data: data.get("description") is not None,
-                )
-            )
-            # Replace the last label if first one was already replaced
-            labels[-1] = label_with_desc
-        _test_data_cache["labels"] = labels
+        _test_data_cache["labels"] = _generate_items(label_strategy, n_test_items)
     return _test_data_cache
 
 
