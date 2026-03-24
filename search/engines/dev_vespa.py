@@ -439,8 +439,115 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         raise NotImplementedError()
 
 
-class DevVespaLabelSearchEngine:
-    """Search engine for dev Vespa"""
+class DevVespaLabelSearchEngine(SearchEngine[Label]):
+    """Search engine for labels in dev Vespa."""
+
+    model_class = Label
+
+    def search(
+        self,
+        query: str | None,
+        filters_json_string: str | None = None,  # noqa: ARG002
+        limit: int = 10,
+        offset: int = 0,
+        label_type: str | None = None,
+    ) -> list[Label]:
+        """Fetch a list of relevant label search results."""
+        yql = "select * from sources labels where true"
+        if query:
+            yql += " and userQuery()"
+        if label_type:
+            yql += f' and type contains "{label_type}"'
+        yql += f" limit {limit} offset {offset}"
+        logger.info(f"searching labels for yql: {yql}")
+
+        request_body: dict[str, Any] = {
+            "yql": yql,
+            "query": query,
+            "timeout": "5s",
+            "model.language": "en",
+        }
+
+        try:
+            res = requests.post(
+                f"{settings.vespa_endpoint}/search",
+                json=request_body,
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa labels query failed")
+            return []
+
+        res = res.json()
+        labels: list[Label] = []
+
+        for hit in res.get("root", {}).get("children", []):
+            fields = hit.get("fields", {})
+            labels.append(
+                Label(
+                    id=fields.get("id", ""),
+                    type=fields.get("type", ""),
+                    value=fields.get("value", ""),
+                )
+            )
+
+        return labels
+
+    def all_label_types(self) -> list[str]:
+        """Fetch all distinct label types from the labels source."""
+        yql = (
+            "select * from sources labels where true "
+            "| all(group(type) order(-count()) each(output(count())))"
+        )
+
+        try:
+            res = requests.post(
+                f"{settings.vespa_endpoint}/search",
+                json={
+                    "yql": yql,
+                    "hits": 0,
+                    "timeout": "5s",
+                },
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa all_label_types query failed")
+            return []
+
+        res = res.json()
+        types: list[str] = []
+
+        root = res.get("root", {})
+        children = root.get("children", [{}])[0].get("children", [])
+        group_list = next(
+            (
+                item.get("children", [])
+                for item in children
+                if item.get("label") == "type"
+            ),
+            [],
+        )
+
+        for group in group_list:
+            types.append(group.get("value", ""))
+
+        return types
+
+    def count(self, query: str) -> int:
+        """Return hit count for DevVespaLabelSearchEngine."""
+        raise NotImplementedError()
+
+
+class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
+    """Typeahead search engine for labels, using grouping on the documents source."""
+
+    model_class = Label
 
     def __init__(self) -> None:
         pass
@@ -448,6 +555,9 @@ class DevVespaLabelSearchEngine:
     def search(
         self,
         query: str | None,
+        filters_json_string: str | None = None,  # noqa: ARG002
+        limit: int = 10,  # noqa: ARG002
+        offset: int = 0,  # noqa: ARG002
         label_type: str | None = None,
     ) -> list[Label]:
         """Returns unique values for concepts and labels in the documents"""
