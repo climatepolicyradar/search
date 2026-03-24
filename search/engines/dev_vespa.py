@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from vespa.querybuilder import Grouping as G
 from vespa.querybuilder.builder.builder import Q, QueryField
 
-from search.data_in_models import Document, LabelRelationship
+from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
 from search.engines import SearchEngine
 from search.label import Label
