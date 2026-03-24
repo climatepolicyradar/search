@@ -182,6 +182,8 @@
         <min-redundancy>2</min-redundancy>
         <documents>
             <document type="documents" mode="index" global="true" />
+            <document type="passages" mode="index" global="true" />
+            <document type="labels" mode="index" global="true" />
         </documents>
 
         <nodes deploy:instance="search-production" count="2">
