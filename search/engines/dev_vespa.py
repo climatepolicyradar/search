@@ -32,6 +32,7 @@ from vespa.querybuilder.builder.builder import Q, QueryField
 from search.data_in_models import Document, Label, LabelRelationship
 from search.engines import SearchEngine
 from search.log import get_logger
+from search.passage import Passage
 
 logger = get_logger(__name__)
 
@@ -366,6 +367,70 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             )
 
         return documents
+
+    def count(self, query: str) -> int:
+        """Return hit count"""
+        raise NotImplementedError()
+
+
+class DevVespaPassageSearchEngine(SearchEngine[Passage]):
+    """Search engine for passages in dev Vespa."""
+
+    model_class = Passage
+
+    def search(
+        self,
+        query: str | None,
+        filters_json_string: str | None = None,  # noqa: ARG002
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[Passage]:
+        """Fetch a list of relevant passage search results."""
+        yql = "select * from sources passages where true"
+        if query:
+            yql += " and userQuery()"
+        yql += f" limit {limit} offset {offset}"
+        logger.info(f"searching passages for yql: {yql}")
+
+        request_body: dict[str, Any] = {
+            "yql": yql,
+            "query": query,
+            "timeout": "5s",
+            "model.language": "en",
+        }
+
+        try:
+            res = requests.post(
+                f"{settings.vespa_endpoint}/search",
+                json=request_body,
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa passages query failed")
+            return []
+
+        res = res.json()
+        passages: list[Passage] = []
+
+        for hit in res.get("root", {}).get("children", []):
+            fields = hit.get("fields", {})
+            passages.append(
+                Passage(
+                    text_block_id=fields.get("id", ""),
+                    text=fields.get("text", ""),
+                    language=fields.get("language", ""),
+                    type=fields.get("type", ""),
+                    type_confidence=fields.get("type_confidence", 0.0),
+                    page_number=fields.get("page_number", 0),
+                    heading_id=fields.get("heading_id"),
+                    document_id=fields.get("document_id", ""),
+                )
+            )
+
+        return passages
 
     def count(self, query: str) -> int:
         """Return hit count"""

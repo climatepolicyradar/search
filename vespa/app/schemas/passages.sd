@@ -12,6 +12,21 @@ schema passages {
         field text type string {
             indexing: index | attribute | summary
         }
+        field document_id type string {
+            indexing: attribute | summary
+        }
+        field type type string {
+            indexing: attribute | summary
+        }
+        field type_confidence type double {
+            indexing: attribute | summary
+        }
+        field page_number type int {
+            indexing: attribute | summary
+        }
+        field heading_id type string {
+            indexing: attribute | summary
+        }
     }
 
     fieldset default {

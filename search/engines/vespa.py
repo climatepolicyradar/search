@@ -262,10 +262,9 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
             )
 
             passage = Passage(
+                text_block_id=text_block_id,
                 text=text,
                 document_id=document.id,
-                labels=[],
-                original_passage_id=text_block_id,
             )
             passages.append(passage)
 
