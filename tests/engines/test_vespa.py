@@ -205,11 +205,8 @@ def sample_label_fields():
     """
     return {
         "id": "zv3r45ae",
-        "wikibase_id": "Q1363",
-        "preferred_label": "multilateral climate fund",
-        "description": "Climate finance fund",
-        "alternative_labels": ["climate fund", "MCF"],
-        "negative_labels": [],
+        "type": "topic",
+        "value": "multilateral climate fund",
     }
 
 
@@ -237,24 +234,20 @@ def test_parse_vespa_label_response(
     """Test parsing a Vespa response with multiple labels."""
     fields_1 = sample_label_fields.copy()
     fields_2 = {
-        **sample_label_fields,
         "id": "abc123",
-        "preferred_label": "air pollution",
-        "alternative_labels": ["atmospheric pollution"],
-        "description": "",
+        "type": "topic",
+        "value": "air pollution",
     }
     fields_3 = {
-        **sample_label_fields,
         "id": "xyz789",
-        "preferred_label": "renewable energy",
-        "alternative_labels": ["clean energy"],
-        "description": "Sustainable power sources",
+        "type": "topic",
+        "value": "renewable energy",
     }
 
     response = mock_vespa_label_response([fields_1, fields_2, fields_3])
     labels = vespa_label_engine._parse_vespa_response(response)
 
     assert len(labels) == 3
-    assert labels[0].preferred_label == "multilateral climate fund"
-    assert labels[1].preferred_label == "air pollution"
-    assert labels[2].preferred_label == "renewable energy"
+    assert labels[0].value == "multilateral climate fund"
+    assert labels[1].value == "air pollution"
+    assert labels[2].value == "renewable energy"

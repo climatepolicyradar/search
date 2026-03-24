@@ -93,12 +93,9 @@ def huggingface_row_strategy(
 def label_data_strategy(draw) -> dict:
     """Generate input data for Label model."""
     return {
-        "preferred_label": draw(text_strategy),
-        "alternative_labels": draw(st.lists(text_strategy, max_size=5)),
-        "negative_labels": draw(st.lists(text_strategy, max_size=5)),
-        "description": draw(st.one_of(st.none(), text_strategy)),
-        "source": draw(text_strategy),
-        "id_at_source": draw(text_strategy),
+        "id": draw(text_strategy),
+        "type": draw(text_strategy),
+        "value": draw(text_strategy),
     }
 
 
