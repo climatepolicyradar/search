@@ -6,12 +6,21 @@ schema labels {
         field type type string {
             indexing: index | attribute | summary
         }
-        field value type string {
+        field preferred_label type string {
             indexing: index | attribute | summary
+        }
+        field alternative_labels type array<string> {
+            indexing: index | attribute | summary
+        }
+        field description type string {
+            indexing: index | attribute | summary
+        }
+        field negative_labels type array<string> {
+            indexing: attribute | summary
         }
     }
 
     fieldset default {
-        fields: id, type, value
+        fields: id, preferred_label, description, alternative_labels
     }
 }

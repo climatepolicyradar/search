@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import TypedDict
 
-import boto3
 import orjson
 
 from search.vespa.models import VespaAssign, VespaUpdate
@@ -18,13 +17,19 @@ OUTPUT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 class VespaLabel(TypedDict):
     id: str
     type: str
-    value: str
+    preferred_label: str
+    alternative_labels: list[str]
+    description: str
+    negative_labels: list[str]
 
 
 class VespaLabelUpdate(TypedDict):
     id: VespaAssign[str]
     type: VespaAssign[str]
-    value: VespaAssign[str]
+    preferred_label: VespaAssign[str]
+    alternative_labels: VespaAssign[list[str]]
+    description: VespaAssign[str]
+    negative_labels: VespaAssign[list[str]]
 
 
 def labels_feed_materializer():
@@ -38,7 +43,10 @@ def labels_feed_materializer():
             labels[identifier] = {
                 "id": identifier,
                 "type": value["type"],
-                "value": value["value"],
+                "preferred_label": value["value"],
+                "alternative_labels": [],
+                "description": "",
+                "negative_labels": [],
             }
 
     inference_results = read_inference_results()
@@ -68,9 +76,11 @@ def labels_feed_materializer():
         labels[identifier] = {
             "id": identifier,
             "type": "concept",
-            "value": concept["preferred_label"],
+            "preferred_label": concept["preferred_label"],
+            "alternative_labels": concept["alternative_labels"],
+            "description": concept["description"] or "",
+            "negative_labels": concept["negative_labels"],
         }
-    # TODO: update data models elsewhere to fit Wikibase label model
     unique_labels = list(labels.values())
 
     print(f"Collected {len(unique_labels)} unique labels.")
@@ -79,22 +89,25 @@ def labels_feed_materializer():
     with output_file.open("wb") as f:
         for label in unique_labels:
             vespa_update: VespaUpdate[VespaLabelUpdate] = {
-                "update": f"id:labels:labels::{label.get('id')}",
+                "update": f"id:labels:labels::{label['id']}",
                 "create": True,
                 "fields": {
                     "id": {"assign": label["id"]},
-                    "value": {"assign": label["value"]},
                     "type": {"assign": label["type"]},
+                    "preferred_label": {"assign": label["preferred_label"]},
+                    "alternative_labels": {"assign": label["alternative_labels"]},
+                    "description": {"assign": label["description"]},
+                    "negative_labels": {"assign": label["negative_labels"]},
                 },
             }
             f.write(orjson.dumps(vespa_update) + b"\n")
 
-    boto3.client("s3").upload_file(
-        str(output_file),
-        "cpr-cache",
-        "search/vespa/labels_feed_materializer.jsonl",
-    )
-    print(f"Uploaded {len(labels)} labels to S3.")
+    # boto3.client("s3").upload_file(
+    #     str(output_file),
+    #     "cpr-cache",
+    #     "search/vespa/labels_feed_materializer.jsonl",
+    # )
+    # print(f"Uploaded {len(labels)} labels to S3.")
 
 
 if __name__ == "__main__":

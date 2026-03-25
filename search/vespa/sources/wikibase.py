@@ -16,11 +16,15 @@ REQUEST_DELAY_SECONDS = 0.5
 BATCH_SIZE = 50
 
 
+NEGATIVE_LABELS_PROPERTY_ID = os.getenv("WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID", "P9")
+
+
 class WikibaseConcept(TypedDict):
     wikibase_id: str
     preferred_label: str
     alternative_labels: list[str]
     description: str | None
+    negative_labels: list[str]
 
 
 def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
@@ -44,11 +48,22 @@ def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
         else None
     )
 
+    negative_labels: list[str] = []
+    for claim in (entity.get("claims") or {}).values():
+        for statement in claim:
+            mainsnak = statement.get("mainsnak", {})
+            if (
+                mainsnak.get("property") == NEGATIVE_LABELS_PROPERTY_ID
+                and mainsnak.get("snaktype") == "value"
+            ):
+                negative_labels.append(mainsnak["datavalue"]["value"])
+
     return WikibaseConcept(
         wikibase_id=wikibase_id,
         preferred_label=preferred_label,
         alternative_labels=alternative_labels,
         description=description,
+        negative_labels=negative_labels,
     )
 
 
