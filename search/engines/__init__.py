@@ -19,7 +19,11 @@ class SearchEngine(ABC, Generic[TModel]):
 
     @abstractmethod
     def search(
-        self, query: str, filters_json_string: str | None, limit: int, offset: int = 0
+        self,
+        query: str,
+        filters_json_string: str | None,
+        page_token: int,
+        page_size: int = 0,
     ) -> list[TModel]:
         """
         Fetch a list of relevant search results.

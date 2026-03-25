@@ -75,7 +75,6 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
     VESPA_PUBLIC_CERT_SSM_PARAMETER = "VESPA_PUBLIC_CERT_READ_ONLY"
     VESPA_PRIVATE_KEY_SSM_PARAMETER = "VESPA_PRIVATE_KEY_READ_ONLY"
 
-    DEFAULT_SEARCH_LIMIT: int = 20
     DEFAULT_TIMEOUT_SECONDS: int = 20
     DEFAULT_RANKING_SOFTTIMEOUT_FACTOR: str = "0.7"
     DEFAULT_SUMMARY: str = "search_summary"
@@ -121,27 +120,26 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         )
 
     def search(
-        self, query: str, limit: int | None = None, offset: int = 0
+        self,
+        query: str,
+        filters_json_string: str | None = None,  # noqa: ARG002
+        page: int = 1,
+        page_size: int = 10,
     ) -> list[TModel]:
         """
         Search Vespa using the configured search strategy.
 
         :param query: Search query from the user
-        :param limit: Maximum number of results to return
-        :param offset: Number of results to skip
+        :param filters_json_string: Filters JSON string
+        :param page: Page number
+        :param page_size: Number of results per page
         :return: List of model objects matching the search.
         """
-        if limit is None:
-            logger.info(
-                f"Search limit was not set. Setting to {self.DEFAULT_SEARCH_LIMIT}."
-            )
-            limit = self.DEFAULT_SEARCH_LIMIT
-
         if self.client is None:
             self.connect_to_vespa()
             assert self.client is not None  # nosec
 
-        request_body = self._build_request(query, limit, offset)
+        request_body = self._build_request(query, page, page_size)
 
         try:
             vespa_response = cast(

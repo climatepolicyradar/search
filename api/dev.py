@@ -84,16 +84,16 @@ async def root():
 def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
-    limit: int = 10,
-    offset: int = 0,
+    page_token: int = 1,
+    page_size: int = 10,
     debug: bool = False,
 ):
     engine = DevVespaDocumentSearchEngine(debug=debug)
     results = engine.search(
         query=query,
         filters_json_string=filters_json_string,
-        limit=limit,
-        offset=offset,
+        page=page_token,
+        page_size=page_size,
     )
 
     # TODO: pagination
@@ -139,14 +139,14 @@ def read_labels(
 @router.get("/passages", response_model=SearchResponse[Passage])
 def read_passages(
     query: str | None = Query(None, description="What are you looking for?"),
-    limit: int = 10,
-    offset: int = 0,
+    page_token: int = 1,
+    page_size: int = 10,
 ):
     engine = DevVespaPassageSearchEngine()
     results = engine.search(
         query=query,
-        limit=limit,
-        offset=offset,
+        page_token=page_token,
+        page_size=page_size,
     )
 
     return SearchResponse[Passage](
