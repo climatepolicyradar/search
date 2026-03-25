@@ -92,7 +92,7 @@ def read_documents(
     results = engine.search(
         query=query,
         filters_json_string=filters_json_string,
-        page=page_token,
+        page_token=page_token,
         page_size=page_size,
     )
 
