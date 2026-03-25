@@ -23,9 +23,8 @@ import re
 from typing import Any, Literal
 
 import requests
-from pydantic import BaseModel, TypeAdapter
-from pydantic.networks import AnyHttpUrl
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
+from pydantic_settings import BaseSettings
 from vespa.querybuilder import Grouping as G
 from vespa.querybuilder.builder.builder import Q, QueryField
 
@@ -48,13 +47,9 @@ MISSING_PLACEHOLDER = "MISSING"
 class Settings(BaseSettings):
     vespa_endpoint: AnyHttpUrl
     vespa_read_token: str
-    model_config = SettingsConfigDict(env_file="api/.env")
 
 
-# @see: https://github.com/pydantic/pydantic-settings/issues/201
-settings = Settings()  # pyright: ignore[reportCallIssue]
-
-# endregion Settings
+# endregion
 
 
 # region Filters
@@ -236,7 +231,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
     model_class = Document
 
-    def __init__(self, debug: bool = False) -> None:
+    def __init__(self, settings: Settings, debug: bool = False) -> None:
         """
         Initialise the search engine.
 
@@ -246,6 +241,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         """
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
+        self.settings = settings
 
     _userQuery: str = (
         " and (userQuery() "
@@ -290,11 +286,11 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json=request_body,
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -436,7 +432,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "query": query,
@@ -447,7 +443,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -490,6 +486,9 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
 
     model_class = Passage
 
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
     def search(
         self,
         query: str | None,
@@ -514,11 +513,11 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json=request_body,
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -557,6 +556,9 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
     model_class = Label
 
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
     def search(
         self,
         query: str | None,
@@ -584,11 +586,11 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json=request_body,
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -621,7 +623,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "hits": 0,
@@ -629,7 +631,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -665,8 +667,8 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
 
     model_class = Label
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, settings: Settings):
+        self.settings = settings
 
     def search(
         self,
@@ -719,7 +721,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "query": query,
@@ -729,7 +731,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -772,7 +774,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "hits": 0,
@@ -780,7 +782,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
