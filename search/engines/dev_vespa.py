@@ -261,10 +261,11 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         self,
         query: str | None,
         filters_json_string: str | None = None,
-        limit: int = 10,
-        offset: int = 0,
+        page_token: int = 1,
+        page_size: int = 10,
     ) -> list[Document]:
         """Fetch a list of relevant search results."""
+
         where = "true "
 
         if filters_json_string:
@@ -274,12 +275,13 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         yql = f"select * from sources documents where {where}"
         if query:
             yql += self._userQuery
-        yql += f" limit {limit} offset {offset}"
         logger.info(f"searching for yql: {yql}")
 
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
+            "hits": page_size,
+            "offset": (page_token - 1) * page_size,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": "nativerank",
@@ -491,19 +493,21 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         self,
         query: str | None,
         filters_json_string: str | None = None,  # noqa: ARG002
-        limit: int = 10,
-        offset: int = 0,
+        page_token: int = 1,
+        page_size: int = 10,
     ) -> list[Passage]:
         """Fetch a list of relevant passage search results."""
         yql = "select * from sources passages where true"
         if query:
             yql += " and userQuery()"
-        yql += f" limit {limit} offset {offset}"
+
         logger.info(f"searching passages for yql: {yql}")
 
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
+            "hits": page_size,
+            "offset": (page_token - 1) * page_size,
             "timeout": "5s",
             "model.language": "en",
         }
@@ -555,8 +559,8 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
         self,
         query: str | None,
         filters_json_string: str | None = None,  # noqa: ARG002
-        limit: int = 10,
-        offset: int = 0,
+        page_token: int = 1,
+        page_size: int = 10,
         label_type: str | None = None,
     ) -> list[Label]:
         """Fetch a list of relevant label search results."""
@@ -565,12 +569,14 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             yql += " and userQuery()"
         if label_type:
             yql += f' and type contains "{label_type}"'
-        yql += f" limit {limit} offset {offset}"
+
         logger.info(f"searching labels for yql: {yql}")
 
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
+            "hits": page_size,
+            "offset": (page_token - 1) * page_size,
             "timeout": "5s",
             "model.language": "en",
         }
@@ -663,8 +669,8 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
         self,
         query: str | None,
         filters_json_string: str | None = None,  # noqa: ARG002
-        limit: int = 10,  # noqa: ARG002
-        offset: int = 0,  # noqa: ARG002
+        page_token: int = 1,  # noqa: ARG002
+        page_size: int = 10,  # noqa: ARG002
         label_type: str | None = None,
     ) -> list[Label]:
         """Returns unique values for concepts and labels in the documents"""

@@ -499,7 +499,7 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     _feed_document(vespa_app, doc)
 
     engine = DevVespaDocumentSearchEngine(debug=True)
-    results = engine.search(query="running", limit=10)
+    results = engine.search(query="running", page_size=10)
     assert len(results) >= 1, f"Expected results, got: {results}"
 
     debug = engine.last_debug_info[0]
@@ -531,7 +531,7 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
 
     engine = DevVespaDocumentSearchEngine(debug=True)
     # Search for "running" — matches title via default fieldset
-    results = engine.search(query="running", limit=10)
+    results = engine.search(query="running", page_size=10)
     assert len(results) >= 1, f"Expected results, got: {results}"
 
     debug = engine.last_debug_info[0]
@@ -584,7 +584,7 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
     _feed_document(vespa_app, doc_us)
 
     engine = DevVespaDocumentSearchEngine(debug=True)
-    results = engine.search(query="UK", limit=50)
+    results = engine.search(query="UK", page_size=50)
     result_ids = {doc.id for doc in results}
 
     assert doc_uk.id in result_ids, (
@@ -617,7 +617,7 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     _feed_document(vespa_app, doc_without_match)
 
     engine = DevVespaDocumentSearchEngine(debug=True)
-    results = engine.search(query="fca rules tcfd", limit=50)
+    results = engine.search(query="fca rules tcfd", page_size=50)
     result_ids = {doc.id for doc in results}
 
     assert doc_with_full_forms.id in result_ids, (

@@ -16,8 +16,8 @@ console = Console()
 @app.command()
 def search(
     query: str,
-    limit: int = 10,
-    offset: int = 0,
+    page_token: int = 1,
+    page_size: int = 10,
     debug: bool = True,
     filters: str | None = None,
     labels: bool = False,
@@ -27,8 +27,8 @@ def search(
     results = engine.search(
         query=query,
         filters_json_string=filters,
-        limit=limit,
-        offset=offset,
+        page_token=page_token,
+        page_size=page_size,
     )
 
     words = query.split()
