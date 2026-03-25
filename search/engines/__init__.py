@@ -13,6 +13,12 @@ from search.passage import Passage
 TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel, LabelModel)
 
 
+class ListResponse[T](BaseModel):
+    results: list[T]
+    total_size: int | None
+    next_page_token: int | None
+
+
 class Pagination(BaseModel):
     """
     Pagination
@@ -36,7 +42,7 @@ class SearchEngine(ABC, Generic[TModel]):
         query: str,
         pagination: Pagination,
         filters_json_string: str | None,
-    ) -> list[TModel]:
+    ) -> ListResponse[TModel]:
         """
         Fetch a list of relevant search results.
 

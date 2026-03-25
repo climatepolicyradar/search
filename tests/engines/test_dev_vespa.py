@@ -132,10 +132,10 @@ def test_typeahead_engine_returns_correct_type_and_value(
         pagination=Pagination(page_token=1, page_size=10),
     )
 
-    assert all(isinstance(label, Label) for label in labels)
+    assert all(isinstance(label, Label) for label in labels.results)
 
     # Extract the "air pollution risk" label.
-    values = {(label.type, label.value) for label in labels}
+    values = {(label.type, label.value) for label in labels.results}
     assert ("concept", "air pollution risk") in values
 
 
