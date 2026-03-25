@@ -166,9 +166,23 @@ async def fetch_concepts_at_timestamps(
     Returns:
         List of WikibaseConcept dicts for successfully fetched concepts.
     """
-    base_url = os.environ["WIKIBASE_URL"].rstrip("/")
-    username = os.environ["WIKIBASE_USERNAME"]
-    password = os.environ["WIKIBASE_PASSWORD"]
+    from search.config import (
+        get_from_env_with_fallback,
+        wikibase_password_ssm_key,
+        wikibase_url_ssm_key,
+        wikibase_username_ssm_key,
+    )
+
+    base_url = get_from_env_with_fallback("WIKIBASE_URL", wikibase_url_ssm_key)
+    username = get_from_env_with_fallback(
+        "WIKIBASE_USERNAME", wikibase_username_ssm_key
+    )
+    password = get_from_env_with_fallback(
+        "WIKIBASE_PASSWORD", wikibase_password_ssm_key
+    )
+    if not all([base_url, username, password]):
+        raise RuntimeError("Missing Wikibase credentials (checked env vars and SSM)")
+    base_url = base_url.rstrip("/")
     api_url = f"{base_url}/w/api.php"
 
     async with httpx.AsyncClient(timeout=30) as client:
