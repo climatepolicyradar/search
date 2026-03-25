@@ -7,6 +7,7 @@ import orjson
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
+from search.vespa.sources.wikibase import fetch_concepts_at_timestamps_sync
 
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -41,16 +42,35 @@ def labels_feed_materializer():
             }
 
     inference_results = read_inference_results()
-    for document_id, inference_result in inference_results:
-        for passage_id, concepts in inference_result.items():
-            for concept in concepts:
-                identifier = f"concept::{concept['name']}"
-                labels[identifier] = {
-                    "id": identifier,
-                    "type": "concept",
-                    "value": concept["name"],
-                }
 
+    # Get wikibase IDs and timestamps
+    wikibase_id_to_timestamps: dict[str, list[str]] = {}
+    for _, inference_result in inference_results:
+        for _, concepts in inference_result.items():
+            for concept in concepts:
+                wikibase_id_to_timestamps.setdefault(concept["id"], []).append(
+                    concept["timestamp"]
+                )
+
+    # Use the most recent timestamp per concept
+    wikibase_id_to_timestamp = {
+        wid: max(timestamps) for wid, timestamps in wikibase_id_to_timestamps.items()
+    }
+
+    # Fetch full labels from Wikibase at each timestamp
+    wikibase_concepts = fetch_concepts_at_timestamps_sync(wikibase_id_to_timestamp)
+
+    if len(wikibase_concepts) < len(wikibase_id_to_timestamp):
+        print("WARNING: fewer concepts returned from Wikibase than requested.")
+
+    for concept in wikibase_concepts:
+        identifier = f"concept::{concept['wikibase_id']}"
+        labels[identifier] = {
+            "id": identifier,
+            "type": "concept",
+            "value": concept["preferred_label"],
+        }
+    # TODO: update data models elsewhere to fit Wikibase label model
     unique_labels = list(labels.values())
 
     print(f"Collected {len(unique_labels)} unique labels.")
