@@ -57,7 +57,7 @@ class Aggregations(BaseModel):
 class SearchResponse[T](BaseModel):
     """Response model for search results."""
 
-    total_results: int | None = None
+    total_size: int | None = None
     page: int
     page_size: int
     total_pages: int | None
@@ -107,13 +107,13 @@ def read_documents(
 
     # TODO: pagination
     return SearchResponse[Document](
-        total_results=len(results),
+        total_size=results.total_size,
         page=0,
         page_size=0,
         total_pages=0,
         next_page=None,
         previous_page=None,
-        results=results,
+        results=results.results,
         debug_info=engine.last_debug_info if debug else None,
         aggregations=Aggregations(
             labels=engine.aggregations(
@@ -135,13 +135,13 @@ def read_labels(
     engine.all_label_types()
 
     return SearchResponse[Label](
-        total_results=len(results),
+        total_size=results.total_size,
         page=0,
         page_size=0,
         total_pages=0,
         next_page=None,
         previous_page=None,
-        results=results,
+        results=results.results,
         aggregations=None,
     )
 
@@ -158,13 +158,13 @@ def read_passages(
     )
 
     return SearchResponse[Passage](
-        total_results=len(results),
+        total_size=results.total_size,
         page=0,
         page_size=0,
         total_pages=0,
         next_page=None,
         previous_page=None,
-        results=results,
+        results=results.results,
         aggregations=None,
     )
 

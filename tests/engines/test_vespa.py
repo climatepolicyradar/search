@@ -7,6 +7,7 @@ import pytest
 from hypothesis import given
 from vespa.io import VespaQueryResponse
 
+from search.engines import Pagination
 from search.engines.vespa import (
     ExactVespaPassageSearchEngine,
     HybridVespaPassageSearchEngine,
@@ -98,7 +99,7 @@ def test_exact_request(terms, limit, offset):
     """Test exact request returns the expected fields."""
 
     engine = ExactVespaPassageSearchEngine()
-    request = engine._build_request(terms, limit, offset)
+    request = engine._build_request(terms, Pagination(page_size=limit, page_token=offset + 1), None)
 
     assert isinstance(request, dict)
     assert "yql" in request
@@ -120,7 +121,7 @@ def test_hybrid_request(terms, limit, offset):
     """Test hybrid request returns the expected fields."""
 
     engine = HybridVespaPassageSearchEngine()
-    request = engine._build_request(terms, limit, offset)
+    request = engine._build_request(terms, Pagination(page_size=limit, page_token=offset + 1), None)
 
     assert isinstance(request, dict)
     assert "yql" in request
@@ -149,12 +150,12 @@ def test_parse_vespa_passage_response(
     }
 
     response = mock_vespa_passage_response([fields_1, fields_2, fields_3])
-    passages = exact_vespa_passage_engine._parse_vespa_response(response)
+    result = exact_vespa_passage_engine._parse_vespa_response(response)
 
-    assert len(passages) == 3
-    assert passages[0].text == "This is a sample passage about climate change."
-    assert passages[1].text == "Second passage"
-    assert passages[2].text == "Third passage"
+    assert len(result.results) == 3
+    assert result.results[0].text == "This is a sample passage about climate change."
+    assert result.results[1].text == "Second passage"
+    assert result.results[2].text == "Third passage"
 
 
 @pytest.fixture
@@ -218,14 +219,15 @@ def sample_label_fields():
 def test_label_request_parameters(terms, limit, offset):
     """Test label request contains correct parameters with property-based testing."""
     engine = VespaLabelSearchEngine()
-    request = engine._build_request(terms, limit, offset)
+    pagination = Pagination(page_size=limit, page_token=offset + 1)
+    request = engine._build_request(terms, pagination, None)
 
     assert isinstance(request, dict)
     assert "yql" in request
     assert "query_string" in request
     assert request["query_string"] == terms
-    assert f"limit {limit}" in request["yql"]
-    assert f"offset {offset}" in request["yql"]
+    assert request["hits"] == limit
+    assert request["offset"] == offset * limit
 
 
 def test_parse_vespa_label_response(
@@ -245,9 +247,9 @@ def test_parse_vespa_label_response(
     }
 
     response = mock_vespa_label_response([fields_1, fields_2, fields_3])
-    labels = vespa_label_engine._parse_vespa_response(response)
+    result = vespa_label_engine._parse_vespa_response(response)
 
-    assert len(labels) == 3
-    assert labels[0].value == "multilateral climate fund"
-    assert labels[1].value == "air pollution"
-    assert labels[2].value == "renewable energy"
+    assert len(result.results) == 3
+    assert result.results[0].value == "multilateral climate fund"
+    assert result.results[1].value == "air pollution"
+    assert result.results[2].value == "renewable energy"

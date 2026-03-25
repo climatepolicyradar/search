@@ -31,7 +31,7 @@ from vespa.querybuilder.builder.builder import Q, QueryField
 
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
-from search.engines import Pagination, SearchEngine
+from search.engines import ListResponse, Pagination, SearchEngine
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -262,7 +262,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         query: str | None,
         pagination: Pagination,
         filters_json_string: str | None = None,
-    ) -> list[Document]:
+    ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
 
         where = "true "
@@ -299,7 +299,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             )
         except Exception:
             logger.exception("Vespa query failed")
-            return []
+            return ListResponse(results=[], total_size=None, next_page_token=None)
 
         res = res.json()
         documents = []
@@ -386,7 +386,9 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 json.dumps(debug_info, indent=2),
             )
 
-        return documents
+        return ListResponse(
+            results=documents, total_size=len(documents), next_page_token=None
+        )
 
     def aggregations(
         self,
@@ -493,7 +495,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         query: str | None,
         pagination: Pagination,
         filters_json_string: str | None = None,  # noqa: ARG002
-    ) -> list[Passage]:
+    ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
         yql = "select * from sources passages where true"
         if query:
@@ -521,7 +523,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
             )
         except Exception:
             logger.exception("Vespa passages query failed")
-            return []
+            return ListResponse(results=[], total_size=None, next_page_token=None)
 
         res = res.json()
         passages: list[Passage] = []
@@ -541,7 +543,9 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
                 )
             )
 
-        return passages
+        return ListResponse(
+            results=passages, total_size=len(passages), next_page_token=None
+        )
 
     def count(self, query: str) -> int:
         """Return hit count"""
@@ -559,7 +563,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
         pagination: Pagination,
         filters_json_string: str | None = None,  # noqa: ARG002
         label_type: str | None = None,
-    ) -> list[Label]:
+    ) -> ListResponse[Label]:
         """Fetch a list of relevant label search results."""
         yql = "select * from sources labels where true"
         if query:
@@ -589,7 +593,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             )
         except Exception:
             logger.exception("Vespa labels query failed")
-            return []
+            return ListResponse(results=[], total_size=None, next_page_token=None)
 
         res = res.json()
         labels: list[Label] = []
@@ -604,7 +608,9 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                 )
             )
 
-        return labels
+        return ListResponse(
+            results=labels, total_size=len(labels), next_page_token=None
+        )
 
     def all_label_types(self) -> list[str]:
         """Fetch all distinct label types from the labels source."""
@@ -668,7 +674,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
         pagination: Pagination,  # noqa: ARG002
         filters_json_string: str | None = None,  # noqa: ARG002
         label_type: str | None = None,
-    ) -> list[Label]:
+    ) -> ListResponse[Label]:
         """Returns unique values for concepts and labels in the documents"""
         labels_field = QueryField("labels_type_value_attribute")
         concepts_field = QueryField("concepts_type_value_attribute")
@@ -728,7 +734,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
             )
         except Exception:
             logger.exception("Vespa query failed")
-            return []
+            return ListResponse(results=[], total_size=None, next_page_token=None)
 
         # Parse the groups & transform => Labels
         # You can read more about grouping @see: https://docs.vespa.ai/en/querying/grouping.html
@@ -752,7 +758,9 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
                     type=label_type or MISSING_PLACEHOLDER,
                 )
             )
-        return labels
+        return ListResponse(
+            results=labels, total_size=len(labels), next_page_token=None
+        )
 
     def all_label_types(self) -> list[str]:
         """Fetch all distinct label types (unfiltered)."""
