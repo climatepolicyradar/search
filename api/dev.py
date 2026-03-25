@@ -122,7 +122,7 @@ def read_labels(
 ):
     engine = DevVespaLabelTypeaheadSearchEngine()
     results = engine.search(query=query, label_type=type)
-    label_types = engine.all_label_types()
+    engine.all_label_types()
 
     return SearchResponse[Label](
         total_results=len(results),
