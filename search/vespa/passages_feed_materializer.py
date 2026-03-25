@@ -1,3 +1,4 @@
+import gzip
 from pathlib import Path
 from typing import TypedDict
 
@@ -37,7 +38,8 @@ def passages_feed_materializer():
     batch: list[bytes] = []
 
     output_file = OUTPUT_CACHE_DIR / "passages_feed_materializer.jsonl"
-    with output_file.open("wb") as f:
+    output_file_gz = OUTPUT_CACHE_DIR / "passages_feed_materializer.jsonl.gz"
+    with output_file.open("wb") as f, gzip.open(output_file_gz, "wb") as f_gz:
         for document_id, inference_result in read_embeddings_input_v2():
             pdf_data = inference_result.get("pdf_data")
             text_blocks = pdf_data.get("text_blocks") if pdf_data is not None else None
@@ -67,17 +69,25 @@ def passages_feed_materializer():
 
                 if len(batch) >= BATCH_SIZE:
                     f.writelines(batch)
+                    f_gz.writelines(batch)
                     total += len(batch)
                     batch = []
 
         if batch:
             f.writelines(batch)
+            f_gz.writelines(batch)
             total += len(batch)
 
-    boto3.client("s3").upload_file(
+    s3 = boto3.client("s3")
+    s3.upload_file(
         str(output_file),
         "cpr-cache",
         "search/vespa/passages_feed_materializer.jsonl",
+    )
+    s3.upload_file(
+        str(output_file_gz),
+        "cpr-cache",
+        "search/vespa/passages_feed_materializer.jsonl.gz",
     )
     print(f"Uploaded {total} passages to S3.")
 
