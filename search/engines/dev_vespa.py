@@ -553,6 +553,10 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
     model_class = Label
 
+    def __init__(self, debug: bool = False) -> None:
+        self.debug = debug
+        self.last_debug_info: list[dict[str, Any]] = []
+
     def search(
         self,
         query: str | None,
@@ -594,6 +598,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         res = res.json()
         labels: list[Label] = []
+        debug_info: list[dict[str, Any]] = []
 
         for hit in res.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
@@ -604,7 +609,18 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                     value=fields.get("value", ""),
                 )
             )
+            if self.debug:
+                debug_info.append(
+                    {
+                        "relevance": hit.get("relevance"),
+                        "summaryfeatures": fields.get("summaryfeatures"),
+                        "preferred_label": fields.get("preferred_label", ""),
+                        "alternative_labels": fields.get("alternative_labels", []),
+                        "description": fields.get("description", ""),
+                    }
+                )
 
+        self.last_debug_info = debug_info
         return labels
 
     def all_label_types(self) -> list[str]:
