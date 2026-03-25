@@ -576,6 +576,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            "ranking.profile": "nativerank",
         }
 
         try:
