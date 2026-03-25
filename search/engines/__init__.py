@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
 from knowledge_graph.identifiers import Identifier
+from pydantic import BaseModel
 
 from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Label as LabelModel
@@ -10,6 +11,18 @@ from search.label import Label
 from search.passage import Passage
 
 TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel, LabelModel)
+
+
+class Pagination(BaseModel):
+    """
+    Pagination
+
+    @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
+    @see:https://google.aip.dev/158
+    """
+
+    page_token: int
+    page_size: int
 
 
 class SearchEngine(ABC, Generic[TModel]):
@@ -21,9 +34,8 @@ class SearchEngine(ABC, Generic[TModel]):
     def search(
         self,
         query: str,
+        pagination: Pagination,
         filters_json_string: str | None,
-        page_token: int,
-        page_size: int = 0,
     ) -> list[TModel]:
         """
         Fetch a list of relevant search results.

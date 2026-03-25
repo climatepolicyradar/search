@@ -7,6 +7,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+from search.engines import Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
 
 app = typer.Typer()
@@ -16,8 +17,7 @@ console = Console()
 @app.command()
 def search(
     query: str,
-    page_token: int = 1,
-    page_size: int = 10,
+    pagination: Pagination = Pagination(page_token=1, page_size=10),
     debug: bool = True,
     filters: str | None = None,
     labels: bool = False,
@@ -27,8 +27,7 @@ def search(
     results = engine.search(
         query=query,
         filters_json_string=filters,
-        page_token=page_token,
-        page_size=page_size,
+        pagination=pagination,
     )
 
     words = query.split()

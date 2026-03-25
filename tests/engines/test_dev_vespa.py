@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
+from search.engines import Pagination
 from search.engines.dev_vespa import (
     DevVespaLabelTypeaheadSearchEngine,
 )
@@ -97,7 +98,11 @@ def test_typeahead_engine_builds_substring_regex_for_concepts(
     """
     mock_requests_post.json_return_value = {"root": {}}
 
-    dev_typeahead_engine.search(query=query, label_type="concept")
+    dev_typeahead_engine.search(
+        query=query,
+        label_type="concept",
+        pagination=Pagination(page_token=1, page_size=10),
+    )
 
     sent = mock_requests_post.last_json  # type: ignore[attr-defined]
     yql = sent["yql"]
@@ -121,7 +126,11 @@ def test_typeahead_engine_returns_correct_type_and_value(
     label_values = ["concept::air pollution risk"]
     mock_requests_post.json_return_value = _make_grouping_response(label_values)
 
-    labels = dev_typeahead_engine.search(query="pollution", label_type="concept")
+    labels = dev_typeahead_engine.search(
+        query="pollution",
+        label_type="concept",
+        pagination=Pagination(page_token=1, page_size=10),
+    )
 
     assert all(isinstance(label, Label) for label in labels)
 
