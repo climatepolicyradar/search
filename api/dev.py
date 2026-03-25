@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AnyHttpUrl, BaseModel
 
 from search.data_in_models import Document
+from search.engines import Pagination
 from search.engines.dev_vespa import (
     CountAggregation,
     DevVespaDocumentSearchEngine,
@@ -14,7 +15,6 @@ from search.engines.dev_vespa import (
 )
 from search.label import Label
 from search.log import get_logger
-from search.models import Pagination
 from search.passage import Passage
 
 logger = get_logger(__name__)

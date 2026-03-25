@@ -7,8 +7,8 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+from search.engines import Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
-from search.models import Pagination
 
 app = typer.Typer()
 console = Console()

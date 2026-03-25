@@ -31,10 +31,9 @@ from vespa.querybuilder.builder.builder import Q, QueryField
 
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
-from search.engines import SearchEngine
+from search.engines import Pagination, SearchEngine
 from search.label import Label
 from search.log import get_logger
-from search.models import Pagination
 from search.passage import Passage
 
 logger = get_logger(__name__)
