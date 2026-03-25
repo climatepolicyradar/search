@@ -205,6 +205,16 @@ def _build_filter_query(filter_group: Filter | None) -> str:
 
 # endregion Filters
 
+# region Aggregations
+
+
+class CountAggregation[T](BaseModel):
+    count: int
+    value: T
+
+
+# endregion Aggregations
+
 
 class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     """
@@ -237,6 +247,16 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
 
+    _userQuery: str = (
+        " and (userQuery() "
+        # As geographies and title_synonyms use different Lucene analyzers
+        # to the default fieldset, they're referenced explicitly in the query
+        # so they can be searched.
+        # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
+        ' or ({defaultIndex: "geographies"}userInput(@query))'
+        ' or ({defaultIndex: "title_synonyms"}userInput(@query)))'
+    )
+
     def search(
         self,
         query: str | None,
@@ -253,15 +273,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         yql = f"select * from sources documents where {where}"
         if query:
-            yql += (
-                " and (userQuery() "
-                # As geographies and title_synonyms use different Lucene analyzers
-                # to the default fieldset, they're referenced explicitly in the query
-                # so they can be searched.
-                # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
-                ' or ({defaultIndex: "geographies"}userInput(@query))'
-                ' or ({defaultIndex: "title_synonyms"}userInput(@query)))'
-            )
+            yql += self._userQuery
         yql += f" limit {limit} offset {offset}"
         logger.info(f"searching for yql: {yql}")
 
@@ -374,6 +386,96 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             )
 
         return documents
+
+    def aggregations(
+        self,
+        query: str | None,
+        filters_json_string: str | None = None,
+    ) -> list[CountAggregation[Label]]:
+        """Return aggregations (label/concept groups with counts) filtered by the search query."""
+        # Build the top-level where clause from the search query and any filters,
+        # mirroring how `search()` constructs its YQL.
+        where = "true"
+        if query:
+            where += self._userQuery
+
+        if filters_json_string:
+            filters = Filter.model_validate_json(filters_json_string)
+            where += _build_filter_query(filters)
+
+        # Group labels and concepts across all documents matching the search query.
+        # The top-level `where` already scopes the document set.
+        # per-bucket filtering is not needed here.
+        grouping = G.all(
+            G.all(
+                G.group("labels_type_value_attribute"),
+                # This is the max we expect to see
+                # TODO: Pagination on groups if we hit this limit
+                G.max(5000),
+                G.order(-G.count()),
+                G.each(G.output(G.count())),
+            ),
+            G.all(
+                G.group("concepts_type_value_attribute"),
+                # This is the max we expect to see
+                # TODO: Pagination on groups if we hit this limit
+                G.max(5000),
+                G.order(-G.count()),
+                G.each(G.output(G.count())),
+            ),
+        )
+
+        # Build a raw YQL string, the same way `search()` does, because the query
+        # builder's `.where()` only accepts Condition/bool objects, not raw strings.
+        select_fields = "labels_type_value_attribute, concepts_type_value_attribute"
+        groupby_str = str(grouping)
+        yql = f"select {select_fields} from documents where {where} | {groupby_str}"
+
+        try:
+            res = requests.post(
+                f"{settings.vespa_endpoint}/search",
+                json={
+                    "yql": yql,
+                    "query": query,
+                    "hits": 0,
+                    "timeout": "5s",
+                    "model.language": "en",
+                    "ranking.profile": "nativerank",
+                },
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa aggregations query failed")
+            return []
+
+        root = res.json().get("root", {})
+        root_children: list[dict] = root.get("children") or []
+        groups: list[dict] = (
+            root_children[0].get("children", []) if root_children else []
+        )
+
+        group_values = []
+        for group in groups:
+            group_values.extend(group.get("children", []))
+
+        count_aggregations: list[CountAggregation[Label]] = []
+        for group_value in group_values:
+            label_type_value = group_value.get("value", "")
+            label_type, _, label_value = label_type_value.partition("::")
+            count_aggregations.append(
+                CountAggregation(
+                    count=group_value.get("fields", {}).get("count()", 0),
+                    value=Label(
+                        id=label_type_value,
+                        value=label_value,
+                        type=label_type or MISSING_PLACEHOLDER,
+                    ),
+                )
+            )
+        return count_aggregations
 
     def count(self, query: str) -> int:
         """Return hit count"""
@@ -581,6 +683,8 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
             G.all(
                 G.group("labels_type_value_attribute"),
                 f'filter(regex("{doc_regex}", labels_type_value_attribute))',
+                # This is the max we expect to see
+                # TODO: Pagination on groups if we hit this limit
                 G.max(5000),
                 G.order(-G.count()),
                 G.each(G.output(G.count())),
@@ -588,6 +692,8 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
             G.all(
                 G.group("concepts_type_value_attribute"),
                 f'filter(regex("{doc_regex}", concepts_type_value_attribute))',
+                # This is the max we expect to see
+                # TODO: Pagination on groups if we hit this limit
                 G.max(5000),
                 G.order(-G.count()),
                 G.each(G.output(G.count())),

@@ -7,6 +7,7 @@ from pydantic import AnyHttpUrl, BaseModel
 
 from search.data_in_models import Document
 from search.engines.dev_vespa import (
+    CountAggregation,
     DevVespaDocumentSearchEngine,
     DevVespaLabelTypeaheadSearchEngine,
     DevVespaPassageSearchEngine,
@@ -48,9 +49,8 @@ app.add_middleware(
 T = TypeVar("T", bound=BaseModel)
 
 
-class Aggregation(BaseModel):
-    field: str
-    values: list[str]
+class Aggregations(BaseModel):
+    labels: list[CountAggregation[Label]]
 
 
 class SearchResponse[T](BaseModel):
@@ -63,7 +63,7 @@ class SearchResponse[T](BaseModel):
     next_page: AnyHttpUrl | None = None
     previous_page: AnyHttpUrl | None = None
     results: list[T]
-    aggregations: list[Aggregation] = []
+    aggregations: Aggregations | None = None
     debug_info: list[dict] | None = None
 
 
@@ -105,8 +105,13 @@ def read_documents(
         next_page=None,
         previous_page=None,
         results=results,
-        aggregations=[],
         debug_info=engine.last_debug_info if debug else None,
+        aggregations=Aggregations(
+            labels=engine.aggregations(
+                query=query,
+                filters_json_string=filters_json_string,
+            )
+        ),
     )
 
 
@@ -117,7 +122,7 @@ def read_labels(
 ):
     engine = DevVespaLabelTypeaheadSearchEngine()
     results = engine.search(query=query, label_type=type)
-    label_types = engine.all_label_types()
+    engine.all_label_types()
 
     return SearchResponse[Label](
         total_results=len(results),
@@ -127,12 +132,7 @@ def read_labels(
         next_page=None,
         previous_page=None,
         results=results,
-        aggregations=[
-            Aggregation(
-                field="type",
-                values=label_types,
-            )
-        ],
+        aggregations=None,
     )
 
 
