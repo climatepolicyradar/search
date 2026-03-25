@@ -34,6 +34,7 @@ from search.data_in_models import Label as DataInLabel
 from search.engines import SearchEngine
 from search.label import Label
 from search.log import get_logger
+from search.models import Pagination
 from search.passage import Passage
 
 logger = get_logger(__name__)
@@ -260,9 +261,8 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     def search(
         self,
         query: str | None,
+        pagination: Pagination,
         filters_json_string: str | None = None,
-        page_token: int = 1,
-        page_size: int = 10,
     ) -> list[Document]:
         """Fetch a list of relevant search results."""
 
@@ -280,8 +280,8 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
-            "hits": page_size,
-            "offset": (page_token - 1) * page_size,
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": "nativerank",
@@ -492,9 +492,8 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
     def search(
         self,
         query: str | None,
+        pagination: Pagination,
         filters_json_string: str | None = None,  # noqa: ARG002
-        page_token: int = 1,
-        page_size: int = 10,
     ) -> list[Passage]:
         """Fetch a list of relevant passage search results."""
         yql = "select * from sources passages where true"
@@ -506,8 +505,8 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
-            "hits": page_size,
-            "offset": (page_token - 1) * page_size,
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
         }
@@ -558,9 +557,8 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
     def search(
         self,
         query: str | None,
+        pagination: Pagination,
         filters_json_string: str | None = None,  # noqa: ARG002
-        page_token: int = 1,
-        page_size: int = 10,
         label_type: str | None = None,
     ) -> list[Label]:
         """Fetch a list of relevant label search results."""
@@ -575,8 +573,8 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
-            "hits": page_size,
-            "offset": (page_token - 1) * page_size,
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
         }
@@ -668,9 +666,8 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
     def search(
         self,
         query: str | None,
+        pagination: Pagination,  # noqa: ARG002
         filters_json_string: str | None = None,  # noqa: ARG002
-        page_token: int = 1,  # noqa: ARG002
-        page_size: int = 10,  # noqa: ARG002
         label_type: str | None = None,
     ) -> list[Label]:
         """Returns unique values for concepts and labels in the documents"""

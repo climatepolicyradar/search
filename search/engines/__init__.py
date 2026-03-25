@@ -7,6 +7,7 @@ from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Label as LabelModel
 from search.document import Document
 from search.label import Label
+from search.models import Pagination
 from search.passage import Passage
 
 TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel, LabelModel)
@@ -21,9 +22,8 @@ class SearchEngine(ABC, Generic[TModel]):
     def search(
         self,
         query: str,
+        pagination: Pagination,
         filters_json_string: str | None,
-        page_token: int,
-        page_size: int = 0,
     ) -> list[TModel]:
         """
         Fetch a list of relevant search results.

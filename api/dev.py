@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import TypeVar
 
-from fastapi import APIRouter, FastAPI, Query
+from fastapi import APIRouter, Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AnyHttpUrl, BaseModel
 
@@ -14,6 +14,7 @@ from search.engines.dev_vespa import (
 )
 from search.label import Label
 from search.log import get_logger
+from search.models import Pagination
 from search.passage import Passage
 
 logger = get_logger(__name__)
@@ -67,6 +68,16 @@ class SearchResponse[T](BaseModel):
     debug_info: list[dict] | None = None
 
 
+def pagination(page_token: int = 1, page_size: int = 10):
+    """
+    Shared pagination parameters
+
+    @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
+    @see:https://google.aip.dev/158
+    """
+    return Pagination(page_token=page_token, page_size=page_size)
+
+
 # region routes
 # We use both routers to make sure we can have /search available publicly
 # and / available to the AppRunner health check.
@@ -84,16 +95,14 @@ async def root():
 def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
-    page_token: int = 1,
-    page_size: int = 10,
+    pagination: Pagination = Depends(pagination),
     debug: bool = False,
 ):
     engine = DevVespaDocumentSearchEngine(debug=debug)
     results = engine.search(
         query=query,
+        pagination=pagination,
         filters_json_string=filters_json_string,
-        page_token=page_token,
-        page_size=page_size,
     )
 
     # TODO: pagination
@@ -119,9 +128,10 @@ def read_documents(
 def read_labels(
     query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
+    pagination: Pagination = Depends(pagination),
 ):
     engine = DevVespaLabelTypeaheadSearchEngine()
-    results = engine.search(query=query, label_type=type)
+    results = engine.search(query=query, pagination=pagination, label_type=type)
     engine.all_label_types()
 
     return SearchResponse[Label](
@@ -139,14 +149,12 @@ def read_labels(
 @router.get("/passages", response_model=SearchResponse[Passage])
 def read_passages(
     query: str | None = Query(None, description="What are you looking for?"),
-    page_token: int = 1,
-    page_size: int = 10,
+    pagination: Pagination = Depends(pagination),
 ):
     engine = DevVespaPassageSearchEngine()
     results = engine.search(
         query=query,
-        page_token=page_token,
-        page_size=page_size,
+        pagination=pagination,
     )
 
     return SearchResponse[Passage](
@@ -157,7 +165,7 @@ def read_passages(
         next_page=None,
         previous_page=None,
         results=results,
-        aggregations=[],
+        aggregations=None,
     )
 
 
