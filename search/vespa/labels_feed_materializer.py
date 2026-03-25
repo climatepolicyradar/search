@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import TypedDict
 
+import boto3
 import orjson
 
 from search.vespa.models import VespaAssign, VespaUpdate
@@ -102,12 +103,12 @@ def labels_feed_materializer():
             }
             f.write(orjson.dumps(vespa_update) + b"\n")
 
-    # boto3.client("s3").upload_file(
-    #     str(output_file),
-    #     "cpr-cache",
-    #     "search/vespa/labels_feed_materializer.jsonl",
-    # )
-    # print(f"Uploaded {len(labels)} labels to S3.")
+    boto3.client("s3").upload_file(
+        str(output_file),
+        "cpr-cache",
+        "search/vespa/labels_feed_materializer.jsonl",
+    )
+    print(f"Uploaded {len(labels)} labels to S3.")
 
 
 if __name__ == "__main__":
