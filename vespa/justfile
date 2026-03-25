@@ -18,7 +18,8 @@ feed-labels:
     vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 extract-passages:
-    aws s3 cp s3://cpr-cache/search/vespa/passages_feed_materializer.jsonl ../.data_cache/vespa/passages_feed_materializer.jsonl
+    aws s3 cp s3://cpr-cache/search/vespa/passages_feed_materializer.jsonl.gz ../.data_cache/vespa/passages_feed_materializer.jsonl.gz
+    gunzip -f ../.data_cache/vespa/passages_feed_materializer.jsonl.gz
 
 feed-passages:
     vespa feed ../.data_cache/vespa/passages_feed_materializer.jsonl --target http://localhost:8080 --progress 30
