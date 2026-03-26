@@ -206,7 +206,7 @@ def sample_label_fields():
     return {
         "id": "zv3r45ae",
         "type": "topic",
-        "preferred_label": "multilateral climate fund",
+        "value": "multilateral climate fund",
     }
 
 
@@ -236,12 +236,12 @@ def test_parse_vespa_label_response(
     fields_2 = {
         "id": "abc123",
         "type": "topic",
-        "preferred_label": "air pollution",
+        "value": "air pollution",
     }
     fields_3 = {
         "id": "xyz789",
         "type": "topic",
-        "preferred_label": "renewable energy",
+        "value": "renewable energy",
     }
 
     response = mock_vespa_label_response([fields_1, fields_2, fields_3])

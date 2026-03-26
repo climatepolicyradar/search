@@ -6,7 +6,7 @@ schema labels {
         field type type string {
             indexing: index | attribute | summary
         }
-        field preferred_label type string {
+        field value type string {
             indexing: index | attribute | summary
         }
         field alternative_labels type array<string> {
@@ -21,7 +21,7 @@ schema labels {
     }
 
     fieldset default {
-        fields: id, preferred_label, description, alternative_labels
+        fields: id, value, description, alternative_labels
     }
 
     rank-profile default {

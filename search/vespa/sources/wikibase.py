@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from typing import TypedDict
 
@@ -14,9 +13,6 @@ logger = logging.getLogger(__name__)
 MAX_CONCURRENT_REQUESTS = 3
 REQUEST_DELAY_SECONDS = 0.5
 BATCH_SIZE = 50
-
-
-NEGATIVE_LABELS_PROPERTY_ID = os.getenv("WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID", "P9")
 
 
 class WikibaseConcept(TypedDict):
@@ -52,10 +48,7 @@ def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
     for claim in (entity.get("claims") or {}).values():
         for statement in claim:
             mainsnak = statement.get("mainsnak", {})
-            if (
-                mainsnak.get("property") == NEGATIVE_LABELS_PROPERTY_ID
-                and mainsnak.get("snaktype") == "value"
-            ):
+            if mainsnak.get("property") == "P9" and mainsnak.get("snaktype") == "value":
                 negative_labels.append(mainsnak["datavalue"]["value"])
 
     return WikibaseConcept(
