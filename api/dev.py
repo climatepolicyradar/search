@@ -97,8 +97,9 @@ def read_documents(
     filters_json_string: str | None = Query(None, alias="filters"),
     pagination: Pagination = Depends(pagination),
     debug: bool = False,
+    bolding: bool = False,
 ):
-    engine = DevVespaDocumentSearchEngine(debug=debug)
+    engine = DevVespaDocumentSearchEngine(debug=debug, bolding=bolding)
     results = engine.search(
         query=query,
         pagination=pagination,

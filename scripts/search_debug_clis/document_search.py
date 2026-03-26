@@ -17,17 +17,19 @@ console = Console()
 @app.command()
 def search(
     query: str,
-    pagination: Pagination = Pagination(page_token=1, page_size=10),
+    page_token: int = 1,
+    page_size: int = 10,
     debug: bool = True,
     filters: str | None = None,
     labels: bool = False,
+    bolding: bool = False,
 ):
     """Search for documents."""
-    engine = DevVespaDocumentSearchEngine(debug=debug)
+    engine = DevVespaDocumentSearchEngine(debug=debug, bolding=bolding)
     results = engine.search(
         query=query,
         filters_json_string=filters,
-        pagination=pagination,
+        pagination=Pagination(page_token=page_token, page_size=page_size),
     )
 
     words = query.split()
@@ -38,7 +40,7 @@ def search(
         t.highlight_words(words, style="bold yellow", case_sensitive=False)
         return t
 
-    for i, doc in enumerate(results):
+    for i, doc in enumerate(results.results):
         relevance = None
         summaryfeatures = None
         geographies = None
