@@ -18,7 +18,7 @@ OUTPUT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 class VespaLabel(TypedDict):
     id: str
     type: str
-    preferred_label: str
+    value: str
     alternative_labels: list[str]
     description: str
     negative_labels: list[str]
@@ -27,7 +27,7 @@ class VespaLabel(TypedDict):
 class VespaLabelUpdate(TypedDict):
     id: VespaAssign[str]
     type: VespaAssign[str]
-    preferred_label: VespaAssign[str]
+    value: VespaAssign[str]
     alternative_labels: VespaAssign[list[str]]
     description: VespaAssign[str]
     negative_labels: VespaAssign[list[str]]
@@ -44,7 +44,7 @@ def labels_feed_materializer():
             labels[identifier] = {
                 "id": identifier,
                 "type": value["type"],
-                "preferred_label": value["value"],
+                "value": value["value"],
                 "alternative_labels": [],
                 "description": "",
                 "negative_labels": [],
@@ -77,7 +77,7 @@ def labels_feed_materializer():
         labels[identifier] = {
             "id": identifier,
             "type": "concept",
-            "preferred_label": concept["preferred_label"],
+            "value": concept["preferred_label"],
             "alternative_labels": concept["alternative_labels"],
             "description": concept["description"] or "",
             "negative_labels": concept["negative_labels"],
@@ -95,7 +95,7 @@ def labels_feed_materializer():
                 "fields": {
                     "id": {"assign": label["id"]},
                     "type": {"assign": label["type"]},
-                    "preferred_label": {"assign": label["preferred_label"]},
+                    "value": {"assign": label["value"]},
                     "alternative_labels": {"assign": label["alternative_labels"]},
                     "description": {"assign": label["description"]},
                     "negative_labels": {"assign": label["negative_labels"]},
