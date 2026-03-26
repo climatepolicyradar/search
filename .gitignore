@@ -1,3 +1,4 @@
+.worktrees/
 wandb/
 huggingface_cache/
 .data_cache/
