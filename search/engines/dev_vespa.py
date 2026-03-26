@@ -614,7 +614,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                     {
                         "relevance": hit.get("relevance"),
                         "summaryfeatures": fields.get("summaryfeatures"),
-                        "preferred_label": fields.get("preferred_label", ""),
+                        "value": fields.get("value", ""),
                         "alternative_labels": fields.get("alternative_labels", []),
                         "description": fields.get("description", ""),
                     }

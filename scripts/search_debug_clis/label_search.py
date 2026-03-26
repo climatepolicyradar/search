@@ -41,14 +41,14 @@ def search(
     for i, label in enumerate(results):
         relevance = None
         summaryfeatures = None
-        preferred_label = ""
+        value = ""
         alternative_labels: list[str] = []
         description = ""
         if debug and i < len(engine.last_debug_info):
             info = engine.last_debug_info[i]
             relevance = info.get("relevance")
             summaryfeatures = info.get("summaryfeatures")
-            preferred_label = info.get("preferred_label", "")
+            value = info.get("value", "")
             alternative_labels = info.get("alternative_labels", [])
             description = info.get("description", "")
 
@@ -57,8 +57,8 @@ def search(
         table.add_column()
         table.add_row("id", label.id)
         table.add_row("type", label.type)
-        if preferred_label:
-            table.add_row("preferred_label", highlight(preferred_label))
+        if value:
+            table.add_row("value", highlight(value))
         if alternative_labels:
             table.add_row(
                 "alternative_labels",
