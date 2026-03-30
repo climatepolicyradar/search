@@ -32,4 +32,32 @@ schema passages {
     fieldset default {
         fields: text
     }
+
+    rank-profile nativerank {
+        function text_score() {
+            expression: nativeRank(text) + nativeProximity(text)
+        }
+
+        first-phase {
+            expression: text_score()
+        }
+        summary-features: text_score() nativeRank(text) nativeProximity(text)
+    }
+
+    document-summary debug-summary {
+        summary id {}
+        summary idx {}
+        summary language {}
+        summary text {}
+        summary document_id {}
+        summary type {}
+        summary type_confidence {}
+        summary page_number {}
+        summary heading_id {}
+        summary text_tokens {
+            source: text
+            tokens
+        }
+        from-disk
+    }
 }

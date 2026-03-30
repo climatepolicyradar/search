@@ -499,7 +499,9 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
 
     model_class = Passage
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, debug: bool = False) -> None:
+        self.debug = debug
+        self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
 
     def search(
@@ -523,6 +525,9 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
             "timeout": "5s",
             "model.language": "en",
         }
+        if self.debug:
+            request_body["ranking.profile"] = "nativerank"
+            request_body["presentation.summary"] = "debug-summary"
 
         try:
             res = requests.post(
@@ -539,6 +544,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
 
         res = res.json()
         passages: list[Passage] = []
+        debug_info: list[dict[str, Any]] = []
 
         for hit in res.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
@@ -554,6 +560,16 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
                     document_id=fields.get("document_id", ""),
                 )
             )
+            if self.debug:
+                debug_info.append(
+                    {
+                        "relevance": hit.get("relevance"),
+                        "summaryfeatures": fields.get("summaryfeatures"),
+                        "text_tokens": fields.get("text_tokens"),
+                    }
+                )
+
+        self.last_debug_info = debug_info
 
         total_size = _get_total_count(res)
         return ListResponse(
