@@ -1,5 +1,6 @@
 from prefect.task_runners import ThreadPoolTaskRunner
 
+from api.dev import settings
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import (
@@ -225,7 +226,7 @@ def relevance_tests_labels():
     """Run relevance tests for labels"""
 
     engines = [
-        DevVespaLabelSearchEngine(),
+        DevVespaLabelSearchEngine(settings=settings),
         # DevVespaLabelTypeaheadSearchEngine(),
         # VespaLabelSearchEngine(),
     ]
