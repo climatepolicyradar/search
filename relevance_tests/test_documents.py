@@ -222,6 +222,25 @@ test_cases = [
         expected_result_ids=["Sabin.document.69198.69199"],
         description="Searching for docket number of US case should return all the documents from the case first.",
     ),
+    FieldCharacteristicsTestCase[Document](
+        category="entity name",
+        search_terms="erp",
+        characteristics_test=lambda document: any(
+            term in document.title.lower() for term in ["emissions reduction plan"]
+        ),
+        description="Search for 'erp' should return documents with 'emissions reduction plan' in the title",
+        k=10,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="entity name",
+        search_terms="necp",
+        characteristics_test=lambda document: any(
+            term in document.title.lower()
+            for term in ["national energy and climate plan", "necp"]
+        ),
+        description="Search for 'necp' should return documents with 'national energy and climate plan' or 'necp' in the title",
+        k=10,
+    ),
 ]
 
 
