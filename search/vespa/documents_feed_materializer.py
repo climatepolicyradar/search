@@ -8,6 +8,7 @@ import boto3
 import orjson
 
 from search.vespa.models import VespaAssign, VespaUpdate
+from search.vespa.sources.data_in_api import SourceDocument
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
 
@@ -53,6 +54,66 @@ def _to_unix_timestamp(ts_str: str | None) -> int | None:
         return None
 
 
+def _source_document_to_vespa_update(
+    document: SourceDocument,
+) -> VespaUpdate[VespaDocument]:
+    attrs = document.get("attributes") or {}
+    vespa_update: VespaUpdate[VespaDocument] = {
+        "update": f"id:documents:documents::{document.get('id')}",
+        "create": True,
+        "fields": {
+            "title": {"assign": _strip_control_chars(document["title"])},
+            "description": {
+                "assign": _strip_control_chars(document.get("description") or "")
+                if document.get("description")
+                else None
+            },
+            "labels": {
+                "assign": [
+                    {
+                        "id": label["value"]["id"],
+                        "type": label["value"]["type"],
+                        "value": label["value"]["value"],
+                        "timestamp": _to_unix_timestamp(label.get("timestamp")),
+                        "relationship": label.get("type", "related"),
+                        "count": None,
+                        "passages_id": None,
+                    }
+                    for label in (document.get("labels") or [])
+                ]
+            },
+            "geographies": {
+                "assign": [
+                    label["value"]["value"]
+                    for label in (document.get("labels") or [])
+                    if label.get("type") == "geography"
+                ]
+            },
+            "document_source": {"assign": orjson.dumps(document).decode()},
+            "attributes_string": {
+                "assign": {k: str(v) for k, v in attrs.items() if isinstance(v, str)}
+            },
+            "attributes_double": {
+                "assign": {
+                    k: float(v)
+                    for k, v in attrs.items()
+                    if isinstance(v, (int, float))
+                    # this is needed because
+                    # >>> isinstance(True, int)
+                    # True
+                    # >>> isinstance(False, int)
+                    # True
+                    and not isinstance(v, bool)
+                }
+            },
+            "attributes_boolean": {
+                "assign": {k: int(v) for k, v in attrs.items() if isinstance(v, bool)}
+            },
+        },
+    }
+    return vespa_update
+
+
 def documents_feed_materializer():
     documents = read_documents()
     length = 0
@@ -60,66 +121,7 @@ def documents_feed_materializer():
     output_file = OUTPUT_CACHE_DIR / "documents_feed_materializer.jsonl"
     with output_file.open("wb") as f:
         for document in documents:
-            attrs = document.get("attributes") or {}
-            vespa_update: VespaUpdate[VespaDocument] = {
-                "update": f"id:documents:documents::{document.get('id')}",
-                "create": True,
-                "fields": {
-                    "title": {"assign": _strip_control_chars(document["title"])},
-                    "description": {
-                        "assign": _strip_control_chars(
-                            document.get("description") or ""
-                        )
-                        if document.get("description")
-                        else None
-                    },
-                    "labels": {
-                        "assign": [
-                            {
-                                "id": label["value"]["id"],
-                                "type": label["value"]["type"],
-                                "value": label["value"]["value"],
-                                "timestamp": _to_unix_timestamp(label.get("timestamp")),
-                                "relationship": label.get("type", "related"),
-                                "count": None,
-                                "passages_id": None,
-                            }
-                            for label in (document.get("labels") or [])
-                        ]
-                    },
-                    "geographies": {
-                        "assign": [
-                            label["value"]["value"]
-                            for label in (document.get("labels") or [])
-                            if label.get("type") == "geography"
-                        ]
-                    },
-                    "document_source": {"assign": orjson.dumps(document).decode()},
-                    "attributes_string": {
-                        "assign": {
-                            k: str(v) for k, v in attrs.items() if isinstance(v, str)
-                        }
-                    },
-                    "attributes_double": {
-                        "assign": {
-                            k: float(v)
-                            for k, v in attrs.items()
-                            if isinstance(v, (int, float))
-                            # this is needed because
-                            # >>> isinstance(True, int)
-                            # True
-                            # >>> isinstance(False, int)
-                            # True
-                            and not isinstance(v, bool)
-                        }
-                    },
-                    "attributes_boolean": {
-                        "assign": {
-                            k: int(v) for k, v in attrs.items() if isinstance(v, bool)
-                        }
-                    },
-                },
-            }
+            vespa_update = _source_document_to_vespa_update(document)
             f.write(orjson.dumps(vespa_update) + b"\n")
             length += 1
 
