@@ -14,7 +14,6 @@ Run with: pytest tests/test_attribute_filter_e2e.py
 """
 
 import os
-import re
 import shutil
 import tempfile
 from collections.abc import Generator
@@ -34,40 +33,19 @@ from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     Filter,
     LabelsCondition,
+    Settings,
 )
 from search.vespa.concepts_indexer import InferenceResultInput
 from search.vespa.concepts_indexer import index as index_concepts
 from search.vespa.document_indexer import document_to_vespa_update
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
-_PORT = 8080
-
-
-def _build_services_xml() -> str:
-    """Build a test services.xml, extracting the Lucene component from the real one."""
-    real_services = (VESPA_APP_DIR / "services.xml").read_text()
-    match = re.search(
-        r"(<component\s+id=\"com\.yahoo\.language\.lucene\.LuceneLinguistics\".*?</component>)",
-        real_services,
-        re.DOTALL,
-    )
-    lucene_component = match.group(1) if match else ""
-    return f"""\
-<?xml version="1.0" encoding="utf-8" ?>
-<services version="1.0">
-    <container id="default" version="1.0">
-        {lucene_component}
-        <document-api/>
-        <search/>
-    </container>
-    <content id="content" version="1.0">
-        <min-redundancy>1</min-redundancy>
-        <documents>
-            <document type="documents" mode="index" />
-        </documents>
-    </content>
-</services>
-"""
+# we try not to use 8080 as this _might_ be the currently running local server
+_PORT = 8089
+_TEST_SETTINGS = Settings(
+    vespa_endpoint=f"http://localhost:{_PORT}",  # type: ignore[arg-type]
+    vespa_read_token="",  # nosec B106
+)
 
 
 class DocumentFactory(ModelFactory):
@@ -78,7 +56,7 @@ def _vespa_ready() -> bool:
     try:
         return (
             req.get(
-                f"{os.environ['VESPA_ENDPOINT']}/state/v1/health", timeout=2
+                f"{_TEST_SETTINGS.vespa_endpoint}state/v1/health", timeout=2
             ).status_code
             == req.codes.ok
         )
@@ -97,15 +75,13 @@ def vespa_app() -> Generator[Vespa, None, None]:
     else:
         app_dir = Path(tempfile.mkdtemp())
         shutil.copytree(VESPA_APP_DIR / "schemas", app_dir / "schemas")
-        shutil.copytree(
-            VESPA_APP_DIR / "lucene-linguistics",
-            app_dir / "lucene-linguistics",
-        )
-        (app_dir / "services.xml").write_text(_build_services_xml())
+        shutil.copytree(VESPA_APP_DIR / "lucene-linguistics", app_dir / "lucene-linguistics")
+        shutil.copy(Path(__file__).parent / "vespa_test_services.xml", app_dir / "services.xml")
         vespa_docker = VespaDocker(port=_PORT)
         app = vespa_docker.deploy_from_disk(
             application_name="searchtestvespae2e",
             application_root=app_dir,
+            max_wait_application=600,
         )
 
     try:
@@ -113,7 +89,7 @@ def vespa_app() -> Generator[Vespa, None, None]:
     finally:
         if remove_container and vespa_docker and vespa_docker.container:
             vespa_docker.container.remove(force=True)
-        if app_dir:
+        if app_dir is not None:
             shutil.rmtree(app_dir, ignore_errors=True)
 
 
@@ -121,7 +97,7 @@ def vespa_app() -> Generator[Vespa, None, None]:
 def clean_docs(vespa_app: Vespa):
     """Delete all documents after each test for isolation."""
     yield
-    vespa_app.delete_all_docs(content_cluster_name="content", schema="documents")
+    vespa_app.delete_all_docs(content_cluster_name="search-production", schema="documents")
 
 
 def _feed_document(app: Vespa, document: Document) -> None:
@@ -136,13 +112,13 @@ def _feed_document(app: Vespa, document: Document) -> None:
 
 
 def _ids(filter_: Filter) -> set[str]:
-    engine = DevVespaDocumentSearchEngine()
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     docs = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         filters_json_string=filter_.model_dump_json(),
     )
-    return {doc.id for doc in docs}
+    return {doc.id for doc in docs.results}
 
 
 # region Attributes
@@ -503,10 +479,10 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(debug=True)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     results = engine.search(
         query="running", pagination=Pagination(page_token=1, page_size=10)
-    )
+    ).results
     assert len(results) >= 1, f"Expected results, got: {results}"
 
     debug = engine.last_debug_info[0]
@@ -536,11 +512,11 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(debug=True)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     # Search for "running" — matches title via default fieldset
     results = engine.search(
         query="running", pagination=Pagination(page_token=1, page_size=10)
-    )
+    ).results
     assert len(results) >= 1, f"Expected results, got: {results}"
 
     debug = engine.last_debug_info[0]
@@ -592,10 +568,10 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
     _feed_document(vespa_app, doc_uk)
     _feed_document(vespa_app, doc_us)
 
-    engine = DevVespaDocumentSearchEngine(debug=True)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     results = engine.search(
         query="UK", pagination=Pagination(page_token=1, page_size=50)
-    )
+    ).results
     result_ids = {doc.id for doc in results}
 
     assert doc_uk.id in result_ids, (
@@ -627,10 +603,10 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     _feed_document(vespa_app, doc_with_full_forms)
     _feed_document(vespa_app, doc_without_match)
 
-    engine = DevVespaDocumentSearchEngine(debug=True)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     results = engine.search(
         query="fca rules tcfd", pagination=Pagination(page_token=1, page_size=50)
-    )
+    ).results
     result_ids = {doc.id for doc in results}
 
     assert doc_with_full_forms.id in result_ids, (

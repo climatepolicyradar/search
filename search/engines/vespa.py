@@ -13,7 +13,7 @@ from search.aws import get_ssm_parameter
 from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Item
 from search.document import Document
-from search.engines import SearchEngine, TModel
+from search.engines import ListResponse, Pagination, SearchEngine, TModel
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -122,24 +122,22 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
     def search(
         self,
         query: str,
+        pagination: Pagination,
         filters_json_string: str | None = None,  # noqa: ARG002
-        page: int = 1,
-        page_size: int = 10,
-    ) -> list[TModel]:
+    ) -> ListResponse[TModel]:
         """
         Search Vespa using the configured search strategy.
 
         :param query: Search query from the user
         :param filters_json_string: Filters JSON string
-        :param page: Page number
-        :param page_size: Number of results per page
+        :param pagination: Pagination
         :return: List of model objects matching the search.
         """
         if self.client is None:
             self.connect_to_vespa()
             assert self.client is not None  # nosec
 
-        request_body = self._build_request(query, page, page_size)
+        request_body = self._build_request(query, pagination, filters_json_string)
 
         try:
             vespa_response = cast(
@@ -156,7 +154,9 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         return self._parse_vespa_response(vespa_response)
 
     @abstractmethod
-    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(
+        self, query: str, pagination: Pagination, filters_json_string: str | None
+    ) -> dict[str, Any]:
         """
         Build the Vespa query request body.
 
@@ -168,7 +168,9 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         ...
 
     @abstractmethod
-    def _parse_vespa_response(self, response: VespaQueryResponse) -> list[TModel]:
+    def _parse_vespa_response(
+        self, response: VespaQueryResponse
+    ) -> ListResponse[TModel]:
         """
         Parse a Vespa query response into model objects.
 
@@ -198,7 +200,7 @@ class VespaDocumentSearchEngine(VespaSearchEngine[DocumentModel], ABC):
 
     def _parse_vespa_response(
         self, response: VespaQueryResponse
-    ) -> list[DocumentModel]:
+    ) -> ListResponse[DocumentModel]:
         """Parse a Vespa query response into Document objects."""
         documents = []
 
@@ -221,7 +223,11 @@ class VespaDocumentSearchEngine(VespaSearchEngine[DocumentModel], ABC):
             )
             documents.append(document)
 
-        return documents
+        return ListResponse(
+            results=documents,
+            total_size=len(documents),
+            next_page_token=None,
+        )
 
 
 class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
@@ -233,7 +239,9 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
 
     model_class = Passage
 
-    def _parse_vespa_response(self, response: VespaQueryResponse) -> list[Passage]:
+    def _parse_vespa_response(
+        self, response: VespaQueryResponse
+    ) -> ListResponse[Passage]:
         """Parse a Vespa query response with summary ``search_summary``."""
         passages = []
 
@@ -266,7 +274,11 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
             )
             passages.append(passage)
 
-        return passages
+        return ListResponse(
+            results=passages,
+            total_size=len(passages),
+            next_page_token=None,
+        )
 
 
 class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
@@ -277,7 +289,12 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
     text matching. Ranking profile: exact_not_stemmed.
     """
 
-    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(
+        self,
+        query: str,
+        pagination: Pagination,
+        filters_json_string: str | None,  # noqa: ARG002
+    ) -> dict[str, Any]:
         """
         Build request body for exact match search.
 
@@ -286,10 +303,9 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
         :param offset: Number of results to skip
         :return: Dictionary containing the Vespa query request body
         """
-        yql = f"""
+        yql = """
         select * from sources document_passage where
-            (text_block_not_stemmed contains ({{stem: false}}@query_string))
-        limit {limit} offset {offset}
+            (text_block_not_stemmed contains ({stem: false}@query_string))
         """
 
         return {
@@ -298,6 +314,8 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
             "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
             "query_string": query,
             "ranking.profile": "exact_not_stemmed",
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
             "summary": self.DEFAULT_SUMMARY,
         }
 
@@ -315,7 +333,12 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
     DISTANCE_THRESHOLD: float = 0.24
     TARGET_NUM_HITS: int = 1000
 
-    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(
+        self,
+        query: str,
+        pagination: Pagination,
+        filters_json_string: str | None,  # noqa: ARG002
+    ) -> dict[str, Any]:
         """
         Build request body for hybrid search (text + embeddings).
 
@@ -331,7 +354,7 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
                 ([{{"targetNumHits": {self.TARGET_NUM_HITS}, "distanceThreshold": {self.DISTANCE_THRESHOLD}}}]
                  nearestNeighbor(text_embedding,query_embedding))
             )
-        limit {limit} offset {offset}
+        
         """
 
         return {
@@ -340,6 +363,8 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
             "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
             "query_string": query,
             "ranking.profile": "hybrid",
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
             "input.query(query_embedding)": f"embed({self.EMBEDDING_MODEL}, @query_string)",
             "summary": self.DEFAULT_SUMMARY,
         }
@@ -353,7 +378,12 @@ class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
     field and the ``bm25_document_title`` ranking profile.
     """
 
-    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(
+        self,
+        query: str,
+        pagination: Pagination,
+        filters_json_string: str | None,  # noqa: ARG002
+    ) -> dict[str, Any]:
         """
         Build request body for BM25 document title search.
 
@@ -362,10 +392,9 @@ class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
         :param offset: Number of results to skip.
         :return: Dictionary containing the Vespa query request body.
         """
-        yql = f"""
+        yql = """
         select * from sources family_document where
             (document_title_index contains(@query_string))
-        limit {limit} offset {offset}
         """
 
         return {
@@ -375,6 +404,8 @@ class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
             "query_string": query,
             "ranking.profile": "bm25_document_title",
             "summary": self.DEFAULT_SUMMARY,
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
         }
 
 
@@ -389,7 +420,12 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
 
     model_class = Label
 
-    def _build_request(self, query: str, limit: int, offset: int) -> dict[str, Any]:
+    def _build_request(
+        self,
+        query: str,
+        pagination: Pagination,
+        filters_json_string: str | None,  # noqa: ARG002
+    ) -> dict[str, Any]:
         """
         Build request body for concept/label search.
 
@@ -402,9 +438,8 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
         :return: Dictionary containing the Vespa query request body
         """
         yql = (
-            f"select * from sources concept where "
-            f"(preferred_label contains @query_string or description contains @query_string) "
-            f"limit {limit} offset {offset}"
+            "select * from sources concept where "
+            "(preferred_label contains @query_string or description contains @query_string) "
         )
 
         return {
@@ -413,9 +448,13 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
             "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
             "query_string": query,
             "summary": self.DEFAULT_SUMMARY,
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
         }
 
-    def _parse_vespa_response(self, response: VespaQueryResponse) -> list[Label]:
+    def _parse_vespa_response(
+        self, response: VespaQueryResponse
+    ) -> ListResponse[Label]:
         """
         Parse a Vespa query response into Label objects.
 
@@ -439,4 +478,8 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
             )
             labels.append(label)
 
-        return labels
+        return ListResponse(
+            results=labels,
+            total_size=len(labels),
+            next_page_token=None,
+        )

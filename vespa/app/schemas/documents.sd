@@ -7,6 +7,7 @@ schema documents {
             linguistics {
                 profile: passage_analysis
             }
+            bolding: on
         }
         field description type string {
             indexing: index | summary
@@ -14,6 +15,7 @@ schema documents {
             linguistics {
                 profile: passage_analysis
             }
+            bolding: on
         }
 
         struct label {
@@ -226,8 +228,6 @@ schema documents {
     }
 
     document-summary default {
-        summary document_source {}
-        from-disk
     }
 
     document-summary debug-summary inherits default {
