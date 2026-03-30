@@ -11,3 +11,9 @@ config:
     secure: AAABAG9zVvGc81u1tFZ7EtU/7XN5YllAORGTrjcBZaP/fgaeo08mkPyY79NmJimia+ym6mwoTMJLIEcvhLRj4DhtAsNhC8n1PlAS2w==
   search:vespa_read_token:
     secure: AAABAJqwZ2M3S1jgvaMVTGefH4rpLhJ3JGzm9da4lPiz6/PfLGw7LobD82AGWqraQbIsWDqu6W4t66eKU9OyNDucM1u+6/olMPuunaWme/bgzSvsoqQB
+  search:WIKIBASE_URL:
+    secure: AAABAIB9+gpmmW8hItrDRUByc9wjMsrlpDK0JDwjCM0H6DyZbR1zai6NDuxE4vrJUWFOve8DpUYxmExxmIWQmgbYDJsSUfNFjw==
+  search:WIKIBASE_USERNAME:
+    secure: AAABAAkB2vLlrcCCvRhlBRCa/JlprUF6UPF+ZQDvXrFfZV7155SPuB76xofOHDU4
+  search:WIKIBASE_PASSWORD:
+    secure: AAABACk6w/AC6Z8U+ThYYeAWrIvP3ArDMxHByIT7gzMnmwxaWXjjozABLiFm20ABxHmC6HnnIwY6WGre8P+npRuEXk+ON0WRK0NGHuzTHtTRZOXD

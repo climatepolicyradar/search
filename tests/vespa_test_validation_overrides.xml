@@ -1,0 +1,6 @@
+<validation-overrides>
+    <!-- Allow schema/cluster changes when redeploying the test container with a different config -->
+    <allow until="2030-01-01">content-cluster-removal</allow>
+    <allow until="2030-01-01">schema-removal</allow>
+    <allow until="2030-01-01">global-document-change</allow>
+</validation-overrides>

@@ -9,9 +9,18 @@ schema labels {
         field value type string {
             indexing: index | attribute | summary
         }
+        field alternative_labels type array<string> {
+            indexing: index | attribute | summary
+        }
+        field description type string {
+            indexing: index | attribute | summary
+        }
+        field negative_labels type array<string> {
+            indexing: attribute | summary
+        }
     }
 
     fieldset default {
-        fields: id, type, value
+        fields: id, value, description, alternative_labels
     }
 }
