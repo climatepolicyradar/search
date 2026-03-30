@@ -22,11 +22,10 @@ from typing import Any
 
 import pytest
 import requests as req
-from polyfactory.factories.pydantic_factory import ModelFactory
+from polyfactory.factories.typed_dict_factory import TypedDictFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
-from search.data_in_models import Document, Label, LabelRelationship
 from search.engines import Pagination
 from search.engines.dev_vespa import (
     AttributesCondition,
@@ -35,9 +34,12 @@ from search.engines.dev_vespa import (
     LabelsCondition,
     Settings,
 )
-from search.vespa.concepts_indexer import InferenceResultInput
-from search.vespa.concepts_indexer import index as index_concepts
-from search.vespa.document_indexer import document_to_vespa_update
+from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
+from search.vespa.sources.data_in_api import (
+    SourceDocument,
+    SourceLabel,
+    SourceLabelRelationship,
+)
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 # we try not to use 8080 as this _might_ be the currently running local server
@@ -48,8 +50,8 @@ _TEST_SETTINGS = Settings(
 )
 
 
-class DocumentFactory(ModelFactory):
-    __model__ = Document
+class SourceDocumentFactory(TypedDictFactory):
+    __model__ = SourceDocument
 
 
 def _vespa_ready() -> bool:
@@ -75,8 +77,12 @@ def vespa_app() -> Generator[Vespa, None, None]:
     else:
         app_dir = Path(tempfile.mkdtemp())
         shutil.copytree(VESPA_APP_DIR / "schemas", app_dir / "schemas")
-        shutil.copytree(VESPA_APP_DIR / "lucene-linguistics", app_dir / "lucene-linguistics")
-        shutil.copy(Path(__file__).parent / "vespa_test_services.xml", app_dir / "services.xml")
+        shutil.copytree(
+            VESPA_APP_DIR / "lucene-linguistics", app_dir / "lucene-linguistics"
+        )
+        shutil.copy(
+            Path(__file__).parent / "vespa_test_services.xml", app_dir / "services.xml"
+        )
         vespa_docker = VespaDocker(port=_PORT)
         app = vespa_docker.deploy_from_disk(
             application_name="searchtestvespae2e",
@@ -97,14 +103,16 @@ def vespa_app() -> Generator[Vespa, None, None]:
 def clean_docs(vespa_app: Vespa):
     """Delete all documents after each test for isolation."""
     yield
-    vespa_app.delete_all_docs(content_cluster_name="search-production", schema="documents")
+    vespa_app.delete_all_docs(
+        content_cluster_name="search-production", schema="documents"
+    )
 
 
-def _feed_document(app: Vespa, document: Document) -> None:
+def _feed_document(app: Vespa, document: SourceDocument) -> None:
     """Feed a document as an update operation — same format as JSONL feed."""
-    op = document_to_vespa_update(document)
+    op = _source_document_to_vespa_update(document)
     r = req.put(
-        f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
+        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
         json={**op, "create": True},
         timeout=5,
     )
@@ -123,10 +131,10 @@ def _ids(filter_: Filter) -> set[str]:
 
 # region Attributes
 def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = DocumentFactory.build(
+    document_with_matching_attribute = SourceDocumentFactory.build(
         attributes={"country": "UK"},
     )
-    document_without_matching_attribute = DocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -139,15 +147,15 @@ def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute.id in ids
-    assert document_without_matching_attribute.id not in ids
+    assert document_with_matching_attribute["id"] in ids
+    assert document_without_matching_attribute["id"] not in ids
 
 
 def test_attribute_string_not_eq_excludes_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = DocumentFactory.build(
+    document_with_matching_attribute = SourceDocumentFactory.build(
         attributes={"country": "UK"},
     )
-    document_without_matching_attribute = DocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -160,15 +168,15 @@ def test_attribute_string_not_eq_excludes_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute.id not in ids
-    assert document_without_matching_attribute.id in ids
+    assert document_with_matching_attribute["id"] not in ids
+    assert document_without_matching_attribute["id"] in ids
 
 
 def test_attribute_double_eq_returns_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = DocumentFactory.build(
+    document_with_matching_attribute = SourceDocumentFactory.build(
         attributes={"project_cost_usd": 1_000_000.0},
     )
-    document_without_matching_attribute = DocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -184,15 +192,15 @@ def test_attribute_double_eq_returns_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute.id in ids
-    assert document_without_matching_attribute.id not in ids
+    assert document_with_matching_attribute["id"] in ids
+    assert document_without_matching_attribute["id"] not in ids
 
 
 def test_attribute_double_not_eq_excludes_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = DocumentFactory.build(
+    document_with_matching_attribute = SourceDocumentFactory.build(
         attributes={"project_cost_usd": 1_000_000.0},
     )
-    document_without_matching_attribute = DocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -208,15 +216,15 @@ def test_attribute_double_not_eq_excludes_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute.id not in ids
-    assert document_without_matching_attribute.id in ids
+    assert document_with_matching_attribute["id"] not in ids
+    assert document_without_matching_attribute["id"] in ids
 
 
 def test_attribute_bool_eq_returns_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = DocumentFactory.build(
+    document_with_matching_attribute = SourceDocumentFactory.build(
         attributes={"is_active": True},
     )
-    document_without_matching_attribute = DocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -229,15 +237,15 @@ def test_attribute_bool_eq_returns_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute.id in ids
-    assert document_without_matching_attribute.id not in ids
+    assert document_with_matching_attribute["id"] in ids
+    assert document_without_matching_attribute["id"] not in ids
 
 
 def test_attribute_bool_not_eq_excludes_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = DocumentFactory.build(
+    document_with_matching_attribute = SourceDocumentFactory.build(
         attributes={"is_active": True},
     )
-    document_without_matching_attribute = DocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -250,24 +258,25 @@ def test_attribute_bool_not_eq_excludes_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute.id not in ids
-    assert document_without_matching_attribute.id in ids
+    assert document_with_matching_attribute["id"] not in ids
+    assert document_without_matching_attribute["id"] in ids
 
 
 # endregion Attributes
 
 
 # region Labels
-def _make_label(label_id: str) -> LabelRelationship:
-    return LabelRelationship(
-        type="entity_type",
-        value=Label(id=label_id, value=label_id, type="entity_type"),
-    )
+def _make_label(label_id: str) -> SourceLabelRelationship:
+    return {
+        "type": "entity_type",
+        "value": SourceLabel(id=label_id, value=label_id, type="entity_type"),
+        "timestamp": None,
+    }
 
 
 def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
-    doc_with_label = DocumentFactory.build(labels=[_make_label("Romania")])
-    doc_without_label = DocumentFactory.build(labels=[])
+    doc_with_label = SourceDocumentFactory.build(labels=[_make_label("Romania")])
+    doc_without_label = SourceDocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_label)
     _feed_document(vespa_app, doc_without_label)
 
@@ -278,13 +287,15 @@ def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert doc_with_label.id in ids
-    assert doc_without_label.id not in ids
+    assert doc_with_label["id"] in ids
+    assert doc_without_label["id"] not in ids
 
 
 def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
-    doc_with_different_label = DocumentFactory.build(labels=[_make_label("France")])
-    doc_without_label = DocumentFactory.build(labels=[])
+    doc_with_different_label = SourceDocumentFactory.build(
+        labels=[_make_label("France")]
+    )
+    doc_without_label = SourceDocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_different_label)
     _feed_document(vespa_app, doc_without_label)
 
@@ -295,13 +306,13 @@ def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert doc_with_different_label.id not in ids
-    assert doc_without_label.id not in ids
+    assert doc_with_different_label["id"] not in ids
+    assert doc_without_label["id"] not in ids
 
 
 def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
-    doc_with_label = DocumentFactory.build(labels=[_make_label("Romania")])
-    doc_without_label = DocumentFactory.build(labels=[])
+    doc_with_label = SourceDocumentFactory.build(labels=[_make_label("Romania")])
+    doc_without_label = SourceDocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_label)
     _feed_document(vespa_app, doc_without_label)
 
@@ -312,13 +323,17 @@ def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert doc_with_label.id not in ids
-    assert doc_without_label.id in ids
+    assert doc_with_label["id"] not in ids
+    assert doc_without_label["id"] in ids
 
 
 def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
-    doc_with_different_label = DocumentFactory.build(labels=[_make_label("France")])
-    doc_with_matching_label = DocumentFactory.build(labels=[_make_label("Romania")])
+    doc_with_different_label = SourceDocumentFactory.build(
+        labels=[_make_label("France")]
+    )
+    doc_with_matching_label = SourceDocumentFactory.build(
+        labels=[_make_label("Romania")]
+    )
     _feed_document(vespa_app, doc_with_different_label)
     _feed_document(vespa_app, doc_with_matching_label)
 
@@ -329,8 +344,8 @@ def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert doc_with_different_label.id in ids
-    assert doc_with_matching_label.id not in ids
+    assert doc_with_different_label["id"] in ids
+    assert doc_with_matching_label["id"] not in ids
 
 
 # endregion Labels
@@ -339,35 +354,39 @@ def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
 
 
 def _feed_concepts(
-    app: Vespa, document: Document, concept_id: str, concept_name: str
+    app: Vespa, document: SourceDocument, concept_id: str, concept_name: str
 ) -> None:
     """Update an existing document with a single concept."""
-    inference_input: InferenceResultInput = {
-        "passage_1": [
-            {
-                "id": concept_id,
-                "name": concept_name,
-                "parent_concepts": [],
-                "parent_concept_ids_flat": "",
-                "model": "test",
-                "end": 0,
-                "start": 0,
-                "timestamp": "2024-01-01T00:00:00Z",
-            }
-        ]
+    # concept struct only has id/type/value/count/passages_id — no relationship/timestamp
+    vespa_concepts = [
+        {
+            "id": concept_id,
+            "type": "concept",
+            "value": concept_name,
+            "count": 1,
+            "passages_id": "test",
+        }
+    ]
+
+    update_op = {
+        "update": f"id:documents:documents::{document['id']}",
+        "fields": {
+            "concepts": {"assign": vespa_concepts},
+        },
+        "create": False,
     }
-    op = index_concepts(document.id, inference_input)
+
     r = req.put(
-        f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
-        json={"fields": op["fields"]},
+        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
+        json={"fields": update_op["fields"]},
         timeout=5,
     )
     r.raise_for_status()
 
 
 def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
-    doc_with_concept = DocumentFactory.build(labels=[])
-    doc_without_concept = DocumentFactory.build(labels=[])
+    doc_with_concept = SourceDocumentFactory.build(labels=[])
+    doc_without_concept = SourceDocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_concept)
     _feed_document(vespa_app, doc_without_concept)
     _feed_concepts(vespa_app, doc_with_concept, "Romania", "Romania")
@@ -379,13 +398,13 @@ def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert doc_with_concept.id in ids
-    assert doc_without_concept.id not in ids
+    assert doc_with_concept["id"] in ids
+    assert doc_without_concept["id"] not in ids
 
 
 def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
-    doc_with_different_concept = DocumentFactory.build(labels=[])
-    doc_without_concept = DocumentFactory.build(labels=[])
+    doc_with_different_concept = SourceDocumentFactory.build(labels=[])
+    doc_without_concept = SourceDocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_different_concept)
     _feed_document(vespa_app, doc_without_concept)
     _feed_concepts(vespa_app, doc_with_different_concept, "France", "France")
@@ -397,13 +416,13 @@ def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert doc_with_different_concept.id not in ids
-    assert doc_without_concept.id not in ids
+    assert doc_with_different_concept["id"] not in ids
+    assert doc_without_concept["id"] not in ids
 
 
 def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
-    doc_with_concept = DocumentFactory.build(labels=[])
-    doc_without_concept = DocumentFactory.build(labels=[])
+    doc_with_concept = SourceDocumentFactory.build(labels=[])
+    doc_without_concept = SourceDocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_concept)
     _feed_document(vespa_app, doc_without_concept)
     _feed_concepts(vespa_app, doc_with_concept, "Romania", "Romania")
@@ -415,13 +434,13 @@ def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert doc_with_concept.id not in ids
-    assert doc_without_concept.id in ids
+    assert doc_with_concept["id"] not in ids
+    assert doc_without_concept["id"] in ids
 
 
 def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
-    doc_with_different_concept = DocumentFactory.build(labels=[])
-    doc_with_matching_concept = DocumentFactory.build(labels=[])
+    doc_with_different_concept = SourceDocumentFactory.build(labels=[])
+    doc_with_matching_concept = SourceDocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_different_concept)
     _feed_document(vespa_app, doc_with_matching_concept)
     _feed_concepts(vespa_app, doc_with_different_concept, "France", "France")
@@ -434,8 +453,8 @@ def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert doc_with_different_concept.id in ids
-    assert doc_with_matching_concept.id not in ids
+    assert doc_with_different_concept["id"] in ids
+    assert doc_with_matching_concept["id"] not in ids
 
 
 # endregion Concepts
@@ -472,7 +491,7 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     "Running" should stem to "run", "waters" to "water",
     and "is" should be removed as a stop word.
     """
-    doc = DocumentFactory.build(
+    doc = SourceDocumentFactory.build(
         title="Running waters is beautiful",
         description="A short description",
         labels=[],
@@ -500,14 +519,17 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
     "Running" should become "running" (not "run").
     Search by title so userQuery() matches via the default fieldset.
     """
-    doc = DocumentFactory.build(
+    doc = SourceDocumentFactory.build(
         title="Running Waters document",
         description="Test description",
         labels=[
-            LabelRelationship(
-                type="topic",
-                value=Label(id="running-waters", value="Running Waters", type="topic"),
-            )
+            {
+                "type": "topic",
+                "value": SourceLabel(
+                    id="running-waters", value="Running Waters", type="topic"
+                ),
+                "timestamp": None,
+            }
         ],
     )
     _feed_document(vespa_app, doc)
@@ -541,28 +563,30 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
 
     See: https://github.com/vespa-engine/sample-apps/tree/master/examples/lucene-linguistics/multiple-profiles
     """
-    doc_uk = DocumentFactory.build(
+    doc_uk = SourceDocumentFactory.build(
         title="xyzzygeotestuk document",
         description="A climate policy document",
         labels=[
-            LabelRelationship(
-                type="geography",
-                value=Label(
+            {
+                "type": "geography",
+                "value": SourceLabel(
                     id="united-kingdom", value="United Kingdom", type="geography"
                 ),
-            )
+                "timestamp": None,
+            }
         ],
     )
-    doc_us = DocumentFactory.build(
+    doc_us = SourceDocumentFactory.build(
         title="xyzzygeotestus document",
         description="A US environmental policy document",
         labels=[
-            LabelRelationship(
-                type="geography",
-                value=Label(
+            {
+                "type": "geography",
+                "value": SourceLabel(
                     id="united-states", value="United States", type="geography"
                 ),
-            )
+                "timestamp": None,
+            }
         ],
     )
     _feed_document(vespa_app, doc_uk)
@@ -574,11 +598,11 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
     ).results
     result_ids = {doc.id for doc in results}
 
-    assert doc_uk.id in result_ids, (
+    assert doc_uk["id"] in result_ids, (
         f"Expected doc with geography 'United Kingdom' to match 'UK', "
         f"got ids: {result_ids}"
     )
-    assert doc_us.id not in result_ids, (
+    assert doc_us["id"] not in result_ids, (
         f"Doc with geography 'United States' should NOT match 'UK', "
         f"got ids: {result_ids}"
     )
@@ -592,11 +616,11 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     titles contain the expanded forms ("Financial Conduct Authority",
     "Task Force on Climate-related Financial Disclosures").
     """
-    doc_with_full_forms = DocumentFactory.build(
+    doc_with_full_forms = SourceDocumentFactory.build(
         title="Financial Conduct Authority rules on Task Force on Climate-related Financial Disclosures",
         description="A climate disclosure document",
     )
-    doc_without_match = DocumentFactory.build(
+    doc_without_match = SourceDocumentFactory.build(
         title="xyzzytitlesyntest unrelated environmental policy",
         description="An unrelated document",
     )
@@ -609,11 +633,11 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     ).results
     result_ids = {doc.id for doc in results}
 
-    assert doc_with_full_forms.id in result_ids, (
+    assert doc_with_full_forms["id"] in result_ids, (
         f"Expected doc with expanded title to match acronym search 'fca rules tcfd', "
         f"got ids: {result_ids}"
     )
-    assert doc_without_match.id not in result_ids, (
+    assert doc_without_match["id"] not in result_ids, (
         f"Unrelated doc should NOT match 'fca rules tcfd', got ids: {result_ids}"
     )
 
