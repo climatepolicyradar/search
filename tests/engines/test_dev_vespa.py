@@ -9,6 +9,7 @@ import requests
 from search.engines import Pagination
 from search.engines.dev_vespa import (
     DevVespaLabelTypeaheadSearchEngine,
+    Settings,
 )
 from search.label import Label
 
@@ -46,7 +47,12 @@ def mock_requests_post(monkeypatch):
 
 @pytest.fixture
 def dev_typeahead_engine() -> DevVespaLabelTypeaheadSearchEngine:
-    return DevVespaLabelTypeaheadSearchEngine()
+    settings = Settings(
+        vespa_endpoint="http://localhost:8089",  # type: ignore[arg-type]
+        vespa_read_token="",  # nosec B106
+    )
+
+    return DevVespaLabelTypeaheadSearchEngine(settings=settings)
 
 
 def _make_grouping_response(values: list[str]) -> dict[str, Any]:
@@ -132,10 +138,10 @@ def test_typeahead_engine_returns_correct_type_and_value(
         pagination=Pagination(page_token=1, page_size=10),
     )
 
-    assert all(isinstance(label, Label) for label in labels)
+    assert all(isinstance(label, Label) for label in labels.results)
 
     # Extract the "air pollution risk" label.
-    values = {(label.type, label.value) for label in labels}
+    values = {(label.type, label.value) for label in labels.results}
     assert ("concept", "air pollution risk") in values
 
 
