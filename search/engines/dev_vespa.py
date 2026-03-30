@@ -211,6 +211,10 @@ class CountAggregation[T](BaseModel):
 # endregion Aggregations
 
 
+def _get_total_count(res: dict[str, Any]) -> int | None:
+    return res.get("root", {}).get("fields", {}).get("totalCount")
+
+
 class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     """
     Search engine for dev Vespa
@@ -382,8 +386,9 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 json.dumps(debug_info, indent=2),
             )
 
+        total_size = _get_total_count(res)
         return ListResponse(
-            results=documents, total_size=len(documents), next_page_token=None
+            results=documents, total_size=total_size, next_page_token=None
         )
 
     def aggregations(
@@ -542,8 +547,9 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
                 )
             )
 
+        total_size = _get_total_count(res)
         return ListResponse(
-            results=passages, total_size=len(passages), next_page_token=None
+            results=passages, total_size=total_size, next_page_token=None
         )
 
     def count(self, query: str) -> int:
@@ -610,9 +616,8 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                 )
             )
 
-        return ListResponse(
-            results=labels, total_size=len(labels), next_page_token=None
-        )
+        total_size = _get_total_count(res)
+        return ListResponse(results=labels, total_size=total_size, next_page_token=None)
 
     def all_label_types(self) -> list[str]:
         """Fetch all distinct label types from the labels source."""
