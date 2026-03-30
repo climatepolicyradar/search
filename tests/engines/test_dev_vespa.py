@@ -1,10 +1,4 @@
-"""
-Tests for the dev Vespa label search engine (DevVespaLabelSearchEngine).
-
-These tests focus on:
-- verifying the regex / YQL generated for different query terms
-- ensuring labels like "concept::air pollution risk" are parsed correctly
-"""
+"""Tests for the dev Vespa label search engines."""
 
 from typing import Any
 from unittest.mock import MagicMock
@@ -12,24 +6,18 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from search.data_in_models import Label
-from search.engines.dev_vespa import DevVespaLabelSearchEngine
-
-
-@pytest.fixture
-def dev_label_engine() -> DevVespaLabelSearchEngine:
-    """
-    Create a DevVespaLabelSearchEngine instance for testing.
-
-    :return DevVespaLabelSearchEngine: engine under test
-    """
-    return DevVespaLabelSearchEngine()
+from search.engines import Pagination
+from search.engines.dev_vespa import (
+    DevVespaLabelTypeaheadSearchEngine,
+    Settings,
+)
+from search.label import Label
 
 
 @pytest.fixture
 def mock_requests_post(monkeypatch):
     """
-    Monkeypatch requests.post used inside DevVespaLabelSearchEngine.search.
+    Monkeypatch requests.post.
 
     :return: A MagicMock whose .json() can be controlled per-test.
     """
@@ -52,6 +40,19 @@ def mock_requests_post(monkeypatch):
     monkeypatch.setattr(requests, "post", mock_post)
 
     return mock_post
+
+
+# region DevVespaLabelTypeaheadSearchEngine tests
+
+
+@pytest.fixture
+def dev_typeahead_engine() -> DevVespaLabelTypeaheadSearchEngine:
+    settings = Settings(
+        vespa_endpoint="http://localhost:8089",  # type: ignore[arg-type]
+        vespa_read_token="",  # nosec B106
+    )
+
+    return DevVespaLabelTypeaheadSearchEngine(settings=settings)
 
 
 def _make_grouping_response(values: list[str]) -> dict[str, Any]:
@@ -85,8 +86,8 @@ def _make_grouping_response(values: list[str]) -> dict[str, Any]:
         ("risk", r"(?i)^concept::.*risk.*"),
     ],
 )
-def test_dev_label_engine_builds_substring_regex_for_concepts(
-    dev_label_engine: DevVespaLabelSearchEngine,
+def test_typeahead_engine_builds_substring_regex_for_concepts(
+    dev_typeahead_engine: DevVespaLabelTypeaheadSearchEngine,
     mock_requests_post: MagicMock,
     query: str,
     expected_fragment: str,
@@ -103,7 +104,11 @@ def test_dev_label_engine_builds_substring_regex_for_concepts(
     """
     mock_requests_post.json_return_value = {"root": {}}
 
-    dev_label_engine.search(query=query, label_type="concept")
+    dev_typeahead_engine.search(
+        query=query,
+        label_type="concept",
+        pagination=Pagination(page_token=1, page_size=10),
+    )
 
     sent = mock_requests_post.last_json  # type: ignore[attr-defined]
     yql = sent["yql"]
@@ -112,8 +117,9 @@ def test_dev_label_engine_builds_substring_regex_for_concepts(
     assert expected_fragment in yql
 
 
-def test_dev_label_engine_returns_correct_type_and_value(
-    dev_label_engine: DevVespaLabelSearchEngine, mock_requests_post: MagicMock
+def test_typeahead_engine_returns_correct_type_and_value(
+    dev_typeahead_engine: DevVespaLabelTypeaheadSearchEngine,
+    mock_requests_post: MagicMock,
 ):
     """
     Check dev engine returns correct type.
@@ -124,13 +130,19 @@ def test_dev_label_engine_returns_correct_type_and_value(
         type and value.
     """
     label_values = ["concept::air pollution risk"]
-    mock_response_json = _make_grouping_response(label_values)
-    mock_requests_post.json_return_value = mock_response_json
+    mock_requests_post.json_return_value = _make_grouping_response(label_values)
 
-    labels = dev_label_engine.search(query="pollution", label_type="concept")
+    labels = dev_typeahead_engine.search(
+        query="pollution",
+        label_type="concept",
+        pagination=Pagination(page_token=1, page_size=10),
+    )
 
-    assert all(isinstance(label, Label) for label in labels)
+    assert all(isinstance(label, Label) for label in labels.results)
 
     # Extract the "air pollution risk" label.
-    values = {(label.type, label.value) for label in labels}
+    values = {(label.type, label.value) for label in labels.results}
     assert ("concept", "air pollution risk") in values
+
+
+# endregion

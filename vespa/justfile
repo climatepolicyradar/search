@@ -18,7 +18,8 @@ feed-labels:
     vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 extract-passages:
-    aws s3 cp s3://cpr-cache/search/vespa/passages_feed_materializer.jsonl ../.data_cache/vespa/passages_feed_materializer.jsonl
+    aws s3 cp s3://cpr-cache/search/vespa/passages_feed_materializer.jsonl.gz ../.data_cache/vespa/passages_feed_materializer.jsonl.gz
+    gunzip -f ../.data_cache/vespa/passages_feed_materializer.jsonl.gz
 
 feed-passages:
     vespa feed ../.data_cache/vespa/passages_feed_materializer.jsonl --target http://localhost:8080 --progress 30
@@ -99,5 +100,19 @@ remote-visit:
     vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     mkdir -p ../.data_cache/vespa
-    vespa visit --target "$vespa_endpoint" --header "Authorization: Bearer $vespa_read_token" > "../.data_cache/vespa/documents-cloud.jsonl"
+    vespa visit --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token" > "../.data_cache/vespa/documents-cloud.jsonl"
     echo "Exported to ../.data_cache/vespa/documents-cloud.jsonl"
+
+remote-get-document id="CCLW.collection.1755.0":
+    #!/usr/bin/env bash
+    set -e
+    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa document get "id:documents:documents::{{id}}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
+
+remote-delete-document id:
+    #!/usr/bin/env bash
+    set -e
+    vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa document remove "id:documents:documents::{{id}}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"

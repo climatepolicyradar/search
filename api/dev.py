@@ -1,18 +1,33 @@
 from contextlib import asynccontextmanager
 from typing import TypeVar
 
-from fastapi import APIRouter, FastAPI, Query
+from fastapi import APIRouter, Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AnyHttpUrl, BaseModel
+from pydantic_settings import SettingsConfigDict
 
-from search.data_in_models import Document, Label
+from search.data_in_models import Document
+from search.engines import Pagination
 from search.engines.dev_vespa import (
+    CountAggregation,
     DevVespaDocumentSearchEngine,
-    DevVespaLabelSearchEngine,
+    DevVespaLabelTypeaheadSearchEngine,
+    DevVespaPassageSearchEngine,
+    Settings,
 )
+from search.label import Label
 from search.log import get_logger
+from search.passage import Passage
 
 logger = get_logger(__name__)
+
+
+class EnvSettings(Settings):
+    model_config = SettingsConfigDict(env_file="api/.env")
+
+
+# @see: https://github.com/pydantic/pydantic-settings/issues/201
+settings = EnvSettings()  # pyright: ignore[reportCallIssue]
 
 
 @asynccontextmanager
@@ -45,23 +60,32 @@ app.add_middleware(
 T = TypeVar("T", bound=BaseModel)
 
 
-class Aggregation(BaseModel):
-    field: str
-    values: list[str]
+class Aggregations(BaseModel):
+    labels: list[CountAggregation[Label]]
 
 
 class SearchResponse[T](BaseModel):
     """Response model for search results."""
 
-    total_results: int | None = None
+    total_size: int | None = None
     page: int
     page_size: int
     total_pages: int | None
     next_page: AnyHttpUrl | None = None
     previous_page: AnyHttpUrl | None = None
     results: list[T]
-    aggregations: list[Aggregation] = []
+    aggregations: Aggregations | None = None
     debug_info: list[dict] | None = None
+
+
+def pagination(page_token: int = 1, page_size: int = 10):
+    """
+    Shared pagination parameters
+
+    @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
+    @see:https://google.aip.dev/158
+    """
+    return Pagination(page_token=page_token, page_size=page_size)
 
 
 # region routes
@@ -81,29 +105,35 @@ async def root():
 def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
-    limit: int = 10,
-    offset: int = 0,
+    pagination: Pagination = Depends(pagination),
     debug: bool = False,
+    bolding: bool = False,
 ):
-    engine = DevVespaDocumentSearchEngine(debug=debug)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings, debug=debug, bolding=bolding
+    )
     results = engine.search(
         query=query,
+        pagination=pagination,
         filters_json_string=filters_json_string,
-        limit=limit,
-        offset=offset,
     )
 
     # TODO: pagination
     return SearchResponse[Document](
-        total_results=len(results),
+        total_size=results.total_size,
         page=0,
         page_size=0,
         total_pages=0,
         next_page=None,
         previous_page=None,
-        results=results,
-        aggregations=[],
+        results=results.results,
         debug_info=engine.last_debug_info if debug else None,
+        aggregations=Aggregations(
+            labels=engine.aggregations(
+                query=query,
+                filters_json_string=filters_json_string,
+            )
+        ),
     )
 
 
@@ -111,25 +141,44 @@ def read_documents(
 def read_labels(
     query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
+    pagination: Pagination = Depends(pagination),
 ):
-    results = DevVespaLabelSearchEngine().search(query=query, label_type=type)
-    label_types = DevVespaLabelSearchEngine().all_label_types()
+    engine = DevVespaLabelTypeaheadSearchEngine(settings=settings)
+    results = engine.search(query=query, pagination=pagination, label_type=type)
+    engine.all_label_types()
 
-    # TODO: pagination
     return SearchResponse[Label](
-        total_results=len(results),
+        total_size=results.total_size,
         page=0,
         page_size=0,
         total_pages=0,
         next_page=None,
         previous_page=None,
-        results=results,
-        aggregations=[
-            Aggregation(
-                field="type",
-                values=label_types,
-            )
-        ],
+        results=results.results,
+        aggregations=None,
+    )
+
+
+@router.get("/passages", response_model=SearchResponse[Passage])
+def read_passages(
+    query: str | None = Query(None, description="What are you looking for?"),
+    pagination: Pagination = Depends(pagination),
+):
+    engine = DevVespaPassageSearchEngine(settings=settings)
+    results = engine.search(
+        query=query,
+        pagination=pagination,
+    )
+
+    return SearchResponse[Passage](
+        total_size=results.total_size,
+        page=0,
+        page_size=0,
+        total_pages=0,
+        next_page=None,
+        previous_page=None,
+        results=results.results,
+        aggregations=None,
     )
 
 

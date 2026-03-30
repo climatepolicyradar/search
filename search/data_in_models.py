@@ -54,7 +54,7 @@ class DocumentRelationship(BaseModel):
     timestamp: datetime | None = None
 
 
-class Document(BaseDocument, WithRelationships):
+class Document(WithRelationships, BaseDocument):
     pass
 
 

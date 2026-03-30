@@ -11,7 +11,7 @@ def get_valid_search_term(item: Primitive) -> str:
     elif isinstance(item, Passage):
         string_field = item.text
     elif isinstance(item, Label):
-        string_field = item.preferred_label
+        string_field = item.value
     else:
         raise ValueError(f"Unknown primitive type: {type(item)}")
 

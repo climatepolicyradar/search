@@ -146,7 +146,12 @@ test_cases = [
     PrecisionTestCase[Document](
         category="document name",
         search_terms="argentina LT-LEDS",
-        expected_result_ids=["UNFCCC.document.i00002622.n0000"],
+        expected_result_ids=[
+            # Argentina's Long-Term Strategies (LT-LEDS)
+            "UNFCCC.collection.i00006905.n0000",
+            # Argentina's Long-Term Low-Emission Development Strategy. LT-LEDS1
+            "UNFCCC.family.i00002621.n0000",
+        ],
         description="Searching for 'argentina LT-LEDS' should return Argentina's long-term low greenhouse gas emission development strategy",
     ),
     FieldCharacteristicsTestCase[Document](

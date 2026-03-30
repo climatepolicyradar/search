@@ -6,7 +6,7 @@ from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from search.data_in_models import Document
-from search.engines import SearchEngine
+from search.engines import Pagination, SearchEngine
 from search.label import Label
 from search.passage import Passage
 
@@ -75,7 +75,11 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
 
-        search_results = engine.search(self.search_terms)
+        search_results = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=10),
+            filters_json_string=None,
+        )
         result_ids = [result.id for result in search_results]
 
         result_ids_limited = result_ids[: len(self.expected_result_ids)]
@@ -217,7 +221,11 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
 
-        search_results = engine.search(self.search_terms)
+        search_results = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=10),
+            filters_json_string=None,
+        )
         result_ids = [result.id for result in search_results]
 
         expected_ids_not_in_response = set(self.expected_result_ids).difference(
@@ -299,8 +307,9 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
         """Run the test case against the given engine."""
 
         search_results = engine.search(
-            self.search_terms,
-            limit=self.k,
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=self.k),
+            filters_json_string=None,
         )
 
         if self.k > len(search_results):
@@ -396,8 +405,16 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
 
-        search_results_1 = engine.search(self.search_terms)
-        search_results_2 = engine.search(self.search_terms_to_compare)
+        search_results_1 = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=self.k),
+            filters_json_string=None,
+        )
+        search_results_2 = engine.search(
+            query=self.search_terms_to_compare,
+            pagination=Pagination(page_token=1, page_size=self.k),
+            filters_json_string=None,
+        )
 
         results_1_limited = search_results_1[: self.k]
         results_2_limited = search_results_2[: self.k]

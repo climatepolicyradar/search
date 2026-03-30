@@ -158,3 +158,21 @@ vespa_public_cert_read_only_ssm_key = generate_secret_key(
     aws_service="prefect",
     name="VESPA_PUBLIC_CERT_READ_ONLY",
 )
+
+wikibase_url_ssm_key = generate_secret_key(
+    project=PROJECT_NAME,
+    aws_service="wikibase",
+    name="url",
+)
+
+wikibase_username_ssm_key = generate_secret_key(
+    project=PROJECT_NAME,
+    aws_service="wikibase",
+    name="username",
+)
+
+wikibase_password_ssm_key = generate_secret_key(
+    project=PROJECT_NAME,
+    aws_service="wikibase",
+    name="password",
+)

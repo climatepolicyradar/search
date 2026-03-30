@@ -12,9 +12,52 @@ schema passages {
         field text type string {
             indexing: index | attribute | summary
         }
+        field document_id type string {
+            indexing: attribute | summary
+        }
+        field type type string {
+            indexing: attribute | summary
+        }
+        field type_confidence type double {
+            indexing: attribute | summary
+        }
+        field page_number type int {
+            indexing: attribute | summary
+        }
+        field heading_id type string {
+            indexing: attribute | summary
+        }
     }
 
     fieldset default {
-        fields: id, idx, language, text
+        fields: text
+    }
+
+    rank-profile nativerank {
+        function text_score() {
+            expression: nativeRank(text) + nativeProximity(text)
+        }
+
+        first-phase {
+            expression: text_score()
+        }
+        summary-features: text_score() nativeRank(text) nativeProximity(text)
+    }
+
+    document-summary debug-summary {
+        summary id {}
+        summary idx {}
+        summary language {}
+        summary text {}
+        summary document_id {}
+        summary type {}
+        summary type_confidence {}
+        summary page_number {}
+        summary heading_id {}
+        summary text_tokens {
+            source: text
+            tokens
+        }
+        from-disk
     }
 }

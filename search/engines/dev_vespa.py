@@ -23,15 +23,17 @@ import re
 from typing import Any, Literal
 
 import requests
-from pydantic import BaseModel
-from pydantic.networks import AnyHttpUrl
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
+from pydantic_settings import BaseSettings
 from vespa.querybuilder import Grouping as G
 from vespa.querybuilder.builder.builder import Q, QueryField
 
-from search.data_in_models import Document, Label, LabelRelationship
-from search.engines import SearchEngine
+from search.data_in_models import Document, DocumentRelationship, LabelRelationship
+from search.data_in_models import Label as DataInLabel
+from search.engines import ListResponse, Pagination, SearchEngine
+from search.label import Label
 from search.log import get_logger
+from search.passage import Passage
 
 logger = get_logger(__name__)
 
@@ -45,13 +47,9 @@ MISSING_PLACEHOLDER = "MISSING"
 class Settings(BaseSettings):
     vespa_endpoint: AnyHttpUrl
     vespa_read_token: str
-    model_config = SettingsConfigDict(env_file="api/.env")
 
 
-# @see: https://github.com/pydantic/pydantic-settings/issues/201
-settings = Settings()  # pyright: ignore[reportCallIssue]
-
-# endregion Settings
+# endregion
 
 
 # region Filters
@@ -202,6 +200,20 @@ def _build_filter_query(filter_group: Filter | None) -> str:
 
 # endregion Filters
 
+# region Aggregations
+
+
+class CountAggregation[T](BaseModel):
+    count: int
+    value: T
+
+
+# endregion Aggregations
+
+
+def _get_total_count(res: dict[str, Any]) -> int | None:
+    return res.get("root", {}).get("fields", {}).get("totalCount")
+
 
 class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     """
@@ -223,25 +235,42 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
     model_class = Document
 
-    def __init__(self, debug: bool = False) -> None:
+    def __init__(
+        self, settings: Settings, debug: bool = False, bolding: bool = False
+    ) -> None:
         """
         Initialise the search engine.
 
         :param debug: When ``True``, request the ``debug-summary`` document
             summary from Vespa and store per-hit token information in
             :attr:`last_debug_info`.
+        :param bolding: When ``False``, request the ``no-bolding`` document
+            summary, returning plain title/description without ``<hi>`` tags.
+            Ignored when ``debug=True``.
         """
         self.debug = debug
+        self.bolding = bolding
         self.last_debug_info: list[dict[str, Any]] = []
+        self.settings = settings
+
+    _userQuery: str = (
+        " and (userQuery() "
+        # As geographies and title_synonyms use different Lucene analyzers
+        # to the default fieldset, they're referenced explicitly in the query
+        # so they can be searched.
+        # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
+        ' or ({defaultIndex: "geographies"}userInput(@query))'
+        ' or ({defaultIndex: "title_synonyms"}userInput(@query)))'
+    )
 
     def search(
         self,
         query: str | None,
+        pagination: Pagination,
         filters_json_string: str | None = None,
-        limit: int = 10,
-        offset: int = 0,
-    ) -> list[Document]:
+    ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
+
         where = "true "
 
         if filters_json_string:
@@ -250,40 +279,35 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         yql = f"select * from sources documents where {where}"
         if query:
-            yql += (
-                " and (userQuery() "
-                # As geographies and title_synonyms use different Lucene analyzers
-                # to the default fieldset, they're referenced explicitly in the query
-                # so they can be searched.
-                "or geographies contains @query"
-                # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
-                ' or ({defaultIndex: "title_synonyms"}userInput(@query)))'
-            )
-        yql += f" limit {limit} offset {offset}"
+            yql += self._userQuery
         logger.info(f"searching for yql: {yql}")
 
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": "nativerank",
         }
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
+        if not self.bolding:
+            request_body["presentation.bolding"] = "false"
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json=request_body,
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
             logger.exception("Vespa query failed")
-            return []
+            return ListResponse(results=[], total_size=None, next_page_token=None)
 
         res = res.json()
         documents = []
@@ -304,7 +328,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 labels.append(
                     LabelRelationship(
                         type=label.get("type", MISSING_PLACEHOLDER),
-                        value=Label(
+                        value=DataInLabel(
                             id=label.get("value").get("id", MISSING_PLACEHOLDER),
                             value=label.get("value").get("value", MISSING_PLACEHOLDER),
                             type=label.get("value").get("type", MISSING_PLACEHOLDER),
@@ -317,7 +341,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 labels.append(
                     LabelRelationship(
                         type="concept",
-                        value=Label(
+                        value=DataInLabel(
                             id=concept.get("id", MISSING_PLACEHOLDER),
                             type="concept",
                             value=concept.get("value", MISSING_PLACEHOLDER),
@@ -327,13 +351,18 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                     )
                 )
 
+            document_relationships = TypeAdapter(
+                list[DocumentRelationship]
+            ).validate_python(source.get("documents", []))
+
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
-                    title=source.get("title", MISSING_PLACEHOLDER),
-                    description=source.get("description", MISSING_PLACEHOLDER),
+                    title=fields.get("title", MISSING_PLACEHOLDER),
+                    description=fields.get("description", MISSING_PLACEHOLDER),
                     labels=labels,
                     attributes=source.get("attributes", {}),
+                    documents=document_relationships,
                 )
             )
 
@@ -365,22 +394,333 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 json.dumps(debug_info, indent=2),
             )
 
-        return documents
+        total_size = _get_total_count(res)
+        return ListResponse(
+            results=documents, total_size=total_size, next_page_token=None
+        )
+
+    def aggregations(
+        self,
+        query: str | None,
+        filters_json_string: str | None = None,
+    ) -> list[CountAggregation[Label]]:
+        """Return aggregations (label/concept groups with counts) filtered by the search query."""
+        # Build the top-level where clause from the search query and any filters,
+        # mirroring how `search()` constructs its YQL.
+        where = "true"
+        if query:
+            where += self._userQuery
+
+        if filters_json_string:
+            filters = Filter.model_validate_json(filters_json_string)
+            where += _build_filter_query(filters)
+
+        # Group labels and concepts across all documents matching the search query.
+        # The top-level `where` already scopes the document set.
+        # per-bucket filtering is not needed here.
+        grouping = G.all(
+            G.all(
+                G.group("labels_type_value_attribute"),
+                # This is the max we expect to see
+                # TODO: Pagination on groups if we hit this limit
+                G.max(5000),
+                G.order(-G.count()),
+                G.each(G.output(G.count())),
+            ),
+            G.all(
+                G.group("concepts_type_value_attribute"),
+                # This is the max we expect to see
+                # TODO: Pagination on groups if we hit this limit
+                G.max(5000),
+                G.order(-G.count()),
+                G.each(G.output(G.count())),
+            ),
+        )
+
+        # Build a raw YQL string, the same way `search()` does, because the query
+        # builder's `.where()` only accepts Condition/bool objects, not raw strings.
+        select_fields = "labels_type_value_attribute, concepts_type_value_attribute"
+        groupby_str = str(grouping)
+        yql = f"select {select_fields} from documents where {where} | {groupby_str}"
+
+        try:
+            res = requests.post(
+                f"{self.settings.vespa_endpoint}/search",
+                json={
+                    "yql": yql,
+                    "query": query,
+                    "hits": 0,
+                    "timeout": "5s",
+                    "model.language": "en",
+                    "ranking.profile": "nativerank",
+                },
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa aggregations query failed")
+            return []
+
+        root = res.json().get("root", {})
+        root_children: list[dict] = root.get("children") or []
+        groups: list[dict] = (
+            root_children[0].get("children", []) if root_children else []
+        )
+
+        group_values = []
+        for group in groups:
+            group_values.extend(group.get("children", []))
+
+        count_aggregations: list[CountAggregation[Label]] = []
+        for group_value in group_values:
+            label_type_value = group_value.get("value", "")
+            label_type, _, label_value = label_type_value.partition("::")
+            count_aggregations.append(
+                CountAggregation(
+                    count=group_value.get("fields", {}).get("count()", 0),
+                    value=Label(
+                        id=label_type_value,
+                        value=label_value,
+                        type=label_type or MISSING_PLACEHOLDER,
+                    ),
+                )
+            )
+        return count_aggregations
 
     def count(self, query: str) -> int:
         """Return hit count"""
         raise NotImplementedError()
 
 
-# We do not inherit from `SearchEngine[Label]` as the searech method does not have `limit: int, offset: int` parameters
-# at least not yet
-class DevVespaLabelSearchEngine:
-    """Search engine for dev Vespa"""
+class DevVespaPassageSearchEngine(SearchEngine[Passage]):
+    """Search engine for passages in dev Vespa."""
 
-    def __init__(self) -> None:
-        pass
+    model_class = Passage
 
-    def search(self, query: str | None, label_type: str | None):
+    def __init__(self, settings: Settings, debug: bool = False) -> None:
+        self.debug = debug
+        self.last_debug_info: list[dict[str, Any]] = []
+        self.settings = settings
+
+    def search(
+        self,
+        query: str | None,
+        pagination: Pagination,
+        filters_json_string: str | None = None,  # noqa: ARG002
+    ) -> ListResponse[Passage]:
+        """Fetch a list of relevant passage search results."""
+        yql = "select * from sources passages where true"
+        if query:
+            yql += " and userQuery()"
+
+        logger.info(f"searching passages for yql: {yql}")
+
+        request_body: dict[str, Any] = {
+            "yql": yql,
+            "query": query,
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
+            "timeout": "5s",
+            "model.language": "en",
+        }
+        if self.debug:
+            request_body["ranking.profile"] = "nativerank"
+            request_body["presentation.summary"] = "debug-summary"
+
+        try:
+            res = requests.post(
+                f"{self.settings.vespa_endpoint}/search",
+                json=request_body,
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa passages query failed")
+            return ListResponse(results=[], total_size=None, next_page_token=None)
+
+        res = res.json()
+        passages: list[Passage] = []
+        debug_info: list[dict[str, Any]] = []
+
+        for hit in res.get("root", {}).get("children", []):
+            fields = hit.get("fields", {})
+            passages.append(
+                Passage(
+                    text_block_id=fields.get("id", ""),
+                    text=fields.get("text", ""),
+                    language=fields.get("language", ""),
+                    type=fields.get("type", ""),
+                    type_confidence=fields.get("type_confidence", 0.0),
+                    page_number=fields.get("page_number", 0),
+                    heading_id=fields.get("heading_id"),
+                    document_id=fields.get("document_id", ""),
+                )
+            )
+            if self.debug:
+                debug_info.append(
+                    {
+                        "relevance": hit.get("relevance"),
+                        "summaryfeatures": fields.get("summaryfeatures"),
+                        "text_tokens": fields.get("text_tokens"),
+                    }
+                )
+
+        self.last_debug_info = debug_info
+
+        total_size = _get_total_count(res)
+        return ListResponse(
+            results=passages, total_size=total_size, next_page_token=None
+        )
+
+    def count(self, query: str) -> int:
+        """Return hit count"""
+        raise NotImplementedError()
+
+
+class DevVespaLabelSearchEngine(SearchEngine[Label]):
+    """Search engine for labels in dev Vespa."""
+
+    model_class = Label
+
+    def __init__(self, settings: Settings, debug: bool = False) -> None:
+        self.debug = debug
+        self.last_debug_info: list[dict[str, Any]] = []
+        self.settings = settings
+
+    def search(
+        self,
+        query: str | None,
+        pagination: Pagination,
+        filters_json_string: str | None = None,  # noqa: ARG002
+        label_type: str | None = None,
+    ) -> ListResponse[Label]:
+        """Fetch a list of relevant label search results."""
+        yql = "select * from sources labels where true"
+        if query:
+            yql += " and userQuery()"
+        if label_type:
+            yql += f' and type contains "{label_type}"'
+
+        logger.info(f"searching labels for yql: {yql}")
+
+        request_body: dict[str, Any] = {
+            "yql": yql,
+            "query": query,
+            "hits": pagination.page_size,
+            "offset": (pagination.page_token - 1) * pagination.page_size,
+            "timeout": "5s",
+            "model.language": "en",
+            "ranking.profile": "nativerank",
+        }
+
+        try:
+            res = requests.post(
+                f"{self.settings.vespa_endpoint}/search",
+                json=request_body,
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa labels query failed")
+            return ListResponse(results=[], total_size=None, next_page_token=None)
+
+        res = res.json()
+        labels: list[Label] = []
+        debug_info: list[dict[str, Any]] = []
+
+        for hit in res.get("root", {}).get("children", []):
+            fields = hit.get("fields", {})
+            labels.append(
+                Label(
+                    id=fields.get("id", ""),
+                    type=fields.get("type", ""),
+                    value=fields.get("value", ""),
+                )
+            )
+            if self.debug:
+                debug_info.append(
+                    {
+                        "relevance": hit.get("relevance"),
+                        "summaryfeatures": fields.get("summaryfeatures"),
+                        "value": fields.get("value", ""),
+                        "alternative_labels": fields.get("alternative_labels", []),
+                        "description": fields.get("description", ""),
+                    }
+                )
+
+        self.last_debug_info = debug_info
+        total_size = _get_total_count(res)
+        return ListResponse(results=labels, total_size=total_size, next_page_token=None)
+
+    def all_label_types(self) -> list[str]:
+        """Fetch all distinct label types from the labels source."""
+        yql = (
+            "select * from sources labels where true "
+            "| all(group(type) order(-count()) each(output(count())))"
+        )
+
+        try:
+            res = requests.post(
+                f"{self.settings.vespa_endpoint}/search",
+                json={
+                    "yql": yql,
+                    "hits": 0,
+                    "timeout": "5s",
+                },
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
+                },
+            )
+        except Exception:
+            logger.exception("Vespa all_label_types query failed")
+            return []
+
+        res = res.json()
+        types: list[str] = []
+
+        root = res.get("root", {})
+        children = root.get("children", [{}])[0].get("children", [])
+        group_list = next(
+            (
+                item.get("children", [])
+                for item in children
+                if item.get("label") == "type"
+            ),
+            [],
+        )
+
+        for group in group_list:
+            types.append(group.get("value", ""))
+
+        return types
+
+    def count(self, query: str) -> int:
+        """Return hit count for DevVespaLabelSearchEngine."""
+        raise NotImplementedError()
+
+
+class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
+    """Typeahead search engine for labels, using grouping on the documents source."""
+
+    model_class = Label
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+
+    def search(
+        self,
+        query: str | None,
+        pagination: Pagination,  # noqa: ARG002
+        filters_json_string: str | None = None,  # noqa: ARG002
+        label_type: str | None = None,
+    ) -> ListResponse[Label]:
         """Returns unique values for concepts and labels in the documents"""
         labels_field = QueryField("labels_type_value_attribute")
         concepts_field = QueryField("concepts_type_value_attribute")
@@ -397,6 +737,8 @@ class DevVespaLabelSearchEngine:
             G.all(
                 G.group("labels_type_value_attribute"),
                 f'filter(regex("{doc_regex}", labels_type_value_attribute))',
+                # This is the max we expect to see
+                # TODO: Pagination on groups if we hit this limit
                 G.max(5000),
                 G.order(-G.count()),
                 G.each(G.output(G.count())),
@@ -404,6 +746,8 @@ class DevVespaLabelSearchEngine:
             G.all(
                 G.group("concepts_type_value_attribute"),
                 f'filter(regex("{doc_regex}", concepts_type_value_attribute))',
+                # This is the max we expect to see
+                # TODO: Pagination on groups if we hit this limit
                 G.max(5000),
                 G.order(-G.count()),
                 G.each(G.output(G.count())),
@@ -421,7 +765,7 @@ class DevVespaLabelSearchEngine:
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "query": query,
@@ -431,12 +775,12 @@ class DevVespaLabelSearchEngine:
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
             logger.exception("Vespa query failed")
-            return []
+            return ListResponse(results=[], total_size=None, next_page_token=None)
 
         # Parse the groups & transform => Labels
         # You can read more about grouping @see: https://docs.vespa.ai/en/querying/grouping.html
@@ -460,7 +804,9 @@ class DevVespaLabelSearchEngine:
                     type=label_type or MISSING_PLACEHOLDER,
                 )
             )
-        return labels
+        return ListResponse(
+            results=labels, total_size=len(labels), next_page_token=None
+        )
 
     def all_label_types(self) -> list[str]:
         """Fetch all distinct label types (unfiltered)."""
@@ -472,7 +818,7 @@ class DevVespaLabelSearchEngine:
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "hits": 0,
@@ -480,7 +826,7 @@ class DevVespaLabelSearchEngine:
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
