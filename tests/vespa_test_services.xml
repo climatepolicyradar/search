@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    Minimal Vespa services.xml for e2e tests.
+    Uses the same Lucene linguistics config as production but strips out
+    everything else (no redundancy, no extra chains) to keep startup fast.
+-->
+<services version="1.0">
+    <container id="default" version="1.0">
+        <component id="com.yahoo.language.lucene.LuceneLinguistics"
+                   bundle="lucene-linguistics">
+            <config name="com.yahoo.language.lucene.lucene-analysis">
+                <configDir>lucene-linguistics</configDir>
+                <analysis>
+                    <item key="profile=title_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <item key="profile=passage_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>stop</name>
+                                <conf>
+                                    <item key="words">en/stopwords.txt</item>
+                                    <item key="ignoreCase">true</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <item key="profile=label_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <item key="profile=geo_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <item key="profile=geo_analysis_search;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>synonymGraph</name>
+                                <conf>
+                                    <item key="synonyms">en/geo-synonyms.txt</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <item key="profile=title_synonym_analysis_search;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>synonymGraph</name>
+                                <conf>
+                                    <item key="synonyms">en/title-synonyms.txt</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                </analysis>
+            </config>
+        </component>
+        <document-api/>
+        <search/>
+    </container>
+    <content id="search-production" version="1.0">
+        <min-redundancy>1</min-redundancy>
+        <documents>
+            <document type="documents" mode="index" />
+        </documents>
+    </content>
+</services>

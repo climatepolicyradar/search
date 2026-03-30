@@ -1,6 +1,7 @@
 import json
 
 import typer
+from pydantic_settings import SettingsConfigDict
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -8,10 +9,18 @@ from rich.table import Table
 from rich.text import Text
 
 from search.engines import Pagination
-from search.engines.dev_vespa import DevVespaDocumentSearchEngine
+from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Settings
 
 app = typer.Typer()
 console = Console()
+
+
+class EnvSettings(Settings):
+    model_config = SettingsConfigDict(env_file="api/.env")
+
+
+# @see: https://github.com/pydantic/pydantic-settings/issues/201
+settings = EnvSettings()  # pyright: ignore[reportCallIssue]
 
 
 @app.command()
@@ -23,7 +32,7 @@ def search(
     labels: bool = False,
 ):
     """Search for documents."""
-    engine = DevVespaDocumentSearchEngine(debug=debug)
+    engine = DevVespaDocumentSearchEngine(settings=settings, debug=debug)
     results = engine.search(
         query=query,
         filters_json_string=filters,
@@ -38,7 +47,7 @@ def search(
         t.highlight_words(words, style="bold yellow", case_sensitive=False)
         return t
 
-    for i, doc in enumerate(results):
+    for i, doc in enumerate(results.results):
         relevance = None
         summaryfeatures = None
         geographies = None
