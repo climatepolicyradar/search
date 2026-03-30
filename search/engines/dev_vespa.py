@@ -23,9 +23,8 @@ import re
 from typing import Any, Literal
 
 import requests
-from pydantic import BaseModel, TypeAdapter
-from pydantic.networks import AnyHttpUrl
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
+from pydantic_settings import BaseSettings
 from vespa.querybuilder import Grouping as G
 from vespa.querybuilder.builder.builder import Q, QueryField
 
@@ -48,13 +47,9 @@ MISSING_PLACEHOLDER = "MISSING"
 class Settings(BaseSettings):
     vespa_endpoint: AnyHttpUrl
     vespa_read_token: str
-    model_config = SettingsConfigDict(env_file="api/.env")
 
 
-# @see: https://github.com/pydantic/pydantic-settings/issues/201
-settings = Settings()  # pyright: ignore[reportCallIssue]
-
-# endregion Settings
+# endregion
 
 
 # region Filters
@@ -216,6 +211,10 @@ class CountAggregation[T](BaseModel):
 # endregion Aggregations
 
 
+def _get_total_count(res: dict[str, Any]) -> int | None:
+    return res.get("root", {}).get("fields", {}).get("totalCount")
+
+
 class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     """
     Search engine for dev Vespa
@@ -236,16 +235,23 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
     model_class = Document
 
-    def __init__(self, debug: bool = False) -> None:
+    def __init__(
+        self, settings: Settings, debug: bool = False, bolding: bool = False
+    ) -> None:
         """
         Initialise the search engine.
 
         :param debug: When ``True``, request the ``debug-summary`` document
             summary from Vespa and store per-hit token information in
             :attr:`last_debug_info`.
+        :param bolding: When ``False``, request the ``no-bolding`` document
+            summary, returning plain title/description without ``<hi>`` tags.
+            Ignored when ``debug=True``.
         """
         self.debug = debug
+        self.bolding = bolding
         self.last_debug_info: list[dict[str, Any]] = []
+        self.settings = settings
 
     _userQuery: str = (
         " and (userQuery() "
@@ -287,14 +293,16 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         }
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
+        if not self.bolding:
+            request_body["presentation.bolding"] = "false"
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json=request_body,
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -350,8 +358,8 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
-                    title=source.get("title", MISSING_PLACEHOLDER),
-                    description=source.get("description", MISSING_PLACEHOLDER),
+                    title=fields.get("title", MISSING_PLACEHOLDER),
+                    description=fields.get("description", MISSING_PLACEHOLDER),
                     labels=labels,
                     attributes=source.get("attributes", {}),
                     documents=document_relationships,
@@ -386,8 +394,9 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 json.dumps(debug_info, indent=2),
             )
 
+        total_size = _get_total_count(res)
         return ListResponse(
-            results=documents, total_size=len(documents), next_page_token=None
+            results=documents, total_size=total_size, next_page_token=None
         )
 
     def aggregations(
@@ -436,7 +445,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "query": query,
@@ -447,7 +456,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -490,9 +499,10 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
 
     model_class = Passage
 
-    def __init__(self, debug: bool = False) -> None:
+    def __init__(self, settings: Settings, debug: bool = False) -> None:
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
+        self.settings = settings
 
     def search(
         self,
@@ -521,11 +531,11 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json=request_body,
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -561,8 +571,9 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
 
         self.last_debug_info = debug_info
 
+        total_size = _get_total_count(res)
         return ListResponse(
-            results=passages, total_size=len(passages), next_page_token=None
+            results=passages, total_size=total_size, next_page_token=None
         )
 
     def count(self, query: str) -> int:
@@ -574,6 +585,11 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
     """Search engine for labels in dev Vespa."""
 
     model_class = Label
+
+    def __init__(self, settings: Settings, debug: bool = False) -> None:
+        self.debug = debug
+        self.last_debug_info: list[dict[str, Any]] = []
+        self.settings = settings
 
     def search(
         self,
@@ -598,15 +614,16 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            "ranking.profile": "nativerank",
         }
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json=request_body,
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -615,6 +632,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         res = res.json()
         labels: list[Label] = []
+        debug_info: list[dict[str, Any]] = []
 
         for hit in res.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
@@ -625,10 +643,20 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                     value=fields.get("value", ""),
                 )
             )
+            if self.debug:
+                debug_info.append(
+                    {
+                        "relevance": hit.get("relevance"),
+                        "summaryfeatures": fields.get("summaryfeatures"),
+                        "value": fields.get("value", ""),
+                        "alternative_labels": fields.get("alternative_labels", []),
+                        "description": fields.get("description", ""),
+                    }
+                )
 
-        return ListResponse(
-            results=labels, total_size=len(labels), next_page_token=None
-        )
+        self.last_debug_info = debug_info
+        total_size = _get_total_count(res)
+        return ListResponse(results=labels, total_size=total_size, next_page_token=None)
 
     def all_label_types(self) -> list[str]:
         """Fetch all distinct label types from the labels source."""
@@ -639,7 +667,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "hits": 0,
@@ -647,7 +675,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -683,8 +711,8 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
 
     model_class = Label
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, settings: Settings):
+        self.settings = settings
 
     def search(
         self,
@@ -737,7 +765,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "query": query,
@@ -747,7 +775,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:
@@ -790,7 +818,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
 
         try:
             res = requests.post(
-                f"{settings.vespa_endpoint}/search",
+                f"{self.settings.vespa_endpoint}/search",
                 json={
                     "yql": yql,
                     "hits": 0,
@@ -798,7 +826,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
                 },
                 timeout=API_TIMEOUT,
                 headers={
-                    "Authorization": f"Bearer {settings.vespa_read_token}",
+                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
                 },
             )
         except Exception:

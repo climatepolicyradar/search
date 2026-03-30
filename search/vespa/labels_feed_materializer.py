@@ -7,6 +7,7 @@ import orjson
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
+from search.vespa.sources.wikibase import fetch_concepts_at_timestamps_sync
 
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -18,12 +19,18 @@ class VespaLabel(TypedDict):
     id: str
     type: str
     value: str
+    alternative_labels: list[str]
+    description: str
+    negative_labels: list[str]
 
 
 class VespaLabelUpdate(TypedDict):
     id: VespaAssign[str]
     type: VespaAssign[str]
     value: VespaAssign[str]
+    alternative_labels: VespaAssign[list[str]]
+    description: VespaAssign[str]
+    negative_labels: VespaAssign[list[str]]
 
 
 def labels_feed_materializer():
@@ -38,19 +45,43 @@ def labels_feed_materializer():
                 "id": identifier,
                 "type": value["type"],
                 "value": value["value"],
+                "alternative_labels": [],
+                "description": "",
+                "negative_labels": [],
             }
 
     inference_results = read_inference_results()
-    for document_id, inference_result in inference_results:
-        for passage_id, concepts in inference_result.items():
-            for concept in concepts:
-                identifier = f"concept::{concept['name']}"
-                labels[identifier] = {
-                    "id": identifier,
-                    "type": "concept",
-                    "value": concept["name"],
-                }
 
+    # Get wikibase IDs and timestamps
+    wikibase_id_to_timestamps: dict[str, list[str]] = {}
+    for _, inference_result in inference_results:
+        for _, concepts in inference_result.items():
+            for concept in concepts:
+                wikibase_id_to_timestamps.setdefault(concept["id"], []).append(
+                    concept["timestamp"]
+                )
+
+    # Use the most recent timestamp per concept
+    wikibase_id_to_timestamp = {
+        wid: max(timestamps) for wid, timestamps in wikibase_id_to_timestamps.items()
+    }
+
+    # Fetch full labels from Wikibase at each timestamp
+    wikibase_concepts = fetch_concepts_at_timestamps_sync(wikibase_id_to_timestamp)
+
+    if len(wikibase_concepts) < len(wikibase_id_to_timestamp):
+        print("WARNING: fewer concepts returned from Wikibase than requested.")
+
+    for concept in wikibase_concepts:
+        identifier = f"concept::{concept['wikibase_id']}"
+        labels[identifier] = {
+            "id": identifier,
+            "type": "concept",
+            "value": concept["preferred_label"],
+            "alternative_labels": concept["alternative_labels"],
+            "description": concept["description"] or "",
+            "negative_labels": concept["negative_labels"],
+        }
     unique_labels = list(labels.values())
 
     print(f"Collected {len(unique_labels)} unique labels.")
@@ -59,12 +90,15 @@ def labels_feed_materializer():
     with output_file.open("wb") as f:
         for label in unique_labels:
             vespa_update: VespaUpdate[VespaLabelUpdate] = {
-                "update": f"id:labels:labels::{label.get('id')}",
+                "update": f"id:labels:labels::{label['id']}",
                 "create": True,
                 "fields": {
                     "id": {"assign": label["id"]},
-                    "value": {"assign": label["value"]},
                     "type": {"assign": label["type"]},
+                    "value": {"assign": label["value"]},
+                    "alternative_labels": {"assign": label["alternative_labels"]},
+                    "description": {"assign": label["description"]},
+                    "negative_labels": {"assign": label["negative_labels"]},
                 },
             }
             f.write(orjson.dumps(vespa_update) + b"\n")

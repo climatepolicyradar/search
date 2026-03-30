@@ -4,6 +4,7 @@ from typing import TypeVar
 from fastapi import APIRouter, Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AnyHttpUrl, BaseModel
+from pydantic_settings import SettingsConfigDict
 
 from search.data_in_models import Document
 from search.engines import Pagination
@@ -12,12 +13,21 @@ from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     DevVespaLabelTypeaheadSearchEngine,
     DevVespaPassageSearchEngine,
+    Settings,
 )
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
 
 logger = get_logger(__name__)
+
+
+class EnvSettings(Settings):
+    model_config = SettingsConfigDict(env_file="api/.env")
+
+
+# @see: https://github.com/pydantic/pydantic-settings/issues/201
+settings = EnvSettings()  # pyright: ignore[reportCallIssue]
 
 
 @asynccontextmanager
@@ -97,8 +107,11 @@ def read_documents(
     filters_json_string: str | None = Query(None, alias="filters"),
     pagination: Pagination = Depends(pagination),
     debug: bool = False,
+    bolding: bool = False,
 ):
-    engine = DevVespaDocumentSearchEngine(debug=debug)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings, debug=debug, bolding=bolding
+    )
     results = engine.search(
         query=query,
         pagination=pagination,
@@ -130,7 +143,7 @@ def read_labels(
     type: str | None = None,
     pagination: Pagination = Depends(pagination),
 ):
-    engine = DevVespaLabelTypeaheadSearchEngine()
+    engine = DevVespaLabelTypeaheadSearchEngine(settings=settings)
     results = engine.search(query=query, pagination=pagination, label_type=type)
     engine.all_label_types()
 
@@ -151,7 +164,7 @@ def read_passages(
     query: str | None = Query(None, description="What are you looking for?"),
     pagination: Pagination = Depends(pagination),
 ):
-    engine = DevVespaPassageSearchEngine()
+    engine = DevVespaPassageSearchEngine(settings=settings)
     results = engine.search(
         query=query,
         pagination=pagination,

@@ -9,6 +9,7 @@ import requests
 from search.engines import Pagination
 from search.engines.dev_vespa import (
     DevVespaLabelTypeaheadSearchEngine,
+    Settings,
 )
 from search.label import Label
 
@@ -46,7 +47,12 @@ def mock_requests_post(monkeypatch):
 
 @pytest.fixture
 def dev_typeahead_engine() -> DevVespaLabelTypeaheadSearchEngine:
-    return DevVespaLabelTypeaheadSearchEngine()
+    settings = Settings(
+        vespa_endpoint="http://localhost:8089",  # type: ignore[arg-type]
+        vespa_read_token="",  # nosec B106
+    )
+
+    return DevVespaLabelTypeaheadSearchEngine(settings=settings)
 
 
 def _make_grouping_response(values: list[str]) -> dict[str, Any]:

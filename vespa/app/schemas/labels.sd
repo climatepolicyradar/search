@@ -9,9 +9,43 @@ schema labels {
         field value type string {
             indexing: index | attribute | summary
         }
+        field alternative_labels type array<string> {
+            indexing: index | attribute | summary
+        }
+        field description type string {
+            indexing: index | attribute | summary
+        }
+        field negative_labels type array<string> {
+            indexing: attribute | summary
+        }
     }
 
     fieldset default {
-        fields: id, type, value
+        fields: id, value, description, alternative_labels
+    }
+
+    rank-profile default {
+        inputs {
+            query(value_weight) double: 3.0
+            query(alternative_labels_weight) double: 1.0
+            query(description_weight) double: 0.0
+        }
+    }
+
+    rank-profile nativerank inherits default {
+        function value_score() {
+            expression: query(value_weight) * nativeRank(value) + nativeProximity(value)
+        }
+        function alternative_labels_score() {
+            expression: query(alternative_labels_weight) * nativeRank(alternative_labels)
+        }
+        function description_score() {
+            expression: query(description_weight) * nativeRank(description)
+        }
+
+        first-phase {
+            expression: value_score() + alternative_labels_score() + description_score()
+        }
+        summary-features: value_score() alternative_labels_score() description_score() nativeRank(value) nativeRank(alternative_labels) nativeRank(description) nativeProximity(value)
     }
 }
