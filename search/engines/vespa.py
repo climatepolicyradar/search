@@ -474,7 +474,7 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
             label = Label(
                 id=fields.get("id", ""),
                 type="",
-                value=fields.get("preferred_label", ""),
+                value=fields.get("value", ""),
             )
             labels.append(label)
 
