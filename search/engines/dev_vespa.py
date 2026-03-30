@@ -235,15 +235,21 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
     model_class = Document
 
-    def __init__(self, settings: Settings, debug: bool = False) -> None:
+    def __init__(
+        self, settings: Settings, debug: bool = False, bolding: bool = False
+    ) -> None:
         """
         Initialise the search engine.
 
         :param debug: When ``True``, request the ``debug-summary`` document
             summary from Vespa and store per-hit token information in
             :attr:`last_debug_info`.
+        :param bolding: When ``False``, request the ``no-bolding`` document
+            summary, returning plain title/description without ``<hi>`` tags.
+            Ignored when ``debug=True``.
         """
         self.debug = debug
+        self.bolding = bolding
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
 
@@ -287,6 +293,8 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         }
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
+        if not self.bolding:
+            request_body["presentation.bolding"] = "false"
 
         try:
             res = requests.post(
@@ -350,8 +358,8 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
-                    title=source.get("title", MISSING_PLACEHOLDER),
-                    description=source.get("description", MISSING_PLACEHOLDER),
+                    title=fields.get("title", MISSING_PLACEHOLDER),
+                    description=fields.get("description", MISSING_PLACEHOLDER),
                     labels=labels,
                     attributes=source.get("attributes", {}),
                     documents=document_relationships,
