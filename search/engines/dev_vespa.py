@@ -562,7 +562,9 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
     model_class = Label
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, debug: bool = False) -> None:
+        self.debug = debug
+        self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
 
     def search(
@@ -588,6 +590,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            "ranking.profile": "nativerank",
         }
 
         try:
@@ -605,6 +608,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         res = res.json()
         labels: list[Label] = []
+        debug_info: list[dict[str, Any]] = []
 
         for hit in res.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
@@ -615,7 +619,18 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                     value=fields.get("value", ""),
                 )
             )
+            if self.debug:
+                debug_info.append(
+                    {
+                        "relevance": hit.get("relevance"),
+                        "summaryfeatures": fields.get("summaryfeatures"),
+                        "value": fields.get("value", ""),
+                        "alternative_labels": fields.get("alternative_labels", []),
+                        "description": fields.get("description", ""),
+                    }
+                )
 
+        self.last_debug_info = debug_info
         total_size = _get_total_count(res)
         return ListResponse(results=labels, total_size=total_size, next_page_token=None)
 
