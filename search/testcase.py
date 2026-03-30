@@ -80,7 +80,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
             pagination=Pagination(page_token=1, page_size=10),
             filters_json_string=None,
         )
-        result_ids = [result.id for result in search_results]
+        result_ids = [result.id for result in search_results.results]
 
         result_ids_limited = result_ids[: len(self.expected_result_ids)]
 
@@ -89,7 +89,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
         else:
             passed = sorted(self.expected_result_ids) == sorted(result_ids_limited)
 
-        return passed, search_results
+        return passed, search_results.results
 
     def diagnose(self, search_results: list[TModel]) -> str:
         """
@@ -226,7 +226,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             pagination=Pagination(page_token=1, page_size=10),
             filters_json_string=None,
         )
-        result_ids = [result.id for result in search_results]
+        result_ids = [result.id for result in search_results.results]
 
         expected_ids_not_in_response = set(self.expected_result_ids).difference(
             set(result_ids)
@@ -240,7 +240,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         failed = expected_ids_not_in_response or forbidden_ids_in_response
         passed = not failed
 
-        return passed, search_results
+        return passed, search_results.results
 
     @computed_field
     @property
@@ -312,11 +312,11 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             filters_json_string=None,
         )
 
-        if self.k > len(search_results):
+        if self.k > len(search_results.results):
             # self.diagnose handles reporting this kind of issue
-            return False, search_results
+            return False, search_results.results
         else:
-            search_results = search_results[: self.k]
+            search_results = search_results.results[: self.k]
             passing_results = [
                 result for result in search_results if self.characteristics_test(result)
             ]
@@ -416,8 +416,8 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             filters_json_string=None,
         )
 
-        results_1_limited = search_results_1[: self.k]
-        results_2_limited = search_results_2[: self.k]
+        results_1_limited = search_results_1.results[: self.k]
+        results_2_limited = search_results_2.results[: self.k]
 
         result_ids_1 = [result.id for result in results_1_limited]
         result_ids_2 = [result.id for result in results_2_limited]
@@ -434,7 +434,7 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
         overlap_proportion = overlap_count / self.k if self.k > 0 else 0
         passed = overlap_proportion >= self.minimum_overlap
 
-        return passed, search_results_1
+        return passed, search_results_1.results
 
     @computed_field
     @property
