@@ -48,6 +48,6 @@ schema labels {
         first-phase {
             expression: value_score() + alternative_labels_score() + description_score()
         }
-        summary-features: value_score() alternative_labels_score() description_score() nativeRank(value) nativeRank(alternative_labels) nativeRank(description) nativeProximity(value) elementCompleteness(alternative_labels).queryCompleteness
+        summary-features: value_score() alternative_labels_score() description_score() nativeRank(value) nativeRank(alternative_labels) nativeRank(description) nativeProximity(value) elementCompleteness(alternative_labels).queryCompleteness fieldMatch(value).fieldCompleteness fieldMatch(value).queryCompleteness
     }
 }
