@@ -7,6 +7,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+from api.dev import settings
 from search.engines import Pagination
 from search.engines.dev_vespa import DevVespaLabelSearchEngine
 
@@ -23,7 +24,7 @@ def search(
     label_type: str | None = None,
 ):
     """Search for labels."""
-    engine = DevVespaLabelSearchEngine(debug=debug)
+    engine = DevVespaLabelSearchEngine(settings=settings, debug=debug)
     results = engine.search(
         query=query,
         pagination=Pagination(page_token=page, page_size=page_size),
@@ -38,7 +39,7 @@ def search(
         t.highlight_words(words, style="bold yellow", case_sensitive=False)
         return t
 
-    for i, label in enumerate(results):
+    for i, label in enumerate(results.results):
         relevance = None
         summaryfeatures = None
         value = ""

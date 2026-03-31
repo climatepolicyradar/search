@@ -7,6 +7,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+from api.dev import settings
 from search.engines import Pagination
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
 
@@ -36,7 +37,7 @@ def search(
     max_len: int | None = 600,
 ):
     """Search for passages."""
-    engine = DevVespaPassageSearchEngine(debug=debug)
+    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
     results = engine.search(
         query=query,
         pagination=Pagination(page_token=page, page_size=page_size),
