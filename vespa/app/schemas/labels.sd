@@ -8,9 +8,23 @@ schema labels {
         }
         field value type string {
             indexing: index | attribute | summary
+            stemming: multiple
+            linguistics {
+                profile {
+                    index: label_analysis
+                    search: label_analysis_search
+                }
+            }
         }
         field alternative_labels type array<string> {
             indexing: index | attribute | summary
+            stemming: multiple
+            linguistics {
+                profile {
+                    index: label_analysis
+                    search: label_analysis_search
+                }
+            }
         }
         field description type string {
             indexing: index | attribute | summary
@@ -21,7 +35,7 @@ schema labels {
     }
 
     fieldset default {
-        fields: id, value, description, alternative_labels
+        fields: value, alternative_labels
     }
 
     rank-profile default {
