@@ -224,7 +224,7 @@ test_cases = [
         description="Searching for docket number of US case should return all the documents from the case first.",
     ),
     FieldCharacteristicsTestCase[Document](
-        category="entity name",
+        category="entity name + acronym",
         search_terms="erp",
         characteristics_test=lambda document: any(
             term in document.title.lower() for term in ["emissions reduction plan"]
@@ -233,7 +233,7 @@ test_cases = [
         k=10,
     ),
     FieldCharacteristicsTestCase[Document](
-        category="entity name",
+        category="entity name + acronym",
         search_terms="necp",
         characteristics_test=lambda document: any(
             term in document.title.lower()
@@ -259,6 +259,18 @@ test_cases = [
         k=5,
         minimum_overlap=1.0,
         strict_order=False,
+    ),
+    PrecisionTestCase[Document](
+        category="document name+acronym",
+        search_terms="sfdr",
+        expected_result_ids=[
+            "CCLW.family.9520.0",
+            "CCLW.legislative.9520.3859",
+            "CCLW.legislative.9520.4620",
+            "CCLW.document.i00006386.n0000",
+            "CCLW.legislative.9520.6334",
+        ],
+        description="searching for 'sfdr' should return the EU Sustainable Finance Disclosure Regulation",
     ),
 ]
 
