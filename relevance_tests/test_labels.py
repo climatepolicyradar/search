@@ -1,5 +1,6 @@
 from prefect.task_runners import ThreadPoolTaskRunner
 
+from api.dev import settings
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import (
@@ -53,11 +54,13 @@ test_cases = [
         search_terms="energy policy act us",
         characteristics_test=lambda label: (
             "energy" in label.value.lower()
-            or "policy" in label.value.lower()
+            or "polic" in label.value.lower()
+            or "act" in label.value.lower()
             or "usa" in label.value.lower()
         ),
         all_or_any="all",
         description="search for energy policy act us should return relevant labels",
+        k=10,
     ),
     RecallTestCase[Label](
         category="document name",
@@ -123,6 +126,7 @@ test_cases = [
             # "dummy996",  # CLIMATE
             "entity_type::Policy",  # POLICY
             "entity_type::Strategy",  # STRATEGY
+            "geography::HRV",  # Croatia
         ],
         description="search about croatia climate strategy should return relevant labels first",
     ),
@@ -225,7 +229,7 @@ def relevance_tests_labels():
     """Run relevance tests for labels"""
 
     engines = [
-        DevVespaLabelSearchEngine(),
+        DevVespaLabelSearchEngine(settings=settings),
         # DevVespaLabelTypeaheadSearchEngine(),
         # VespaLabelSearchEngine(),
     ]

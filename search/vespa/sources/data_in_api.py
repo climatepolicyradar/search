@@ -34,6 +34,7 @@ class SourceDocument(TypedDict, total=False):
     title: Required[str]
     description: str | None
     labels: list[SourceLabelRelationship]
+    attributes: dict[str, str | float | int | bool]
 
 
 def extract() -> Path:

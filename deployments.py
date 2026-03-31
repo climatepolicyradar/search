@@ -18,15 +18,6 @@ from prefect.variables import Variable
 
 from online_metrics.online_metrics_flow import collect_online_metrics
 from relevance_tests import test_documents, test_labels, test_passages
-from scripts.materialize_vespa_updates.from_data_in_api import (
-    materialize_vespa_updates_from_data_in_api,
-)
-from scripts.materialize_vespa_updates.from_indexer_input import (
-    materialize_vespa_updates_from_indexer_input,
-)
-from scripts.materialize_vespa_updates.from_inference_results import (
-    materialize_vespa_updates_from_inference_results,
-)
 from search.vespa.documents_feed_flow import documents_feed_flow
 from search.vespa.labels_feed_flow import labels_feed_flow
 from search.vespa.passages_feed_flow import passages_feed_flow
@@ -212,28 +203,4 @@ if __name__ == "__main__":
         schedule="0 3 * * 1",  # weekly on Mondays at 3am
         flow_variables=DEFAULT_FLOW_VARIABLES
         | {"ephemeralStorage": {"sizeInGiB": 100}},  # bump storage for 100GB
-    )
-
-    # Materializers (to be deprecated with feed)
-    create_deployment(
-        flow=materialize_vespa_updates_from_indexer_input,
-        description="Materialize Vespa update ops from indexer input bucket",
-        schedule="0 3 * * *",  # daily at 3am
-        flow_variables=DEFAULT_FLOW_VARIABLES
-        | {"ephemeralStorage": {"sizeInGiB": 60}},  # bump storage for 40GB
-    )
-
-    create_deployment(
-        flow=materialize_vespa_updates_from_data_in_api,
-        description="Materialize Vespa update ops from data-in API",
-        schedule="0 3 * * *",  # daily at 3am
-        flow_variables=DEFAULT_FLOW_VARIABLES,
-    )
-
-    create_deployment(
-        flow=materialize_vespa_updates_from_inference_results,
-        description="Materialize Vespa update ops from inference results bucket",
-        schedule="0 3 * * *",  # daily at 3am
-        flow_variables=DEFAULT_FLOW_VARIABLES
-        | {"ephemeralStorage": {"sizeInGiB": 60}},  # bump storage for 40GB
     )
