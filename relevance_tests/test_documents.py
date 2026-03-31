@@ -241,6 +241,24 @@ test_cases = [
         description="Search for 'necp' should return documents with 'national energy and climate plan' or 'necp' in the title",
         k=10,
     ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="climate action plan",
+        characteristics_test=lambda document: all_words_in_string(
+            ["climate", "action", "plan"], document.title
+        ),
+        description="Search for 'climate action plan' should return documents with that phrase in the title",
+        k=10,
+    ),
+    SearchComparisonTestCase[Document](
+        category="spelling",
+        search_terms="phaseout",
+        search_terms_to_compare="phase out",
+        description="Searches for 'phaseout' and 'phase out' should return the same top few documents, like the Japanese policy on phaseout of inefficient coal and Chilean phaseout document",
+        k=5,
+        minimum_overlap=1.0,
+        strict_order=False,
+    ),
 ]
 
 
