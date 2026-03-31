@@ -282,6 +282,12 @@ test_cases = [
         ],
         description="searching for 'ira' should return the Inflation Reduction Act",
     ),
+    PrecisionTestCase[Document](
+        category="document name",
+        search_terms="uganda climate change act",
+        expected_result_ids=["CCLW.family.10180.0", "CCLW.legislative.10180.4758"],
+        description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
+    ),
 ]
 
 
