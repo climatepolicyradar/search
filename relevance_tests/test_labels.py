@@ -130,6 +130,9 @@ test_cases = [
         ],
         description="search about croatia climate strategy should return relevant labels first",
     ),
+    # TODO: 'hurricanes' is a label of storm, which is a child of 'extreme weather'.
+    # So this requires the labels of the subconcepts to be indexed. They should probably
+    # be indexed in a different field to the main concept's labels.
     RecallTestCase[Label](
         category="topic",
         search_terms="hurricanes",
