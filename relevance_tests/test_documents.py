@@ -272,6 +272,16 @@ test_cases = [
         ],
         description="searching for 'sfdr' should return the EU Sustainable Finance Disclosure Regulation",
     ),
+    PrecisionTestCase[Document](
+        category="acronym",
+        search_terms="ira",
+        expected_result_ids=[
+            "CCLW.family.10699.0",
+            "CCLW.legislative.10699.5931",
+            "CCLW.legislative.10699.5933",
+        ],
+        description="searching for 'ira' should return the Inflation Reduction Act",
+    ),
 ]
 
 
