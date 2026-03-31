@@ -34,7 +34,7 @@ schema labels {
 
     rank-profile nativerank inherits default {
         function value_score() {
-            expression: query(value_weight) * nativeRank(value) + nativeProximity(value)
+            expression: query(value_weight) * (nativeRank(value) + nativeProximity(value) / 3)
         }
         function alternative_labels_score() {
             # nativeRank * sqrt(queryCompleteness) penalises labels which match a lower number  of terms in the query.
