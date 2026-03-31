@@ -60,7 +60,12 @@ class LabelsCondition(BaseModel):
 
 
 class AttributesCondition(BaseModel):
-    field: Literal["attributes_string", "attributes_double", "attributes_boolean"]
+    field: Literal[
+        "attributes_string",
+        "attributes_double",
+        "attributes_boolean",
+        "attributes_identifiers",
+    ]
     key: str
     op: Literal["eq", "not_eq"]
     value: str | float | bool
