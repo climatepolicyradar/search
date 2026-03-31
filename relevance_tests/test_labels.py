@@ -126,6 +126,7 @@ test_cases = [
             # "dummy996",  # CLIMATE
             "entity_type::Policy",  # POLICY
             "entity_type::Strategy",  # STRATEGY
+            "geography::HRV",  # Croatia
         ],
         description="search about croatia climate strategy should return relevant labels first",
     ),
