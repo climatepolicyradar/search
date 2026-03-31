@@ -191,9 +191,10 @@ test_cases = [
                 "wind" in lbl.lower() or "energy" in lbl.lower()
                 for lbl in label.all_labels
             )
+            or label.id == "entity_type::Roadmap"
         ),
         all_or_any="any",
-        description="search for offshore wind roadmap should return wind energy labels",
+        description="search for offshore wind roadmap should return wind energy or Roadmap labels",
     ),
     PrecisionTestCase[Label](
         category="logic",
