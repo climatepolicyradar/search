@@ -288,6 +288,15 @@ test_cases = [
         expected_result_ids=["CCLW.family.10180.0", "CCLW.legislative.10180.4758"],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
+    SearchComparisonTestCase[Document](
+        category="equivalent terms",
+        search_terms="uganda climate change act",
+        search_terms_to_compare="climate change law uganda",
+        description="Searches for equivalent terms should return the same top few documents (namely the Uganda Climate Change Act 2021)",
+        k=5,
+        minimum_overlap=1.0,
+        strict_order=False,
+    ),
     PrecisionTestCase[Document](
         category="document name+acronym",
         search_terms="ev mandate",
