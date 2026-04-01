@@ -50,8 +50,23 @@ _TEST_SETTINGS = Settings(
 )
 
 
+class SourceLabelRelationshipFactory(TypedDictFactory):
+    __model__ = SourceLabelRelationship
+
+    @classmethod
+    def build(cls, **kwargs: Any) -> SourceLabelRelationship:
+        kwargs.setdefault("timestamp", None)
+        return super().build(**kwargs)
+
+
 class SourceDocumentFactory(TypedDictFactory):
     __model__ = SourceDocument
+
+    @classmethod
+    def build(cls, **kwargs: Any) -> SourceDocument:
+        if "labels" not in kwargs:
+            kwargs["labels"] = [SourceLabelRelationshipFactory.build()]
+        return super().build(**kwargs)
 
 
 def _vespa_ready() -> bool:
