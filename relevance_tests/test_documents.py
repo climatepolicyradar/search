@@ -288,6 +288,29 @@ test_cases = [
         expected_result_ids=["CCLW.family.10180.0", "CCLW.legislative.10180.4758"],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
+    PrecisionTestCase[Document](
+        category="document name+acronym",
+        search_terms="ev mandate",
+        expected_result_ids=[
+            "CCLW.family.i00001515.n0000",  # there is a duplicate family with year 0 in the metadata (CCLW.family.i00000771.n0000, the-vehicle-emissions-trading-schemes-order-2023_260e)
+            # there are also two document pages on CCLW not accessible from the family page:
+            "CCLW.document.i00000772.n0000",
+            "CCLW.document.i00001516.n0000",
+            # Canada--also a document page not accessible from the family page:
+            "CPR.family.i00000386.n0000",
+            "CPR.document.i00000387.n0000",
+        ],
+        description="searching for 'ev mandate' as the commonly understood topic of the legislation when not obvious from the title but stated in the summary should return the UK's Vechicle Emissions Trading Schemes Order 2023 and Canada's Electric Vehicle Availability Standard in the top results",
+    ),
+    SearchComparisonTestCase[Document](
+        category="alternate acronyms",
+        search_terms="ev mandate",
+        search_terms_to_compare="zev mandate",
+        description="Searches for 'ev mandate' and 'zev mandate' should return same top few documents relating to electric vehicle and zero emission vehicle mandates",
+        k=5,
+        minimum_overlap=1.0,
+        strict_order=False,
+    ),
 ]
 
 
