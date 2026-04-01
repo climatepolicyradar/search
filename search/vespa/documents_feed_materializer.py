@@ -38,6 +38,7 @@ class VespaDocument(TypedDict):
     attributes_string: VespaAssign[dict[str, str]]
     attributes_double: VespaAssign[dict[str, float]]
     attributes_boolean: VespaAssign[dict[str, int]]
+    attributes_identifiers: VespaAssign[dict[str, str]]
 
 
 def _strip_control_chars(s: str) -> str:
@@ -108,6 +109,15 @@ def _source_document_to_vespa_update(
             },
             "attributes_boolean": {
                 "assign": {k: int(v) for k, v in attrs.items() if isinstance(v, bool)}
+            },
+            "attributes_identifiers": {
+                "assign": {
+                    # we do not mind if this is duplicated in attributes_string
+                    # as it is used for boosting
+                    k.replace("identifiers::", ""): str(v)
+                    for k, v in attrs.items()
+                    if k.startswith("identifiers::")
+                }
             },
         },
     }
