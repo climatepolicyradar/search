@@ -83,6 +83,15 @@ test_cases = [
         ],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Climate Change Act 2008)",
     ),
+    SearchComparisonTestCase[Document](
+        category="equivalent terms",
+        search_terms="uk climate change act",
+        search_terms_to_compare="climate change law uk",
+        description="Searches for equivalent terms should return the same top few documents (namely the UK Climate Change Act 2008)",
+        k=5,
+        minimum_overlap=1.0,
+        strict_order=False,
+    ),
     PrecisionTestCase[Document](
         category="document name + geography",
         search_terms="energy policy act us",
