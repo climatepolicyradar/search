@@ -20,6 +20,7 @@ class VespaLabel(TypedDict):
     type: str
     value: str
     alternative_labels: list[str]
+    subconcept_labels: list[str]
     description: str
     negative_labels: list[str]
 
@@ -29,6 +30,7 @@ class VespaLabelUpdate(TypedDict):
     type: VespaAssign[str]
     value: VespaAssign[str]
     alternative_labels: VespaAssign[list[str]]
+    subconcept_labels: VespaAssign[list[str]]
     description: VespaAssign[str]
     negative_labels: VespaAssign[list[str]]
 
@@ -46,6 +48,7 @@ def labels_feed_materializer():
                 "type": value["type"],
                 "value": value["value"],
                 "alternative_labels": [],
+                "subconcept_labels": [],
                 "description": "",
                 "negative_labels": [],
             }
@@ -79,6 +82,7 @@ def labels_feed_materializer():
             "type": "concept",
             "value": concept["preferred_label"],
             "alternative_labels": concept["alternative_labels"],
+            "subconcept_labels": concept["subconcept_labels"],
             "description": concept["description"] or "",
             "negative_labels": concept["negative_labels"],
         }
@@ -97,6 +101,7 @@ def labels_feed_materializer():
                     "type": {"assign": label["type"]},
                     "value": {"assign": label["value"]},
                     "alternative_labels": {"assign": label["alternative_labels"]},
+                    "subconcept_labels": {"assign": label["subconcept_labels"]},
                     "description": {"assign": label["description"]},
                     "negative_labels": {"assign": label["negative_labels"]},
                 },

@@ -354,7 +354,7 @@ class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
                 ([{{"targetNumHits": {self.TARGET_NUM_HITS}, "distanceThreshold": {self.DISTANCE_THRESHOLD}}}]
                  nearestNeighbor(text_embedding,query_embedding))
             )
-        
+
         """
 
         return {
@@ -471,10 +471,18 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
 
         for child in children:
             fields = child.get("fields", {})
+            alternative_labels = fields.get("alternative_labels", [])
+            if not isinstance(alternative_labels, list):
+                alternative_labels = []
+            subconcept_labels = fields.get("subconcept_labels", [])
+            if not isinstance(subconcept_labels, list):
+                subconcept_labels = []
             label = Label(
                 id=fields.get("id", ""),
-                type="",
+                type=fields.get("type", ""),
                 value=fields.get("value", ""),
+                alternative_labels=alternative_labels,
+                subconcept_labels=subconcept_labels,
             )
             labels.append(label)
 
