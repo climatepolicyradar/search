@@ -26,6 +26,16 @@ schema labels {
                 }
             }
         }
+        field subconcept_labels type array<string> {
+            indexing: index | attribute | summary
+            stemming: multiple
+            linguistics {
+                profile {
+                    index: label_analysis
+                    search: label_analysis_search
+                }
+            }
+        }
         field description type string {
             indexing: index | attribute | summary
         }
@@ -35,13 +45,14 @@ schema labels {
     }
 
     fieldset default {
-        fields: value, alternative_labels
+        fields: value, alternative_labels, subconcept_labels
     }
 
     rank-profile default {
         inputs {
             query(value_weight) double: 3.0
             query(alternative_labels_weight) double: 1.5
+            query(subconcept_labels_weight) double: 1.0
             query(description_weight) double: 0.0
         }
     }
@@ -55,13 +66,16 @@ schema labels {
             # Without the sqrt, the multiplier is too aggressive.
             expression: query(alternative_labels_weight) * nativeRank(alternative_labels) * pow(elementCompleteness(alternative_labels).queryCompleteness, 0.5)
         }
+        function subconcept_labels_score() {
+            expression: query(subconcept_labels_weight) * nativeRank(subconcept_labels) * pow(elementCompleteness(subconcept_labels).queryCompleteness, 0.5)
+        }
         function description_score() {
             expression: query(description_weight) * nativeRank(description)
         }
 
         first-phase {
-            expression: value_score() + alternative_labels_score() + description_score()
+            expression: value_score() + alternative_labels_score() + subconcept_labels_score() + description_score()
         }
-        summary-features: value_score() alternative_labels_score() description_score() nativeRank(value) nativeRank(alternative_labels) nativeRank(description) nativeProximity(value) elementCompleteness(alternative_labels).queryCompleteness fieldMatch(value).fieldCompleteness fieldMatch(value).queryCompleteness
+        summary-features: value_score() alternative_labels_score() subconcept_labels_score() description_score() nativeRank(value) nativeRank(alternative_labels) nativeRank(subconcept_labels) nativeRank(description) nativeProximity(value) elementCompleteness(alternative_labels).queryCompleteness elementCompleteness(subconcept_labels).queryCompleteness fieldMatch(value).fieldCompleteness fieldMatch(value).queryCompleteness
     }
 }
