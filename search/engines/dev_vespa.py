@@ -518,7 +518,10 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         """Fetch a list of relevant passage search results."""
         yql = "select * from sources passages where true"
         if query:
-            yql += " and userQuery()"
+            yql += (
+                " and (userQuery()"
+                ' or ({defaultIndex: "text_synonyms"}userInput(@query)))'
+            )
 
         logger.info(f"searching passages for yql: {yql}")
 
@@ -529,9 +532,9 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            "ranking.profile": "nativerank",
         }
         if self.debug:
-            request_body["ranking.profile"] = "nativerank"
             request_body["presentation.summary"] = "debug-summary"
 
         try:
@@ -571,6 +574,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
                         "relevance": hit.get("relevance"),
                         "summaryfeatures": fields.get("summaryfeatures"),
                         "text_tokens": fields.get("text_tokens"),
+                        "text_synonyms_tokens": fields.get("text_synonyms_tokens"),
                     }
                 )
 

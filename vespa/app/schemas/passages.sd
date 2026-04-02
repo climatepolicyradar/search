@@ -11,6 +11,10 @@ schema passages {
         }
         field text type string {
             indexing: index | attribute | summary
+            stemming: multiple
+            linguistics {
+                profile: passage_analysis
+            }
         }
         field document_id type string {
             indexing: attribute | summary
@@ -29,19 +33,40 @@ schema passages {
         }
     }
 
+    # Uses title_analysis (no stop words) rather than passage_analysis because
+    # some synonyms contain stop words (e.g. "global goal on adaptation").
+    # Both index and search profiles must be consistent — no stop words on either side.
+    field text_synonyms type string {
+        indexing: input text | index
+        stemming: multiple
+        linguistics {
+            profile {
+                index: title_analysis
+                search: passage_synonym_analysis_search
+            }
+        }
+    }
+
     fieldset default {
         fields: text
+    }
+
+    fieldset text_synonyms_fieldset {
+        fields: text_synonyms
     }
 
     rank-profile nativerank {
         function text_score() {
             expression: nativeRank(text) + nativeProximity(text)
         }
+        function text_synonyms_score() {
+            expression: nativeRank(text_synonyms)
+        }
 
         first-phase {
-            expression: text_score()
+            expression: text_score() + text_synonyms_score()
         }
-        summary-features: text_score() nativeRank(text) nativeProximity(text)
+        summary-features: text_score() text_synonyms_score() nativeRank(text) nativeProximity(text) nativeRank(text_synonyms)
     }
 
     document-summary debug-summary {
@@ -56,6 +81,10 @@ schema passages {
         summary heading_id {}
         summary text_tokens {
             source: text
+            tokens
+        }
+        summary text_synonyms_tokens {
+            source: text_synonyms
             tokens
         }
         from-disk

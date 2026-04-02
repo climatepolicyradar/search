@@ -49,11 +49,13 @@ def search(
         relevance = None
         summaryfeatures = None
         text_tokens = None
+        text_synonyms_tokens = None
         if debug and i < len(engine.last_debug_info):
             info = engine.last_debug_info[i]
             relevance = info.get("relevance")
             summaryfeatures = info.get("summaryfeatures")
             text_tokens = info.get("text_tokens")
+            text_synonyms_tokens = info.get("text_synonyms_tokens")
 
         table = Table(show_header=False, box=None, padding=(0, 1))
         table.add_column(style="bold cyan", no_wrap=True)
@@ -73,6 +75,10 @@ def search(
             table.add_row("relevance", str(relevance))
         if text_tokens:
             table.add_row("text_tokens", truncate(str(text_tokens), max_len))
+        if text_synonyms_tokens:
+            table.add_row(
+                "text_synonyms_tokens", truncate(str(text_synonyms_tokens), max_len)
+            )
 
         parts: list[Table | Syntax] = [table]
         if summaryfeatures:

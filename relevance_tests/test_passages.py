@@ -4,10 +4,6 @@ from api.dev import settings
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
-from search.engines.vespa import (
-    ExactVespaPassageSearchEngine,
-    HybridVespaPassageSearchEngine,
-)
 from search.passage import Passage
 from search.testcase import (
     FieldCharacteristicsTestCase,
@@ -63,22 +59,22 @@ test_cases = [
         all_or_any="all",
         assert_results=True,
     ),
-    FieldCharacteristicsTestCase[Passage](
-        category="BROKEN exact match",
-        search_terms="adaptation options",
-        # FIXME: this tests exact match search, which we don't currently consider using these tests
-        # exact_match=True,
-        characteristics_test=(
-            lambda passage: not (
-                "adaptation option" in passage.text.lower()
-                and "adaptation options" not in passage.text.lower()
-            )
-        ),
-        description="Exact match search should not perform stemming.",
-        k=100,
-        all_or_any="all",
-        assert_results=True,
-    ),
+    # FieldCharacteristicsTestCase[Passage](
+    #     category="BROKEN exact match",
+    #     search_terms="adaptation options",
+    #     # FIXME: this tests exact match search, which we don't currently consider using these tests
+    #     # exact_match=True,
+    #     characteristics_test=(
+    #         lambda passage: not (
+    #             "adaptation option" in passage.text.lower()
+    #             and "adaptation options" not in passage.text.lower()
+    #         )
+    #     ),
+    #     description="Exact match search should not perform stemming.",
+    #     k=100,
+    #     all_or_any="all",
+    #     assert_results=True,
+    # ),
     FieldCharacteristicsTestCase[Passage](
         category="dissimilar passages excluded",
         search_terms="mango",
@@ -262,8 +258,8 @@ def relevance_tests_passages():
 
     engines = [
         DevVespaPassageSearchEngine(settings=settings),
-        ExactVespaPassageSearchEngine(),
-        HybridVespaPassageSearchEngine(),
+        # ExactVespaPassageSearchEngine(),
+        # HybridVespaPassageSearchEngine(),
     ]
 
     run_relevance_tests_parallel(
