@@ -71,6 +71,11 @@ lint:
           run: typos ${target} --format sarif
           read_output_from: stdout
 
+  ignore:
+    - linters: [typos]
+      paths:
+        - relevance_tests/**
+
   enabled:
     - actionlint@1.7.10
     - bandit@1.9.3
