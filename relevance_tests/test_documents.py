@@ -367,6 +367,15 @@ test_cases = [
         ],
         description="searching for 'governance regulation' should the EU Governance Regulation, even when the term is not in the title",
     ),
+    PrecisionTestCase[Document](
+        category="specific documents",
+        search_terms="five year plan",
+        expected_result_ids=[
+            "CCLW.family.10087.0",  # The most recent of China's five-year plans (15th).  Further guidance needed on which of the many other documents should be included in this test
+            "CCLW.document.i00008343.n0000",
+        ],
+        description="searching for 'five year plan' should return China's five-year plans first",
+    ),
 ]
 
 
