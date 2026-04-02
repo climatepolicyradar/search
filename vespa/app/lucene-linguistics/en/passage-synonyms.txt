@@ -1,0 +1,15 @@
+# Acronyms — bidirectional where both forms appear in documents
+nz => net zero, new zealand
+ndc => nationally determined contribution
+nationally determined contribution => ndc
+nbs => nature based solutions
+nature based solution, nature based solutions => nbs
+gga => global goal on adaptation
+global goal on adaptation => gga
+
+# Related phrases — one-directional expansion
+ev, evs => electric vehicle, electric car
+ecosystem based => nature based solutions, nbs
+peatland rehabilitation => peatland restoration
+human rights => rights based approach
+public health infrastructure => hospital
