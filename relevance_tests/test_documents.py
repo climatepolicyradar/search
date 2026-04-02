@@ -335,6 +335,18 @@ test_cases = [
         ],
         description="searching for 'zev mandate' as the commonly understood topic of the legislation when not obvious from the title but stated in the summary should return the UK's Vechicle Emissions Trading Schemes Order 2023 and Canada's Electric Vehicle Availability Standard in the top results",
     ),
+    PrecisionTestCase[Document](
+        category="document name",
+        search_terms="safeguard mechanism",
+        expected_result_ids=[
+            "CCLW.family.i00006699.n0000",  # "National Greenhouse and Energy Reporting (Safeguard Mechanism) Rule 2015, Australia"
+            "CCLW.document.i00006700.n0000",
+            "CCLW.family.11176.0",  # 'Safeguard Mechanism (Crediting) Amendment Act 2023, Australia
+            "CCLW.document.i00006698.n0000",
+            # There could be more documents but I don't know what they are
+        ],
+        description="searching for 'safeguard mechanism' should return documents about the Australian policy instrument whose short name is 'safeguard mechanism'",
+    ),
 ]
 
 
