@@ -319,7 +319,7 @@ test_cases = [
             "CPR.family.i00000386.n0000",
             "CPR.document.i00000387.n0000",
         ],
-        description="searching for 'ev mandate' as the commonly understood topic of the legislation when not obvious from the title but stated in the summary should return the UK's Vechicle Emissions Trading Schemes Order 2023 and Canada's Electric Vehicle Availability Standard in the top results",
+        description="searching for 'ev mandate' as the commonly understood topic of the legislation when not obvious from the title but stated in the summary should return the UK's Vehicle Emissions Trading Schemes Order 2023 and Canada's Electric Vehicle Availability Standard in the top results",
     ),
     PrecisionTestCase[Document](
         category="document name+acronym",
