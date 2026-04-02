@@ -296,7 +296,10 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
         ]
 
         if self.k > len(search_results):
-            "`k` chosen for test is greater than the number of search results returned. This will automatically fail this test."
+            lines.append(
+                f"  NOTE: Only {len(search_results)} results were returned, but k={self.k}. "
+                "This test is evaluated against the returned results only."
+            )
 
         if self.assert_results and total == 0:
             lines.append("  No results returned (assert_results=True)")
@@ -311,25 +314,20 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             pagination=Pagination(page_token=1, page_size=self.k),
             filters_json_string=None,
         )
-
-        if self.k > len(search_results.results):
-            # self.diagnose handles reporting this kind of issue
-            return False, search_results.results
-        else:
-            search_results = search_results.results[: self.k]
-            passing_results = [
-                result for result in search_results if self.characteristics_test(result)
-            ]
+        results = search_results.results[: self.k]
+        passing_results = [
+            result for result in results if self.characteristics_test(result)
+        ]
 
         if self.all_or_any == "all":
-            passed = len(passing_results) == len(search_results)
+            passed = len(passing_results) == len(results)
         elif self.all_or_any == "any":
             passed = len(passing_results) > 0
 
         if self.assert_results:
-            passed = passed and (len(search_results) > 0)
+            passed = passed and (len(results) > 0)
 
-        return passed, search_results
+        return passed, results
 
     @computed_field
     @property

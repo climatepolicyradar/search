@@ -50,7 +50,7 @@
                             </item>
                         </tokenFilters>
                     </item>
-                    <item key="profile=label_analysis;language=en">
+                    <item key="profile=document_label_analysis;language=en">
                         <tokenizer>
                             <name>standard</name>
                         </tokenizer>

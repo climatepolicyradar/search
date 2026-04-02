@@ -59,7 +59,18 @@
                             </item>
                         </tokenFilters>
                     </item>
-                    <!-- label_analysis: lowercase only, no stemming -->
+                    <!-- document_label_analysis: lowercase only, no stemming -->
+                    <item key="profile=document_label_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <!-- label_analysis: lowercase, stemming -->
                     <item key="profile=label_analysis;language=en">
                         <tokenizer>
                             <name>standard</name>
@@ -67,6 +78,35 @@
                         <tokenFilters>
                             <item>
                                 <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <!-- label_analysis_search: lowercase, synonym expansion, stemming for search time -->
+                    <item key="profile=label_analysis_search;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>synonymGraph</name>
+                                <conf>
+                                    <item key="synonyms">en/label-synonyms.txt</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
                             </item>
                         </tokenFilters>
                     </item>
