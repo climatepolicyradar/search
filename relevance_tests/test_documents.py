@@ -354,6 +354,19 @@ test_cases = [
         description="Search for 'taxonomy' return green taxonomies with the term in the title",
         k=5,
     ),
+    PrecisionTestCase[Document](
+        category="specific document",
+        search_terms="governance regulation",
+        expected_result_ids=[
+            "CCLW.family.9492.0",
+            "CCLW.legislative.9492.3806",
+            "CCLW.legislative.9492.rtl_142",
+            "CCLW.legislative.9492.5884",
+            "CCLW.document.i00006233.n0000",
+            "CCLW.document.i00006232.n0000",
+        ],
+        description="searching for 'governance regulation' should the EU Governance Regulation, even when the term is not in the title",
+    ),
 ]
 
 
