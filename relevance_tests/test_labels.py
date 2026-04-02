@@ -34,8 +34,12 @@ test_cases = [
         search_terms="Philippines policies in climate changes",
         expected_result_ids=[
             "geography::PHL",  # PHILIPPINES
+            "party::Philippines",
             "entity_type::Policy",  # POLICY
-            # "dummy996",  # CLIMATE
+            "academic/research::Climate Policy",
+            "type::Policies",
+            "keyword::Climate Change",
+            "focal_area::Climate Change",
         ],
         description="search for philippines policies in climate changes should return relevant labels first",
     ),
@@ -80,10 +84,12 @@ test_cases = [
         expected_result_ids=[
             "entity_type::Nationally determined contribution",
             "entity_type::National adaptation plan",
+            "entity_type::National adaptation plan,adaptation communication",
             "entity_type::National drought plan (ndp)",
             "entity_type::National biodiversity strategy and action plan (nbsap)",
             "entity_type::National target (nt)",
             "entity_type::Plan",
+            "keyword::National Energy And Climate Plans",
         ],
         description="search for national climate plan should return relevant document types first",
     ),
@@ -113,8 +119,12 @@ test_cases = [
         search_terms="How many targets does Canada currently have relating to climate change?",
         expected_result_ids=[
             "concept::Q1651",  # target
-            "geography::CAN",  # CANADA
-            # "dummy996",  # CLIMATE
+            # Canada
+            "geography::CAN",
+            "party::Canada",
+            # Climate change
+            "focal_area::Climate Change",
+            "keyword::Climate Change",
         ],
         description="search about canada targets should return relevant labels first",
     ),
@@ -122,11 +132,11 @@ test_cases = [
         category="question",
         search_terms="what is the croatias climate strategy",
         expected_result_ids=[
-            # "wf4tcvtp",  # strategy setting and planning
-            # "dummy996",  # CLIMATE
+            "non-party::Climate Strategies",
             "entity_type::Policy",  # POLICY
             "entity_type::Strategy",  # STRATEGY
             "geography::HRV",  # Croatia
+            "party::Croatia",
         ],
         description="search about croatia climate strategy should return relevant labels first",
     ),
@@ -149,6 +159,7 @@ test_cases = [
         expected_result_ids=[
             "concept::Q638",  # fossil fuel
             "concept::Q1275",  # subsidy removal
+            "keyword::Fossil Fuels Subsidies",
         ],
         description="search for fossil fuel subsidy removal should return 'fossil fuel' and 'subsidy removal' labels first",
     ),
@@ -215,6 +226,12 @@ test_cases = [
             "geography::USA",
             "geography::SWE",
             "geography::CHN",
+            "party::United States",
+            "party::Sweden",
+            "party::Japan",
+            "party::Japan ",
+            "party::japan",
+            "party::China",
         ],
         description="search for multiple countries should return labels for those countries first",
     ),
@@ -223,7 +240,9 @@ test_cases = [
         search_terms="indigenous people + colombia + laws",
         expected_result_ids=[
             "concept::Q684",  # indigenous people
+            "keyword::Indigenous People",
             "geography::COL",  # COLOMBIA
+            "party::Colombia",
             "entity_type::Law",
         ],
         description="search for indigenous people colombia laws should return relevant labels first",
