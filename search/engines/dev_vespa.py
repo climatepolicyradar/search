@@ -574,6 +574,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
                         "relevance": hit.get("relevance"),
                         "summaryfeatures": fields.get("summaryfeatures"),
                         "text_tokens": fields.get("text_tokens"),
+                        "text_synonyms_tokens": fields.get("text_synonyms_tokens"),
                     }
                 )
 
