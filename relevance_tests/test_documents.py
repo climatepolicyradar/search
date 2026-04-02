@@ -347,6 +347,13 @@ test_cases = [
         ],
         description="searching for 'safeguard mechanism' should return documents about the Australian policy instrument whose short name is 'safeguard mechanism'",
     ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="taxonomy",
+        characteristics_test=lambda document: "taxonomy" in document.title.lower(),
+        description="Search for 'taxonomy' return green taxonomies with the term in the title",
+        k=5,
+    ),
 ]
 
 
