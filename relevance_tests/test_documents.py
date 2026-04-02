@@ -85,6 +85,19 @@ test_cases = [
     ),
     PrecisionTestCase[Document](
         category="document name + geography",
+        search_terms="climate change law uk",
+        expected_result_ids=[
+            # "UK Climate Change Act" with no geography
+            "CCLW.collection.1755.0",
+            # "Climate Change Act 2008" from "United Kingdom"
+            "CCLW.family.1755.0",
+            "CCLW.legislative.1755.2260",
+            "CCLW.legislative.1755.rtl_71",
+        ],
+        description="Searching for title + geography should return the correct document if geography is not in the document title (Climate Change Act 2008)",
+    ),
+    PrecisionTestCase[Document](
+        category="document name + geography",
         search_terms="energy policy act us",
         expected_result_ids=[
             "CCLW.family.1776.0",
@@ -222,6 +235,146 @@ test_cases = [
         search_terms="24-3397",
         expected_result_ids=["Sabin.document.69198.69199"],
         description="Searching for docket number of US case should return all the documents from the case first.",
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="entity name + acronym",
+        search_terms="erp",
+        characteristics_test=lambda document: any(
+            term in document.title.lower() for term in ["emissions reduction plan"]
+        ),
+        description="Search for 'erp' should return documents with 'emissions reduction plan' in the title",
+        k=10,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="entity name + acronym",
+        search_terms="necp",
+        characteristics_test=lambda document: any(
+            term in document.title.lower()
+            for term in ["national energy and climate plan", "necp"]
+        ),
+        description="Search for 'necp' should return documents with 'national energy and climate plan' or 'necp' in the title",
+        k=10,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="climate action plan",
+        characteristics_test=lambda document: all_words_in_string(
+            ["climate", "action", "plan"], document.title
+        ),
+        description="Search for 'climate action plan' should return documents with that phrase in the title",
+        k=10,
+    ),
+    SearchComparisonTestCase[Document](
+        category="spelling",
+        search_terms="phaseout",
+        search_terms_to_compare="phase out",
+        description="Searches for 'phaseout' and 'phase out' should return the same top few documents, like the Japanese policy on phaseout of inefficient coal and Chilean phaseout document",
+        k=5,
+        minimum_overlap=1.0,
+        strict_order=False,
+    ),
+    PrecisionTestCase[Document](
+        category="document name+acronym",
+        search_terms="sfdr",
+        expected_result_ids=[
+            "CCLW.family.9520.0",
+            "CCLW.legislative.9520.3859",
+            "CCLW.legislative.9520.4620",
+            "CCLW.document.i00006386.n0000",
+            "CCLW.legislative.9520.6334",
+        ],
+        description="searching for 'sfdr' should return the EU Sustainable Finance Disclosure Regulation",
+    ),
+    PrecisionTestCase[Document](
+        category="acronym",
+        search_terms="ira",
+        expected_result_ids=[
+            "CCLW.family.10699.0",
+            "CCLW.legislative.10699.5931",
+            "CCLW.legislative.10699.5933",
+        ],
+        description="searching for 'ira' should return the Inflation Reduction Act",
+    ),
+    PrecisionTestCase[Document](
+        category="document name",
+        search_terms="uganda climate change act",
+        expected_result_ids=["CCLW.family.10180.0", "CCLW.legislative.10180.4758"],
+        description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
+    ),
+    PrecisionTestCase[Document](
+        category="document name",
+        search_terms="climate change law uganda",
+        expected_result_ids=["CCLW.family.10180.0", "CCLW.legislative.10180.4758"],
+        description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
+    ),
+    PrecisionTestCase[Document](
+        category="document name+acronym",
+        search_terms="ev mandate",
+        expected_result_ids=[
+            "CCLW.family.i00001515.n0000",  # there is a duplicate family with year 0 in the metadata (CCLW.family.i00000771.n0000, the-vehicle-emissions-trading-schemes-order-2023_260e)
+            # there are also two document pages on CCLW not accessible from the family page:
+            "CCLW.document.i00000772.n0000",
+            "CCLW.document.i00001516.n0000",
+            # Canada--also a document page not accessible from the family page:
+            "CPR.family.i00000386.n0000",
+            "CPR.document.i00000387.n0000",
+        ],
+        description="searching for 'ev mandate' as the commonly understood topic of the legislation when not obvious from the title but stated in the summary should return the UK's Vehicle Emissions Trading Schemes Order 2023 and Canada's Electric Vehicle Availability Standard in the top results",
+    ),
+    PrecisionTestCase[Document](
+        category="document name+acronym",
+        search_terms="zev mandate",
+        expected_result_ids=[
+            "CCLW.family.i00001515.n0000",  # there is a duplicate family with year 0 in the metadata (CCLW.family.i00000771.n0000, the-vehicle-emissions-trading-schemes-order-2023_260e)
+            # there are also two document pages on CCLW not accessible from the family page:
+            "CCLW.document.i00000772.n0000",
+            "CCLW.document.i00001516.n0000",
+            # Canada--also a document page not accessible from the family page:
+            "CPR.family.i00000386.n0000",
+            "CPR.document.i00000387.n0000",
+        ],
+        description="searching for 'zev mandate' as the commonly understood topic of the legislation when not obvious from the title but stated in the summary should return the UK's Vechicle Emissions Trading Schemes Order 2023 and Canada's Electric Vehicle Availability Standard in the top results",
+    ),
+    PrecisionTestCase[Document](
+        category="document name",
+        search_terms="safeguard mechanism",
+        expected_result_ids=[
+            "CCLW.family.i00006699.n0000",  # "National Greenhouse and Energy Reporting (Safeguard Mechanism) Rule 2015, Australia"
+            "CCLW.document.i00006700.n0000",
+            "CCLW.family.11176.0",  # 'Safeguard Mechanism (Crediting) Amendment Act 2023, Australia
+            "CCLW.document.i00006698.n0000",
+            # There could be more documents but I don't know what they are
+        ],
+        description="searching for 'safeguard mechanism' should return documents about the Australian policy instrument whose short name is 'safeguard mechanism'",
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="document type",
+        search_terms="taxonomy",
+        characteristics_test=lambda document: "taxonomy" in document.title.lower(),
+        description="Search for 'taxonomy' return green taxonomies with the term in the title",
+        k=5,
+    ),
+    PrecisionTestCase[Document](
+        category="specific document",
+        search_terms="governance regulation",
+        expected_result_ids=[
+            "CCLW.family.9492.0",
+            "CCLW.legislative.9492.3806",
+            "CCLW.legislative.9492.rtl_142",
+            "CCLW.legislative.9492.5884",
+            "CCLW.document.i00006233.n0000",
+            "CCLW.document.i00006232.n0000",
+        ],
+        description="searching for 'governance regulation' should the EU Governance Regulation, even when the term is not in the title",
+    ),
+    PrecisionTestCase[Document](
+        category="specific documents",
+        search_terms="five year plan",
+        expected_result_ids=[
+            "CCLW.family.10087.0",  # The most recent of China's five-year plans (15th).  Further guidance needed on which of the many other documents should be included in this test
+            "CCLW.document.i00008343.n0000",
+        ],
+        description="searching for 'five year plan' should return China's five-year plans first",
     ),
 ]
 
