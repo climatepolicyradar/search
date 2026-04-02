@@ -644,12 +644,16 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             alternative_labels = fields.get("alternative_labels", [])
             if not isinstance(alternative_labels, list):
                 alternative_labels = []
+            subconcept_labels = fields.get("subconcept_labels", [])
+            if not isinstance(subconcept_labels, list):
+                subconcept_labels = []
             labels.append(
                 Label(
                     id=fields.get("id", ""),
                     type=fields.get("type", ""),
                     value=fields.get("value", ""),
                     alternative_labels=alternative_labels,
+                    subconcept_labels=subconcept_labels,
                     description=fields.get("description", ""),
                 )
             )
@@ -660,6 +664,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
                         "summaryfeatures": fields.get("summaryfeatures"),
                         "value": fields.get("value", ""),
                         "alternative_labels": fields.get("alternative_labels", []),
+                        "subconcept_labels": fields.get("subconcept_labels", []),
                         "description": fields.get("description", ""),
                     }
                 )

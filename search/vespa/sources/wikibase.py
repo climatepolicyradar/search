@@ -21,6 +21,7 @@ class WikibaseConcept(TypedDict):
     alternative_labels: list[str]
     description: str | None
     negative_labels: list[str]
+    subconcept_labels: list[str]
 
 
 def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
@@ -57,6 +58,7 @@ def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
         alternative_labels=alternative_labels,
         description=description,
         negative_labels=negative_labels,
+        subconcept_labels=[],
     )
 
 
@@ -147,6 +149,99 @@ async def _login(
         raise RuntimeError(f"Wikibase login failed: {result}")
 
 
+async def _fetch_subconcept_ids(
+    client: httpx.AsyncClient,
+    base_url: str,
+    semaphore: asyncio.Semaphore,
+    wikibase_id: str,
+) -> list[str]:
+    """Fetch all recursive subconcept IDs for a concept via SPARQL."""
+    sparql_url = f"{base_url}/query/sparql"
+    entity_prefix = f"{base_url}/entity/"
+    property_prefix = f"{base_url}/prop/direct/"
+
+    sparql_query = f"""
+    PREFIX ent: <{entity_prefix}>
+    PREFIX dp: <{property_prefix}>
+
+    SELECT ?entity WHERE {{
+      ent:{wikibase_id} dp:P1+ ?entity.
+    }}
+    """
+
+    async with semaphore:
+        try:
+            response = await client.get(
+                url=sparql_url,
+                params={"query": sparql_query, "format": "json"},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            subconcept_ids = []
+            for binding in data.get("results", {}).get("bindings", []):
+                uri = binding.get("entity", {}).get("value", "")
+                concept_id = uri.split("/")[-1]
+                if concept_id and concept_id not in subconcept_ids:
+                    subconcept_ids.append(concept_id)
+
+            await asyncio.sleep(REQUEST_DELAY_SECONDS)
+            return subconcept_ids
+
+        except Exception:
+            logger.warning(
+                "Failed to fetch subconcept IDs for %s", wikibase_id, exc_info=True
+            )
+            return []
+
+
+async def _fetch_entities_batch(
+    client: httpx.AsyncClient,
+    api_url: str,
+    semaphore: asyncio.Semaphore,
+    wikibase_ids: list[str],
+) -> dict[str, dict]:
+    """Fetch raw entity data for a batch of wikibase IDs. Returns {wid: entity_dict}."""
+    entities: dict[str, dict] = {}
+    for i in range(0, len(wikibase_ids), BATCH_SIZE):
+        batch = wikibase_ids[i : i + BATCH_SIZE]
+        async with semaphore:
+            try:
+                resp = await client.get(
+                    url=api_url,
+                    params={
+                        "action": "wbgetentities",
+                        "format": "json",
+                        "ids": "|".join(batch),
+                        "props": "labels|aliases",
+                        "languages": "en",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                for wid, entity in data.get("entities", {}).items():
+                    if "missing" not in entity:
+                        entities[wid] = entity
+            except Exception:
+                logger.warning("Failed to fetch entities batch", exc_info=True)
+            await asyncio.sleep(REQUEST_DELAY_SECONDS)
+    return entities
+
+
+def _extract_labels_from_entity(entity: dict) -> list[str]:
+    """Extract preferred label and alternative labels from a raw entity dict."""
+    labels: list[str] = []
+    preferred = entity.get("labels", {}).get("en", {}).get("value")
+    if preferred:
+        labels.append(preferred)
+    if isinstance(entity.get("aliases"), dict):
+        for alias in entity.get("aliases", {}).get("en", []):
+            val = alias.get("value")
+            if val and val not in labels:
+                labels.append(val)
+    return labels
+
+
 async def fetch_concepts_at_timestamps(
     wikibase_id_to_timestamp: dict[str, str],
 ) -> list[WikibaseConcept]:
@@ -231,6 +326,63 @@ async def fetch_concepts_at_timestamps(
                 (len(wikibase_ids) + BATCH_SIZE - 1) // BATCH_SIZE,
                 sum(1 for c in results if c is not None),
             )
+
+        # Fetch subconcept labels for each concept
+        concept_by_wid = {c["wikibase_id"]: c for c in all_concepts}
+        subconcept_id_tasks = [
+            _fetch_subconcept_ids(client, base_url, semaphore, c["wikibase_id"])
+            for c in all_concepts
+        ]
+        subconcept_id_results = await asyncio.gather(*subconcept_id_tasks)
+
+        # Collect all unique subconcept IDs that aren't already fetched as concepts
+        all_subconcept_ids: set[str] = set()
+        wid_to_subconcept_ids: dict[str, list[str]] = {}
+        for concept, sub_ids in zip(all_concepts, subconcept_id_results):
+            wid_to_subconcept_ids[concept["wikibase_id"]] = sub_ids
+            all_subconcept_ids.update(sub_ids)
+
+        # Batch-fetch subconcept entities (only those not already fetched)
+        ids_to_fetch = [sid for sid in all_subconcept_ids if sid not in concept_by_wid]
+        subconcept_entities = await _fetch_entities_batch(
+            client, api_url, semaphore, ids_to_fetch
+        )
+
+        # Also include already-fetched concepts as entity sources
+        # (their labels are already in all_concepts, so extract from there)
+        subconcept_labels_cache: dict[str, list[str]] = {}
+        for wid, entity in subconcept_entities.items():
+            subconcept_labels_cache[wid] = _extract_labels_from_entity(entity)
+        for concept in all_concepts:
+            wid = concept["wikibase_id"]
+            subconcept_labels_cache[wid] = [concept["preferred_label"]] + concept[
+                "alternative_labels"
+            ]
+
+        # Populate subconcept_labels on each concept
+        for concept in all_concepts:
+            sub_ids = wid_to_subconcept_ids.get(concept["wikibase_id"], [])
+            merged_labels: set[str] = set()
+            for sid in sub_ids:
+                merged_labels.update(subconcept_labels_cache.get(sid, []))
+            # Remove labels that are already the concept's own labels
+            own_labels = set(
+                [concept["preferred_label"]] + concept["alternative_labels"]
+            )
+            concept["subconcept_labels"] = sorted(merged_labels - own_labels)
+
+            # Handle positive/negative overlap: positive labels win
+            if concept["subconcept_labels"] and concept["negative_labels"]:
+                all_positive = own_labels | merged_labels
+                concept["negative_labels"] = [
+                    nl for nl in concept["negative_labels"] if nl not in all_positive
+                ]
+
+        logger.info(
+            "Fetched subconcept labels for %d concepts (%d unique subconcepts)",
+            len(all_concepts),
+            len(all_subconcept_ids),
+        )
 
     return all_concepts
 
