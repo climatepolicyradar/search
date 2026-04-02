@@ -147,9 +147,11 @@ def _ids(filter_: Filter) -> set[str]:
 # region Attributes
 def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"country": "UK"},
+        attributes={"country": "UK"}, labels=[]
     )
-    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(
+        attributes={}, labels=[]
+    )
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -168,9 +170,11 @@ def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
 
 def test_attribute_string_not_eq_excludes_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"country": "UK"},
+        attributes={"country": "UK"}, labels=[]
     )
-    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(
+        attributes={}, labels=[]
+    )
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -189,9 +193,11 @@ def test_attribute_string_not_eq_excludes_matching_doc(vespa_app: Vespa):
 
 def test_attribute_double_eq_returns_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"project_cost_usd": 1_000_000.0},
+        attributes={"project_cost_usd": 1_000_000.0}, labels=[]
     )
-    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(
+        attributes={}, labels=[]
+    )
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -213,9 +219,11 @@ def test_attribute_double_eq_returns_matching_doc(vespa_app: Vespa):
 
 def test_attribute_double_not_eq_excludes_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"project_cost_usd": 1_000_000.0},
+        attributes={"project_cost_usd": 1_000_000.0}, labels=[]
     )
-    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(
+        attributes={}, labels=[]
+    )
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -237,9 +245,11 @@ def test_attribute_double_not_eq_excludes_matching_doc(vespa_app: Vespa):
 
 def test_attribute_bool_eq_returns_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"is_active": True},
+        attributes={"is_active": True}, labels=[]
     )
-    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(
+        attributes={}, labels=[]
+    )
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -258,9 +268,11 @@ def test_attribute_bool_eq_returns_matching_doc(vespa_app: Vespa):
 
 def test_attribute_bool_not_eq_excludes_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"is_active": True},
+        attributes={"is_active": True}, labels=[]
     )
-    document_without_matching_attribute = SourceDocumentFactory.build(attributes={})
+    document_without_matching_attribute = SourceDocumentFactory.build(
+        attributes={}, labels=[]
+    )
     _feed_document(vespa_app, document_with_matching_attribute)
     _feed_document(vespa_app, document_without_matching_attribute)
 
@@ -269,6 +281,58 @@ def test_attribute_bool_not_eq_excludes_matching_doc(vespa_app: Vespa):
         filters=[
             AttributesCondition(
                 field="attributes_boolean", key="is_active", op="not_eq", value=True
+            )
+        ],
+    )
+    ids = _ids(f)
+    assert document_with_matching_attribute["id"] not in ids
+    assert document_without_matching_attribute["id"] in ids
+
+
+def test_attribute_identifiers_eq_returns_matching_doc(vespa_app: Vespa):
+    document_with_matching_attribute = SourceDocumentFactory.build(
+        attributes={"identifiers::project_id": "proj-123"}, labels=[]
+    )
+    document_without_matching_attribute = SourceDocumentFactory.build(
+        attributes={}, labels=[]
+    )
+    _feed_document(vespa_app, document_with_matching_attribute)
+    _feed_document(vespa_app, document_without_matching_attribute)
+
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes_identifiers",
+                key="project_id",
+                op="eq",
+                value="proj-123",
+            )
+        ],
+    )
+    ids = _ids(f)
+    assert document_with_matching_attribute["id"] in ids
+    assert document_without_matching_attribute["id"] not in ids
+
+
+def test_attribute_identifiers_not_eq_excludes_matching_doc(vespa_app: Vespa):
+    document_with_matching_attribute = SourceDocumentFactory.build(
+        attributes={"identifiers::project_id": "proj-123"}, labels=[]
+    )
+    document_without_matching_attribute = SourceDocumentFactory.build(
+        attributes={}, labels=[]
+    )
+    _feed_document(vespa_app, document_with_matching_attribute)
+    _feed_document(vespa_app, document_without_matching_attribute)
+
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes_identifiers",
+                key="project_id",
+                op="not_eq",
+                value="proj-123",
             )
         ],
     )
@@ -634,10 +698,12 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     doc_with_full_forms = SourceDocumentFactory.build(
         title="Financial Conduct Authority rules on Task Force on Climate-related Financial Disclosures",
         description="A climate disclosure document",
+        labels=[],
     )
     doc_without_match = SourceDocumentFactory.build(
         title="xyzzytitlesyntest unrelated environmental policy",
         description="An unrelated document",
+        labels=[],
     )
     _feed_document(vespa_app, doc_with_full_forms)
     _feed_document(vespa_app, doc_without_match)
