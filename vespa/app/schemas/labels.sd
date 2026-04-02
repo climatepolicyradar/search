@@ -8,9 +8,23 @@ schema labels {
         }
         field value type string {
             indexing: index | attribute | summary
+            stemming: multiple
+            linguistics {
+                profile {
+                    index: label_analysis
+                    search: label_analysis_search
+                }
+            }
         }
         field alternative_labels type array<string> {
             indexing: index | attribute | summary
+            stemming: multiple
+            linguistics {
+                profile {
+                    index: label_analysis
+                    search: label_analysis_search
+                }
+            }
         }
         field description type string {
             indexing: index | attribute | summary
@@ -21,7 +35,7 @@ schema labels {
     }
 
     fieldset default {
-        fields: id, value, description, alternative_labels
+        fields: value, alternative_labels
     }
 
     rank-profile default {
@@ -34,7 +48,7 @@ schema labels {
 
     rank-profile nativerank inherits default {
         function value_score() {
-            expression: query(value_weight) * nativeRank(value) + nativeProximity(value)
+            expression: query(value_weight) * (nativeRank(value) + nativeProximity(value) / 3 + fieldMatch(value).fieldCompleteness / 3)
         }
         function alternative_labels_score() {
             # nativeRank * sqrt(queryCompleteness) penalises labels which match a lower number  of terms in the query.
@@ -48,6 +62,6 @@ schema labels {
         first-phase {
             expression: value_score() + alternative_labels_score() + description_score()
         }
-        summary-features: value_score() alternative_labels_score() description_score() nativeRank(value) nativeRank(alternative_labels) nativeRank(description) nativeProximity(value) elementCompleteness(alternative_labels).queryCompleteness
+        summary-features: value_score() alternative_labels_score() description_score() nativeRank(value) nativeRank(alternative_labels) nativeRank(description) nativeProximity(value) elementCompleteness(alternative_labels).queryCompleteness fieldMatch(value).fieldCompleteness fieldMatch(value).queryCompleteness
     }
 }

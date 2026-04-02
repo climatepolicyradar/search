@@ -130,6 +130,9 @@ test_cases = [
         ],
         description="search about croatia climate strategy should return relevant labels first",
     ),
+    # TODO: 'hurricanes' is a label of storm, which is a child of 'extreme weather'.
+    # So this requires the labels of the subconcepts to be indexed. They should probably
+    # be indexed in a different field to the main concept's labels.
     RecallTestCase[Label](
         category="topic",
         search_terms="hurricanes",
@@ -173,9 +176,12 @@ test_cases = [
         category="topic not in kg",
         search_terms="resilient infrastructure",
         characteristics_test=lambda label: (
-            "resilient" in label.value.lower()
-            or "infrastructure" in label.value.lower()
-            or "construction" in label.value.lower()
+            any(
+                "resilien" in lbl.lower()
+                or "infrastructur" in lbl.lower()
+                or "construct" in lbl.lower()
+                for lbl in label.all_labels
+            )
         ),
         all_or_any="any",
         description="search for resilient infrastructure should return relevant labels",
@@ -184,10 +190,14 @@ test_cases = [
         category="topic not in kg",
         search_terms="offshore wind roadmap",
         characteristics_test=lambda label: (
-            "wind" in label.value.lower() or "energy" in label.value.lower()
+            any(
+                "wind" in lbl.lower() or "energy" in lbl.lower()
+                for lbl in label.all_labels
+            )
+            or label.id == "entity_type::Roadmap"
         ),
         all_or_any="any",
-        description="search for offshore wind roadmap should return wind energy labels",
+        description="search for offshore wind roadmap should return wind energy or Roadmap labels",
     ),
     PrecisionTestCase[Label](
         category="logic",

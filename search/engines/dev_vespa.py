@@ -641,11 +641,16 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         for hit in res.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
+            alternative_labels = fields.get("alternative_labels", [])
+            if not isinstance(alternative_labels, list):
+                alternative_labels = []
             labels.append(
                 Label(
                     id=fields.get("id", ""),
                     type=fields.get("type", ""),
                     value=fields.get("value", ""),
+                    alternative_labels=alternative_labels,
+                    description=fields.get("description", ""),
                 )
             )
             if self.debug:
