@@ -52,7 +52,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@v4
       - name: Install python or load from cache with dependencies
         uses: actions/setup-python@v6
         with:
@@ -82,7 +82,7 @@ jobs:
           enable-cache: true
 
       - name: Install just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@v4
 
       - name: Install python or load from cache with dependencies
         uses: actions/setup-python@v6
@@ -136,7 +136,7 @@ jobs:
           role-session-name: GitHub_Pulumi_up_production
           aws-region: eu-west-1
       - uses: astral-sh/setup-uv@v7
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - run: just install
       - name: Install Pulumi
         uses: pulumi/actions@v6
