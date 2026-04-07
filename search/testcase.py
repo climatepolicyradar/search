@@ -6,7 +6,7 @@ from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from search.data_in_models import Document
-from search.engines import Pagination, SearchEngine
+from search.engines import OrderBy, Pagination, SearchEngine
 from search.label import Label
 from search.passage import Passage
 
@@ -78,6 +78,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
         search_results = engine.search(
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=None,
         )
         result_ids = [result.id for result in search_results.results]
@@ -224,6 +225,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         search_results = engine.search(
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=None,
         )
         result_ids = [result.id for result in search_results.results]
@@ -312,6 +314,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
         search_results = engine.search(
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=self.k),
+            order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=None,
         )
         results = search_results.results[: self.k]
@@ -406,11 +409,13 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
         search_results_1 = engine.search(
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=self.k),
+            order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=None,
         )
         search_results_2 = engine.search(
             query=self.search_terms_to_compare,
             pagination=Pagination(page_token=1, page_size=self.k),
+            order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=None,
         )
 

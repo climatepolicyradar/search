@@ -7,7 +7,7 @@ from pydantic import AnyHttpUrl, BaseModel
 from pydantic_settings import SettingsConfigDict
 
 from search.data_in_models import Document
-from search.engines import Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     CountAggregation,
     DevVespaDocumentSearchEngine,
@@ -88,6 +88,21 @@ def pagination(page_token: int = 1, page_size: int = 10):
     return Pagination(page_token=page_token, page_size=page_size)
 
 
+def order_by(order_by: str = "relevance desc"):
+    """
+    Shared order by parameters
+
+    @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
+    @see:https://google.aip.dev/132#ordering
+    """
+
+    order_by_list: list[OrderBy] = []
+    for order_by_tuple in order_by.split(","):
+        field, direction = order_by_tuple.split(" ")
+        order_by_list.append(OrderBy(field=field, direction=direction or "desc"))
+    return order_by_list
+
+
 # region routes
 # We use both routers to make sure we can have /search available publicly
 # and / available to the AppRunner health check.
@@ -106,6 +121,7 @@ def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
     pagination: Pagination = Depends(pagination),
+    order_by: OrderBy = Depends(order_by),
     debug: bool = False,
     bolding: bool = False,
 ):
@@ -115,6 +131,7 @@ def read_documents(
     results = engine.search(
         query=query,
         pagination=pagination,
+        order_by=order_by,
         filters_json_string=filters_json_string,
     )
 
@@ -142,9 +159,12 @@ def read_labels(
     query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
     pagination: Pagination = Depends(pagination),
+    order_by: list[OrderBy] = Depends(order_by),
 ):
     engine = DevVespaLabelTypeaheadSearchEngine(settings=settings)
-    results = engine.search(query=query, pagination=pagination, label_type=type)
+    results = engine.search(
+        query=query, pagination=pagination, order_by=order_by, label_type=type
+    )
     engine.all_label_types()
 
     return SearchResponse[Label](
@@ -163,11 +183,13 @@ def read_labels(
 def read_passages(
     query: str | None = Query(None, description="What are you looking for?"),
     pagination: Pagination = Depends(pagination),
+    order_by: list[OrderBy] = Depends(order_by),
 ):
     engine = DevVespaPassageSearchEngine(settings=settings)
     results = engine.search(
         query=query,
         pagination=pagination,
+        order_by=order_by,
     )
 
     return SearchResponse[Passage](

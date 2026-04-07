@@ -26,7 +26,7 @@ from polyfactory.factories.typed_dict_factory import TypedDictFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
-from search.engines import Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
@@ -139,6 +139,7 @@ def _ids(filter_: Filter) -> set[str]:
     docs = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
         filters_json_string=filter_.model_dump_json(),
     )
     return {doc.id for doc in docs.results}
@@ -579,7 +580,9 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     results = engine.search(
-        query="running", pagination=Pagination(page_token=1, page_size=10)
+        query="running",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
     ).results
     assert len(results) >= 1, f"Expected results, got: {results}"
 
@@ -616,7 +619,9 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     # Search for "running" — matches title via default fieldset
     results = engine.search(
-        query="running", pagination=Pagination(page_token=1, page_size=10)
+        query="running",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
     ).results
     assert len(results) >= 1, f"Expected results, got: {results}"
 
@@ -673,7 +678,9 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     results = engine.search(
-        query="UK", pagination=Pagination(page_token=1, page_size=50)
+        query="UK",
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
     ).results
     result_ids = {doc.id for doc in results}
 
@@ -710,7 +717,9 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     results = engine.search(
-        query="fca rules tcfd", pagination=Pagination(page_token=1, page_size=50)
+        query="fca rules tcfd",
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
     ).results
     result_ids = {doc.id for doc in results}
 
