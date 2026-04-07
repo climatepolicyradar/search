@@ -121,7 +121,7 @@ def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
     pagination: Pagination = Depends(pagination),
-    order_by: OrderBy = Depends(order_by),
+    order_by: list[OrderBy] = Depends(order_by),
     debug: bool = False,
     bolding: bool = False,
 ):
