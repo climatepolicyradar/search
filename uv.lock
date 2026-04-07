@@ -598,6 +598,9 @@ wheels = [
 s3 = [
     { name = "mypy-boto3-s3" },
 ]
+ssm = [
+    { name = "mypy-boto3-ssm" },
+]
 
 [[package]]
 name = "botocore"
@@ -3203,6 +3206,15 @@ wheels = [
 ]
 
 [[package]]
+name = "mypy-boto3-ssm"
+version = "1.41.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1c/e6/fb55603dc536037f64f4de3459138b08734287b5021997f3470ef3d8dd8f/mypy_boto3_ssm-1.41.0.tar.gz", hash = "sha256:959745aa4e77f2ac5a19bf0c755e8fd9fe8ea4ce7e8b771e0965a21342a29d3d", size = 94218, upload-time = "2025-11-19T21:03:14.267Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ef/0b/58bf5515045e40cc2d7225da3419354a2a5b743e55504d9f88bc156d974e/mypy_boto3_ssm-1.41.0-py3-none-any.whl", hash = "sha256:8ee2be4af796dbb7884fc01b22db5b242e0ab93f2330b86745d3a0b69271dc84", size = 95897, upload-time = "2025-11-19T21:03:12.891Z" },
+]
+
+[[package]]
 name = "neo4j"
 version = "5.28.2"
 source = { registry = "https://pypi.org/simple" }
@@ -5384,6 +5396,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "boto3-stubs", extra = ["s3", "ssm"] },
     { name = "hypothesis" },
     { name = "pre-commit" },
     { name = "pulumi" },
@@ -5415,6 +5428,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "boto3-stubs", extras = ["s3", "ssm"], specifier = ">=1.41.5" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "pre-commit", specifier = ">=3.5.0" },
     { name = "pulumi", specifier = ">=3.0.0,<4.0.0" },
