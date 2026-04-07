@@ -121,33 +121,11 @@ jobs:
     needs: [changes, tests]
     if: needs.changes.outputs.run-deploy == 'true'
 
-  # Based on @see: https://github.com/vespa-cloud/vector-search/blob/main/.github/workflows/deploy-vector-search.yaml
   vespa_deploy:
+    uses: ./.github/workflows/vespa_deploy.yml
+    secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-vespa-deploy == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      VESPA_CLI_API_KEY: ${{ secrets.VESPA_CLI_API_KEY }}
-    steps:
-      - uses: actions/checkout@v6
-      - name: Install Vespa CLI
-        env:
-          VESPA_CLI_VERSION: 8.250.43
-        run: |
-          mkdir vespa-cli
-          curl -fsSL https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz | \
-            tar -zxf - -C vespa-cli --strip-component=1
-          echo "vespa-cli/bin" >> $GITHUB_PATH
-      - name: Configure Vespa
-        run: |
-          vespa config set target cloud
-          vespa config set zone prod.aws-eu-west-1a
-          vespa config set application climate-policy-radar.search
-        working-directory: ./vespa
-      - name: Deploy
-        run: vespa prod deploy ./app
-        working-directory: ./vespa
 
   pulumi-up:
     runs-on: ubuntu-latest
