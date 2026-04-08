@@ -1,51 +1,32 @@
-from contextlib import asynccontextmanager
+from fastapi import APIRouter, Depends, Query
+from pydantic_settings import SettingsConfigDict
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-from api.routers import router
+from api.types import Aggregations, SearchResponse
+from api.utils import order_by, pagination
+from search.data_in_models import Document
+from search.engines import OrderBy, Pagination
+from search.engines.dev_vespa import (
+    DevVespaDocumentSearchEngine,
+    DevVespaLabelSearchEngine,
+    DevVespaPassageSearchEngine,
+    Settings,
+)
+from search.label import Label
 from search.log import get_logger
+from search.passage import Passage
 
 logger = get_logger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    """Lifespan context manager for startup and shutdown events."""
-    yield
-    # Shutdown: Cleanup (if needed)
+class EnvSettings(Settings):
+    model_config = SettingsConfigDict(env_file="api/.env")
 
 
-app = FastAPI(
-    title="Climate Policy Radar Search API",
-    description="API for searching climate policy documents, passages, and labels",
-    version="0.1.0",
-    lifespan=lifespan,
-    docs_url="/search/docs",
-    redoc_url="/search/redoc",
-    openapi_url="/search/openapi.json",
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(router)
+# @see: https://github.com/pydantic/pydantic-settings/issues/201
+settings = EnvSettings()  # pyright: ignore[reportCallIssue]
 
 
-# We use both routers to make sure we can have /search available publicly
-# and / available to the AppRunner health check.
-@app.get("/")
-@router.get("")
-async def root():
-    """Root endpoint with API information."""
-    return {
-        "name": "Climate Policy Radar Search API",
-        "version": "0.1.0",
-    }
+router = APIRouter(prefix="/search")
 
 
 @router.get("/documents", response_model=SearchResponse[Document])
@@ -56,7 +37,6 @@ def read_documents(
     order_by: list[OrderBy] = Depends(order_by),
     debug: bool = False,
     bolding: bool = False,
-    principal_label_boost_factor: float | None = None,
 ):
     engine = DevVespaDocumentSearchEngine(
         settings=settings, debug=debug, bolding=bolding
@@ -66,7 +46,6 @@ def read_documents(
         pagination=pagination,
         order_by=order_by,
         filters_json_string=filters_json_string,
-        principal_label_boost_factor=principal_label_boost_factor,
     )
 
     # TODO: pagination
@@ -136,8 +115,3 @@ def read_passages(
         results=results.results,
         aggregations=None,
     )
-
-
-# endregion
-
-app.include_router(router)
