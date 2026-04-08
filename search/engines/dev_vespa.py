@@ -291,6 +291,9 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             "query": query,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
+            # This should be set at the Vespa app level, but is not working for some reason
+            # FIXME: Fix this 👆
+            "maxHits": 50000,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": "nativerank",
