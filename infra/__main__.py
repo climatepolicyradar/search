@@ -58,6 +58,7 @@ bucket = s3.Bucket(
             ),
         ),
     ],
+    versioning=s3.BucketVersioningArgs(enabled=True),
 )
 
 # Create a private ECR repository to store the Docker image
