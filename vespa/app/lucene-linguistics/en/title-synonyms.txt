@@ -2,6 +2,5 @@ tcfd => task force on climate related financial disclosures
 fca => financial conduct authority
 ira => inflation reduction act
 sfdr => sustainable finance disclosure regulation
-era => emissions reduction plan
+erp => emissions reduction plan
 necp => national energy and climate plan
-phaseout, phase out
