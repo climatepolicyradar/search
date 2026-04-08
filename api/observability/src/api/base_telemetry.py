@@ -16,13 +16,22 @@ from typing import Callable, Optional
 
 # Tracing imports - stable
 from opentelemetry import trace
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+from opentelemetry._logs import (
+    set_logger_provider,  # pyright: ignore[reportPrivateImportUsage]
+)
+from opentelemetry.exporter.otlp.proto.http._log_exporter import (
+    OTLPLogExporter,  # pyright: ignore[reportPrivateImportUsage]
+)
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
 # These are beta still, so may change and break compatibility
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk._logs import (
+    LoggerProvider,  # pyright: ignore[reportPrivateImportUsage]
+    LoggingHandler,  # pyright: ignore[reportPrivateImportUsage]
+)
+from opentelemetry.sdk._logs.export import (
+    BatchLogRecordProcessor,  # pyright: ignore[reportPrivateImportUsage]
+)
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Span, Status, StatusCode, Tracer
@@ -317,7 +326,9 @@ class BaseTelemetry:
         # initialised them. This is needed as otherwise tests will try to
         # export logs and traces to our OTLP endpoint, which will fail.
         try:
-            from opentelemetry._logs import get_logger_provider
+            from opentelemetry._logs import (
+                get_logger_provider,  # pyright: ignore[reportPrivateImportUsage]
+            )
 
             global_logger_provider = get_logger_provider()
             if (
