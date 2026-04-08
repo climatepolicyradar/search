@@ -49,6 +49,16 @@ dockerfile_path = REPO_ROOT_DIR / "api" / "Dockerfile"
 bucket = s3.Bucket(
     "search-bucket",
     bucket=f"cpr-{stack}-search",
+    lifecycle_rules=[
+        s3.BucketLifecycleRuleArgs(
+            enabled=True,
+            id="noncurrent-version-cleanup-90d",
+            noncurrent_version_expiration=s3.BucketLifecycleRuleNoncurrentVersionExpirationArgs(
+                days=90,
+            ),
+        ),
+    ],
+    versioning=s3.BucketVersioningArgs(enabled=True),
 )
 
 # Create a private ECR repository to store the Docker image
