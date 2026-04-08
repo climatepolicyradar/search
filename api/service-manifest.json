@@ -1,0 +1,13 @@
+{
+  "service.name": "search-api",
+  "service.namespace": "data-querying",
+  "team": "application",
+  "inputs": [
+    {
+      "type": "service",
+      "name": "vespa"
+    }
+  ],
+  "outputs": [],
+  "repos": ["https://github.com/climatepolicyradar/search"]
+}
