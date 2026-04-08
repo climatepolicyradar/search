@@ -146,7 +146,9 @@ async def _login(
     login_resp.raise_for_status()
     result = login_resp.json()
     if result.get("login", {}).get("result") != "Success":
-        raise RuntimeError(f"Wikibase login failed: {result}")
+        raise RuntimeError(
+            f"Wikibase login failed: {result}, api_url: {api_url}, username: {username}, password: {password}"
+        )
 
 
 async def _fetch_subconcept_ids(
