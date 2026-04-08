@@ -43,11 +43,11 @@ get query="congo":
     set -e
     curl -G "http://localhost:8080/search/" \
      --data-urlencode 'yql=select * from sources documents where userQuery()' \
-     --data-urlencode 'query={{query}}' \
+     --data-urlencode 'query={{ query }}' \
      --data-urlencode 'hits=10'
 
 get-document id="CCLW.collection.1755.0":
-    vespa document get "id:documents:documents::{{id}}"
+    vespa document get "id:documents:documents::{{ id }}"
 
 # Remove the application. To remove data as well, use `reset` below.
 destroy:
@@ -108,11 +108,11 @@ remote-get-document id="CCLW.collection.1755.0":
     set -e
     vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa document get "id:documents:documents::{{id}}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
+    vespa document get "id:documents:documents::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
 
 remote-delete-document id:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa document remove "id:documents:documents::{{id}}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
+    vespa document remove "id:documents:documents::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"

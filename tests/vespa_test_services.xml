@@ -60,6 +60,32 @@
                             </item>
                         </tokenFilters>
                     </item>
+                    <item key="profile=label_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <item key="profile=label_analysis_search;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
                     <item key="profile=geo_analysis;language=en">
                         <tokenizer>
                             <name>standard</name>
@@ -118,6 +144,7 @@
         <min-redundancy>1</min-redundancy>
         <documents>
             <document type="documents" mode="index" />
+            <document type="labels" mode="index" />
         </documents>
     </content>
 </services>

@@ -19,6 +19,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 import requests as req
@@ -30,6 +31,7 @@ from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
+    DevVespaLabelSearchEngine,
     Filter,
     LabelsCondition,
     Settings,
@@ -733,3 +735,50 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
 
 
 # endregion Linguistics
+
+
+# region /labels
+
+
+def _feed_label(
+    app: Vespa, label_id: str, value: str, label_type: str = "topic"
+) -> None:
+    doc_id = f"{label_type}::{label_id}"
+    r = req.put(
+        f"{app.end_point}/document/v1/labels/labels/docid/{quote(doc_id, safe='')}?create=true",
+        json={
+            "fields": {
+                "id": {"assign": doc_id},
+                "type": {"assign": label_type},
+                "value": {"assign": value},
+            }
+        },
+        timeout=5,
+    )
+    if not r.ok:
+        print(f"Feed label error {r.status_code}: {r.text}")
+    r.raise_for_status()
+
+
+@pytest.fixture(autouse=True)
+def clean_labels(vespa_app: Vespa):
+    yield
+    vespa_app.delete_all_docs(content_cluster_name="search-production", schema="labels")
+
+
+def test_label_search_returns_exact_match_first(vespa_app: Vespa, clean_labels: None):
+    _feed_label(vespa_app, "law", "Law")
+    _feed_label(vespa_app, "science", "Science")
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query="Law",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+
+    assert results, "Expected at least one result"
+    assert results[0].value == "Law"
+
+
+# endregion /labels

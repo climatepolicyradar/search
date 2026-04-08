@@ -19,14 +19,12 @@ For now we just use `requests` which yields the same results.
 from __future__ import annotations
 
 import json
-import re
 from typing import Any, Literal
 
 import requests
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
 from pydantic_settings import BaseSettings
 from vespa.querybuilder import Grouping as G
-from vespa.querybuilder.builder.builder import Q, QueryField
 
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
@@ -619,6 +617,9 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             "yql": yql,
             "query": query,
             "hits": pagination.page_size,
+            # This should be set at the Vespa app level, but is not workingg for some reason
+            # TODO: Fix this 👆
+            "maxHits": 50000,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
@@ -721,156 +722,4 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
     def count(self, query: str) -> int:
         """Return hit count for DevVespaLabelSearchEngine."""
-        raise NotImplementedError()
-
-
-class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
-    """Typeahead search engine for labels, using grouping on the documents source."""
-
-    model_class = Label
-
-    def __init__(self, settings: Settings):
-        self.settings = settings
-
-    def search(
-        self,
-        query: str | None,
-        pagination: Pagination,  # noqa: ARG002
-        order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None = None,  # noqa: ARG002
-        label_type: str | None = None,
-    ) -> ListResponse[Label]:
-        """Returns unique values for concepts and labels in the documents"""
-        labels_field = QueryField("labels_type_value_attribute")
-        concepts_field = QueryField("concepts_type_value_attribute")
-
-        safe_terms = re.escape(query) if query else "[^:]*"
-        safe_label_type = re.escape(label_type) if label_type else "[^:]*"
-        doc_regex = f"(?i)^{safe_label_type}::.*{safe_terms}.*"
-
-        # Filter the documents that only have matching labels or concepts
-        where = labels_field.matches(doc_regex) | concepts_field.matches(doc_regex)
-
-        # Create the two groups, filtered and ordered
-        grouping = G.all(
-            G.all(
-                G.group("labels_type_value_attribute"),
-                f'filter(regex("{doc_regex}", labels_type_value_attribute))',
-                # This is the max we expect to see
-                # TODO: Pagination on groups if we hit this limit
-                G.max(5000),
-                G.order(-G.count()),
-                G.each(G.output(G.count())),
-            ),
-            G.all(
-                G.group("concepts_type_value_attribute"),
-                f'filter(regex("{doc_regex}", concepts_type_value_attribute))',
-                # This is the max we expect to see
-                # TODO: Pagination on groups if we hit this limit
-                G.max(5000),
-                G.order(-G.count()),
-                G.each(G.output(G.count())),
-            ),
-        )
-
-        # Generate the YQL query
-        yql = (
-            Q.select(["labels_type_value_attribute", "concepts_type_value_attribute"])
-            .from_("documents")
-            .where(where)
-            .groupby(grouping)
-            .build()
-        )
-
-        try:
-            res = requests.post(
-                f"{self.settings.vespa_endpoint}/search",
-                json={
-                    "yql": yql,
-                    "query": query,
-                    # standard practice is "hits": 0 to get only aggregation if possible
-                    "hits": 0,
-                    "timeout": "5s",
-                },
-                timeout=API_TIMEOUT,
-                headers={
-                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
-                },
-            )
-        except Exception:
-            logger.exception("Vespa query failed")
-            return ListResponse(results=[], total_size=None, next_page_token=None)
-
-        # Parse the groups & transform => Labels
-        # You can read more about grouping @see: https://docs.vespa.ai/en/querying/grouping.html
-        # And there is an example of the response type @see: https://docs.vespa.ai/en/querying/grouping.html#pagination
-        # I do wish this was typed
-        root = res.json().get("root", {})
-        groups = root.get("children", [{}])[0].get("children", [])
-
-        group_values = []
-        for group in groups:
-            group_values.extend(group.get("children", []))
-
-        labels: list[Label] = []
-        for group_value in group_values:
-            label_type_value = group_value.get("value", "")
-            label_type, _, label_value = label_type_value.partition("::")
-            labels.append(
-                Label(
-                    id=label_type_value,
-                    value=label_value,
-                    type=label_type or MISSING_PLACEHOLDER,
-                )
-            )
-        return ListResponse(
-            results=labels, total_size=len(labels), next_page_token=None
-        )
-
-    def all_label_types(self) -> list[str]:
-        """Fetch all distinct label types (unfiltered)."""
-        yql = (
-            "select * from sources documents where true "
-            "| all(group(labels_type_attribute) "
-            "order(-count()) each(output(count())))"
-        )
-
-        try:
-            res = requests.post(
-                f"{self.settings.vespa_endpoint}/search",
-                json={
-                    "yql": yql,
-                    "hits": 0,
-                    "timeout": "5s",
-                },
-                timeout=API_TIMEOUT,
-                headers={
-                    "Authorization": f"Bearer {self.settings.vespa_read_token}",
-                },
-            )
-        except Exception:
-            logger.exception("Vespa all_label_types query failed")
-            return []
-
-        res = res.json()
-        types: list[str] = []
-
-        root = res.get("root", {})
-        children = root.get("children", [{}])[0].get("children", [])
-        group_list = next(
-            (
-                item.get("children", [])
-                for item in children
-                if item.get("label") == "labels_type_attribute"
-            ),
-            [],
-        )
-
-        for group in group_list:
-            types.append(group.get("value", ""))
-
-        return types
-
-    def count(self, query: str) -> int:
-        """Return hit count"""
         raise NotImplementedError()

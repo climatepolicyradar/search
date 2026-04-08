@@ -259,7 +259,6 @@ def relevance_tests_labels():
 
     engines = [
         DevVespaLabelSearchEngine(settings=settings),
-        # DevVespaLabelTypeaheadSearchEngine(),
         # VespaLabelSearchEngine(),
     ]
 
