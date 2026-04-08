@@ -19,6 +19,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 import requests as req
@@ -30,11 +31,16 @@ from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
+    DevVespaLabelSearchEngine,
     Filter,
     LabelsCondition,
     Settings,
 )
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
+from search.vespa.labels_feed_materializer import (
+    VespaLabel,
+    _vespa_label_to_vespa_update,
+)
 from search.vespa.sources.data_in_api import (
     SourceDocument,
     SourceLabel,
@@ -733,3 +739,62 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
 
 
 # endregion Linguistics
+
+
+# region /labels
+@pytest.fixture(autouse=True)
+def clean_labels(vespa_app: Vespa):
+    yield
+    vespa_app.delete_all_docs(content_cluster_name="search-production", schema="labels")
+
+
+def _feed_label(vespa_app: Vespa, vespa_label: VespaLabel) -> None:
+    vespa_update = _vespa_label_to_vespa_update(vespa_label)
+    response = req.put(
+        f"{vespa_app.end_point}/document/v1/labels/labels/docid/{quote(vespa_update['update'], safe='')}?create=true",
+        json={"fields": vespa_update["fields"]},
+        timeout=5,
+    )
+    if not response.ok:
+        print(f"Feed label error {response.status_code}: {response.text}")
+    response.raise_for_status()
+
+
+def test_label_search_returns_exact_match_first(vespa_app: Vespa, clean_labels: None):
+    _feed_label(
+        vespa_app,
+        VespaLabel(
+            id="category::Law",
+            type="category",
+            value="Law",
+            alternative_labels=[],
+            subconcept_labels=[],
+            description="",
+            negative_labels=[],
+        ),
+    )
+    _feed_label(
+        vespa_app,
+        VespaLabel(
+            id="category::Policy",
+            type="category",
+            value="Policy",
+            alternative_labels=[],
+            subconcept_labels=[],
+            description="",
+            negative_labels=[],
+        ),
+    )
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query="Law",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+
+    assert results, "Expected at least one result"
+    assert results[0].value == "Law"
+
+
+# endregion /labels

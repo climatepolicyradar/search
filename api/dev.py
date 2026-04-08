@@ -11,7 +11,7 @@ from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     CountAggregation,
     DevVespaDocumentSearchEngine,
-    DevVespaLabelTypeaheadSearchEngine,
+    DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
     Settings,
 )
@@ -161,7 +161,7 @@ def read_labels(
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(order_by),
 ):
-    engine = DevVespaLabelTypeaheadSearchEngine(settings=settings)
+    engine = DevVespaLabelSearchEngine(settings=settings)
     results = engine.search(
         query=query, pagination=pagination, order_by=order_by, label_type=type
     )
