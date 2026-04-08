@@ -69,7 +69,13 @@ class AttributesCondition(BaseModel):
     value: str | float | bool
 
 
-Condition = LabelsCondition | AttributesCondition
+class FieldFilter(BaseModel):
+    field: str
+    op: Literal["contains", "not_contains"]
+    value: str
+
+
+Condition = LabelsCondition | AttributesCondition | FieldFilter
 
 
 class Filter(BaseModel):
@@ -169,6 +175,14 @@ def _build_condition_yql(condition: Condition) -> str:
             if condition.op == "not_contains":
                 return f"!({labels_expr} or {concepts_expr})"
             return f"({labels_expr} or {concepts_expr})"
+
+        case FieldFilter():
+            value = _format_value(condition.value)
+            match condition.op:
+                case "contains":
+                    return f"{condition.field} contains {value}"
+                case "not_contains":
+                    return f"!({condition.field} contains {value})"
 
 
 def _build_filter_yql(filter_group: Filter) -> str:
@@ -608,7 +622,14 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
         label_type: str | None = None,
     ) -> ListResponse[Label]:
         """Fetch a list of relevant label search results."""
-        yql = "select * from sources labels where true"
+
+        where = " true "
+
+        if filters_json_string:
+            filters = Filter.model_validate_json(filters_json_string)
+            where += _build_filter_query(filters)
+
+        yql = f"select * from sources labels where {where}"
         if query:
             yql += " and userQuery()"
         if label_type:
