@@ -8,7 +8,7 @@ from rich.table import Table
 from rich.text import Text
 
 from api.dev import settings
-from search.engines import Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaLabelSearchEngine
 
 app = typer.Typer()
@@ -28,6 +28,7 @@ def search(
     results = engine.search(
         query=query,
         pagination=Pagination(page_token=page, page_size=page_size),
+        order_by=[OrderBy(field="relevance", direction="desc")],
         label_type=label_type,
     )
 

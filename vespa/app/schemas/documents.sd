@@ -231,6 +231,19 @@ schema documents {
         summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
     }
 
+    rank-profile label-boosted inherits nativerank {
+        inputs {
+            query(label_boost_factor) double: 0.2
+        }
+        function label_boost_score() {
+            expression: query(label_boost_factor) * (attributeMatch(labels_type_value_attribute) > 0)
+        }
+        first-phase {
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + label_boost_score()
+        }
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
+    }
+
     document-summary default {
     }
 

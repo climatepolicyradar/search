@@ -8,7 +8,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from search.engines import Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Settings
 
 app = typer.Typer()
@@ -41,6 +41,7 @@ def search(
         query=query,
         filters_json_string=filters,
         pagination=Pagination(page_token=page_token, page_size=page_size),
+        order_by=[OrderBy(field="relevance", direction="desc")],
     )
 
     words = query.split()

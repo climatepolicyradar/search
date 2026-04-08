@@ -39,7 +39,7 @@ jobs:
           docker-images: false
           swap-storage: true
 
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
         with:
           just-version: 1.36.0
 

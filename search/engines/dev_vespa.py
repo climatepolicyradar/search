@@ -30,7 +30,7 @@ from vespa.querybuilder.builder.builder import Q, QueryField
 
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
-from search.engines import ListResponse, Pagination, SearchEngine
+from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -272,6 +272,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         self,
         query: str | None,
         pagination: Pagination,
+        order_by: list[OrderBy],  # noqa: ARG002
         filters_json_string: str | None = None,
     ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
@@ -513,6 +514,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         self,
         query: str | None,
         pagination: Pagination,
+        order_by: list[OrderBy],  # noqa: ARG002
         filters_json_string: str | None = None,  # noqa: ARG002
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
@@ -600,6 +602,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
         self,
         query: str | None,
         pagination: Pagination,
+        order_by: list[OrderBy],  # noqa: ARG002
         filters_json_string: str | None = None,  # noqa: ARG002
         label_type: str | None = None,
     ) -> ListResponse[Label]:
@@ -733,6 +736,7 @@ class DevVespaLabelTypeaheadSearchEngine(SearchEngine[Label]):
         self,
         query: str | None,
         pagination: Pagination,  # noqa: ARG002
+        order_by: list[OrderBy],  # noqa: ARG002
         filters_json_string: str | None = None,  # noqa: ARG002
         label_type: str | None = None,
     ) -> ListResponse[Label]:

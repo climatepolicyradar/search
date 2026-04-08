@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 import requests
 
-from search.engines import Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DevVespaLabelTypeaheadSearchEngine,
     Settings,
@@ -108,6 +108,7 @@ def test_typeahead_engine_builds_substring_regex_for_concepts(
         query=query,
         label_type="concept",
         pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
     )
 
     sent = mock_requests_post.last_json  # type: ignore[attr-defined]
@@ -136,6 +137,7 @@ def test_typeahead_engine_returns_correct_type_and_value(
         query="pollution",
         label_type="concept",
         pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
     )
 
     assert all(isinstance(label, Label) for label in labels.results)

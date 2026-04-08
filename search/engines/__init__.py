@@ -31,6 +31,17 @@ class Pagination(BaseModel):
     page_size: int
 
 
+class OrderBy(BaseModel):
+    """
+    Order by
+
+    @see: https://google.aip.dev/132#ordering
+    """
+
+    field: str
+    direction: str
+
+
 class SearchEngine(ABC, Generic[TModel]):
     """Base class for a search engine"""
 
@@ -41,6 +52,7 @@ class SearchEngine(ABC, Generic[TModel]):
         self,
         query: str,
         pagination: Pagination,
+        order_by: list[OrderBy],
         filters_json_string: str | None,
     ) -> ListResponse[TModel]:
         """

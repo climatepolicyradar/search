@@ -3,7 +3,8 @@
 from pathlib import Path
 
 import boto3
-from botocore.client import BaseClient
+from mypy_boto3_s3 import S3Client
+from mypy_boto3_ssm import SSMClient
 
 from search.config import AWS_PROFILE, AWS_REGION, BUCKET_NAME, DATA_DIR
 from search.log import get_logger
@@ -21,13 +22,13 @@ def get_aws_session() -> boto3.Session:
     return boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
 
 
-def get_s3_client() -> BaseClient:
+def get_s3_client() -> S3Client:
     """Get an S3 client using the configured session."""
     session = get_aws_session()
     return session.client("s3")
 
 
-def get_ssm_client() -> BaseClient:
+def get_ssm_client() -> SSMClient:
     """Get an SSM client using the configured session."""
     session = get_aws_session()
     return session.client("ssm")
@@ -46,7 +47,10 @@ def get_ssm_parameter(name: str, with_decryption: bool = True) -> str:
     """
     ssm = get_ssm_client()
     response = ssm.get_parameter(Name=name, WithDecryption=with_decryption)
-    return response["Parameter"]["Value"]
+    value = response["Parameter"].get("Value")
+    if value is None:
+        raise RuntimeError(f"SSM parameter '{name}' has no value")
+    return value
 
 
 def upload_file_to_s3(
