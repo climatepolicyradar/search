@@ -13,7 +13,7 @@ from search.aws import get_ssm_parameter
 from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Item
 from search.document import Document
-from search.engines import ListResponse, Pagination, SearchEngine, TModel
+from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, TModel
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -123,6 +123,7 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         self,
         query: str,
         pagination: Pagination,
+        order_by: list[OrderBy],  # noqa: ARG002
         filters_json_string: str | None = None,  # noqa: ARG002
     ) -> ListResponse[TModel]:
         """
