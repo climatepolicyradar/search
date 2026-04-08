@@ -1,10 +1,10 @@
 schema labels {
     document labels {
         field id type string {
-            indexing: index | attribute | summary
+            indexing: attribute | summary
         }
         field type type string {
-            indexing: index | attribute | summary
+            indexing: attribute | summary
         }
         field value type string {
             indexing: index | attribute | summary
