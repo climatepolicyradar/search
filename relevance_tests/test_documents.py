@@ -252,7 +252,7 @@ test_cases = [
             term in document.title.lower()
             for term in ["national energy and climate plan"]
         ),
-        description="Search for 'necp' should return documents with 'national energy and climate plan' or 'necp' in the title",
+        description="Search for 'necp' should return documents with 'national energy and climate plan' in the title",
         k=10,
     ),
     # TODO: use relevant labels if they exist, e.g., document type = "climate action plan"
