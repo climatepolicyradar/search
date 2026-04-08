@@ -19,7 +19,7 @@ def order_by(order_by: str = "relevance desc"):
     Shared order by parameters
 
     @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
-    @see:https://google.aip.dev/132#ordering
+    @see: https://google.aip.dev/132#ordering
     """
 
     order_by_list: list[OrderBy] = []
