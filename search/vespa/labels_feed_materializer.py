@@ -35,6 +35,23 @@ class VespaLabelUpdate(TypedDict):
     negative_labels: VespaAssign[list[str]]
 
 
+def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpdate]:
+    """Convert a Vespa label to a Vespa update operation."""
+    return {
+        "update": f"id:labels:labels::{label['id']}",
+        "create": True,
+        "fields": {
+            "id": {"assign": label["id"]},
+            "type": {"assign": label["type"]},
+            "value": {"assign": label["value"]},
+            "alternative_labels": {"assign": label["alternative_labels"]},
+            "subconcept_labels": {"assign": label["subconcept_labels"]},
+            "description": {"assign": label["description"]},
+            "negative_labels": {"assign": label["negative_labels"]},
+        },
+    }
+
+
 def labels_feed_materializer():
     labels: dict[str, VespaLabel] = {}
 
@@ -93,19 +110,9 @@ def labels_feed_materializer():
     output_file = OUTPUT_CACHE_DIR / "labels_feed_materializer.jsonl"
     with output_file.open("wb") as f:
         for label in unique_labels:
-            vespa_update: VespaUpdate[VespaLabelUpdate] = {
-                "update": f"id:labels:labels::{label['id']}",
-                "create": True,
-                "fields": {
-                    "id": {"assign": label["id"]},
-                    "type": {"assign": label["type"]},
-                    "value": {"assign": label["value"]},
-                    "alternative_labels": {"assign": label["alternative_labels"]},
-                    "subconcept_labels": {"assign": label["subconcept_labels"]},
-                    "description": {"assign": label["description"]},
-                    "negative_labels": {"assign": label["negative_labels"]},
-                },
-            }
+            vespa_update: VespaUpdate[VespaLabelUpdate] = _vespa_label_to_vespa_update(
+                label
+            )
             f.write(orjson.dumps(vespa_update) + b"\n")
 
     boto3.client("s3").upload_file(
