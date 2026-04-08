@@ -30,6 +30,7 @@ dependencies = [
   "opentelemetry-sdk>=1.38.0,<2.0.0",
   "opentelemetry-instrumentation-requests>=0.59b0",
   "opentelemetry-instrumentation-httpx>=0.59b0",
+  "pyright>=1.1.408",
 ]
 
 [dependency-groups]

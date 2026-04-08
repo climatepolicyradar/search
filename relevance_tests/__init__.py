@@ -137,14 +137,14 @@ def print_test_results(test_results: list[TestResult]) -> None:
         cat = metrics[category]
         passed = cat["passed"]
         total = cat["total"]
-        pass_rate = f"{(cat['pass_rate'] * 100):.1f}%" if total > 0 else "N/A"
+        pass_rate = f"{(cat['pass_rate'] * 100):.1f}%" if total > 0 else "N/A"  # pyright: ignore[reportOperatorIssue]
         table.add_row(category, str(passed), str(total), pass_rate)
 
     overall = metrics["overall"]
     total_passed = overall["passed"]
     total_tests = overall["total"]
     total_pass_rate = (
-        f"{(overall['pass_rate'] * 100):.1f}%" if total_tests > 0 else "N/A"
+        f"{(overall['pass_rate'] * 100):.1f}%" if total_tests > 0 else "N/A"  # pyright: ignore[reportOperatorIssue]
     )
     table.add_row(
         "[bold]TOTAL[/bold]",
@@ -225,8 +225,8 @@ def run_tests_for_engine(
     print_test_results(engine_test_results)
     wb.log_test_results(
         test_results=engine_test_results,
-        primitive=primitive_type,
-        search_engine=engine,
+        primitive=primitive_type,  # pyright: ignore[reportArgumentType]
+        search_engine=engine,  # pyright: ignore[reportArgumentType]
     )
 
     test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
