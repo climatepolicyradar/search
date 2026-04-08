@@ -174,7 +174,7 @@ class WandbSession:
     ) -> None:
         """Log a list of online metric results to Weights & Biases."""
 
-        config = {"date_from": date_from}
+        config: dict[str, date | int] = {"date_from": date_from}
         if date_to:
             config["date_to"] = date_to
         if retention_date:
