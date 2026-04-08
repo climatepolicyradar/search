@@ -34,14 +34,23 @@ class GrafanaSession:
     """Session for querying Grafana data."""
 
     def __init__(self) -> None:
-        self.api_key = get_from_env_with_fallback(
-            var_name="GRAFANA_API_KEY", ssm_name="/Grafana/MetricUserApiToken"
+        self.api_key = (
+            get_from_env_with_fallback(
+                var_name="GRAFANA_API_KEY", ssm_name="/Grafana/MetricUserApiToken"
+            )
+            or ""
         )
-        self.url = get_from_env_with_fallback(
-            var_name="GRAFANA_URL", ssm_name="/Grafana/MetricQueryURL"
+        self.url = (
+            get_from_env_with_fallback(
+                var_name="GRAFANA_URL", ssm_name="/Grafana/MetricQueryURL"
+            )
+            or ""
         )
-        self.user_id = get_from_env_with_fallback(
-            var_name="GRAFANA_USER_ID", ssm_name="/Grafana/MetricUserId"
+        self.user_id = (
+            get_from_env_with_fallback(
+                var_name="GRAFANA_USER_ID", ssm_name="/Grafana/MetricUserId"
+            )
+            or ""
         )
 
     def execute_query(
@@ -77,8 +86,8 @@ class GrafanaSession:
         :param date_range: DateRange object specifying the inclusive date range
         :return: dict with keys "p50", "p95", "p99" and values as Latency objects
         """
-        start_time = date_range.get_earliest_time_of_date()
-        end_time = date_range.get_latest_time_of_date()
+        start_time = date_range.get_earliest_time_of_date()  # type: ignore[attr-defined]
+        end_time = date_range.get_latest_time_of_date()  # type: ignore[attr-defined]
 
         # P50 (median) latency
         query_p50 = f"""histogram_quantile(0.50, sum(rate(traces_spanmetrics_latency_bucket{{{GRAFANA_LABELS}}}[5m])) by (le,job))"""
@@ -91,7 +100,9 @@ class GrafanaSession:
 
         results = {}
         for name, query in [("p50", query_p50), ("p95", query_p95), ("p99", query_p99)]:
-            values = self.execute_query(query, start_time, end_time)
+            values = self.execute_query(
+                query, start_time=start_time, end_time=end_time, timeout=10
+            )
             # Get the last value in the range (latency is in seconds) and convert to milliseconds
             results[name] = float(values[-1][1]) * 1000
         return PercentileResult(
