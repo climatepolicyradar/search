@@ -322,6 +322,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             result for result in results if self.characteristics_test(result)
         ]
 
+        passed = False
         if self.all_or_any == "all":
             passed = len(passing_results) == len(results)
         elif self.all_or_any == "any":
