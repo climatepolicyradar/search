@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 
 class ServiceManifest(BaseModel):
-    class Input(BaseModel): 
+    class Input(BaseModel):
         """Input model for the service manifest."""
 
         type: str

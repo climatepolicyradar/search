@@ -1,33 +1,12 @@
 from contextlib import asynccontextmanager
-from typing import TypeVar
 
-from fastapi import APIRouter, Depends, FastAPI, Query
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import AnyHttpUrl, BaseModel
-from pydantic_settings import SettingsConfigDict
 
-from search.data_in_models import Document
-from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import (
-    CountAggregation,
-    DevVespaDocumentSearchEngine,
-    DevVespaLabelSearchEngine,
-    DevVespaPassageSearchEngine,
-    Settings,
-)
-from search.label import Label
+from api.routers import router
 from search.log import get_logger
-from search.passage import Passage
 
 logger = get_logger(__name__)
-
-
-class EnvSettings(Settings):
-    model_config = SettingsConfigDict(env_file="api/.env")
-
-
-# @see: https://github.com/pydantic/pydantic-settings/issues/201
-settings = EnvSettings()  # pyright: ignore[reportCallIssue]
 
 
 @asynccontextmanager
@@ -37,9 +16,6 @@ async def lifespan(_app: FastAPI):
     # Shutdown: Cleanup (if needed)
 
 
-router = APIRouter(
-    prefix="/search",
-)
 app = FastAPI(
     title="Climate Policy Radar Search API",
     description="API for searching climate policy documents, passages, and labels",
@@ -57,53 +33,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-T = TypeVar("T", bound=BaseModel)
+app.include_router(router)
 
 
-class Aggregations(BaseModel):
-    labels: list[CountAggregation[Label]]
-
-
-class SearchResponse[T](BaseModel):
-    """Response model for search results."""
-
-    total_size: int | None = None
-    page: int
-    page_size: int
-    total_pages: int | None
-    next_page: AnyHttpUrl | None = None
-    previous_page: AnyHttpUrl | None = None
-    results: list[T]
-    aggregations: Aggregations | None = None
-    debug_info: list[dict] | None = None
-
-
-def pagination(page_token: int = 1, page_size: int = 10):
-    """
-    Shared pagination parameters
-
-    @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
-    @see:https://google.aip.dev/158
-    """
-    return Pagination(page_token=page_token, page_size=page_size)
-
-
-def order_by(order_by: str = "relevance desc"):
-    """
-    Shared order by parameters
-
-    @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
-    @see:https://google.aip.dev/132#ordering
-    """
-
-    order_by_list: list[OrderBy] = []
-    for order_by_tuple in order_by.split(","):
-        field, direction = order_by_tuple.split(" ")
-        order_by_list.append(OrderBy(field=field, direction=direction or "desc"))
-    return order_by_list
-
-
-# region routes
 # We use both routers to make sure we can have /search available publicly
 # and / available to the AppRunner health check.
 @app.get("/")
@@ -114,96 +46,3 @@ async def root():
         "name": "Climate Policy Radar Search API",
         "version": "0.1.0",
     }
-
-
-@router.get("/documents", response_model=SearchResponse[Document])
-def read_documents(
-    query: str | None = Query(None, description="What are you looking for?"),
-    filters_json_string: str | None = Query(None, alias="filters"),
-    pagination: Pagination = Depends(pagination),
-    order_by: list[OrderBy] = Depends(order_by),
-    debug: bool = False,
-    bolding: bool = False,
-):
-    engine = DevVespaDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=bolding
-    )
-    results = engine.search(
-        query=query,
-        pagination=pagination,
-        order_by=order_by,
-        filters_json_string=filters_json_string,
-    )
-
-    # TODO: pagination
-    return SearchResponse[Document](
-        total_size=results.total_size,
-        page=0,
-        page_size=0,
-        total_pages=0,
-        next_page=None,
-        previous_page=None,
-        results=results.results,
-        debug_info=engine.last_debug_info if debug else None,
-        aggregations=Aggregations(
-            labels=engine.aggregations(
-                query=query,
-                filters_json_string=filters_json_string,
-            )
-        ),
-    )
-
-
-@router.get("/labels", response_model=SearchResponse[Label])
-def read_labels(
-    query: str | None = Query(None, description="What are you looking for?"),
-    type: str | None = None,
-    pagination: Pagination = Depends(pagination),
-    order_by: list[OrderBy] = Depends(order_by),
-):
-    engine = DevVespaLabelSearchEngine(settings=settings)
-    results = engine.search(
-        query=query, pagination=pagination, order_by=order_by, label_type=type
-    )
-    engine.all_label_types()
-
-    return SearchResponse[Label](
-        total_size=results.total_size,
-        page=0,
-        page_size=0,
-        total_pages=0,
-        next_page=None,
-        previous_page=None,
-        results=results.results,
-        aggregations=None,
-    )
-
-
-@router.get("/passages", response_model=SearchResponse[Passage])
-def read_passages(
-    query: str | None = Query(None, description="What are you looking for?"),
-    pagination: Pagination = Depends(pagination),
-    order_by: list[OrderBy] = Depends(order_by),
-):
-    engine = DevVespaPassageSearchEngine(settings=settings)
-    results = engine.search(
-        query=query,
-        pagination=pagination,
-        order_by=order_by,
-    )
-
-    return SearchResponse[Passage](
-        total_size=results.total_size,
-        page=0,
-        page_size=0,
-        total_pages=0,
-        next_page=None,
-        previous_page=None,
-        results=results.results,
-        aggregations=None,
-    )
-
-
-# endregion
-
-app.include_router(router)
