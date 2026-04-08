@@ -78,6 +78,10 @@ class FastAPITelemetry(BaseTelemetry):
             try:
                 telemetry = FastAPITelemetry._extract_telemetry(request)
                 tracer = telemetry.get_tracer()
+
+                if not tracer:
+                    raise RuntimeError("Tracer not found in FastAPI application state.")
+
                 with tracer.start_as_current_span("route_handler"):
                     return await original_handler(request)
             except Exception as exc:  # noqa: BLE001
