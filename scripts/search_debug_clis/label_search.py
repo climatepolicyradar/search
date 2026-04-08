@@ -7,7 +7,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from api.dev import settings
+from api.routers import settings
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaLabelSearchEngine
 
