@@ -19,14 +19,24 @@ class GrafanaSession:
     """Session for querying Grafana data."""
 
     def __init__(self) -> None:
-        self.api_key = get_from_env_with_fallback(
-            var_name="GRAFANA_API_KEY", ssm_name="/Grafana/MetricUserApiToken"
+        # The fallbacks here are not great, but they were done in haste, and the errors will still surface if missing
+        self.api_key = (
+            get_from_env_with_fallback(
+                var_name="GRAFANA_API_KEY", ssm_name="/Grafana/MetricUserApiToken"
+            )
+            or ""
         )
-        self.url = get_from_env_with_fallback(
-            var_name="GRAFANA_URL", ssm_name="/Grafana/MetricQueryURL"
+        self.url = (
+            get_from_env_with_fallback(
+                var_name="GRAFANA_URL", ssm_name="/Grafana/MetricQueryURL"
+            )
+            or ""
         )
-        self.user_id = get_from_env_with_fallback(
-            var_name="GRAFANA_USER_ID", ssm_name="/Grafana/MetricUserId"
+        self.user_id = (
+            get_from_env_with_fallback(
+                var_name="GRAFANA_USER_ID", ssm_name="/Grafana/MetricUserId"
+            )
+            or ""
         )
 
     def execute_query(
