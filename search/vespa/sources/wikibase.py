@@ -270,7 +270,7 @@ async def fetch_concepts_at_timestamps(
     password = get_from_env_with_fallback(
         "WIKIBASE_PASSWORD", wikibase_password_ssm_key
     )
-    if not all([base_url, username, password]):
+    if not base_url or not username or not password:
         raise RuntimeError("Missing Wikibase credentials (checked env vars and SSM)")
     base_url = base_url.rstrip("/")
     api_url = f"{base_url}/w/api.php"
