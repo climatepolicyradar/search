@@ -250,11 +250,12 @@ test_cases = [
         search_terms="necp",
         characteristics_test=lambda document: any(
             term in document.title.lower()
-            for term in ["national energy and climate plan", "necp"]
+            for term in ["national energy and climate plan"]
         ),
         description="Search for 'necp' should return documents with 'national energy and climate plan' or 'necp' in the title",
         k=10,
     ),
+    # TODO: use relevant labels if they exist, e.g., document type = "climate action plan"
     FieldCharacteristicsTestCase[Document](
         category="document type",
         search_terms="climate action plan",
@@ -280,13 +281,13 @@ test_cases = [
             "CCLW.family.9520.0",
             "CCLW.legislative.9520.3859",
             "CCLW.legislative.9520.4620",
-            "CCLW.document.i00006386.n0000",
+            "CCLW.document.i00006386.n0000",  # this document has a different family ID but is included in the document family on the app.  It is "Regulation (EU) 2023/2869", slug "regulation-eu-2023-2869_73bf"
             "CCLW.legislative.9520.6334",
         ],
         description="searching for 'sfdr' should return the EU Sustainable Finance Disclosure Regulation",
     ),
     PrecisionTestCase[Document](
-        category="acronym",
+        category="document name+acronym",
         search_terms="ira",
         expected_result_ids=[
             "CCLW.family.10699.0",
@@ -343,7 +344,7 @@ test_cases = [
             "CCLW.document.i00006700.n0000",
             "CCLW.family.11176.0",  # 'Safeguard Mechanism (Crediting) Amendment Act 2023, Australia
             "CCLW.document.i00006698.n0000",
-            # There could be more documents but I don't know what they are
+            # TODO: add more documents if they exist
         ],
         description="searching for 'safeguard mechanism' should return documents about the Australian policy instrument whose short name is 'safeguard mechanism'",
     ),
@@ -358,12 +359,12 @@ test_cases = [
         category="specific document",
         search_terms="governance regulation",
         expected_result_ids=[
-            "CCLW.family.9492.0",
-            "CCLW.legislative.9492.3806",
-            "CCLW.legislative.9492.rtl_142",
-            "CCLW.legislative.9492.5884",
-            "CCLW.document.i00006233.n0000",
-            "CCLW.document.i00006232.n0000",
+            "CCLW.family.9492.0",  # "Regulation 2018/1999 on the Governance of the Energy Union and Climate Action" (regulation-2018-1999-on-the-governance-of-the-energy-union-and-climate-action_26fa) and all documents on the family page
+            "CCLW.legislative.9492.3806",  # "Regulation 2018/1999 on the Governance of the Energy Union and Climate Action (initial text)" (regulation-2018-1999-on-the-governance-of-the-energy-union-and-climate-action_0adc)
+            "CCLW.legislative.9492.rtl_142",  # "Regulation (EU) 2023/839 regarding improvement in monitoring, reporting, tracking of progress and review" (regulation-eu-2023839-regarding-improvement-in-monitoring-reporting-tracking-of-progress-and-review-4527)
+            "CCLW.legislative.9492.5884",  # "Regulation 2018/1999 on the Governance of the Energy Union and Climate Action: Consolidated Version" (regulation-2018-1999-on-the-governance-of-the-energy-union-and-climate-action-consolidated-version_4d0a)
+            "CCLW.document.i00006233.n0000",  # "Directive (EU) 2023/2413 amending as regards the promotion of energy from renewable sources" (directive-eu-2023-2413-amending-as-regards-the-promotion-of-energy-from-renewable-sources_fc66)
+            "CCLW.document.i00006232.n0000",  # "Decision (EU) 2019/504" (decision-eu-2019-504_272a)
         ],
         description="searching for 'governance regulation' should the EU Governance Regulation, even when the term is not in the title",
     ),
