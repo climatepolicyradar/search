@@ -44,6 +44,16 @@ schema labels {
         }
     }
 
+    field value_attribute type string {
+        indexing: input value | attribute
+    }
+    field alternative_labels_attribute type array<string> {
+        indexing: input alternative_labels | attribute
+    }
+    field subconcept_labels_attribute type array<string> {
+        indexing: input subconcept_labels | attribute
+    }
+
     fieldset default {
         fields: value, alternative_labels, subconcept_labels
     }
