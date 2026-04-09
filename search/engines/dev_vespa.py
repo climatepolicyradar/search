@@ -52,7 +52,7 @@ class Settings(BaseSettings):
 
 # region Filters
 class LabelsCondition(BaseModel):
-    field: Literal["labels.value.id"]
+    field: Literal["labels.value.id", "labels.value.value"]
     op: Literal["contains", "not_contains"]
     value: str
 
@@ -90,7 +90,7 @@ SimpleExampleFilter = Filter(
     op="and",
     filters=[
         LabelsCondition(
-            field="labels.value.id",
+            field="labels.value.value",
             op="contains",
             value="Romania",
         ),
@@ -108,26 +108,26 @@ ComplexExampleFilter = Filter(
                     op="and",
                     filters=[
                         LabelsCondition(
-                            field="labels.value.id",
+                            field="labels.value.value",
                             op="contains",
                             value="Multilateral climate fund project",
                         ),
                         LabelsCondition(
-                            field="labels.value.id",
+                            field="labels.value.value",
                             op="contains",
                             value="Principal",
                         ),
                     ],
                 ),
                 LabelsCondition(
-                    field="labels.value.id",
+                    field="labels.value.value",
                     op="contains",
                     value="UN submissions",
                 ),
             ],
         ),
         LabelsCondition(
-            field="labels.value.id",
+            field="labels.value.value",
             op="contains",
             value="Romania",
         ),
