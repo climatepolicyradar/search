@@ -32,6 +32,7 @@ from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
+    FieldFilter,
     Filter,
     LabelsCondition,
     Settings,
@@ -760,7 +761,7 @@ def _feed_label(vespa_app: Vespa, vespa_label: VespaLabel) -> None:
     response.raise_for_status()
 
 
-def test_label_search_returns_exact_match_first(vespa_app: Vespa, clean_labels: None):
+def test_label_search_returns_exact_match_first(vespa_app: Vespa):
     _feed_label(
         vespa_app,
         VespaLabel(
@@ -795,6 +796,50 @@ def test_label_search_returns_exact_match_first(vespa_app: Vespa, clean_labels: 
 
     assert results, "Expected at least one result"
     assert results[0].value == "Law"
+
+
+def test_label_field_filter_type_not_contains_returns_matching_type_only(
+    vespa_app: Vespa,
+):
+    _feed_label(
+        vespa_app,
+        VespaLabel(
+            id="category::Law",
+            type="category",
+            value="Law",
+            alternative_labels=[],
+            subconcept_labels=[],
+            description="",
+            negative_labels=[],
+        ),
+    )
+    _feed_label(
+        vespa_app,
+        VespaLabel(
+            id="geography::Romania",
+            type="geography",
+            value="Romania",
+            alternative_labels=[],
+            subconcept_labels=[],
+            description="",
+            negative_labels=[],
+        ),
+    )
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        filters_json_string=Filter(
+            op="and",
+            filters=[FieldFilter(field="type", op="not_contains", value="category")],
+        ).model_dump_json(),
+    ).results
+
+    result_ids = {label.id for label in results}
+    assert "category::Law" not in result_ids
+    assert "geography::Romania" in result_ids
 
 
 # endregion /labels
