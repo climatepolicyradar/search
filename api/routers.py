@@ -70,13 +70,18 @@ def read_documents(
 @router.get("/labels", response_model=SearchResponse[Label])
 def read_labels(
     query: str | None = Query(None, description="What are you looking for?"),
+    filters_json_string: str | None = Query(None, alias="filters"),
     type: str | None = None,
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(order_by),
 ):
     engine = DevVespaLabelSearchEngine(settings=settings)
     results = engine.search(
-        query=query, pagination=pagination, order_by=order_by, label_type=type
+        query=query,
+        filters_json_string=filters_json_string,
+        pagination=pagination,
+        order_by=order_by,
+        label_type=type,
     )
     engine.all_label_types()
 
