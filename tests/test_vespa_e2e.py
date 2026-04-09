@@ -370,7 +370,7 @@ def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.id", op="contains", value="Romania")
+            LabelsCondition(field="labels.value.value", op="contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -389,7 +389,7 @@ def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.id", op="contains", value="Romania")
+            LabelsCondition(field="labels.value.value", op="contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -406,7 +406,9 @@ def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.id", op="not_contains", value="Romania")
+            LabelsCondition(
+                field="labels.value.value", op="not_contains", value="Romania"
+            )
         ],
     )
     ids = _ids(f)
@@ -427,7 +429,9 @@ def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.id", op="not_contains", value="Romania")
+            LabelsCondition(
+                field="labels.value.value", op="not_contains", value="Romania"
+            )
         ],
     )
     ids = _ids(f)
@@ -481,7 +485,7 @@ def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.id", op="contains", value="Romania")
+            LabelsCondition(field="labels.value.value", op="contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -499,7 +503,7 @@ def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.id", op="contains", value="Romania")
+            LabelsCondition(field="labels.value.value", op="contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -517,7 +521,9 @@ def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.id", op="not_contains", value="Romania")
+            LabelsCondition(
+                field="labels.value.value", op="not_contains", value="Romania"
+            )
         ],
     )
     ids = _ids(f)
@@ -536,7 +542,9 @@ def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.id", op="not_contains", value="Romania")
+            LabelsCondition(
+                field="labels.value.value", op="not_contains", value="Romania"
+            )
         ],
     )
     ids = _ids(f)
