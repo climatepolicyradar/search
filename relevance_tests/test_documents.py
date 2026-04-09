@@ -250,7 +250,7 @@ test_cases = [
         search_terms="necp",
         characteristics_test=lambda document: "national energy and climate plan"
         in document.title.lower(),
-        description="Search for 'necp' should return documents with 'national energy and climate plan' or 'necp' in the title",
+        description="Search for 'necp' should return documents with 'national energy and climate plan' in the title",
         k=10,
     ),
     # TODO: use relevant labels if they exist, e.g., document type = "climate action plan"
