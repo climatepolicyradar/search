@@ -653,6 +653,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": "nativerank",
+            "rules.rulebase": "labels",
         }
 
         try:

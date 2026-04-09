@@ -55,7 +55,8 @@ Synonym expansion is handled in two different ways depending on the field:
   field-scoped `userInput` (e.g.
   `{defaultIndex: "geographies"}userInput(@query)`), which labels query tokens
   with a field name. Vespa's semantic rules only match unlabeled tokens, so they
-  can't be used here.
+  can't be used here. TODO: investigate whether this is affecting multi-word
+  geography queries.
 - **Everything else** (title acronyms, `phaseout`, etc.) uses Vespa
   [semantic rules](https://docs.vespa.ai/en/linguistics/query-rewriting.html)
   defined in `vespa/app/rules/`. There are two rulebases:

@@ -12,7 +12,7 @@ schema labels {
             linguistics {
                 profile {
                     index: label_analysis
-                    search: label_analysis_search
+                    search: label_analysis
                 }
             }
         }
@@ -22,7 +22,7 @@ schema labels {
             linguistics {
                 profile {
                     index: label_analysis
-                    search: label_analysis_search
+                    search: label_analysis
                 }
             }
         }
@@ -32,7 +32,7 @@ schema labels {
             linguistics {
                 profile {
                     index: label_analysis
-                    search: label_analysis_search
+                    search: label_analysis
                 }
             }
         }
