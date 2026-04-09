@@ -124,6 +124,7 @@ def read_documents(
     order_by: list[OrderBy] = Depends(order_by),
     debug: bool = False,
     bolding: bool = False,
+    principal_label_boost_factor: float | None = None,
 ):
     engine = DevVespaDocumentSearchEngine(
         settings=settings, debug=debug, bolding=bolding
@@ -133,6 +134,7 @@ def read_documents(
         pagination=pagination,
         order_by=order_by,
         filters_json_string=filters_json_string,
+        principal_label_boost_factor=principal_label_boost_factor,
     )
 
     # TODO: pagination

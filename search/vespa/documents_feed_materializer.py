@@ -39,6 +39,7 @@ class VespaDocument(TypedDict):
     attributes_double: VespaAssign[dict[str, float]]
     attributes_boolean: VespaAssign[dict[str, int]]
     attributes_identifiers: VespaAssign[dict[str, str]]
+    has_principal_label: VespaAssign[int]
 
 
 def _strip_control_chars(s: str) -> str:
@@ -118,6 +119,15 @@ def _source_document_to_vespa_update(
                     for k, v in attrs.items()
                     if k.startswith("identifiers::")
                 }
+            },
+            "has_principal_label": {
+                "assign": int(
+                    any(
+                        label.get("type") == "status"
+                        and label["value"]["value"] == "Principal"
+                        for label in (document.get("labels") or [])
+                    )
+                )
             },
         },
     }

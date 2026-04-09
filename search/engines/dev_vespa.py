@@ -274,6 +274,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
         filters_json_string: str | None = None,
+        principal_label_boost_factor: float | None = None,
     ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
 
@@ -295,8 +296,14 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
-            "ranking.profile": "nativerank",
+            "ranking.profile": "principal-label-boosted"
+            if principal_label_boost_factor is not None
+            else "nativerank",
         }
+        if principal_label_boost_factor is not None:
+            request_body["ranking.features.query(principal_label_boost_factor)"] = (
+                principal_label_boost_factor
+            )
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
         if not self.bolding:
