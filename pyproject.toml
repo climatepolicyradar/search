@@ -72,3 +72,8 @@ disable = [
 
 [tool.typos.files]
 extend-exclude = ["relevance_tests/*.py"]
+
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
