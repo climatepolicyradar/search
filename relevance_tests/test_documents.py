@@ -248,10 +248,8 @@ test_cases = [
     FieldCharacteristicsTestCase[Document](
         category="entity name + acronym",
         search_terms="necp",
-        characteristics_test=lambda document: any(
-            term in document.title.lower()
-            for term in ["national energy and climate plan"]
-        ),
+        characteristics_test=lambda document: "national energy and climate plan"
+        in document.title.lower(),
         description="Search for 'necp' should return documents with 'national energy and climate plan' in the title",
         k=10,
     ),
