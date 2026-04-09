@@ -63,6 +63,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+@router.get("")
+async def root():
+    """Root endpoint with API information."""
+    return {
+        "name": "Climate Policy Radar Search API",
+        "version": "0.1.0",
+    }
+
+
 app.include_router(router)
 
 
@@ -72,11 +84,3 @@ telemetry.setup_exception_hook()
 
 # We use both routers to make sure we can have /search available publicly
 # and / available to the AppRunner health check.
-@app.get("/")
-@router.get("")
-async def root():
-    """Root endpoint with API information."""
-    return {
-        "name": "Climate Policy Radar Search API",
-        "version": "0.1.0",
-    }
