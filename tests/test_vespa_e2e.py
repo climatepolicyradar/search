@@ -102,6 +102,7 @@ def vespa_app() -> Generator[Vespa, None, None]:
         shutil.copytree(
             VESPA_APP_DIR / "lucene-linguistics", app_dir / "lucene-linguistics"
         )
+        shutil.copytree(VESPA_APP_DIR / "rules", app_dir / "rules")
         shutil.copy(
             Path(__file__).parent / "vespa_test_services.xml", app_dir / "services.xml"
         )
@@ -646,13 +647,13 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
 
 def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
     """
-    Test geography synonym expansion using lucene linguistics.
+    Test geography query rewrites from semantic rules.
 
     Note: this test could end up *not* applying to the DevVespaDocumentSearchEngine
     for valid reasons. In that case, we could remove this test or apply it to a specific
     SearchEngine.
 
-    See: https://github.com/vespa-engine/sample-apps/tree/master/examples/lucene-linguistics/multiple-profiles
+    See: https://docs.vespa.ai/en/linguistics/query-rewriting.html
     """
     doc_uk = SourceDocumentFactory.build(
         title="xyzzygeotestuk document",
@@ -703,7 +704,7 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
 
 def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     """
-    Test title synonym expansion using lucene linguistics.
+    Test title acronym query rewrites from semantic rules (documents.sr).
 
     Searching for acronyms like "fca" or "tcfd" should match documents whose
     titles contain the expanded forms ("Financial Conduct Authority",
