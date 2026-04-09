@@ -51,12 +51,6 @@ class Settings(BaseSettings):
 
 
 # region Filters
-# class FieldFilter(BaseModel):
-#     field: Literal["labels.value.id", "labels.value.value"]
-#     op: Literal["contains", "not_contains"]
-#     value: str
-
-
 class AttributesCondition(BaseModel):
     field: Literal[
         "attributes_string",
