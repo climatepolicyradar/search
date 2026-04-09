@@ -638,11 +638,16 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         yql = f"select * from sources labels where {where}"
         if query:
-            yql += " and userQuery()"
+            # We prioritise prefix matches, but then search more loosely and rank them lower
+            yql += (
+                " and (value_attribute contains ({prefix: true, weight: 200}@query)"
+                " or alternative_labels_attribute contains ({prefix: true, weight: 200}@query)"
+                " or userQuery())"
+            )
         if label_type:
             yql += f' and type contains "{label_type}"'
 
-        logger.info(f"searching labels for yql: {yql}")
+        logger.info(f"searching labels for yql: {yql}, query: {query}")
 
         request_body: dict[str, Any] = {
             "yql": yql,
