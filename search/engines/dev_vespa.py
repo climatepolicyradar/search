@@ -51,10 +51,10 @@ class Settings(BaseSettings):
 
 
 # region Filters
-class LabelsCondition(BaseModel):
-    field: Literal["labels.value.id", "labels.value.value"]
-    op: Literal["contains", "not_contains"]
-    value: str
+# class FieldFilter(BaseModel):
+#     field: Literal["labels.value.id", "labels.value.value"]
+#     op: Literal["contains", "not_contains"]
+#     value: str
 
 
 class AttributesCondition(BaseModel):
@@ -75,7 +75,7 @@ class FieldFilter(BaseModel):
     value: str
 
 
-Condition = LabelsCondition | AttributesCondition | FieldFilter
+Condition = FieldFilter | AttributesCondition | FieldFilter
 
 
 class Filter(BaseModel):
@@ -89,7 +89,7 @@ class Filter(BaseModel):
 SimpleExampleFilter = Filter(
     op="and",
     filters=[
-        LabelsCondition(
+        FieldFilter(
             field="labels.value.value",
             op="contains",
             value="Romania",
@@ -107,26 +107,26 @@ ComplexExampleFilter = Filter(
                 Filter(
                     op="and",
                     filters=[
-                        LabelsCondition(
+                        FieldFilter(
                             field="labels.value.value",
                             op="contains",
                             value="Multilateral climate fund project",
                         ),
-                        LabelsCondition(
+                        FieldFilter(
                             field="labels.value.value",
                             op="contains",
                             value="Principal",
                         ),
                     ],
                 ),
-                LabelsCondition(
+                FieldFilter(
                     field="labels.value.value",
                     op="contains",
                     value="UN submissions",
                 ),
             ],
         ),
-        LabelsCondition(
+        FieldFilter(
             field="labels.value.value",
             op="contains",
             value="Romania",
@@ -150,6 +150,12 @@ def _format_value(value: str | float | bool) -> str:
     return f'"{value}"'
 
 
+filter_field_to_vespa_field_map = {
+    "labels.value.id": ["labels.id", "concepts.id"],
+    "labels.value.value": ["labels.value", "concepts.value"],
+}
+
+
 def _build_condition_yql(condition: Condition) -> str:
     match condition:
         case AttributesCondition():
@@ -168,21 +174,16 @@ def _build_condition_yql(condition: Condition) -> str:
                 return f"!({expr})"
             return expr
 
-        case LabelsCondition():
-            value = condition.value
-            labels_expr = f'labels.value contains "{value}"'
-            concepts_expr = f'concepts.value contains "{value}"'
-            if condition.op == "not_contains":
-                return f"!({labels_expr} or {concepts_expr})"
-            return f"({labels_expr} or {concepts_expr})"
-
         case FieldFilter():
+            fields = filter_field_to_vespa_field_map.get(
+                condition.field, [condition.field]
+            )
             value = _format_value(condition.value)
-            match condition.op:
-                case "contains":
-                    return f"{condition.field} contains {value}"
-                case "not_contains":
-                    return f"!({condition.field} contains {value})"
+            exprs = [f"{field} contains {value}" for field in fields]
+            combined = " or ".join(exprs)
+            if condition.op == "not_contains":
+                return f"!({combined})"
+            return f"({combined})" if len(exprs) > 1 else combined
 
 
 def _build_filter_yql(filter_group: Filter) -> str:
