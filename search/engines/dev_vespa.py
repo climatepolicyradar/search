@@ -69,7 +69,7 @@ class FieldFilter(BaseModel):
     value: str
 
 
-Condition = FieldFilter | AttributesCondition | FieldFilter
+Condition = AttributesCondition | FieldFilter
 
 
 class Filter(BaseModel):
