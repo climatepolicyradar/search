@@ -114,9 +114,9 @@ def _source_document_to_vespa_update(
                 "assign": {
                     # we do not mind if this is duplicated in attributes_string
                     # as it is used for boosting
-                    k.replace("identifiers::", ""): str(v)
+                    k.replace("identifier::", ""): str(v)
                     for k, v in attrs.items()
-                    if k.startswith("identifiers::")
+                    if k.startswith("identifier::")
                 }
             },
         },
