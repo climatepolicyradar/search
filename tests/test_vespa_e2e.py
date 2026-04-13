@@ -913,7 +913,7 @@ def test_label_multi_word_subphrase_queries_surface_same_geography(
     A multi-word label value must match single-token, sub-phrase,
     full-phrase, and prefix-style queries.
     """
-    anchor_id = "geography::USA"
+    anchor_id = "geography::united-states"
     _feed_label(
         vespa_app,
         VespaLabel(
