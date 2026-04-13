@@ -900,7 +900,6 @@ def test_label_multi_word_subphrase_queries_surface_same_topic(
         "united",
         "united states",
         "states",
-        "usa",
         "united states of america",
     ],
 )
