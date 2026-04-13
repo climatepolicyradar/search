@@ -34,7 +34,6 @@ from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
     FieldFilter,
     Filter,
-    LabelsCondition,
     Settings,
 )
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
@@ -370,7 +369,7 @@ def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.value", op="contains", value="Romania")
+            FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -389,7 +388,7 @@ def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.value", op="contains", value="Romania")
+            FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -406,9 +405,7 @@ def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(
-                field="labels.value.value", op="not_contains", value="Romania"
-            )
+            FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -429,9 +426,7 @@ def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(
-                field="labels.value.value", op="not_contains", value="Romania"
-            )
+            FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -485,7 +480,7 @@ def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.value", op="contains", value="Romania")
+            FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -503,7 +498,7 @@ def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(field="labels.value.value", op="contains", value="Romania")
+            FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -521,9 +516,7 @@ def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(
-                field="labels.value.value", op="not_contains", value="Romania"
-            )
+            FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
     ids = _ids(f)
@@ -542,9 +535,7 @@ def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
     f = Filter(
         op="and",
         filters=[
-            LabelsCondition(
-                field="labels.value.value", op="not_contains", value="Romania"
-            )
+            FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
     ids = _ids(f)
