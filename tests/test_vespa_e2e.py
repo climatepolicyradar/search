@@ -894,4 +894,48 @@ def test_label_multi_word_subphrase_queries_surface_same_topic(
     )
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        "united",
+        "united states",
+        "states",
+        "usa",
+        "united states of america",
+    ],
+)
+def test_label_multi_word_subphrase_queries_surface_same_geography(
+    vespa_app: Vespa, query: str
+):
+    """
+    Multi-word label value query must surface the right geography.
+
+    A multi-word label value must match single-token, sub-phrase,
+    full-phrase, and prefix-style queries.
+    """
+    anchor_id = "geography::USA"
+    _feed_label(
+        vespa_app,
+        VespaLabel(
+            id=anchor_id,
+            type="geography",
+            value="United States",
+            alternative_labels=[],
+            subconcept_labels=[],
+            description="",
+            negative_labels=[],
+        ),
+    )
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+    result_ids = [label.id for label in results]
+    assert anchor_id in result_ids, (
+        f"Expected {anchor_id!r} in top 10 for query {query!r}, got ids: {result_ids}"
+    )
+
+
 # endregion /labels
