@@ -1,0 +1,69 @@
+set dotenv-load := true
+
+default:
+    @just --list
+
+# Install dependencies
+install:
+    uv sync --locked --group dev
+
+# Run tests
+test +OPTS="":
+    uv run pytest --disable-pytest-warnings --color=yes --verbose {{ OPTS }}
+
+# Lint
+lint:
+    uv run ruff check src/ tests/
+    uv run ruff format --check src/ tests/
+
+# Format
+fmt:
+    uv run ruff format src/ tests/
+
+# ── Local dev ──────────────────────────────────────────────────────────────────
+
+# Start local Vespa + LocalStack
+up:
+    docker compose up -d
+    @echo "Waiting for Vespa to be ready…"
+    @until curl -sf http://localhost:8080/state/v1/health > /dev/null; do sleep 2; done
+    @echo "Vespa is ready."
+
+# Stop local services
+down:
+    docker compose down
+
+# Wipe all local data
+reset:
+    docker compose down -v
+
+# Deploy the Vespa app schema to the local instance
+# (run from the repo root where vespa/app lives)
+deploy-schema:
+    vespa deploy ../vespa/app --target http://localhost:19071/ --wait 300
+
+# Run the flow locally (reads .env)
+run:
+    uv run python -m vespa_feeder.flow
+
+# ── LocalStack S3 helpers ──────────────────────────────────────────────────────
+
+# Create a bucket in LocalStack
+localstack-create-bucket bucket="test-bucket":
+    AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
+    aws --endpoint-url=http://localhost:4566 s3 mb s3://{{ bucket }}
+
+# Upload a local JSONL file to LocalStack for testing
+localstack-upload file bucket="test-bucket" key="feed/test.jsonl":
+    AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
+    aws --endpoint-url=http://localhost:4566 s3 cp {{ file }} s3://{{ bucket }}/{{ key }}
+
+# ── Production ────────────────────────────────────────────────────────────────
+
+# Build and push the Docker image
+docker-build tag="latest":
+    docker build -t vespa-feeder:{{ tag }} .
+
+# Deploy Prefect flows to production
+deploy:
+    uv run python deployments.py

@@ -1,0 +1,30 @@
+services:
+  vespa:
+    image: vespaengine/vespa
+    container_name: vespa-feeder-vespa
+    ports:
+      - "8080:8080"
+      - "19071:19071"
+    volumes:
+      - vespa-data:/opt/vespa/var
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/state/v1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # LocalStack provides a local S3 for development without hitting real AWS
+  localstack:
+    image: localstack/localstack
+    container_name: vespa-feeder-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEFAULT_REGION=eu-west-1
+    volumes:
+      - localstack-data:/var/lib/localstack
+
+volumes:
+  vespa-data:
+  localstack-data:
