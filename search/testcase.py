@@ -347,6 +347,80 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
         )
 
 
+class SortingComparisonTestCase(TestCase[TModel], Generic[TModel]):
+    """
+    Compare top-k results for the same query under two ``order_by`` clauses.
+
+    This is useful for guarding against regressions where explicit sorting is
+    ignored and the same document appears at the top across all sort modes.
+    """
+
+    first_order_by: list[OrderBy] = Field(description="First order_by clause list.")
+    second_order_by: list[OrderBy] = Field(description="Second order_by clause list.")
+    k: int = Field(
+        description="Top-k window to compare between both sort modes.",
+        default=5,
+        gt=0,
+    )
+
+    @model_validator(mode="after")
+    def check_different_sort_clauses(self):
+        """Ensure sort clauses being compared are not identical."""
+        if self.first_order_by == self.second_order_by:
+            raise ValueError("first_order_by and second_order_by must differ")
+        return self
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a sorting comparison failure.
+
+        :param search_results: The first query's search results.
+        :returns: A summary including the first sort mode and top-k IDs.
+        """
+        result_ids = [r.id for r in search_results[: self.k]]
+        return (
+            f"Sort comparison failed for query '{self.search_terms}'. "
+            f"first_order_by={self.first_order_by}, "
+            f"second_order_by={self.second_order_by}, "
+            f"first top-{self.k}={result_ids}. "
+            "Re-run with debug logging to inspect second query IDs."
+        )
+
+    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+        """Run two sorted searches and assert top-k IDs differ."""
+        first = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=self.k),
+            order_by=self.first_order_by,
+            filters_json_string=None,
+        )
+        second = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=self.k),
+            order_by=self.second_order_by,
+            filters_json_string=None,
+        )
+
+        first_ids = [result.id for result in first.results[: self.k]]
+        second_ids = [result.id for result in second.results[: self.k]]
+        passed = first_ids != second_ids
+
+        return passed, first.results
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase."""
+        return Identifier.generate(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.first_order_by,
+            self.second_order_by,
+            self.k,
+        )
+
+
 class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
     """
     Compare two searches to each other. Compares the top k results.
