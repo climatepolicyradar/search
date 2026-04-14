@@ -31,7 +31,6 @@ class VespaLabelField(TypedDict):
 
 class VespaDocument(TypedDict):
     title: VespaAssign[str]
-    title_sort: VespaAssign[str]
     description: VespaAssign[str | None]
     labels: VespaAssign[list[VespaLabelField]]
     geographies: VespaAssign[list[str]]
@@ -40,7 +39,7 @@ class VespaDocument(TypedDict):
     attributes_double: VespaAssign[dict[str, float]]
     attributes_boolean: VespaAssign[dict[str, int]]
     attributes_identifiers: VespaAssign[dict[str, str]]
-    published_timestamp: NotRequired[VespaAssign[int]]
+    attributes_published_date: NotRequired[VespaAssign[int]]
 
 
 def _strip_control_chars(s: str) -> str:
@@ -85,7 +84,6 @@ def _source_document_to_vespa_update(
     published_ts = _published_timestamp_from_attributes(attrs)
     fields: VespaDocument = {
         "title": {"assign": title_clean},
-        "title_sort": {"assign": title_clean.lower()},
         "description": {
             "assign": _strip_control_chars(document.get("description") or "")
             if document.get("description")
@@ -143,7 +141,7 @@ def _source_document_to_vespa_update(
         },
     }
     if published_ts is not None:
-        fields["published_timestamp"] = {"assign": published_ts}
+        fields["attributes_published_date"] = {"assign": published_ts}
 
     vespa_update: VespaUpdate[VespaDocument] = {
         "update": f"id:documents:documents::{document.get('id')}",

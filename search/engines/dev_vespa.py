@@ -149,6 +149,17 @@ filter_field_to_vespa_field_map = {
     "labels.value.value": ["labels.value", "concepts.value"],
 }
 
+sort_field_to_vespa_field_map = {
+    "attributes.published_date": ["attributes_published_date"],
+    "title": ["title_sort"],
+}
+
+# Public API field names for ``order_by`` (JSON paths + ``relevance``), aligned
+# with :data:`sort_field_to_vespa_field_map` keys.
+DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
+    {"relevance", *sort_field_to_vespa_field_map.keys()}
+)
+
 
 def _build_condition_yql(condition: Condition) -> str:
     match condition:
@@ -214,10 +225,6 @@ def _build_filter_query(filter_group: Filter | None) -> str:
 
 # region Document sort (Vespa ranking.sorting)
 
-DOCUMENT_SEARCH_ORDER_FIELDS = frozenset(
-    {"relevance", "published_timestamp", "title_sort"}
-)
-
 
 def _ranking_overrides_for_document_order_by(
     order_by: list[OrderBy],
@@ -228,7 +235,8 @@ def _ranking_overrides_for_document_order_by(
     Only the first clause is applied (multilevel sorts can be added later).
     ``relevance`` keeps default ``nativerank`` ordering (no ``ranking.sorting``).
 
-    :param order_by: Parsed ``<field> <direction>`` clauses from the API
+    :param order_by: Parsed ``<field> <direction>`` clauses (public JSON paths
+        such as ``attributes.published_date`` and ``title``, plus ``relevance``)
     :type order_by: list[OrderBy]
     :return: Key/value fragments to merge into the Vespa JSON body
     :rtype: dict[str, Any]
@@ -237,10 +245,10 @@ def _ranking_overrides_for_document_order_by(
     if not order_by:
         return {}
     primary = order_by[0]
-    if primary.field not in DOCUMENT_SEARCH_ORDER_FIELDS:
+    if primary.field not in DOCUMENT_SORT_API_FIELDS:
         raise ValueError(
             f"order_by field {primary.field!r} is not supported for documents; "
-            f"expected one of: {sorted(DOCUMENT_SEARCH_ORDER_FIELDS)}"
+            f"expected one of: {sorted(DOCUMENT_SORT_API_FIELDS)}"
         )
     if primary.field == "relevance":
         if primary.direction not in ("asc", "desc"):
@@ -256,18 +264,25 @@ def _ranking_overrides_for_document_order_by(
         raise ValueError(
             f"invalid order direction {primary.direction!r}; use asc or desc"
         )
-    if primary.field == "published_timestamp":
+
+    if primary.field not in sort_field_to_vespa_field_map:
+        raise ValueError(
+            f"order_by field {primary.field!r} is not supported for documents; "
+            f"expected one of: {sorted(DOCUMENT_SORT_API_FIELDS)}"
+        )
+    vespa_attr = sort_field_to_vespa_field_map[primary.field][0]
+    if vespa_attr == "attributes_published_date":
         sorting = (
-            "-published_timestamp"
+            "-attributes_published_date"
             if primary.direction == "desc"
-            else "+missing(published_timestamp,last) +published_timestamp"
+            else "+missing(attributes_published_date,last) +attributes_published_date"
         )
         return {
             "ranking.profile": "unranked",
             "ranking.sorting": sorting,
             "sorting.degrading": False,
         }
-    if primary.field == "title_sort":
+    if vespa_attr == "title_sort":
         sorting = "+title_sort" if primary.direction == "asc" else "-title_sort"
         return {
             "ranking.profile": "unranked",

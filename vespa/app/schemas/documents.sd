@@ -124,14 +124,11 @@ schema documents {
         }
 
         field title_sort type string {
-            indexing: attribute | summary
-            attribute: fast-search
-            match: exact
+            indexing: input title | attribute | summary | lowercase
         }
 
-        field published_timestamp type long {
+        field attributes_published_date type long {
             indexing: attribute | summary
-            attribute: fast-search
         }
     }
 

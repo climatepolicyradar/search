@@ -1,18 +1,20 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
+from pydantic import BeforeValidator, TypeAdapter, ValidationError
 
 from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import DOCUMENT_SEARCH_ORDER_FIELDS
+from search.engines.dev_vespa import DOCUMENT_SORT_API_FIELDS
 
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
-    "Supported fields: `relevance`, `published_timestamp` "
-    "(from document `published_date`), `title_sort` (lowercased title). "
+    "Supported fields: `relevance`, `attributes.published_date` "
+    "(from document `published_date`), `title` (document title; lowercased for "
+    "sort). "
     "Directions: `asc`, `desc`. "
-    "Examples: `relevance desc`, `published_timestamp desc` (most recent), "
-    "`published_timestamp asc` (oldest; undated documents last), "
-    "`title_sort asc` (A–Z), `title_sort desc` (Z–A)."
+    "Examples: `relevance desc`, `attributes.published_date desc` (most recent), "
+    "`attributes.published_date asc` (oldest; undated documents last), "
+    "`title asc` (A–Z), `title desc` (Z–A)."
 )
 
 
@@ -26,7 +28,7 @@ def pagination(page_token: int = 1, page_size: int = 10):
     return Pagination(page_token=page_token, page_size=page_size)
 
 
-def _parse_order_by_string(raw: str) -> list[OrderBy]:
+def parse_order_by_clauses(raw: str) -> list[OrderBy]:
     """
     Parse a Google AIP-132 ``order_by`` query string.
 
@@ -34,7 +36,7 @@ def _parse_order_by_string(raw: str) -> list[OrderBy]:
     :type raw: str
     :return: Structured order clauses
     :rtype: list[OrderBy]
-    :raises HTTPException: if the string is empty or malformed
+    :raises ValueError: if the string is empty or malformed
     """
     result: list[OrderBy] = []
     for segment in raw.split(","):
@@ -47,22 +49,36 @@ def _parse_order_by_string(raw: str) -> list[OrderBy]:
         else:
             field, direction = parts[0].strip(), parts[1].strip().lower()
         if not field:
-            raise HTTPException(
-                status_code=400,
-                detail="order_by contains an empty field name",
-            )
+            raise ValueError("order_by contains an empty field name")
         if direction not in ("asc", "desc"):
-            raise HTTPException(
-                status_code=400,
-                detail=(f"invalid sort direction {direction!r}; use asc or desc"),
+            raise ValueError(
+                f"invalid sort direction {direction!r}; use asc or desc",
             )
         result.append(OrderBy(field=field, direction=direction))
     if not result:
-        raise HTTPException(
-            status_code=400,
-            detail="order_by must contain at least one non-empty clause",
-        )
+        raise ValueError("order_by must contain at least one non-empty clause")
     return result
+
+
+def _coerce_order_by_query(value: Any) -> list[OrderBy]:
+    """
+    Pydantic ``BeforeValidator`` hook: accept only string input for order_by.
+
+    :param value: Raw dependency value (must be ``str``)
+    :type value: Any
+    :return: Parsed clauses
+    :rtype: list[OrderBy]
+    :raises TypeError: if ``value`` is not a string
+    :raises ValueError: delegated from :func:`parse_order_by_clauses`
+    """
+    if not isinstance(value, str):
+        raise TypeError("order_by must be a string")
+    return parse_order_by_clauses(value)
+
+
+OrderByQueryList = Annotated[list[OrderBy], BeforeValidator(_coerce_order_by_query)]
+
+ORDER_BY_QUERY_ADAPTER = TypeAdapter(OrderByQueryList)
 
 
 def order_by(
@@ -83,7 +99,14 @@ def order_by(
     @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
     @see: https://google.aip.dev/132#ordering
     """
-    return _parse_order_by_string(order_by_raw)
+    try:
+        return ORDER_BY_QUERY_ADAPTER.validate_python(order_by_raw)
+    except (ValueError, TypeError, ValidationError) as exc:
+        detail = str(exc)
+        if isinstance(exc, ValidationError):
+            err0 = exc.errors()[0]
+            detail = err0.get("msg", detail)
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 
 def documents_order_by(
@@ -92,19 +115,34 @@ def documents_order_by(
         Query(
             alias="order_by",
             description=DOCUMENTS_ORDER_BY_DESCRIPTION,
-            example="published_timestamp desc",
+            examples=["attributes.published_date desc"],
         ),
     ] = "relevance desc",
 ) -> list[OrderBy]:
-    """Parse ``order_by`` and restrict fields to those supported on ``/documents``."""
-    parsed = _parse_order_by_string(order_by_raw)
+    """
+    Parse ``order_by`` and restrict fields to those supported on ``/documents``.
+
+    :param order_by_raw: Raw ``order_by`` query string
+    :type order_by_raw: str
+    :return: Parsed clauses whose fields are public JSON paths
+    :rtype: list[OrderBy]
+    :raises HTTPException: if parsing fails or a field is not supported
+    """
+    try:
+        parsed = ORDER_BY_QUERY_ADAPTER.validate_python(order_by_raw)
+    except (ValueError, TypeError, ValidationError) as exc:
+        detail = str(exc)
+        if isinstance(exc, ValidationError):
+            err0 = exc.errors()[0]
+            detail = err0.get("msg", detail)
+        raise HTTPException(status_code=400, detail=detail) from exc
     for clause in parsed:
-        if clause.field not in DOCUMENT_SEARCH_ORDER_FIELDS:
+        if clause.field not in DOCUMENT_SORT_API_FIELDS:
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"order_by field {clause.field!r} is not supported for "
-                    f"/documents; allowed: {sorted(DOCUMENT_SEARCH_ORDER_FIELDS)}"
+                    f"/documents; allowed: {sorted(DOCUMENT_SORT_API_FIELDS)}"
                 ),
             )
     return parsed

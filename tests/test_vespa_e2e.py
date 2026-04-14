@@ -741,7 +741,7 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
 # endregion Linguistics
 
 
-# region Document sorting (title_sort, published_timestamp via Vespa ranking.sorting)
+# region Document sorting (API JSON paths via Vespa ranking.sorting)
 def test_document_sort_title_sort_asc(vespa_app: Vespa):
     doc_z = SourceDocumentFactory.build(title="Zebra memo", labels=[])
     doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
@@ -756,7 +756,7 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="title_sort", direction="asc")],
+        order_by=[OrderBy(field="title", direction="asc")],
     ).results
 
     assert [d.title for d in results] == [
@@ -781,7 +781,7 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="title_sort", direction="desc")],
+        order_by=[OrderBy(field="title", direction="desc")],
     ).results
 
     assert [d.title for d in results] == [
@@ -822,7 +822,7 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="published_timestamp", direction="desc")],
+        order_by=[OrderBy(field="attributes.published_date", direction="desc")],
     ).results
 
     assert [d.title for d in results] == ["Newest", "New", "Old", "Oldest"]
@@ -858,7 +858,7 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="published_timestamp", direction="asc")],
+        order_by=[OrderBy(field="attributes.published_date", direction="asc")],
     ).results
 
     assert [d.title for d in results] == ["Oldest", "Old", "New", "Newest"]
@@ -866,7 +866,7 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
 
 def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
     """
-    First A-Z title should not always be the same first row.
+    First A-Z title and first Z-A title should not always be the same first row.
 
     If Vespa ignores ``ranking.sorting``, the same document can remain first for
     both directions; asc and desc must disagree on the leader when titles differ.
@@ -920,12 +920,12 @@ def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
     asc = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="title_sort", direction="asc")],
+        order_by=[OrderBy(field="title", direction="asc")],
     ).results
     desc = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="title_sort", direction="desc")],
+        order_by=[OrderBy(field="title", direction="desc")],
     ).results
     assert [d.title for d in asc[:5]] == expected_asc_titles
     assert [d.title for d in desc[:5]] == expected_desc_titles
@@ -940,8 +940,8 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
     """
     Newest-by-date and first A-Z title should not always be the same first row.
 
-    Five docs: one is newest by ``published_timestamp`` but not first by
-    ``title_sort``, so date-desc leader and title-asc leader must differ; we also
+    Five docs: one is newest by ``attributes.published_date`` but not first by
+    ``title``, so date-desc leader and title-asc leader must differ; we also
     assert full expected order for each sort mode.
     """
     doc_ancient = SourceDocumentFactory.build(
@@ -997,12 +997,12 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
     by_date = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="published_timestamp", direction="desc")],
+        order_by=[OrderBy(field="attributes.published_date", direction="desc")],
     ).results
     by_title = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="title_sort", direction="asc")],
+        order_by=[OrderBy(field="title", direction="asc")],
     ).results
     assert [d.title for d in by_date[:5]] == expected_date_desc
     assert [d.title for d in by_title[:5]] == expected_title_asc

@@ -4,13 +4,11 @@ from api.routers import settings
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.data_in_models import Document
-from search.engines import OrderBy
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
     SearchComparisonTestCase,
-    SortingComparisonTestCase,
     all_words_in_string,
 )
 
@@ -54,24 +52,6 @@ test_cases = [
             "CCLW.executive.1704.1595",
         ],
         description="Searching for the document title should return the correct document.",
-    ),
-    SortingComparisonTestCase[Document](
-        category="sorting",
-        search_terms="",
-        first_order_by=[OrderBy(field="title_sort", direction="asc")],
-        second_order_by=[OrderBy(field="title_sort", direction="desc")],
-        k=5,
-        description="A-Z and Z-A ordering should not return the same top set.",
-    ),
-    SortingComparisonTestCase[Document](
-        category="sorting",
-        search_terms="",
-        first_order_by=[OrderBy(field="published_timestamp", direction="asc")],
-        second_order_by=[OrderBy(field="published_timestamp", direction="desc")],
-        k=5,
-        description=(
-            "Oldest and most-recent ordering should not return the same top set."
-        ),
     ),
     PrecisionTestCase[Document](
         category="specific document",

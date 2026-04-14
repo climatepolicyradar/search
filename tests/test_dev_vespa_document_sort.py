@@ -14,25 +14,25 @@ from search.engines.dev_vespa import _ranking_overrides_for_document_order_by
             {},
         ),
         (
-            [OrderBy(field="published_timestamp", direction="desc")],
+            [OrderBy(field="attributes.published_date", direction="desc")],
             {
                 "ranking.profile": "unranked",
-                "ranking.sorting": "-published_timestamp",
+                "ranking.sorting": "-attributes_published_date",
                 "sorting.degrading": False,
             },
         ),
         (
-            [OrderBy(field="published_timestamp", direction="asc")],
+            [OrderBy(field="attributes.published_date", direction="asc")],
             {
                 "ranking.profile": "unranked",
                 "ranking.sorting": (
-                    "+missing(published_timestamp,last) +published_timestamp"
+                    "+missing(attributes_published_date,last) +attributes_published_date"
                 ),
                 "sorting.degrading": False,
             },
         ),
         (
-            [OrderBy(field="title_sort", direction="asc")],
+            [OrderBy(field="title", direction="asc")],
             {
                 "ranking.profile": "unranked",
                 "ranking.sorting": "+title_sort",
@@ -40,7 +40,7 @@ from search.engines.dev_vespa import _ranking_overrides_for_document_order_by
             },
         ),
         (
-            [OrderBy(field="title_sort", direction="desc")],
+            [OrderBy(field="title", direction="desc")],
             {
                 "ranking.profile": "unranked",
                 "ranking.sorting": "-title_sort",
@@ -70,5 +70,5 @@ def test_ranking_overrides_rejects_unknown_field() -> None:
     """:raises ValueError: when the document sort field is not allow-listed"""
     with pytest.raises(ValueError, match="not supported"):
         _ranking_overrides_for_document_order_by(
-            [OrderBy(field="nope", direction="asc")]
+            [OrderBy(field="nope", direction="asc")],
         )
