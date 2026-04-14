@@ -14,7 +14,7 @@ DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Directions: `asc`, `desc`. "
     "Examples: `relevance desc`, `attributes.published_date desc` (most recent), "
     "`attributes.published_date asc` (oldest; undated documents last), "
-    "`title asc` (A–Z), `title desc` (Z–A)."
+    "`title asc` (A-Z), `title desc` (Z-A)."
 )
 
 
