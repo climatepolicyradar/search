@@ -30,7 +30,7 @@ setup: install
 test +OPTS="":
     uv run pytest --disable-pytest-warnings --color=yes --verbose {{ OPTS }}
 
-# test only the functional behavior of the code (not relevance)
+# test only the functional behaviour of the code (not relevance)
 test-functional +OPTS="":
     uv run pytest --disable-pytest-warnings --color=yes --verbose --ignore=tests/relevance {{ OPTS }}
 
