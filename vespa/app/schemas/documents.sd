@@ -123,13 +123,13 @@ schema documents {
             indexing: summary
         }
 
-        field title_sort type string {
-            indexing: input title | attribute | summary | lowercase
-        }
-
         field attributes_published_date type long {
             indexing: attribute | summary
         }
+    }
+
+    field title_sort type string {
+        indexing: input title | attribute | summary | lowercase
     }
 
     field labels_value type array<string> {
