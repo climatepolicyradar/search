@@ -217,6 +217,74 @@ def _build_filter_query(filter_group: Filter | None) -> str:
 
 # endregion Filters
 
+# region Document sort (Vespa ranking.sorting)
+
+DOCUMENT_SEARCH_ORDER_FIELDS = frozenset(
+    {"relevance", "published_timestamp", "title_sort"}
+)
+
+
+def _ranking_overrides_for_document_order_by(
+    order_by: list[OrderBy],
+) -> dict[str, Any]:
+    """
+    Translate ``order_by`` clauses into Vespa ranking request fields.
+
+    Only the first clause is applied (multilevel sorts can be added later).
+    ``relevance`` keeps default ``nativerank`` ordering (no ``ranking.sorting``).
+
+    :param order_by: Parsed ``<field> <direction>`` clauses from the API
+    :type order_by: list[OrderBy]
+    :return: Key/value fragments to merge into the Vespa JSON body
+    :rtype: dict[str, Any]
+    :raises ValueError: if the field is not supported for documents
+    """
+    if not order_by:
+        return {}
+    primary = order_by[0]
+    if primary.field not in DOCUMENT_SEARCH_ORDER_FIELDS:
+        raise ValueError(
+            f"order_by field {primary.field!r} is not supported for documents; "
+            f"expected one of: {sorted(DOCUMENT_SEARCH_ORDER_FIELDS)}"
+        )
+    if primary.field == "relevance":
+        if primary.direction not in ("asc", "desc"):
+            raise ValueError(
+                f"invalid order direction {primary.direction!r}; use asc or desc"
+            )
+        if primary.direction == "asc":
+            logger.warning(
+                "relevance ascending is not supported; using relevance (desc) ordering"
+            )
+        return {}
+    if primary.direction not in ("asc", "desc"):
+        raise ValueError(
+            f"invalid order direction {primary.direction!r}; use asc or desc"
+        )
+    if primary.field == "published_timestamp":
+        sorting = (
+            "-published_timestamp"
+            if primary.direction == "desc"
+            else "+missing(published_timestamp,last) +published_timestamp"
+        )
+        return {
+            "ranking.profile": "unranked",
+            "ranking.sorting": sorting,
+            "sorting.degrading": False,
+        }
+    if primary.field == "title_sort":
+        sorting = "+title_sort" if primary.direction == "asc" else "-title_sort"
+        return {
+            "ranking.profile": "unranked",
+            "ranking.sorting": sorting,
+            # Match date sorts: degrading can skew ordering for fast-search attributes.
+            "sorting.degrading": False,
+        }
+    raise AssertionError("unreachable document sort branch")
+
+
+# endregion Document sort
+
 # region Aggregations
 
 
@@ -284,7 +352,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         self,
         query: str | None,
         pagination: Pagination,
-        order_by: list[OrderBy],  # noqa: ARG002
+        order_by: list[OrderBy],
         filters_json_string: str | None = None,
     ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
@@ -300,6 +368,8 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             yql += self._userQuery
         logger.info(f"searching for yql: {yql}")
 
+        sort_overrides = _ranking_overrides_for_document_order_by(order_by)
+
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
@@ -312,6 +382,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             "model.language": "en",
             "ranking.profile": "nativerank",
         }
+        request_body.update(sort_overrides)
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
         if not self.bolding:
