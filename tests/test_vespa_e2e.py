@@ -741,6 +741,279 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
 # endregion Linguistics
 
 
+# region Document sorting (title_sort, published_timestamp via Vespa ranking.sorting)
+def test_document_sort_title_sort_asc(vespa_app: Vespa):
+    doc_z = SourceDocumentFactory.build(title="Zebra memo", labels=[])
+    doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
+    doc_m = SourceDocumentFactory.build(title="Magpie brief", labels=[])
+    doc_f = SourceDocumentFactory.build(title="Fig brief", labels=[])
+    _feed_document(vespa_app, doc_z)
+    _feed_document(vespa_app, doc_a)
+    _feed_document(vespa_app, doc_m)
+    _feed_document(vespa_app, doc_f)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="title_sort", direction="asc")],
+    ).results
+
+    assert [d.title for d in results] == [
+        "Apple brief",
+        "Fig brief",
+        "Magpie brief",
+        "Zebra memo",
+    ]
+
+
+def test_document_sort_title_sort_desc(vespa_app: Vespa):
+    doc_z = SourceDocumentFactory.build(title="Zebra memo", labels=[])
+    doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
+    doc_m = SourceDocumentFactory.build(title="Magpie brief", labels=[])
+    doc_f = SourceDocumentFactory.build(title="Fig brief", labels=[])
+    _feed_document(vespa_app, doc_z)
+    _feed_document(vespa_app, doc_a)
+    _feed_document(vespa_app, doc_m)
+    _feed_document(vespa_app, doc_f)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="title_sort", direction="desc")],
+    ).results
+
+    assert [d.title for d in results] == [
+        "Zebra memo",
+        "Magpie brief",
+        "Fig brief",
+        "Apple brief",
+    ]
+
+
+def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
+    doc_old = SourceDocumentFactory.build(
+        title="Old",
+        labels=[],
+        attributes={"published_date": "2020-01-01T00:00:00Z"},
+    )
+    doc_new = SourceDocumentFactory.build(
+        title="New",
+        labels=[],
+        attributes={"published_date": "2024-06-01T12:00:00Z"},
+    )
+    doc_oldest = SourceDocumentFactory.build(
+        title="Oldest",
+        labels=[],
+        attributes={"published_date": "2010-01-01T00:00:00Z"},
+    )
+    doc_newest = SourceDocumentFactory.build(
+        title="Newest",
+        labels=[],
+        attributes={"published_date": "2026-06-01T12:00:00Z"},
+    )
+    _feed_document(vespa_app, doc_old)
+    _feed_document(vespa_app, doc_new)
+    _feed_document(vespa_app, doc_oldest)
+    _feed_document(vespa_app, doc_newest)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="published_timestamp", direction="desc")],
+    ).results
+
+    assert [d.title for d in results] == ["Newest", "New", "Old", "Oldest"]
+
+
+def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
+    doc_old = SourceDocumentFactory.build(
+        title="Old",
+        labels=[],
+        attributes={"published_date": "2020-01-01T00:00:00Z"},
+    )
+    doc_new = SourceDocumentFactory.build(
+        title="New",
+        labels=[],
+        attributes={"published_date": "2024-06-01T12:00:00Z"},
+    )
+    doc_oldest = SourceDocumentFactory.build(
+        title="Oldest",
+        labels=[],
+        attributes={"published_date": "2010-01-01T00:00:00Z"},
+    )
+    doc_newest = SourceDocumentFactory.build(
+        title="Newest",
+        labels=[],
+        attributes={"published_date": "2026-06-01T12:00:00Z"},
+    )
+    _feed_document(vespa_app, doc_old)
+    _feed_document(vespa_app, doc_new)
+    _feed_document(vespa_app, doc_oldest)
+    _feed_document(vespa_app, doc_newest)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="published_timestamp", direction="asc")],
+    ).results
+
+    assert [d.title for d in results] == ["Oldest", "Old", "New", "Newest"]
+
+
+def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
+    """
+    First A-Z title should not always be the same first row.
+
+    If Vespa ignores ``ranking.sorting``, the same document can remain first for
+    both directions; asc and desc must disagree on the leader when titles differ.
+
+    Five docs with unambiguous lexical order; assert full permuted order, not only
+    the first row.
+    """
+    doc_a = SourceDocumentFactory.build(
+        id="e2e-sort-title-aaa",
+        title="Aaa ascending leader",
+        labels=[],
+        attributes={"published_date": "2015-01-01T00:00:00Z"},
+    )
+    doc_b = SourceDocumentFactory.build(
+        id="e2e-sort-title-bbb",
+        title="Bbb noise",
+        labels=[],
+        attributes={"published_date": "2015-02-01T00:00:00Z"},
+    )
+    doc_m = SourceDocumentFactory.build(
+        id="e2e-sort-title-mmm",
+        title="Mmm middle",
+        labels=[],
+        attributes={"published_date": "2015-03-01T00:00:00Z"},
+    )
+    doc_y = SourceDocumentFactory.build(
+        id="e2e-sort-title-yyy",
+        title="Yyy noise",
+        labels=[],
+        attributes={"published_date": "2015-04-01T00:00:00Z"},
+    )
+    doc_z = SourceDocumentFactory.build(
+        id="e2e-sort-title-zzz",
+        title="Zzz descending leader",
+        labels=[],
+        attributes={"published_date": "2015-06-01T00:00:00Z"},
+    )
+    expected_asc_titles = [
+        "Aaa ascending leader",
+        "Bbb noise",
+        "Mmm middle",
+        "Yyy noise",
+        "Zzz descending leader",
+    ]
+    expected_desc_titles = list(reversed(expected_asc_titles))
+    # Deliberately not alphabetical feed order
+    for doc in (doc_m, doc_z, doc_a, doc_y, doc_b):
+        _feed_document(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    asc = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="title_sort", direction="asc")],
+    ).results
+    desc = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="title_sort", direction="desc")],
+    ).results
+    assert [d.title for d in asc[:5]] == expected_asc_titles
+    assert [d.title for d in desc[:5]] == expected_desc_titles
+    assert asc[0].id == doc_a["id"], asc
+    assert desc[0].id == doc_z["id"], desc
+    assert asc[0].id != desc[0].id
+
+
+def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
+    vespa_app: Vespa,
+):
+    """
+    Newest-by-date and first A-Z title should not always be the same first row.
+
+    Five docs: one is newest by ``published_timestamp`` but not first by
+    ``title_sort``, so date-desc leader and title-asc leader must differ; we also
+    assert full expected order for each sort mode.
+    """
+    doc_ancient = SourceDocumentFactory.build(
+        id="e2e-sort-mixed-ancient",
+        title="Zebra ancient",
+        labels=[],
+        attributes={"published_date": "2000-01-01T00:00:00Z"},
+    )
+    doc_older_a = SourceDocumentFactory.build(
+        id="e2e-sort-mixed-older-a",
+        title="Apple older",
+        labels=[],
+        attributes={"published_date": "2010-01-01T00:00:00Z"},
+    )
+    doc_mid = SourceDocumentFactory.build(
+        id="e2e-sort-mixed-mid",
+        title="Middle road",
+        labels=[],
+        attributes={"published_date": "2015-06-01T00:00:00Z"},
+    )
+    doc_newer_z = SourceDocumentFactory.build(
+        id="e2e-sort-mixed-newer-z",
+        title="Zebra newer",
+        labels=[],
+        attributes={"published_date": "2024-01-01T00:00:00Z"},
+    )
+    doc_newest_banana = SourceDocumentFactory.build(
+        id="e2e-sort-mixed-newest-banana",
+        title="Banana latest",
+        labels=[],
+        attributes={"published_date": "2026-06-01T12:00:00Z"},
+    )
+    # Title asc (lowercased): apple < banana < middle < zebra ancient < zebra newer
+    expected_title_asc = [
+        "Apple older",
+        "Banana latest",
+        "Middle road",
+        "Zebra ancient",
+        "Zebra newer",
+    ]
+    # Date desc: 2026 > 2024 > 2015 > 2010 > 2000
+    expected_date_desc = [
+        "Banana latest",
+        "Zebra newer",
+        "Middle road",
+        "Apple older",
+        "Zebra ancient",
+    ]
+    for doc in (doc_newer_z, doc_ancient, doc_older_a, doc_newest_banana, doc_mid):
+        _feed_document(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    by_date = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="published_timestamp", direction="desc")],
+    ).results
+    by_title = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="title_sort", direction="asc")],
+    ).results
+    assert [d.title for d in by_date[:5]] == expected_date_desc
+    assert [d.title for d in by_title[:5]] == expected_title_asc
+    assert by_date[0].id == doc_newest_banana["id"], by_date
+    assert by_title[0].id == doc_older_a["id"], by_title
+    assert by_date[0].id != by_title[0].id
+
+
+# endregion Document sorting
+
+
 # region /labels
 @pytest.fixture(autouse=True)
 def clean_labels(vespa_app: Vespa):
