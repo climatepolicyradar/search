@@ -32,7 +32,7 @@ test +OPTS="":
 
 # test only the functional behaviour of the code (not relevance)
 test-functional +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes --verbose --ignore=relevance_tests {{ OPTS }}
+    uv run pytest --disable-pytest-warnings --color=yes --verbose --ignore=tests/relevance {{ OPTS }}
 
 # test only the relevance of search results
 test-relevance +OPTS="":
