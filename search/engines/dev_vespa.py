@@ -226,6 +226,29 @@ def _build_filter_query(filter_group: Filter | None) -> str:
 # region Document sort (Vespa ranking.sorting)
 
 
+def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
+    """
+    Build Vespa ``ranking.sorting`` for a document sort attribute.
+
+    :param vespa_attr: First mapped field name from
+        :data:`sort_field_to_vespa_field_map`
+    :type vespa_attr: str
+    :param direction: ``asc`` or ``desc``
+    :type direction: str
+    :return: Vespa sorting expression fragment
+    :rtype: str
+    :raises AssertionError: if ``vespa_attr`` is not handled
+    """
+    if vespa_attr == "attributes_published_date":
+        if direction == "desc":
+            return "-attributes_published_date"
+        return "+missing(attributes_published_date,last) +attributes_published_date"
+    if vespa_attr == "title_sort":
+        sign = "+" if direction == "asc" else "-"
+        return f"{sign}{vespa_attr}"
+    raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")
+
+
 def _ranking_overrides_for_document_order_by(
     order_by: list[OrderBy],
 ) -> dict[str, Any]:
@@ -250,47 +273,27 @@ def _ranking_overrides_for_document_order_by(
             f"order_by field {primary.field!r} is not supported for documents; "
             f"expected one of: {sorted(DOCUMENT_SORT_API_FIELDS)}"
         )
+    if primary.direction not in ("asc", "desc"):
+        raise ValueError(
+            f"invalid order direction {primary.direction!r}; use asc or desc"
+        )
     if primary.field == "relevance":
-        if primary.direction not in ("asc", "desc"):
-            raise ValueError(
-                f"invalid order direction {primary.direction!r}; use asc or desc"
-            )
         if primary.direction == "asc":
             logger.warning(
                 "relevance ascending is not supported; using relevance (desc) ordering"
             )
         return {}
-    if primary.direction not in ("asc", "desc"):
-        raise ValueError(
-            f"invalid order direction {primary.direction!r}; use asc or desc"
-        )
 
-    if primary.field not in sort_field_to_vespa_field_map:
-        raise ValueError(
-            f"order_by field {primary.field!r} is not supported for documents; "
-            f"expected one of: {sorted(DOCUMENT_SORT_API_FIELDS)}"
-        )
+    # ``DOCUMENT_SORT_API_FIELDS`` is ``relevance`` plus map keys, so this
+    # lookup is always valid here.
     vespa_attr = sort_field_to_vespa_field_map[primary.field][0]
-    if vespa_attr == "attributes_published_date":
-        sorting = (
-            "-attributes_published_date"
-            if primary.direction == "desc"
-            else "+missing(attributes_published_date,last) +attributes_published_date"
-        )
-        return {
-            "ranking.profile": "unranked",
-            "ranking.sorting": sorting,
-            "sorting.degrading": False,
-        }
-    if vespa_attr == "title_sort":
-        sorting = "+title_sort" if primary.direction == "asc" else "-title_sort"
-        return {
-            "ranking.profile": "unranked",
-            "ranking.sorting": sorting,
-            # Match date sorts: degrading can skew ordering for fast-search attributes.
-            "sorting.degrading": False,
-        }
-    raise AssertionError("unreachable document sort branch")
+    sorting = _document_sort_ranking_string(vespa_attr, primary.direction)
+    return {
+        "ranking.profile": "unranked",
+        "ranking.sorting": sorting,
+        # Match date sorts: degrading can skew ordering for fast-search attrs.
+        "sorting.degrading": False,
+    }
 
 
 # endregion Document sort
