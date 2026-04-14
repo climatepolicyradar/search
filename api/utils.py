@@ -1,7 +1,6 @@
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import HTTPException, Query
-from pydantic import BeforeValidator, TypeAdapter, ValidationError
+from fastapi import HTTPException, Query, status
 
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DOCUMENT_SORT_API_FIELDS
@@ -60,25 +59,22 @@ def parse_order_by_clauses(raw: str) -> list[OrderBy]:
     return result
 
 
-def _coerce_order_by_query(value: Any) -> list[OrderBy]:
+def _parse_order_by_http(raw: str) -> list[OrderBy]:
     """
-    Pydantic ``BeforeValidator`` hook: accept only string input for order_by.
+    Parse ``order_by`` and map parse errors to HTTP 400.
 
-    :param value: Raw dependency value (must be ``str``)
-    :type value: Any
+    :param raw: Raw query string from the client
+    :type raw: str
     :return: Parsed clauses
     :rtype: list[OrderBy]
-    :raises TypeError: if ``value`` is not a string
-    :raises ValueError: delegated from :func:`parse_order_by_clauses`
+    :raises HTTPException: with status 400 when the string is invalid
     """
-    if not isinstance(value, str):
-        raise TypeError("order_by must be a string")
-    return parse_order_by_clauses(value)
-
-
-OrderByQueryList = Annotated[list[OrderBy], BeforeValidator(_coerce_order_by_query)]
-
-ORDER_BY_QUERY_ADAPTER = TypeAdapter(OrderByQueryList)
+    try:
+        return parse_order_by_clauses(raw)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 def order_by(
@@ -99,14 +95,7 @@ def order_by(
     @see: https://fastapi.tiangolo.com/tutorial/dependencies/#import-depends
     @see: https://google.aip.dev/132#ordering
     """
-    try:
-        return ORDER_BY_QUERY_ADAPTER.validate_python(order_by_raw)
-    except (ValueError, TypeError, ValidationError) as exc:
-        detail = str(exc)
-        if isinstance(exc, ValidationError):
-            err0 = exc.errors()[0]
-            detail = err0.get("msg", detail)
-        raise HTTPException(status_code=400, detail=detail) from exc
+    return _parse_order_by_http(order_by_raw)
 
 
 def documents_order_by(
@@ -128,21 +117,14 @@ def documents_order_by(
     :rtype: list[OrderBy]
     :raises HTTPException: if parsing fails or a field is not supported
     """
-    try:
-        parsed = ORDER_BY_QUERY_ADAPTER.validate_python(order_by_raw)
-    except (ValueError, TypeError, ValidationError) as exc:
-        detail = str(exc)
-        if isinstance(exc, ValidationError):
-            err0 = exc.errors()[0]
-            detail = err0.get("msg", detail)
-        raise HTTPException(status_code=400, detail=detail) from exc
-    for clause in parsed:
+    clauses = _parse_order_by_http(order_by_raw)
+    for clause in clauses:
         if clause.field not in DOCUMENT_SORT_API_FIELDS:
             raise HTTPException(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     f"order_by field {clause.field!r} is not supported for "
                     f"/documents; allowed: {sorted(DOCUMENT_SORT_API_FIELDS)}"
                 ),
             )
-    return parsed
+    return clauses
