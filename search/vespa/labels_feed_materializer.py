@@ -59,7 +59,7 @@ def labels_feed_materializer():
     for document in documents:
         for label_rel in document.get("labels") or []:
             value = label_rel["value"]
-            identifier = f"{value['type']}::{value['id']}"
+            identifier = value["id"]
             labels[identifier] = {
                 "id": identifier,
                 "type": value["type"],
@@ -93,11 +93,12 @@ def labels_feed_materializer():
         print("WARNING: fewer concepts returned from Wikibase than requested.")
 
     for concept in wikibase_concepts:
-        identifier = f"concept::{concept['wikibase_id']}"
+        value = concept["preferred_label"]
+        identifier = f"concept::{value}"
         labels[identifier] = {
             "id": identifier,
             "type": "concept",
-            "value": concept["preferred_label"],
+            "value": value,
             "alternative_labels": concept["alternative_labels"],
             "subconcept_labels": concept["subconcept_labels"],
             "description": concept["description"] or "",
