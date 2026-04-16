@@ -1,0 +1,7 @@
+# Label search: nz means "net zero" here, not New Zealand (see documents.sr).
+# DevVespaLabelSearchEngine passes rules.rulebase=labels.
+# Reference: https://docs.vespa.ai/en/linguistics/query-rewriting.html
+
+@language(en)
+@include(documents)
+nz -> net zero;

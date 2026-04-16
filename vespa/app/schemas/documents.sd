@@ -178,7 +178,6 @@ schema documents {
         linguistics {
             profile {
                 index: title_analysis
-                search: title_synonym_analysis_search
             }
         }
     }
