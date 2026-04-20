@@ -93,12 +93,11 @@ def labels_feed_materializer():
         print("WARNING: fewer concepts returned from Wikibase than requested.")
 
     for concept in wikibase_concepts:
-        value = concept["preferred_label"]
-        identifier = f"concept::{value}"
+        identifier = f"concept::{concept['wikibase_id']}"
         labels[identifier] = {
             "id": identifier,
             "type": "concept",
-            "value": value,
+            "value": concept["preferred_label"],
             "alternative_labels": concept["alternative_labels"],
             "subconcept_labels": concept["subconcept_labels"],
             "description": concept["description"] or "",

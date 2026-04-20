@@ -415,6 +415,18 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             results=documents, total_size=total_size, next_page_token=None
         )
 
+    @staticmethod
+    def parse_label_type_id_value(s: str) -> tuple[str, str, str]:
+        """
+        Parse a `{type}::{id}::{value}` string into its three components.
+
+        {id} may contain `::`
+        e.g: `geography::geography::USA::United States of America`
+        """
+        label_type, _, label_id_value = s.partition("::")
+        label_id, _, label_value = label_id_value.rpartition("::")
+        return label_type, label_id, label_value
+
     def aggregations(
         self,
         query: str | None,
@@ -436,7 +448,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         # per-bucket filtering is not needed here.
         grouping = G.all(
             G.all(
-                G.group("labels_type_value_attribute"),
+                G.group("labels_type_id_value_attribute"),
                 # This is the max we expect to see
                 # TODO: Pagination on groups if we hit this limit
                 G.max(5000),
@@ -444,7 +456,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 G.each(G.output(G.count())),
             ),
             G.all(
-                G.group("concepts_type_value_attribute"),
+                G.group("concepts_type_id_value_attribute"),
                 # This is the max we expect to see
                 # TODO: Pagination on groups if we hit this limit
                 G.max(5000),
@@ -455,7 +467,9 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         # Build a raw YQL string, the same way `search()` does, because the query
         # builder's `.where()` only accepts Condition/bool objects, not raw strings.
-        select_fields = "labels_type_value_attribute, concepts_type_value_attribute"
+        select_fields = (
+            "labels_type_id_value_attribute, concepts_type_id_value_attribute"
+        )
         groupby_str = str(grouping)
         yql = f"select {select_fields} from documents where {where} | {groupby_str}"
 
@@ -491,13 +505,15 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         count_aggregations: list[CountAggregation[Label]] = []
         for group_value in group_values:
-            label_type_value = group_value.get("value", "")
-            label_type, _, label_value = label_type_value.partition("::")
+            label_type_id_value = group_value.get("value", "")
+            label_type, label_id, label_value = self.parse_label_type_id_value(
+                label_type_id_value
+            )
             count_aggregations.append(
                 CountAggregation(
                     count=group_value.get("fields", {}).get("count()", 0),
                     value=Label(
-                        id=label_type_value,
+                        id=label_id,
                         value=label_value,
                         type=label_type or MISSING_PLACEHOLDER,
                     ),
