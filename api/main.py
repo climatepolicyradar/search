@@ -1,16 +1,19 @@
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from time import perf_counter
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.observability.src.api import (
     FastAPITelemetry,
+    MetricsService,
     ServiceManifest,
     TelemetryConfig,
 )
 from api.routers import router
+from api.search_metrics import SearchMetrics
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -44,6 +47,8 @@ except Exception as _:
 
 telemetry = FastAPITelemetry(otel_config)
 tracer = telemetry.get_tracer()
+metrics_service = MetricsService(otel_config)
+search_metrics = SearchMetrics(metrics_service)
 
 
 logger.debug("🚀 Starting FastAPI application")
@@ -63,6 +68,51 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_request_lifecycle(request: Request, call_next):
+    """Log incoming API requests with outcome and latency."""
+    start_time = perf_counter()
+    logger.info(
+        "Incoming request: method=%s path=%s query=%s",
+        request.method,
+        request.url.path,
+        request.url.query,
+    )
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = search_metrics.elapsed_ms(start_time)
+        search_metrics.record_error(
+            method=request.method,
+            path=request.url.path,
+            duration_ms=duration_ms,
+        )
+        logger.exception(
+            "Error: Unhandled exception while serving request method=%s path=%s "
+            "duration_ms=%s",
+            request.method,
+            request.url.path,
+            duration_ms,
+        )
+        raise
+
+    duration_ms = search_metrics.elapsed_ms(start_time)
+    search_metrics.record_success(
+        method=request.method,
+        path=request.url.path,
+        status_code=response.status_code,
+        duration_ms=duration_ms,
+    )
+    logger.info(
+        "Success: Request completed method=%s path=%s status_code=%s duration_ms=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
 
 
 @app.get("/")
