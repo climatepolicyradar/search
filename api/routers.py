@@ -38,14 +38,48 @@ def read_documents(
     debug: bool = False,
     bolding: bool = False,
 ):
+    logger.info(
+        "Searching documents "
+        "(query=%r, page_token=%s, page_size=%s, debug=%s, bolding=%s, "
+        "filters_present=%s)",
+        query,
+        pagination.page_token,
+        pagination.page_size,
+        debug,
+        bolding,
+        bool(filters_json_string),
+    )
+
     engine = DevVespaDocumentSearchEngine(
         settings=settings, debug=debug, bolding=bolding
     )
-    results = engine.search(
-        query=query,
-        pagination=pagination,
-        order_by=order_by,
-        filters_json_string=filters_json_string,
+    try:
+        results = engine.search(
+            query=query,
+            pagination=pagination,
+            order_by=order_by,
+            filters_json_string=filters_json_string,
+        )
+        labels_aggregations = engine.aggregations(
+            query=query,
+            filters_json_string=filters_json_string,
+        )
+    except Exception:
+        logger.exception(
+            "Error: document search request failed "
+            "(query=%r, page_token=%s, page_size=%s)",
+            query,
+            pagination.page_token,
+            pagination.page_size,
+        )
+        raise
+
+    logger.info(
+        "Success: document search request completed "
+        "(query=%r, results=%s, total_size=%s)",
+        query,
+        len(results.results),
+        results.total_size,
     )
 
     # TODO: pagination
@@ -58,12 +92,7 @@ def read_documents(
         previous_page=None,
         results=results.results,
         debug_info=engine.last_debug_info if debug else None,
-        aggregations=Aggregations(
-            labels=engine.aggregations(
-                query=query,
-                filters_json_string=filters_json_string,
-            )
-        ),
+        aggregations=Aggregations(labels=labels_aggregations),
     )
 
 
@@ -75,15 +104,46 @@ def read_labels(
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(order_by),
 ):
-    engine = DevVespaLabelSearchEngine(settings=settings)
-    results = engine.search(
-        query=query,
-        filters_json_string=filters_json_string,
-        pagination=pagination,
-        order_by=order_by,
-        label_type=type,
+    logger.info(
+        "Searching labels "
+        "(query=%r, label_type=%r, page_token=%s, page_size=%s, "
+        "filters_present=%s)",
+        query,
+        type,
+        pagination.page_token,
+        pagination.page_size,
+        bool(filters_json_string),
     )
-    engine.all_label_types()
+
+    engine = DevVespaLabelSearchEngine(settings=settings)
+    try:
+        results = engine.search(
+            query=query,
+            filters_json_string=filters_json_string,
+            pagination=pagination,
+            order_by=order_by,
+            label_type=type,
+        )
+        engine.all_label_types()
+    except Exception:
+        logger.exception(
+            "Error: label search request failed "
+            "(query=%r, label_type=%r, page_token=%s, page_size=%s)",
+            query,
+            type,
+            pagination.page_token,
+            pagination.page_size,
+        )
+        raise
+
+    logger.info(
+        "Success: label search request completed "
+        "(query=%r, label_type=%r, results=%s, total_size=%s)",
+        query,
+        type,
+        len(results.results),
+        results.total_size,
+    )
 
     return SearchResponse[Label](
         total_size=results.total_size,
@@ -103,11 +163,36 @@ def read_passages(
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(order_by),
 ):
+    logger.info(
+        "Searching passages (query=%r, page_token=%s, page_size=%s)",
+        query,
+        pagination.page_token,
+        pagination.page_size,
+    )
+
     engine = DevVespaPassageSearchEngine(settings=settings)
-    results = engine.search(
-        query=query,
-        pagination=pagination,
-        order_by=order_by,
+    try:
+        results = engine.search(
+            query=query,
+            pagination=pagination,
+            order_by=order_by,
+        )
+    except Exception:
+        logger.exception(
+            "Error: passage search request failed "
+            "(query=%r, page_token=%s, page_size=%s)",
+            query,
+            pagination.page_token,
+            pagination.page_size,
+        )
+        raise
+
+    logger.info(
+        "Success: passage search request completed "
+        "(query=%r, results=%s, total_size=%s)",
+        query,
+        len(results.results),
+        results.total_size,
     )
 
     return SearchResponse[Passage](
