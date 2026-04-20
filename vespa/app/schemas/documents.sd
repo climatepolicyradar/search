@@ -253,14 +253,11 @@ schema documents {
         function title_synonyms_score () {
             expression: nativeRank(title_synonyms)
         }
-        function identifiers_score () {
-            expression: nativeRank(case_number) + nativeRank(project_id)
-        }
 
         first-phase {
             expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score()
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() identifiers_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms) nativeRank(case_number) nativeRank(project_id)
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms) nativeRank(case_number) nativeRank(project_id)
     }
 
     rank-profile label-boosted inherits nativerank {
