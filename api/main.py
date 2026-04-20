@@ -74,7 +74,7 @@ app.add_middleware(
 async def log_request_lifecycle(request: Request, call_next):
     """Log incoming API requests with outcome and latency."""
     start_time = perf_counter()
-    logger.info(
+    logger.debug(
         "Incoming request: method=%s path=%s query=%s",
         request.method,
         request.url.path,
