@@ -122,6 +122,14 @@ schema documents {
         field document_source type string {
             indexing: summary
         }
+
+        field attributes_published_date type long {
+            indexing: attribute | summary
+        }
+    }
+
+    field title_sort type string {
+        indexing: input title | attribute | summary | lowercase
     }
 
     field labels_value type array<string> {
@@ -249,6 +257,14 @@ schema documents {
             expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + label_boost_score()
         }
         summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
+    }
+
+    # Used with ranking.sorting for non-relevance document lists. Declared explicitly so
+    # sort queries do not depend on an implicit container default.
+    rank-profile unranked {
+        first-phase {
+            expression: 1
+        }
     }
 
     document-summary default {

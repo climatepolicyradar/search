@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic_settings import SettingsConfigDict
 
 from api.types import Aggregations, SearchResponse
-from api.utils import order_by, pagination
+from api.utils import documents_order_by, order_by, pagination
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
@@ -34,7 +34,7 @@ def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
     pagination: Pagination = Depends(pagination),
-    order_by: list[OrderBy] = Depends(order_by),
+    order_by: list[OrderBy] = Depends(documents_order_by),
     debug: bool = False,
     bolding: bool = False,
 ):
