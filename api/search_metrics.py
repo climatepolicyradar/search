@@ -109,7 +109,7 @@ class SearchMetrics:
             method=method,
             path=self.normalise_path(path),
             status_code=status_code,
-            outcome=Outcome.EXCEPTION.value,
+            outcome=Outcome.EXCEPTION,
             duration_ms=duration_ms,
         )
 
@@ -132,24 +132,24 @@ class SearchMetrics:
         return path_without_query
 
     @staticmethod
-    def outcome_for_status_code(status_code: int) -> str:
+    def outcome_for_status_code(status_code: int) -> Outcome:
         """
         Return a finite outcome taxonomy derived from status code.
 
         :param status_code: HTTP status code.
         :type status_code: int
         :return: One of the defined metric outcome categories.
-        :rtype: str
+        :rtype: Outcome
         """
         if 200 <= status_code <= 299:
-            return Outcome.SUCCESS.value
+            return Outcome.SUCCESS
         if 300 <= status_code <= 399:
-            return Outcome.REDIRECT.value
+            return Outcome.REDIRECT
         if 400 <= status_code <= 499:
-            return Outcome.CLIENT_ERROR.value
+            return Outcome.CLIENT_ERROR
         if 500 <= status_code <= 599:
-            return Outcome.SERVER_ERROR.value
-        return Outcome.UNKNOWN.value
+            return Outcome.SERVER_ERROR
+        return Outcome.UNKNOWN
 
     def _record(
         self,
@@ -157,7 +157,7 @@ class SearchMetrics:
         method: str,
         path: str,
         status_code: int,
-        outcome: str,
+        outcome: Outcome,
         duration_ms: float,
     ) -> None:
         """
@@ -169,8 +169,8 @@ class SearchMetrics:
         :type path: str
         :param status_code: HTTP response status code.
         :type status_code: int
-        :param outcome: Outcome string for aggregation labels.
-        :type outcome: str
+        :param outcome: Outcome enum for aggregation labels.
+        :type outcome: Outcome
         :param duration_ms: Duration in milliseconds.
         :type duration_ms: float
         """
@@ -184,6 +184,6 @@ class SearchMetrics:
                 METRIC_ATTR_METHOD: method,
                 METRIC_ATTR_PATH: path,
                 METRIC_ATTR_STATUS_CODE: status_code,
-                METRIC_ATTR_OUTCOME: outcome,
+                METRIC_ATTR_OUTCOME: outcome.value,
             },
         )
