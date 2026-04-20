@@ -65,9 +65,13 @@ Only then propose a fix.
   an existing rather than modifying an existing one, unless told otherwise.
 - **Field indexing**: Match type (contains vs exact) must align with how the
   field is indexed. Check `index` vs `attribute` mode in the schema.
-- **Synonym expansion**: Applied at query time via linguistics config. If
-  synonyms aren't firing, check `vespa/app/lucene-linguistics/` config and
-  redeploy.
+- **Synonym expansion**: Two mechanisms are in use. Geography synonyms use
+  Lucene's `synonymGraph` filter (`en/geo-synonyms.txt`) because geo queries use
+  field-scoped `userInput`, which labels tokens in a way that prevents semantic
+  rules from matching them. Everything else (title acronyms etc) uses Vespa
+  semantic rules in `vespa/app/rules/` — `documents.sr` by default, `labels.sr`
+  for label search (set via `rules.rulebase=labels`). If rewrites aren't firing,
+  check the relevant `.sr` file or `geo-synonyms.txt` and redeploy.
 - **Deploy target**: Local = `http://localhost:19071/`, use `just deploy` which
   already has the right target and wait time.
 

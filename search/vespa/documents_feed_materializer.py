@@ -194,7 +194,7 @@ def documents_concepts_feed_materializer():
 
             vespa_concepts: list[VespaLabelField] = [
                 {
-                    "id": concept_id,
+                    "id": f"concept::{concept_id}",
                     "type": "concept",
                     "value": concept_names[concept_id],
                     "count": count,
