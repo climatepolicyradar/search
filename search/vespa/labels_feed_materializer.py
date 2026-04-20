@@ -59,7 +59,7 @@ def labels_feed_materializer():
     for document in documents:
         for label_rel in document.get("labels") or []:
             value = label_rel["value"]
-            identifier = f"{value['type']}::{value['id']}"
+            identifier = value["id"]
             labels[identifier] = {
                 "id": identifier,
                 "type": value["type"],

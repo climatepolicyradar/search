@@ -1,0 +1,17 @@
+# Default query rewrites for document search (and any query not using
+# `rules.rulebase=labels`).
+# Title acronyms live here (semantic rules apply to default / unlabeled query terms).
+# Geography aliases stay in Lucene en/geo-synonyms.txt (see lucene-linguistics/README.md).
+# See https://docs.vespa.ai/en/linguistics/query-rewriting.html
+
+@language(en)
+@default
+
+# Title acronyms & variants (formerly lucene-linguistics/en/title-synonyms.txt)
+tcfd -> task force on climate related financial disclosures;
+fca -> financial conduct authority;
+ira -> inflation reduction act;
+sfdr -> sustainable finance disclosure regulation;
+erp -> emissions reduction plan;
+necp -> national energy and climate plan;
+phaseout -> phase out;
