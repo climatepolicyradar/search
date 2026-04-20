@@ -1,5 +1,6 @@
 """Search metrics helpers for the search API."""
 
+from enum import StrEnum
 from time import perf_counter
 
 from api.observability.src.api import MetricsService
@@ -14,8 +15,15 @@ METRIC_ATTR_METHOD = "http.request.method"
 METRIC_ATTR_PATH = "http.route"
 METRIC_ATTR_STATUS_CODE = "http.response.status_code"
 METRIC_ATTR_OUTCOME = "http.request.outcome"
-METRIC_OUTCOME_SUCCESS = "success"
-METRIC_OUTCOME_ERROR = "error"
+
+
+class Outcome(StrEnum):
+    SUCCESS = "success"
+    REDIRECT = "redirect"
+    CLIENT_ERROR = "client_error"
+    SERVER_ERROR = "server_error"
+    EXCEPTION = "exception"
+    UNKNOWN = "unknown"
 
 
 class SearchMetrics:
@@ -71,9 +79,9 @@ class SearchMetrics:
         """
         self._record(
             method=method,
-            path=path,
+            path=self.normalise_path(path),
             status_code=status_code,
-            outcome=METRIC_OUTCOME_SUCCESS,
+            outcome=self.outcome_for_status_code(status_code),
             duration_ms=duration_ms,
         )
 
@@ -99,11 +107,49 @@ class SearchMetrics:
         """
         self._record(
             method=method,
-            path=path,
+            path=self.normalise_path(path),
             status_code=status_code,
-            outcome=METRIC_OUTCOME_ERROR,
+            outcome=Outcome.EXCEPTION.value,
             duration_ms=duration_ms,
         )
+
+    @staticmethod
+    def normalise_path(path: str) -> str:
+        """
+        Return a bounded-cardinality path label.
+
+        This strips query strings and ensures a deterministic fallback value.
+
+        :param path: Raw request path or route template.
+        :type path: str
+        :return: Canonical path label.
+        :rtype: str
+        """
+        if not path:
+            return "/unknown"
+
+        path_without_query = path.split("?", maxsplit=1)[0] or "/unknown"
+        return path_without_query
+
+    @staticmethod
+    def outcome_for_status_code(status_code: int) -> str:
+        """
+        Return a finite outcome taxonomy derived from status code.
+
+        :param status_code: HTTP status code.
+        :type status_code: int
+        :return: One of the defined metric outcome categories.
+        :rtype: str
+        """
+        if 200 <= status_code <= 299:
+            return Outcome.SUCCESS.value
+        if 300 <= status_code <= 399:
+            return Outcome.REDIRECT.value
+        if 400 <= status_code <= 499:
+            return Outcome.CLIENT_ERROR.value
+        if 500 <= status_code <= 599:
+            return Outcome.SERVER_ERROR.value
+        return Outcome.UNKNOWN.value
 
     def _record(
         self,

@@ -74,10 +74,11 @@ app.add_middleware(
 async def log_request_lifecycle(request: Request, call_next):
     """Log incoming API requests with outcome and latency."""
     start_time = perf_counter()
+    route_path = getattr(request.scope.get("route"), "path", request.url.path)
     logger.debug(
         "Incoming request: method=%s path=%s query=%s",
         request.method,
-        request.url.path,
+        route_path,
         request.url.query,
     )
     try:
@@ -86,14 +87,14 @@ async def log_request_lifecycle(request: Request, call_next):
         duration_ms = search_metrics.elapsed_ms(start_time)
         search_metrics.record_error(
             method=request.method,
-            path=request.url.path,
+            path=route_path,
             duration_ms=duration_ms,
         )
         logger.exception(
             "Error: Unhandled exception while serving request method=%s path=%s "
             "duration_ms=%s",
             request.method,
-            request.url.path,
+            route_path,
             duration_ms,
         )
         raise
@@ -101,14 +102,14 @@ async def log_request_lifecycle(request: Request, call_next):
     duration_ms = search_metrics.elapsed_ms(start_time)
     search_metrics.record_success(
         method=request.method,
-        path=request.url.path,
+        path=route_path,
         status_code=response.status_code,
         duration_ms=duration_ms,
     )
     logger.info(
         "Success: Request completed method=%s path=%s status_code=%s duration_ms=%s",
         request.method,
-        request.url.path,
+        route_path,
         response.status_code,
         duration_ms,
     )
