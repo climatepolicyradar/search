@@ -217,24 +217,46 @@ test_cases = [
     PrecisionTestCase[Document](
         category="docket number",
         search_terms="1:25-cv-02214",
-        expected_result_ids=[
-            "Sabin.document.130975.130977",
-            "Sabin.document.130975.130978",
-            "Sabin.document.130975.130979",
-        ],
+        expected_result_ids=["Sabin.family.130975.0"],
+        # expected_result_ids=[
+        #     "Sabin.document.130975.130977",
+        #     "Sabin.document.130975.130978",
+        #     "Sabin.document.130975.130979",
+        # ],
+        # testing for returning the correct family until search result design is finalised.  Only families have docket numbers in current metadata
         description="Searching for docket number of US case should return all the documents from the case first.",
     ),
     PrecisionTestCase[Document](
         category="docket number",
         search_terms="13-1820",
-        expected_result_ids=["Sabin.document.1221.3369"],
+        expected_result_ids=["Sabin.family.1221.0"],
+        # expected_result_ids=["Sabin.document.1221.3369"],
+        # testing for returning the correct family until search result design is finalised.  Only families have docket numbers in current metadata
         description="Searching for docket number of US case should return all the documents from the case first.",
     ),
     PrecisionTestCase[Document](
         category="docket number",
         search_terms="24-3397",
-        expected_result_ids=["Sabin.document.69198.69199"],
+        expected_result_ids=["Sabin.family.69198.0"],
+        # expected_result_ids=["Sabin.document.69198.69199"],
+        # testing for returning the correct family until search result design is finalised.  Only families have docket numbers in current metadata
         description="Searching for docket number of US case should return all the documents from the case first.",
+    ),
+    PrecisionTestCase[Document](
+        category="project id number",
+        search_terms="5567",
+        expected_result_ids=["GEF.family.5567.0"],
+        # expected_result_ids=[""],
+        # testing for returning the correct family until search result design is finalised.  Only families have project ids in current metadata
+        description="Searching for the project id of an MCF project should return the correct project.",
+    ),
+    PrecisionTestCase[Document](
+        category="project id number",
+        search_terms="27920",
+        expected_result_ids=["GCF.family.FP278.27920"],
+        # expected_result_ids=[""],
+        # testing for returning the correct family until search result design is finalised.  Only families have project ids in current metadata
+        description="Searching for the project id of an MCF project should return the correct project.",
     ),
     FieldCharacteristicsTestCase[Document](
         category="entity name + acronym",
