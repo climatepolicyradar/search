@@ -2,7 +2,7 @@ import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 import boto3
 import orjson
@@ -39,6 +39,7 @@ class VespaDocument(TypedDict):
     attributes_double: VespaAssign[dict[str, float]]
     attributes_boolean: VespaAssign[dict[str, int]]
     attributes_identifiers: VespaAssign[dict[str, str]]
+    attributes_published_date: NotRequired[VespaAssign[int]]
 
 
 def _strip_control_chars(s: str) -> str:
@@ -50,76 +51,102 @@ def _to_unix_timestamp(ts_str: str | None) -> int | None:
     if not ts_str:
         return None
     try:
-        return int(datetime.fromisoformat(ts_str).timestamp())
+        normalised = ts_str.replace("Z", "+00:00")
+        return int(datetime.fromisoformat(normalised).timestamp())
     except (ValueError, TypeError):
         return None
+
+
+def _published_timestamp_from_attributes(
+    attributes: dict[str, str | float | bool] | None,
+) -> int | None:
+    """
+    Derive a Unix timestamp for sort from ``published_date`` when present.
+
+    :param attributes: Document attributes from the data-in payload
+    :type attributes: dict[str, str | float | bool] | None
+    :return: Epoch seconds or ``None`` when not sortable
+    :rtype: int | None
+    """
+    if not attributes:
+        return None
+    raw = attributes.get("published_date")
+    if isinstance(raw, str):
+        return _to_unix_timestamp(raw)
+    return None
 
 
 def _source_document_to_vespa_update(
     document: SourceDocument,
 ) -> VespaUpdate[VespaDocument]:
     attrs = document.get("attributes") or {}
+    title_clean = _strip_control_chars(document["title"])
+    published_ts = _published_timestamp_from_attributes(attrs)
+    fields: VespaDocument = {
+        "title": {"assign": title_clean},
+        "description": {
+            "assign": _strip_control_chars(document.get("description") or "")
+            if document.get("description")
+            else None
+        },
+        "labels": {
+            "assign": [
+                {
+                    "id": label["value"]["id"],
+                    "type": label["value"]["type"],
+                    "value": label["value"]["value"],
+                    "timestamp": _to_unix_timestamp(label.get("timestamp")),
+                    "relationship": label.get("type", "related"),
+                    "count": None,
+                    "passages_id": None,
+                }
+                for label in (document.get("labels") or [])
+            ]
+        },
+        "geographies": {
+            "assign": [
+                label["value"]["value"]
+                for label in (document.get("labels") or [])
+                if label.get("type") == "geography"
+            ]
+        },
+        "document_source": {"assign": orjson.dumps(document).decode()},
+        "attributes_string": {
+            "assign": {k: str(v) for k, v in attrs.items() if isinstance(v, str)}
+        },
+        "attributes_double": {
+            "assign": {
+                k: float(v)
+                for k, v in attrs.items()
+                if isinstance(v, (int, float))
+                # this is needed because
+                # >>> isinstance(True, int)
+                # True
+                # >>> isinstance(False, int)
+                # True
+                and not isinstance(v, bool)
+            }
+        },
+        "attributes_boolean": {
+            "assign": {k: int(v) for k, v in attrs.items() if isinstance(v, bool)}
+        },
+        "attributes_identifiers": {
+            "assign": {
+                # we do not mind if this is duplicated in attributes_string
+                # as it is used for boosting
+                k.replace("identifiers::", ""): str(v)
+                for k, v in attrs.items()
+                if k.startswith("identifiers::")
+            }
+        },
+    }
+    if published_ts is not None:
+        fields["attributes_published_date"] = {"assign": published_ts}
+
     vespa_update: VespaUpdate[VespaDocument] = {
         "update": f"id:documents:documents::{document.get('id')}",
         "create": True,
-        "fields": {
-            "title": {"assign": _strip_control_chars(document["title"])},
-            "description": {
-                "assign": _strip_control_chars(document.get("description") or "")
-                if document.get("description")
-                else None
-            },
-            "labels": {
-                "assign": [
-                    {
-                        "id": label["value"]["id"],
-                        "type": label["value"]["type"],
-                        "value": label["value"]["value"],
-                        "timestamp": _to_unix_timestamp(label.get("timestamp")),
-                        "relationship": label.get("type", "related"),
-                        "count": None,
-                        "passages_id": None,
-                    }
-                    for label in (document.get("labels") or [])
-                ]
-            },
-            "geographies": {
-                "assign": [
-                    label["value"]["value"]
-                    for label in (document.get("labels") or [])
-                    if label.get("type") == "geography"
-                ]
-            },
-            "document_source": {"assign": orjson.dumps(document).decode()},
-            "attributes_string": {
-                "assign": {k: str(v) for k, v in attrs.items() if isinstance(v, str)}
-            },
-            "attributes_double": {
-                "assign": {
-                    k: float(v)
-                    for k, v in attrs.items()
-                    if isinstance(v, (int, float))
-                    # this is needed because
-                    # >>> isinstance(True, int)
-                    # True
-                    # >>> isinstance(False, int)
-                    # True
-                    and not isinstance(v, bool)
-                }
-            },
-            "attributes_boolean": {
-                "assign": {k: int(v) for k, v in attrs.items() if isinstance(v, bool)}
-            },
-            "attributes_identifiers": {
-                "assign": {
-                    # we do not mind if this is duplicated in attributes_string
-                    # as it is used for boosting
-                    k.replace("identifiers::", ""): str(v)
-                    for k, v in attrs.items()
-                    if k.startswith("identifiers::")
-                }
-            },
-        },
+        "fields": fields,
     }
     return vespa_update
 
@@ -167,7 +194,7 @@ def documents_concepts_feed_materializer():
 
             vespa_concepts: list[VespaLabelField] = [
                 {
-                    "id": concept_id,
+                    "id": f"concept::{concept_id}",
                     "type": "concept",
                     "value": concept_names[concept_id],
                     "count": count,

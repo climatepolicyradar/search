@@ -122,6 +122,14 @@ schema documents {
         field document_source type string {
             indexing: summary
         }
+
+        field attributes_published_date type long {
+            indexing: attribute | summary
+        }
+    }
+
+    field title_sort type string {
+        indexing: input title | attribute | summary | lowercase
     }
 
     field labels_value type array<string> {
@@ -141,6 +149,10 @@ schema documents {
     }
     field labels_type_value_attribute type array<string> {
         indexing: input labels | for_each { get_field type . "::". get_field value } | attribute
+        attribute: fast-search
+    }
+    field labels_type_id_value_attribute type array<string> {
+        indexing: input labels | for_each { get_field type . "::". get_field id . "::" . get_field value } | attribute
         attribute: fast-search
     }
 
@@ -163,6 +175,10 @@ schema documents {
         indexing: input concepts | for_each { get_field type . "::". get_field value } | attribute
         attribute: fast-search
     }
+    field concepts_type_id_value_attribute type array<string> {
+        indexing: input concepts | for_each { get_field type . "::". get_field id . "::" . get_field value } | attribute
+        attribute: fast-search
+    }
 
     field passages_text type array<string> {
         indexing: input passages | for_each { get_field text } | index
@@ -178,7 +194,6 @@ schema documents {
         linguistics {
             profile {
                 index: title_analysis
-                search: title_synonym_analysis_search
             }
         }
     }
@@ -242,6 +257,14 @@ schema documents {
             expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + label_boost_score()
         }
         summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
+    }
+
+    # Used with ranking.sorting for non-relevance document lists. Declared explicitly so
+    # sort queries do not depend on an implicit container default.
+    rank-profile unranked {
+        first-phase {
+            expression: 1
+        }
     }
 
     document-summary default {

@@ -46,6 +46,25 @@ stopwords filter can find the file.
 To add or remove stop words, edit `en/stopwords.txt` (one word per line) and
 redeploy.
 
+### Synonyms
+
+Synonym expansion is handled in two different ways depending on the field:
+
+- **Geography** synonyms use Lucene's `synonymGraph` filter, configured in
+  `en/geo-synonyms.txt`. This is necessary because geography queries use
+  field-scoped `userInput` (e.g.
+  `{defaultIndex: "geographies"}userInput(@query)`), which labels query tokens
+  with a field name. Vespa's semantic rules only match unlabeled tokens, so they
+  can't be used here. TODO: investigate whether this is affecting multi-word
+  geography queries.
+- **Everything else** (title acronyms, `phaseout`, etc.) uses Vespa
+  [semantic rules](https://docs.vespa.ai/en/linguistics/query-rewriting.html)
+  defined in `vespa/app/rules/`. There are two rulebases:
+  - `documents.sr` — the default, used for document search
+  - `labels.sr` — used for label search (passed via `rules.rulebase=labels`),
+    which extends `documents.sr` and adds `nz → net zero` (omitted from
+    `documents.sr` to avoid conflating it with New Zealand in document search)
+
 ## References
 
 - [Vespa Lucene Linguistics docs](https://docs.vespa.ai/en/linguistics/lucene-linguistics.html)

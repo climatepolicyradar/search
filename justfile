@@ -19,7 +19,7 @@ clean:
 
 # install dependencies and set up the project
 install +OPTS="":
-    GIT_LFS_SKIP_SMUDGE=1 uv sync --locked --group dev {{ OPTS }}
+    GIT_LFS_SKIP_SMUDGE=1 uv sync --group dev {{ OPTS }}
 
 # setup the project
 setup: install
@@ -32,7 +32,7 @@ test +OPTS="":
 
 # test only the functional behaviour of the code (not relevance)
 test-functional +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes --verbose --ignore=tests/relevance {{ OPTS }}
+    uv run pytest --disable-pytest-warnings --color=yes --verbose --ignore=relevance_tests {{ OPTS }}
 
 # test only the relevance of search results
 test-relevance +OPTS="":
