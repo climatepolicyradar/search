@@ -29,6 +29,21 @@ test_cases = [
         ],  # NEW SOUTH WALES, AUSTRALIA
         description="search for new south wales should return new south wales and australia",
     ),
+    *[
+        RecallTestCase[Label](
+            category="place name",
+            search_terms=query,
+            expected_result_ids=["geography::USA"],
+            k=10,
+            description="United States query variants should surface the United States geography label in the top 10",
+        )
+        for query in [
+            "united",
+            "united states",
+            "states",
+            "united states of america",
+        ]
+    ],
     PrecisionTestCase[Label](
         category="place name + other terms",
         search_terms="Philippines policies in climate changes",
@@ -247,6 +262,22 @@ test_cases = [
         ],
         description="search for indigenous people colombia laws should return relevant labels first",
     ),
+    *[
+        RecallTestCase[Label](
+            category="topic",
+            search_terms=query,
+            expected_result_ids=["concept::Q412"],
+            k=10,
+            description="air pollution risk query variants should surface concept::Q412 in the top 10",
+        )
+        for query in [
+            "air",
+            "air pollution",
+            "air pollution risk",
+            "pollution risk",
+            "air pol",
+        ]
+    ],
 ]
 
 
