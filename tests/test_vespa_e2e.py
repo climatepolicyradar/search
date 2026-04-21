@@ -299,7 +299,7 @@ def test_attribute_bool_not_eq_excludes_matching_doc(vespa_app: Vespa):
 
 def test_attribute_identifiers_eq_returns_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"identifiers::project_id": "proj-123"}, labels=[]
+        attributes={"identifier::project_id": "proj-123"}, labels=[]
     )
     document_without_matching_attribute = SourceDocumentFactory.build(
         attributes={}, labels=[]
@@ -325,7 +325,7 @@ def test_attribute_identifiers_eq_returns_matching_doc(vespa_app: Vespa):
 
 def test_attribute_identifiers_not_eq_excludes_matching_doc(vespa_app: Vespa):
     document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"identifiers::project_id": "proj-123"}, labels=[]
+        attributes={"identifier::project_id": "proj-123"}, labels=[]
     )
     document_without_matching_attribute = SourceDocumentFactory.build(
         attributes={}, labels=[]

@@ -198,6 +198,20 @@ schema documents {
         }
     }
 
+    field case_number type string {
+        indexing: input attributes_identifiers | get_value case_number | index
+        stemming: none
+    }
+
+    field project_id type string {
+        indexing: input attributes_identifiers | get_value project_id | index
+        stemming: none
+    }
+
+    fieldset identifiers {
+        fields: case_number, project_id
+    }
+
     fieldset default {
         fields: title, description, passages_text
     }
