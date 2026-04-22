@@ -1,3 +1,4 @@
+import logging
 import re
 from collections import Counter
 from datetime import datetime
@@ -11,6 +12,8 @@ from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import SourceDocument
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
+
+logger = logging.getLogger(__name__)
 
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -40,6 +43,7 @@ class VespaDocument(TypedDict):
     attributes_boolean: VespaAssign[dict[str, int]]
     attributes_identifiers: VespaAssign[dict[str, str]]
     attributes_published_date: NotRequired[VespaAssign[int]]
+    principal_id: NotRequired[VespaAssign[str]]
 
 
 def _strip_control_chars(s: str) -> str:
@@ -61,7 +65,7 @@ def _published_timestamp_from_attributes(
     attributes: dict[str, str | float | bool] | None,
 ) -> int | None:
     """
-    Derive a Unix timestamp for sort from ``published_date`` when present.
+    Derive a Unix timestamp for sort from `published_date` when present.
 
     :param attributes: Document attributes from the data-in payload
     :type attributes: dict[str, str | float | bool] | None
@@ -76,12 +80,44 @@ def _published_timestamp_from_attributes(
     return None
 
 
+def _derive_principal_id(document: SourceDocument) -> str | None:
+    """Return the id of this document's Principal, or None if there is none."""
+
+    # A document with a `status::Principal` label is itself a Principal.
+    # Its principal_id is its own id - self-referential, so it appears in its own grouping bucket.
+    is_principal = any(
+        label["value"]["id"] == "status::Principal"
+        for label in (document.get("labels") or [])
+    )
+    if is_principal:
+        return document["id"]
+
+    # Otherwise, the first `member_of` / `is_version_of` relationship target is the parent Principal.
+    matches = [
+        rel
+        for rel in (document.get("documents") or [])
+        if rel.get("type") in {"member_of", "is_version_of"}
+    ]
+
+    if not matches:
+        return None
+
+    # If multiple candidates exist, take the first and log a warning.
+    if len(matches) > 1:
+        logger.warning(
+            f"document {document['id']} has multiple principal-candidate relationships - using the first."
+        )
+
+    return matches[0]["value"]["id"]
+
+
 def _source_document_to_vespa_update(
     document: SourceDocument,
 ) -> VespaUpdate[VespaDocument]:
     attrs = document.get("attributes") or {}
     title_clean = _strip_control_chars(document["title"])
     published_ts = _published_timestamp_from_attributes(attrs)
+    principal_id = _derive_principal_id(document)
     fields: VespaDocument = {
         "title": {"assign": title_clean},
         "description": {
@@ -142,6 +178,9 @@ def _source_document_to_vespa_update(
     }
     if published_ts is not None:
         fields["attributes_published_date"] = {"assign": published_ts}
+
+    if principal_id is not None:
+        fields["principal_id"] = {"assign": principal_id}
 
     vespa_update: VespaUpdate[VespaDocument] = {
         "update": f"id:documents:documents::{document.get('id')}",
