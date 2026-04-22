@@ -126,6 +126,11 @@ schema documents {
         field attributes_published_date type long {
             indexing: attribute | summary
         }
+
+        field principal_id type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
     }
 
     field title_sort type string {
