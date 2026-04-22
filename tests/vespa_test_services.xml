@@ -111,8 +111,10 @@
     <content id="search-production" version="1.0">
         <min-redundancy>1</min-redundancy>
         <documents>
-            <document type="documents" mode="index" />
-            <document type="labels" mode="index" />
+            <!-- global is required on 'documents' so the passages schema can import fields from it via its reference<documents> field. -->
+            <document type="documents" mode="index" global="true" />
+            <document type="passages" mode="index" global="true" />
+            <document type="labels" mode="index" global="true" />
         </documents>
     </content>
 </services>
