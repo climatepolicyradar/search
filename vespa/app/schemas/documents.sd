@@ -137,6 +137,14 @@ schema documents {
         indexing: input title | attribute | summary | lowercase
     }
 
+    # These are used as references by the passages schema
+    field geographies_attribute type array<string> {
+        indexing: input geographies | attribute
+    }
+    field title_attribute type string {
+        indexing: input title | attribute
+    }
+
     field labels_value type array<string> {
         indexing: input labels | for_each { get_field value } | index | summary
         stemming: none

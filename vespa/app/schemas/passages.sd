@@ -15,6 +15,12 @@ schema passages {
         field document_id type string {
             indexing: attribute | summary
         }
+        field document_ref type reference<documents> {
+            indexing: attribute
+        }
+        field principal_document_ref type reference<documents> {
+            indexing: attribute
+        }
         field type type string {
             indexing: attribute | summary
         }
@@ -28,6 +34,20 @@ schema passages {
             indexing: attribute | summary
         }
     }
+
+    # Fields imported from the parent document via document_ref. These let us
+    # filter and group passages on document-level metadata without denormalising it
+    # onto each passage.
+    import field document_ref.principal_id as principal_id {}
+    import field document_ref.geographies_attribute as geographies {}
+    import field document_ref.labels_type_id_value_attribute as labels_type_id_value_attribute {}
+    import field document_ref.concepts_type_id_value_attribute as concepts_type_id_value_attribute {}
+    import field document_ref.attributes_published_date as attributes_published_date {}
+
+    # Fields imported from the Principal document via principal_document_ref.
+    # Lets passages filter / group / return Principal-scoped metadata in one
+    # hop without denormalising per-passage.
+    import field principal_document_ref.title_attribute as principal_title {}
 
     fieldset default {
         fields: text
