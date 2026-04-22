@@ -71,7 +71,9 @@ def search(
         if doc.description:
             table.add_row("description", highlight(doc.description))
         if doc.attributes:
-            table.add_row("attributes", json.dumps(doc.attributes, default=str))
+            table.add_row(
+                "attributes", highlight(json.dumps(doc.attributes, default=str))
+            )
         if geographies:
             table.add_row("geographies", highlight(", ".join(geographies)))
         if relevance is not None:

@@ -215,6 +215,7 @@ apprunner_service = apprunner.Service(
                 port="8080",
                 runtime_environment_variables={
                     "BUCKET_NAME": bucket.bucket,
+                    "ENV": stack,
                 },
                 runtime_environment_secrets={
                     "VESPA_ENDPOINT": vespa_endpoint.arn,

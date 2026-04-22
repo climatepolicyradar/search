@@ -152,6 +152,7 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Pulumi up
+        working-directory: ./infra
         run: |
           pulumi up --stack climatepolicyradar/search/${{ matrix.environment }} --yes --skip-preview
         env:
