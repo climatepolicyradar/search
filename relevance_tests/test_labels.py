@@ -35,12 +35,22 @@ test_cases = [
             search_terms=query,
             expected_result_ids=["geography::USA"],
             k=10,
-            description="United States query variants should surface the United States geography label in the top 10",
+            description="ambiguous United States query variants should surface the United States geography label in the top 10",
         )
         for query in [
             "united",
-            "united states",
             "states",
+        ]
+    ],
+    *[
+        PrecisionTestCase[Label](
+            category="place name",
+            search_terms=query,
+            expected_result_ids=["geography::USA"],
+            description="specific United States query variants should return the United States geography label first",
+        )
+        for query in [
+            "united states",
             "united states of america",
         ]
     ],
@@ -280,16 +290,22 @@ test_cases = [
         ],
         description="search for indigenous people colombia laws should return relevant labels first",
     ),
+    RecallTestCase[Label](
+        category="topic",
+        search_terms="air",
+        expected_result_ids=["concept::Q412"],
+        k=10,
+        description="air query should surface concept::Q412 in the top 10",
+    ),
     *[
         RecallTestCase[Label](
             category="topic",
             search_terms=query,
             expected_result_ids=["concept::Q412"],
-            k=10,
-            description="air pollution risk query variants should surface concept::Q412 in the top 10",
+            k=5,
+            description="air pollution risk query variants should surface concept::Q412 in the top 5",
         )
         for query in [
-            "air",
             "air pollution",
             "air pollution risk",
             "pollution risk",
