@@ -211,6 +211,24 @@ test_cases = [
         description="search for offshore wind roadmap should return wind energy or Roadmap labels",
     ),
     PrecisionTestCase[Label](
+        category="topic",
+        search_terms="phase out",
+        expected_result_ids=[
+            "concept::Q1285",  # ban (parent concept of phase-out)
+        ],
+        description="search for 'phase out' should return 'ban' label first",
+    ),
+    RecallTestCase[Label](
+        category="topic",
+        search_terms="phase out",
+        expected_result_ids=[],
+        forbidden_result_ids=[
+            "concept::Q1275",  # subsidy removal — ranks highly due to 'phasing out of subsidies' aliases
+        ],
+        k=5,
+        description="search for 'phase out' should not return 'subsidy removal' in top 5",
+    ),
+    PrecisionTestCase[Label](
         category="logic",
         search_terms="Adaptation (OR) resilience investment",
         expected_result_ids=[
