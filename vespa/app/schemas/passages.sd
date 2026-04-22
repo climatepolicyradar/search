@@ -10,7 +10,7 @@ schema passages {
             indexing: attribute | summary
         }
         field text type string {
-            indexing: index | attribute | summary
+            indexing: index | summary
         }
         field document_id type string {
             indexing: attribute | summary
