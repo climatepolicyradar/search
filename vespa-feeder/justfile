@@ -1,0 +1,12 @@
+registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region` + ".amazonaws.com"
+image := registry + "/search-vespa-feeder"
+
+build:
+    docker build --platform=linux/amd64 -t {{ image }}:latest .
+
+push:
+    aws ecr get-login-password | docker login --username AWS --password-stdin {{ registry }}
+    docker push {{ image }}:latest
+
+deploy:
+    uv run python deployments.py

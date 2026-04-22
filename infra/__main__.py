@@ -214,6 +214,7 @@ apprunner_service = apprunner.Service(
                 port="8080",
                 runtime_environment_variables={
                     "BUCKET_NAME": bucket.bucket,
+                    "ENV": stack,
                 },
                 runtime_environment_secrets={
                     "VESPA_ENDPOINT": vespa_endpoint.arn,
@@ -369,6 +370,45 @@ ecr_repository = components_aws.ecr.Repository(
             scan_on_push=False,
         ),
         image_tag_mutability="MUTABLE",
+    ),
+)
+
+# endregion
+
+# region vespa-feeder
+
+vespa_feeder_ecr_repo = ecr.Repository(
+    f"{name}-vespa-feeder-repo",
+    name=f"{name}-vespa-feeder",
+    encryption_configurations=[
+        ecr.RepositoryEncryptionConfigurationArgs(
+            encryption_type="AES256",
+        )
+    ],
+    image_scanning_configuration=ecr.RepositoryImageScanningConfigurationArgs(
+        scan_on_push=False,
+    ),
+    image_tag_mutability="MUTABLE",
+)
+
+vespa_feeder_ecr_lifecycle = ecr.LifecyclePolicy(
+    f"{name}-vespa-feeder-ecr-lifecycle-policy",
+    repository=vespa_feeder_ecr_repo.name,
+    policy=json.dumps(
+        {
+            "rules": [
+                {
+                    "rulePriority": 1,
+                    "description": "Keep last 50 images",
+                    "selection": {
+                        "tagStatus": "any",
+                        "countType": "imageCountMoreThan",
+                        "countNumber": 50,
+                    },
+                    "action": {"type": "expire"},
+                }
+            ]
+        }
     ),
 )
 

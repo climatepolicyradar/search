@@ -27,7 +27,7 @@ async def lifespan(_app: FastAPI):
 
 
 # Configure Open Telemetry.
-ENV = os.getenv("ENV", "staging")
+ENV = os.getenv("ENV", "development")
 os.environ["OTEL_PYTHON_LOG_CORRELATION"] = "True"
 _api_dir = Path(__file__).parent
 try:

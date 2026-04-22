@@ -72,6 +72,8 @@ class SourceDocumentFactory(TypedDictFactory):
     def build(cls, **kwargs: Any) -> SourceDocument:
         if "labels" not in kwargs:
             kwargs["labels"] = [SourceLabelRelationshipFactory.build()]
+        if "documents" not in kwargs:
+            kwargs["documents"] = []
         return super().build(**kwargs)
 
 
