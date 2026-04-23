@@ -11,6 +11,7 @@ import orjson
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import SourceDocument
 from search.vespa.sources.data_in_api import read as read_documents
+from search.vespa.sources.embeddings_input_v2 import read as read_embeddings_input_v2
 from search.vespa.sources.inference_results import read as read_inference_results
 
 logger = logging.getLogger(__name__)
@@ -209,6 +210,20 @@ def documents_feed_materializer():
     print(f"Uploaded {length} documents to S3.")
 
 
+class VespaDocumentPassage(TypedDict):
+    text_block_id: str
+    language: str
+    type: str
+    type_confidence: float
+    page_number: int
+    text: str
+    heading_id: NotRequired[str | None]
+
+
+class VespaDocumentPassages(TypedDict):
+    passages: VespaAssign[list[VespaDocumentPassage]]
+
+
 class VespaDocumentConcepts(TypedDict):
     concepts: VespaAssign[list[VespaLabelField]]
 
@@ -260,6 +275,48 @@ def documents_concepts_feed_materializer():
         "search/vespa/documents_concepts_feed_materializer.jsonl",
     )
     print(f"Uploaded {length} documents to S3.")
+
+
+def documents_passages_feed_materializer():
+    length = 0
+
+    output_file = OUTPUT_CACHE_DIR / "documents_passages_feed_materializer.jsonl"
+    with output_file.open("wb") as f:
+        for document_id, inference_result in read_embeddings_input_v2():
+            pdf_data = inference_result.get("pdf_data")
+            text_blocks = pdf_data.get("text_blocks") if pdf_data is not None else None
+            if not text_blocks:
+                continue
+
+            passages: list[VespaDocumentPassage] = [
+                {
+                    "text_block_id": block["id"],
+                    "language": block["language"],
+                    "type": block["type"],
+                    "type_confidence": block["type_confidence"],
+                    "page_number": block["pages"][0]["number"]
+                    if block.get("pages")
+                    else 0,
+                    "text": block["text"],
+                    "heading_id": block.get("heading_id"),
+                }
+                for block in text_blocks
+            ]
+
+            update_op: VespaUpdate[VespaDocumentPassages] = {
+                "update": f"id:documents:documents::{document_id}",
+                "fields": {"passages": {"assign": passages}},
+                "create": False,
+            }
+            f.write(orjson.dumps(update_op) + b"\n")
+            length += 1
+
+    boto3.client("s3").upload_file(
+        str(output_file),
+        "cpr-cache",
+        "search/vespa/documents_passages_feed_materializer.jsonl",
+    )
+    print(f"Uploaded {length} document passage updates to S3.")
 
 
 if __name__ == "__main__":

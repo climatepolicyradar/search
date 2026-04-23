@@ -1,6 +1,6 @@
 import subprocess
 from pathlib import Path
-from typing import Iterator, TypedDict
+from typing import Iterator, NotRequired, TypedDict
 
 import orjson
 
@@ -33,6 +33,7 @@ class TextBlock(TypedDict):
     id: str
     idx: int
     pages: list[PageRef]
+    heading_id: NotRequired[str | None]
 
 
 class PdfData(TypedDict):
