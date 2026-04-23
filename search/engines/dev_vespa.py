@@ -472,6 +472,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             "ranking.profile": "nativerank",
         }
         request_body.update(sort_overrides)
+
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
         if not self.bolding:
@@ -533,6 +534,33 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 list[DocumentRelationship]
             ).validate_python(source.get("documents", []))
 
+            # `passages` and `passages_text` indices are aligned
+            # as `passages_text` is derived from `passages` in the schema.
+            # Vespa wraps matched terms with <hi>...</hi> on the bolded `passages_text` field.
+            # We use this to identify which `passages[i]` matched the query.
+            document_id = source.get("id", MISSING_PLACEHOLDER)
+            passages_field = fields.get("passages", [])
+            passages_text = fields.get("passages_text", [])
+            passages: list[Passage] = []
+            for i, passage in enumerate(passages_field):
+                if i >= len(passages_text):
+                    break
+                bolded_text = passages_text[i]
+                if "<hi>" not in bolded_text:
+                    continue
+                passages.append(
+                    Passage(
+                        text_block_id=passage.get("text_block_id", ""),
+                        text=bolded_text,
+                        language=passage.get("language", ""),
+                        type=passage.get("type", ""),
+                        type_confidence=passage.get("type_confidence", 0.0),
+                        page_number=passage.get("page_number", 0),
+                        heading_id=passage.get("heading_id"),
+                        document_id=document_id,
+                    )
+                )
+
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
@@ -541,6 +569,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                     labels=labels,
                     attributes=source.get("attributes", {}),
                     documents=document_relationships,
+                    passages=passages,
                 )
             )
 

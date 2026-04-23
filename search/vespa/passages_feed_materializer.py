@@ -33,6 +33,7 @@ class VespaPassageUpdate(TypedDict):
     document_id: VespaAssign[str]
     document_ref: VespaAssign[str]
     principal_document_ref: NotRequired[VespaAssign[str]]
+    heading_id: NotRequired[VespaAssign[str]]
 
 
 BATCH_SIZE = 10_000
@@ -87,10 +88,16 @@ def _text_block_to_vespa_update(
         "document_id": {"assign": document_id},
         "document_ref": {"assign": f"id:documents:documents::{document_id}"},
     }
+
     if principal_id is not None:
         fields["principal_document_ref"] = {
             "assign": f"id:documents:documents::{principal_id}"
         }
+
+    heading_id = block.get("heading_id")
+    if heading_id is not None:
+        fields["heading_id"] = {"assign": heading_id}
+
     return {
         "update": f"id:passages:passages::{block['id']}",
         "create": True,

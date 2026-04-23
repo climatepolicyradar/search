@@ -10,6 +10,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from search.passage import Passage
+
 
 class WithRelationships(BaseModel):
     labels: list[LabelRelationship] = []
@@ -55,7 +57,7 @@ class DocumentRelationship(BaseModel):
 
 
 class Document(WithRelationships, BaseDocument):
-    pass
+    passages: list[Passage] = []
 
 
 class DocumentWithoutRelationships(BaseDocument):

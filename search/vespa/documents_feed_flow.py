@@ -2,6 +2,7 @@ from prefect import flow
 from search.vespa.documents_feed_materializer import (
     documents_concepts_feed_materializer,
     documents_feed_materializer,
+    documents_passages_feed_materializer,
 )
 
 
@@ -9,3 +10,4 @@ from search.vespa.documents_feed_materializer import (
 def documents_feed_flow():
     documents_feed_materializer()
     documents_concepts_feed_materializer()
+    documents_passages_feed_materializer()
