@@ -241,12 +241,13 @@ def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     :raises AssertionError: if ``vespa_attr`` is not handled
     """
     if vespa_attr == "attributes_published_date":
-        if direction == "desc":
-            return "-attributes_published_date"
-        return "+missing(attributes_published_date,last) +attributes_published_date"
+        sign = "+" if direction == "asc" else "-"
+        return (
+            f"+missing(attributes_published_date,last) {sign}attributes_published_date"
+        )
     if vespa_attr == "title_sort":
         sign = "+" if direction == "asc" else "-"
-        return f"{sign}{vespa_attr}"
+        return f"+missing(title_sort,last) {sign}{vespa_attr}"
     raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")
 
 

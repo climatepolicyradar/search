@@ -816,10 +816,16 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
         labels=[],
         attributes={"published_date": "2026-06-01T12:00:00Z"},
     )
+    doc_undated = SourceDocumentFactory.build(
+        title="Undated",
+        labels=[],
+        attributes={},
+    )
     _feed_document(vespa_app, doc_old)
     _feed_document(vespa_app, doc_new)
     _feed_document(vespa_app, doc_oldest)
     _feed_document(vespa_app, doc_newest)
+    _feed_document(vespa_app, doc_undated)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -828,7 +834,13 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
         order_by=[OrderBy(field="attributes.published_date", direction="desc")],
     ).results
 
-    assert [d.title for d in results] == ["Newest", "New", "Old", "Oldest"]
+    assert [d.title for d in results] == [
+        "Newest",
+        "New",
+        "Old",
+        "Oldest",
+        "Undated",
+    ]
 
 
 def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
@@ -852,10 +864,16 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
         labels=[],
         attributes={"published_date": "2026-06-01T12:00:00Z"},
     )
+    doc_undated = SourceDocumentFactory.build(
+        title="Undated",
+        labels=[],
+        attributes={},
+    )
     _feed_document(vespa_app, doc_old)
     _feed_document(vespa_app, doc_new)
     _feed_document(vespa_app, doc_oldest)
     _feed_document(vespa_app, doc_newest)
+    _feed_document(vespa_app, doc_undated)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -864,7 +882,13 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
         order_by=[OrderBy(field="attributes.published_date", direction="asc")],
     ).results
 
-    assert [d.title for d in results] == ["Oldest", "Old", "New", "Newest"]
+    assert [d.title for d in results] == [
+        "Oldest",
+        "Old",
+        "New",
+        "Newest",
+        "Undated",
+    ]
 
 
 def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
