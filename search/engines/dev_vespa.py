@@ -231,6 +231,9 @@ def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     """
     Build Vespa ``ranking.sorting`` for a document sort attribute.
 
+    Always pushes ``missing`` values to the end of the list.
+    https://docs.vespa.ai/en/reference/querying/sorting-language.html#missing
+
     :param vespa_attr: First mapped field name from
         :data:`sort_field_to_vespa_field_map`
     :type vespa_attr: str
