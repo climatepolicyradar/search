@@ -13,16 +13,29 @@ WORK_POOL = "mvp-prod-ecs"
 S3_BUCKET = "cpr-cache"
 
 FEEDS = [
+    # Labels
     {
         "name": "search-vespa-feeder-labels",
         "s3_key": "search/vespa/labels_feed_materializer.jsonl",
         "description": "Feed labels JSONL from S3 into Vespa",
     },
+    # Documents
     {
         "name": "search-vespa-feeder-documents",
         "s3_key": "search/vespa/documents_feed_materializer.jsonl",
         "description": "Feed documents JSONL from S3 into Vespa",
     },
+    {
+        "name": "search-vespa-feeder-documents-concepts",
+        "s3_key": "search/vespa/documents_concepts_feed_materializer.jsonl",
+        "description": "Feed documents concepts JSONL from S3 into Vespa",
+    },
+    {
+        "name": "search-vespa-feeder-documents-principal-concepts",
+        "s3_key": "search/vespa/documents_principal_concepts_feed_materializer.jsonl",
+        "description": "Feed documents principal concepts JSONL from S3 into Vespa",
+    },
+    # Passages
     {
         "name": "search-vespa-feeder-passages",
         "s3_key": "search/vespa/passages_feed_materializer.jsonl",
