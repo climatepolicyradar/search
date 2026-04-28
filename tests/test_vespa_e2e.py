@@ -437,6 +437,119 @@ def test_attribute_published_date_year_range_filters_inclusive(vespa_app: Vespa)
     assert document_after_range["id"] not in ids
 
 
+def _feed_published_date_boundary_docs(vespa_app: Vespa) -> dict[str, SourceDocument]:
+    docs = {
+        "before_year": SourceDocumentFactory.build(
+            id="date-before-year",
+            attributes={"published_date": "2019-12-31T23:59:59Z"},
+            labels=[],
+        ),
+        "year_start": SourceDocumentFactory.build(
+            id="date-year-start",
+            attributes={"published_date": "2020-01-01T00:00:00Z"},
+            labels=[],
+        ),
+        "year_end": SourceDocumentFactory.build(
+            id="date-year-end",
+            attributes={"published_date": "2020-12-31T23:59:59Z"},
+            labels=[],
+        ),
+        "after_year": SourceDocumentFactory.build(
+            id="date-after-year",
+            attributes={"published_date": "2021-01-01T00:00:00Z"},
+            labels=[],
+        ),
+    }
+    for doc in docs.values():
+        _feed_document(vespa_app, doc)
+    return docs
+
+
+@pytest.mark.parametrize(
+    ("op", "expected_keys"),
+    [
+        ("lt", {"before_year"}),
+        ("lte", {"before_year", "year_start", "year_end"}),
+        ("gt", {"after_year"}),
+        ("gte", {"year_start", "year_end", "after_year"}),
+    ],
+)
+def test_attribute_published_date_year_operator_boundaries(
+    vespa_app: Vespa, op: str, expected_keys: set[str]
+):
+    docs = _feed_published_date_boundary_docs(vespa_app)
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes_published_date",
+                key="published_date",
+                op=op,  # type: ignore[arg-type]
+                value=2020,
+            )
+        ],
+    )
+    ids = _ids(f)
+    expected_ids = {docs[key]["id"] for key in expected_keys}
+    assert ids == expected_ids
+
+
+def test_attribute_published_date_eq_year_matches_end_of_year_timestamp(
+    vespa_app: Vespa,
+):
+    docs = _feed_published_date_boundary_docs(vespa_app)
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes_published_date",
+                key="published_date",
+                op="eq",
+                value=2020,
+            )
+        ],
+    )
+    ids = _ids(f)
+    assert ids == {docs["year_end"]["id"]}
+
+
+def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vespa):
+    docs = _feed_published_date_boundary_docs(vespa_app)
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes_published_date",
+                key="published_date",
+                op="eq",
+                value="2020-01-01T00:00:00Z",
+            )
+        ],
+    )
+    ids = _ids(f)
+    assert ids == {docs["year_start"]["id"]}
+
+
+def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Vespa):
+    docs = _feed_published_date_boundary_docs(vespa_app)
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes_published_date",
+                key="published_date",
+                op="not_eq",
+                value="2020-01-01T00:00:00Z",
+            )
+        ],
+    )
+    ids = _ids(f)
+    assert docs["year_start"]["id"] not in ids
+    assert docs["before_year"]["id"] in ids
+    assert docs["year_end"]["id"] in ids
+    assert docs["after_year"]["id"] in ids
+
+
 # endregion Attributes
 
 

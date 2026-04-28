@@ -217,18 +217,19 @@ def _build_condition_yql(condition: Condition) -> str:
             if condition.field == "attributes_published_date":
                 op_to_symbol = {
                     "eq": "=",
-                    "not_eq": "!=",
                     "lt": "<",
                     "lte": "<=",
                     "gt": ">",
                     "gte": ">=",
                 }
+                operand = _published_date_operand(condition.value, condition.op)
+                if condition.op == "not_eq":
+                    return f"!(attributes_published_date = {operand})"
                 op_symbol = op_to_symbol.get(condition.op)
                 if op_symbol is None:
                     raise ValueError(
                         f"unsupported op={condition.op!r} for field={condition.field!r}"
                     )
-                operand = _published_date_operand(condition.value, condition.op)
                 return f"attributes_published_date {op_symbol} {operand}"
 
             # Using `sameElement`, string fields use `contains`
