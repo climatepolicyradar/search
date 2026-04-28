@@ -59,7 +59,7 @@ class AttributesCondition(BaseModel):
         "attributes_double",
         "attributes_boolean",
         "attributes_identifiers",
-        "attributes_published_date",
+        "attributes.published_date",
     ]
     key: str
     op: Literal["eq", "not_eq", "lt", "lte", "gt", "gte"]
@@ -179,7 +179,7 @@ def _published_date_operand(value: str | int | float, op: str) -> int:
     """
     Translate date input into Unix timestamp for Vespa.
 
-    Vespa compares ``attributes_published_date`` as a scalar Unix
+    Vespa compares ``attributes.published_date`` as a scalar Unix
     timestamp. This helper converts the API filter value into the
     comparison operator.
 
@@ -232,7 +232,7 @@ DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
 def _build_condition_yql(condition: Condition) -> str:
     match condition:
         case AttributesCondition():
-            if condition.field == "attributes_published_date":
+            if condition.field == "attributes.published_date":
                 op_to_symbol = {
                     "eq": "=",
                     "lt": "<",
@@ -242,13 +242,13 @@ def _build_condition_yql(condition: Condition) -> str:
                 }
                 operand = _published_date_operand(condition.value, condition.op)
                 if condition.op == "not_eq":
-                    return f"!(attributes_published_date = {operand})"
+                    return f"!({condition.field} = {operand})"
                 op_symbol = op_to_symbol.get(condition.op)
                 if op_symbol is None:
                     raise ValueError(
                         f"unsupported op={condition.op!r} for field={condition.field!r}"
                     )
-                return f"attributes_published_date {op_symbol} {operand}"
+                return f"{condition.field} {op_symbol} {operand}"
 
             # Using `sameElement`, string fields use `contains`
             # while numeric/bool fields use comparison operators.
