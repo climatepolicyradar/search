@@ -369,6 +369,74 @@ def test_attribute_identifiers_not_eq_excludes_matching_doc(vespa_app: Vespa):
     assert document_without_matching_attribute["id"] in ids
 
 
+def test_attribute_published_date_gte_filters_from_year(vespa_app: Vespa):
+    document_before_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2019-12-31T23:59:59Z"},
+        labels=[],
+    )
+    document_in_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2021-06-01T00:00:00Z"},
+        labels=[],
+    )
+    _feed_document(vespa_app, document_before_range)
+    _feed_document(vespa_app, document_in_range)
+
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes_published_date",
+                key="published_date",
+                op="gte",
+                value=2020,
+            )
+        ],
+    )
+    ids = _ids(f)
+    assert document_before_range["id"] not in ids
+    assert document_in_range["id"] in ids
+
+
+def test_attribute_published_date_year_range_filters_inclusive(vespa_app: Vespa):
+    document_before_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2017-06-01T00:00:00Z"},
+        labels=[],
+    )
+    document_in_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2020-06-01T00:00:00Z"},
+        labels=[],
+    )
+    document_after_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2024-01-01T00:00:00Z"},
+        labels=[],
+    )
+    _feed_document(vespa_app, document_before_range)
+    _feed_document(vespa_app, document_in_range)
+    _feed_document(vespa_app, document_after_range)
+
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes_published_date",
+                key="published_date",
+                op="gte",
+                value=2019,
+            ),
+            AttributesCondition(
+                field="attributes_published_date",
+                key="published_date",
+                op="lte",
+                value=2023,
+            ),
+        ],
+    )
+    ids = _ids(f)
+    assert document_before_range["id"] not in ids
+    assert document_in_range["id"] in ids
+    assert document_after_range["id"] not in ids
+
+
 # endregion Attributes
 
 

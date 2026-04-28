@@ -19,6 +19,7 @@ For now we just use `requests` which yields the same results.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 import requests
@@ -58,10 +59,11 @@ class AttributesCondition(BaseModel):
         "attributes_double",
         "attributes_boolean",
         "attributes_identifiers",
+        "attributes_published_date",
     ]
     key: str
-    op: Literal["eq", "not_eq"]
-    value: str | float | bool
+    op: Literal["eq", "not_eq", "lt", "lte", "gt", "gte"]
+    value: str | int | float | bool
 
 
 class FieldFilter(BaseModel):
@@ -136,13 +138,60 @@ ComplexExampleFilter = Filter(
 )
 
 
-def _format_value(value: str | float | bool) -> str:
+def _format_value(value: str | int | float | bool) -> str:
     """Format a value for YQL: strings get quotes, numbers do not, bools become 1/0 (byte)."""
     if isinstance(value, bool):
         return "1" if value else "0"
     if isinstance(value, (int, float)):
         return str(value)
     return f'"{value}"'
+
+
+def _to_unix_timestamp(value: str) -> int:
+    """Convert an ISO datetime string to Unix timestamp (seconds)."""
+    normalised = value.replace("Z", "+00:00")
+    return int(datetime.fromisoformat(normalised).timestamp())
+
+
+def _published_date_year_bounds(year: int) -> tuple[int, int]:
+    """Return inclusive Unix timestamp bounds for a UTC year."""
+    start = datetime(year, 1, 1, tzinfo=timezone.utc)
+    end = datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+    return int(start.timestamp()), int(end.timestamp())
+
+
+def _published_date_value_bounds(value: str | int | float) -> tuple[int, int] | None:
+    """
+    Return year bounds when value is a year, otherwise None.
+
+    Supports numeric years (e.g. ``2020``) and year strings (e.g. ``"2020"``).
+    """
+    if isinstance(value, str) and value.isdigit() and len(value) == 4:
+        return _published_date_year_bounds(int(value))
+    if isinstance(value, (int, float)):
+        year = int(value)
+        if 1000 <= year <= 9999:
+            return _published_date_year_bounds(year)
+    return None
+
+
+def _published_date_operand(value: str | int | float, op: str) -> int:
+    """
+    Convert a published-date filter value to the right comparison timestamp.
+
+    For year values:
+    - ``gte`` / ``lt`` use start-of-year
+    - ``lte`` / ``gt`` use end-of-year
+    """
+    year_bounds = _published_date_value_bounds(value)
+    if year_bounds is not None:
+        start, end = year_bounds
+        if op in ("gte", "lt"):
+            return start
+        return end
+    if isinstance(value, str):
+        return _to_unix_timestamp(value)
+    return int(value)
 
 
 filter_field_to_vespa_field_map = {
@@ -165,16 +214,48 @@ DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
 def _build_condition_yql(condition: Condition) -> str:
     match condition:
         case AttributesCondition():
+            if condition.field == "attributes_published_date":
+                op_to_symbol = {
+                    "eq": "=",
+                    "not_eq": "!=",
+                    "lt": "<",
+                    "lte": "<=",
+                    "gt": ">",
+                    "gte": ">=",
+                }
+                op_symbol = op_to_symbol.get(condition.op)
+                if op_symbol is None:
+                    raise ValueError(
+                        f"unsupported op={condition.op!r} for field={condition.field!r}"
+                    )
+                operand = _published_date_operand(condition.value, condition.op)
+                return f"attributes_published_date {op_symbol} {operand}"
+
             # Using `sameElement`, string fields use `contains`
             # while numeric/bool fields use comparison operators.
             # @see: https://docs.vespa.ai/en/querying/query-language.html#map
             value = condition.value
             if isinstance(value, str):
+                if condition.op not in ("eq", "not_eq"):
+                    raise ValueError(
+                        f"string attributes only support eq/not_eq, got {condition.op!r}"
+                    )
                 inner = f'key contains "{condition.key}", value contains "{value}"'
             else:
-                inner = (
-                    f'key contains "{condition.key}", value = {_format_value(value)}'
-                )
+                op_to_symbol = {
+                    "eq": "=",
+                    "not_eq": "=",
+                    "lt": "<",
+                    "lte": "<=",
+                    "gt": ">",
+                    "gte": ">=",
+                }
+                op_symbol = op_to_symbol.get(condition.op)
+                if op_symbol is None:
+                    raise ValueError(
+                        f"unsupported op={condition.op!r} for field={condition.field!r}"
+                    )
+                inner = f'key contains "{condition.key}", value {op_symbol} {_format_value(value)}'
             expr = f"{condition.field} contains sameElement({inner})"
             if condition.op == "not_eq":
                 return f"!({expr})"
