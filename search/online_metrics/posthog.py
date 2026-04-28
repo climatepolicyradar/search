@@ -29,11 +29,11 @@ class PostHogSession:
 
     def __init__(self) -> None:
         self.api_key = get_from_env_with_fallback(
-            var_name="POSTHOG_API_KEY", ssm_name="posthog_readonly"
+            var_name="POSTHOG_API_KEY", ssm_name="/PostHog/ReadOnlyAPIKey"
         )
         self.host = POSTHOG_HOST
         self.project_id = get_from_env_with_fallback(
-            var_name="POSTHOG_PROJECT_ID", ssm_name="posthog_project_id"
+            var_name="POSTHOG_PROJECT_ID", ssm_name="/PostHog/ProjectId"
         )
         # to filter out internal users mainly, in HogQL queries
         self.cpr_domains_hogql = (
@@ -747,10 +747,7 @@ class PostHogSession:
 
         What does this metric measure?
         It measures the percentage of unique users who clicked on a search result to a
-        family page for the top 5 results.  Right now, this ONLY includes clicking directly
-        on a family page link, not clicking to view a document or family after viewing the
-        passage match sidebar.
-        (see https://linear.app/climate-policy-radar/issue/APP-1610/facilitate-better-analytics-by-including-more-context-in-dom-elements).
+        family page for the top 5 results, including from the passage match sidebar.
 
         This is ONLY available for data after the 29th of January 2026.
 
@@ -791,7 +788,9 @@ class PostHogSession:
                     event = '$autocapture'
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
-                    AND properties.`position-total` IN ('1', '2', '3', '4', '5')
+                    AND
+                        (properties.`position-total` IN ('1', '2', '3', '4', '5') OR properties.`button-purpose` = 'search-result-family-passage' OR
+                        properties.$el_text IN ('View full summary and timeline', 'View overview', 'View all matches highlighted in document'))
                     AND timestamp >= '{date_range.get_earliest_datetime()}'
                     AND timestamp <= '{date_range.get_latest_datetime()}'
                     AND properties.$host IN {self.cpr_domains_hogql}
@@ -922,3 +921,12 @@ class PostHogSession:
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
+
+
+if __name__ == "__main__":
+    posthog = PostHogSession()
+    print(
+        posthog.calculate_click_through_rate_from_search_results_page_for_top_5_results_with_dwell_time(
+            DateRange(date_from=date(2026, 1, 29), date_to=date(2026, 2, 28))
+        )
+    )
