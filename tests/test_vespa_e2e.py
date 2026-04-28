@@ -385,7 +385,7 @@ def test_attribute_published_date_gte_filters_from_year(vespa_app: Vespa):
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_published_date",
+                field="attributes.published_date",
                 key="published_date",
                 op="gte",
                 value=2020,
@@ -418,13 +418,13 @@ def test_attribute_published_date_year_range_filters_inclusive(vespa_app: Vespa)
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_published_date",
+                field="attributes.published_date",
                 key="published_date",
                 op="gte",
                 value=2019,
             ),
             AttributesCondition(
-                field="attributes_published_date",
+                field="attributes.published_date",
                 key="published_date",
                 op="lte",
                 value=2023,
@@ -482,7 +482,7 @@ def test_attribute_published_date_year_operator_boundaries(
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_published_date",
+                field="attributes.published_date",
                 key="published_date",
                 op=op,  # type: ignore[arg-type]
                 value=2020,
@@ -502,7 +502,7 @@ def test_attribute_published_date_eq_year_matches_end_of_year_timestamp(
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_published_date",
+                field="attributes.published_date",
                 key="published_date",
                 op="eq",
                 value=2020,
@@ -519,7 +519,7 @@ def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vesp
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_published_date",
+                field="attributes.published_date",
                 key="published_date",
                 op="eq",
                 value="2020-01-01T00:00:00Z",
@@ -536,7 +536,7 @@ def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Ves
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_published_date",
+                field="attributes.published_date",
                 key="published_date",
                 op="not_eq",
                 value="2020-01-01T00:00:00Z",
