@@ -802,7 +802,7 @@ class PostHogSession:
 
         """
         return self._run_metric(
-            "percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            "percentage_of_users_who_clicked_on_a_search_result_in_top_5_to_a_document_or_family_page",
             query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
@@ -918,7 +918,7 @@ class PostHogSession:
 
         """
         return self._run_metric(
-            "percentage_of_users_who_clicked_on_a_search_result_to_a_document_or_family_page",
+            "percentage_of_users_who_clicked_on_a_search_result_in_top_5_to_a_document_or_family_page_with_at_least_30s_dwell_time",
             query,
             date_from=date_range.date_from,
             date_to=date_range.date_to,
