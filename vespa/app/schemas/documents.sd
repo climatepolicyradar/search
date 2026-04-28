@@ -109,6 +109,7 @@ schema documents {
 
         struct passage {
             field text_block_id type string {}
+            field document_id type string {}
             field language type string {}
             field type type string {}
             field type_confidence type float {}
@@ -117,6 +118,10 @@ schema documents {
             field heading_id type string {}
         }
         field passages type array<passage> {
+            indexing: summary
+        }
+
+        field member_passages type array<passage> {
             indexing: summary
         }
 
@@ -203,6 +208,15 @@ schema documents {
         bolding: on
     }
 
+    field member_passages_text type array<string> {
+        indexing: input member_passages | for_each { get_field text } | index | summary
+        stemming: multiple
+        linguistics {
+            profile: passage_analysis
+        }
+        bolding: on
+    }
+
     field title_synonyms type string {
         indexing: input title | index
         stemming: multiple
@@ -228,7 +242,7 @@ schema documents {
     }
 
     fieldset default {
-        fields: title, description, passages_text
+        fields: title, description, passages_text, member_passages_text
     }
 
     fieldset geographies {
@@ -248,6 +262,7 @@ schema documents {
             query(title_weight) double: 3.0
             query(description_weight) double: 1.0
             query(passages_weight) double: 1.0
+            query(member_passages_weight) double: 0.25
             query(geographies_weight) double: 1.0
         }
     }
@@ -262,6 +277,9 @@ schema documents {
         function passages_score () {
             expression: query(passages_weight) * nativeRank(passages_text)
         }
+        function member_passages_score () {
+            expression: query(member_passages_weight) * nativeRank(member_passages_text)
+        }
         function geographies_score () {
             expression: query(geographies_weight) * nativeRank(geographies)
         }
@@ -270,9 +288,9 @@ schema documents {
         }
 
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score()
+            expression: title_score() + description_score() + passages_score() + member_passages_score() + geographies_score() + title_synonyms_score()
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
+        summary-features: title_score() description_score() passages_score() member_passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeRank(member_passages_text) nativeProximity(title) nativeRank(title_synonyms)
     }
 
     rank-profile label-boosted inherits nativerank {
@@ -283,9 +301,9 @@ schema documents {
             expression: query(label_boost_factor) * (attributeMatch(labels_type_value_attribute) > 0)
         }
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + label_boost_score()
+            expression: title_score() + description_score() + passages_score() + member_passages_score() + geographies_score() + title_synonyms_score() + label_boost_score()
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
+        summary-features: title_score() description_score() passages_score() member_passages_score() geographies_score() title_synonyms_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeRank(member_passages_text) nativeProximity(title) nativeRank(title_synonyms)
     }
 
     # Used with ranking.sorting for non-relevance document lists. Declared explicitly so

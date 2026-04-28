@@ -112,6 +112,16 @@ def _derive_principal_id(document: SourceDocument) -> str | None:
     return matches[0]["value"]["id"]
 
 
+def _build_principal_id_lookup() -> dict[str, str]:
+    """Build a `{document_id → principal_id}` map for the current dataset."""
+    lookup: dict[str, str] = {}
+    for doc in read_documents():
+        principal_id = _derive_principal_id(doc)
+        if principal_id is not None:
+            lookup[doc["id"]] = principal_id
+    return lookup
+
+
 def _source_document_to_vespa_update(
     document: SourceDocument,
 ) -> VespaUpdate[VespaDocument]:
@@ -212,6 +222,7 @@ def documents_feed_materializer():
 
 class VespaDocumentPassage(TypedDict):
     text_block_id: str
+    document_id: str
     language: str
     type: str
     type_confidence: float
@@ -224,8 +235,20 @@ class VespaDocumentPassages(TypedDict):
     passages: VespaAssign[list[VespaDocumentPassage]]
 
 
+class VespaDocumentMemberPassages(TypedDict):
+    member_passages: VespaAssign[list[VespaDocumentPassage]]
+
+
+class VespaConceptField(TypedDict):
+    id: str
+    type: str
+    value: str
+    count: int | None
+    passages_id: str | None
+
+
 class VespaDocumentConcepts(TypedDict):
-    concepts: VespaAssign[list[VespaLabelField]]
+    concepts: VespaAssign[list[VespaConceptField]]
 
 
 def documents_concepts_feed_materializer():
@@ -246,15 +269,13 @@ def documents_concepts_feed_materializer():
                     concept_names[concept_id] = inference_result["name"]
                     concept_passages.setdefault(concept_id, []).append(passage_id)
 
-            vespa_concepts: list[VespaLabelField] = [
+            vespa_concepts: list[VespaConceptField] = [
                 {
                     "id": f"concept::{concept_id}",
                     "type": "concept",
                     "value": concept_names[concept_id],
                     "count": count,
                     "passages_id": "::".join(concept_passages[concept_id]),
-                    "relationship": None,
-                    "timestamp": None,
                 }
                 for concept_id, count in concept_counts.items()
             ]
@@ -291,6 +312,7 @@ def documents_passages_feed_materializer():
             passages: list[VespaDocumentPassage] = [
                 {
                     "text_block_id": block["id"],
+                    "document_id": document_id,
                     "language": block["language"],
                     "type": block["type"],
                     "type_confidence": block["type_confidence"],
@@ -317,6 +339,121 @@ def documents_passages_feed_materializer():
         "search/vespa/documents_passages_feed_materializer.jsonl",
     )
     print(f"Uploaded {length} document passage updates to S3.")
+
+
+def documents_principal_concepts_feed_materializer():
+    """Accumulate concepts from all member documents onto their Principal document."""
+    principal_id_lookup = _build_principal_id_lookup()
+    print(f"Built principal_id lookup for {len(principal_id_lookup)} documents.")
+
+    principal_concept_counts: dict[str, Counter[str]] = {}
+    principal_concept_names: dict[str, dict[str, str]] = {}
+    principal_concept_passages: dict[str, dict[str, list[str]]] = {}
+
+    for document_id, inference_result_input in read_inference_results():
+        principal_id = principal_id_lookup.get(document_id)
+        if principal_id is None:
+            continue
+
+        counts = principal_concept_counts.setdefault(principal_id, Counter())
+        names = principal_concept_names.setdefault(principal_id, {})
+        passages_map = principal_concept_passages.setdefault(principal_id, {})
+
+        for passage_id, inference_results in inference_result_input.items():
+            for inference_result in inference_results:
+                concept_id = inference_result["id"]
+                counts[concept_id] += 1
+                names[concept_id] = inference_result["name"]
+                passages_map.setdefault(concept_id, []).append(passage_id)
+
+    length = 0
+    output_file = (
+        OUTPUT_CACHE_DIR / "documents_principal_concepts_feed_materializer.jsonl"
+    )
+    with output_file.open("wb") as f:
+        for principal_id, concept_counts in principal_concept_counts.items():
+            vespa_concepts: list[VespaConceptField] = [
+                {
+                    "id": f"concept::{concept_id}",
+                    "type": "concept",
+                    "value": principal_concept_names[principal_id][concept_id],
+                    "count": count,
+                    "passages_id": "::".join(
+                        principal_concept_passages[principal_id][concept_id]
+                    ),
+                }
+                for concept_id, count in concept_counts.items()
+            ]
+
+            update_op: VespaUpdate[VespaDocumentConcepts] = {
+                "update": f"id:documents:documents::{principal_id}",
+                "fields": {"concepts": {"assign": vespa_concepts}},
+                "create": False,
+            }
+            f.write(orjson.dumps(update_op) + b"\n")
+            length += 1
+
+    boto3.client("s3").upload_file(
+        str(output_file),
+        "cpr-cache",
+        "search/vespa/documents_principal_concepts_feed_materializer.jsonl",
+    )
+    print(f"Uploaded {length} principal document concept updates to S3.")
+
+
+def documents_principal_passages_feed_materializer():
+    """Accumulate passages from member documents onto their Principal's member_passages field."""
+    principal_id_lookup = _build_principal_id_lookup()
+    print(f"Built principal_id lookup for {len(principal_id_lookup)} documents.")
+
+    principal_passages: dict[str, list[VespaDocumentPassage]] = {}
+
+    for document_id, inference_result in read_embeddings_input_v2():
+        principal_id = principal_id_lookup.get(document_id)
+        if principal_id is None or principal_id == document_id:
+            continue
+
+        pdf_data = inference_result.get("pdf_data")
+        text_blocks = pdf_data.get("text_blocks") if pdf_data is not None else None
+        if not text_blocks:
+            continue
+
+        passages: list[VespaDocumentPassage] = [
+            {
+                "text_block_id": block["id"],
+                "document_id": document_id,
+                "language": block["language"],
+                "type": block["type"],
+                "type_confidence": block["type_confidence"],
+                "page_number": block["pages"][0]["number"] if block.get("pages") else 0,
+                "text": block["text"],
+                "heading_id": block.get("heading_id"),
+            }
+            for block in text_blocks
+        ]
+
+        principal_passages.setdefault(principal_id, []).extend(passages)
+
+    length = 0
+    output_file = (
+        OUTPUT_CACHE_DIR / "documents_principal_passages_feed_materializer.jsonl"
+    )
+    with output_file.open("wb") as f:
+        for principal_id, passages in principal_passages.items():
+            update_op: VespaUpdate[VespaDocumentMemberPassages] = {
+                "update": f"id:documents:documents::{principal_id}",
+                "fields": {"member_passages": {"assign": passages}},
+                "create": False,
+            }
+            f.write(orjson.dumps(update_op) + b"\n")
+            length += 1
+
+    boto3.client("s3").upload_file(
+        str(output_file),
+        "cpr-cache",
+        "search/vespa/documents_principal_passages_feed_materializer.jsonl",
+    )
+    print(f"Uploaded {length} principal document passage updates to S3.")
 
 
 if __name__ == "__main__":
