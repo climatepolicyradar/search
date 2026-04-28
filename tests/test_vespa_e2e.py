@@ -143,6 +143,24 @@ def _feed_document(app: Vespa, document: SourceDocument) -> None:
     r.raise_for_status()
 
 
+def _feed_document_without_title(app: Vespa, document: SourceDocument) -> None:
+    """
+    Feed a document update with ``title`` intentionally omitted.
+
+    This creates a true missing ``title_sort`` value in Vespa so we can verify
+    missing-title sort behaviour end-to-end.
+    """
+    op = _source_document_to_vespa_update(document)
+    fields = dict(op.get("fields", {}))
+    fields.pop("title", None)
+    r = req.put(
+        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
+        json={**op, "fields": fields, "create": True},
+        timeout=5,
+    )
+    r.raise_for_status()
+
+
 def _ids(filter_: Filter) -> set[str]:
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     docs = engine.search(
@@ -750,10 +768,16 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
     doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
     doc_m = SourceDocumentFactory.build(title="Magpie brief", labels=[])
     doc_f = SourceDocumentFactory.build(title="Fig brief", labels=[])
+    doc_missing = SourceDocumentFactory.build(
+        id="e2e-title-missing-asc",
+        title="Will be dropped before feed",
+        labels=[],
+    )
     _feed_document(vespa_app, doc_z)
     _feed_document(vespa_app, doc_a)
     _feed_document(vespa_app, doc_m)
     _feed_document(vespa_app, doc_f)
+    _feed_document_without_title(vespa_app, doc_missing)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -762,12 +786,13 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
         order_by=[OrderBy(field="title", direction="asc")],
     ).results
 
-    assert [d.title for d in results] == [
+    assert [d.title for d in results[:4]] == [
         "Apple brief",
         "Fig brief",
         "Magpie brief",
         "Zebra memo",
     ]
+    assert results[-1].id == "e2e-title-missing-asc"
 
 
 def test_document_sort_title_sort_desc(vespa_app: Vespa):
@@ -775,10 +800,16 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
     doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
     doc_m = SourceDocumentFactory.build(title="Magpie brief", labels=[])
     doc_f = SourceDocumentFactory.build(title="Fig brief", labels=[])
+    doc_missing = SourceDocumentFactory.build(
+        id="e2e-title-missing-desc",
+        title="Will be dropped before feed",
+        labels=[],
+    )
     _feed_document(vespa_app, doc_z)
     _feed_document(vespa_app, doc_a)
     _feed_document(vespa_app, doc_m)
     _feed_document(vespa_app, doc_f)
+    _feed_document_without_title(vespa_app, doc_missing)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -787,12 +818,13 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
         order_by=[OrderBy(field="title", direction="desc")],
     ).results
 
-    assert [d.title for d in results] == [
+    assert [d.title for d in results[:4]] == [
         "Zebra memo",
         "Magpie brief",
         "Fig brief",
         "Apple brief",
     ]
+    assert results[-1].id == "e2e-title-missing-desc"
 
 
 def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
@@ -816,10 +848,16 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
         labels=[],
         attributes={"published_date": "2026-06-01T12:00:00Z"},
     )
+    doc_undated = SourceDocumentFactory.build(
+        title="Undated",
+        labels=[],
+        attributes={},
+    )
     _feed_document(vespa_app, doc_old)
     _feed_document(vespa_app, doc_new)
     _feed_document(vespa_app, doc_oldest)
     _feed_document(vespa_app, doc_newest)
+    _feed_document(vespa_app, doc_undated)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -828,7 +866,13 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
         order_by=[OrderBy(field="attributes.published_date", direction="desc")],
     ).results
 
-    assert [d.title for d in results] == ["Newest", "New", "Old", "Oldest"]
+    assert [d.title for d in results] == [
+        "Newest",
+        "New",
+        "Old",
+        "Oldest",
+        "Undated",
+    ]
 
 
 def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
@@ -852,10 +896,16 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
         labels=[],
         attributes={"published_date": "2026-06-01T12:00:00Z"},
     )
+    doc_undated = SourceDocumentFactory.build(
+        title="Undated",
+        labels=[],
+        attributes={},
+    )
     _feed_document(vespa_app, doc_old)
     _feed_document(vespa_app, doc_new)
     _feed_document(vespa_app, doc_oldest)
     _feed_document(vespa_app, doc_newest)
+    _feed_document(vespa_app, doc_undated)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -864,7 +914,13 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
         order_by=[OrderBy(field="attributes.published_date", direction="asc")],
     ).results
 
-    assert [d.title for d in results] == ["Oldest", "Old", "New", "Newest"]
+    assert [d.title for d in results] == [
+        "Oldest",
+        "Old",
+        "New",
+        "Newest",
+        "Undated",
+    ]
 
 
 def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):

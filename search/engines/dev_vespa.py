@@ -231,6 +231,9 @@ def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     """
     Build Vespa ``ranking.sorting`` for a document sort attribute.
 
+    Always pushes ``missing`` values to the end of the list.
+    https://docs.vespa.ai/en/reference/querying/sorting-language.html#missing
+
     :param vespa_attr: First mapped field name from
         :data:`sort_field_to_vespa_field_map`
     :type vespa_attr: str
@@ -240,13 +243,11 @@ def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     :rtype: str
     :raises AssertionError: if ``vespa_attr`` is not handled
     """
+    sign = "+" if direction == "asc" else "-"
     if vespa_attr == "attributes_published_date":
-        if direction == "desc":
-            return "-attributes_published_date"
-        return "+missing(attributes_published_date,last) +attributes_published_date"
+        return f"{sign}missing(attributes_published_date,last)"
     if vespa_attr == "title_sort":
-        sign = "+" if direction == "asc" else "-"
-        return f"{sign}{vespa_attr}"
+        return f"{sign}missing(title_sort,last)"
     raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")
 
 
