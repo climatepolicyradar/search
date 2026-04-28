@@ -862,8 +862,10 @@ class PostHogSession:
                     event = '$autocapture'
                     AND properties.$event_type = 'click'
                     AND properties.$current_url LIKE '%/search%'
-                    -- Position 1-5 in search results (first page only, offset = 0)
-                    AND properties.`position-total` IN ('1', '2', '3', '4', '5')
+                    -- Position 1-5 in search results (first page only, offset = 0) or click in matches sidebar
+                    AND
+                        (properties.`position-total` IN ('1', '2', '3', '4', '5') OR properties.`button-purpose` = 'search-result-family-passage' OR
+                        properties.$el_text IN ('View full summary and timeline', 'View overview', 'View all matches highlighted in document'))
                     AND timestamp >= '{date_range.get_earliest_datetime()}'
                     AND timestamp <= '{date_range.get_latest_datetime()}'
                     AND properties.$host IN {self.cpr_domains_hogql}
@@ -921,12 +923,3 @@ class PostHogSession:
             date_from=date_range.date_from,
             date_to=date_range.date_to,
         )
-
-
-if __name__ == "__main__":
-    posthog = PostHogSession()
-    print(
-        posthog.calculate_click_through_rate_from_search_results_page_for_top_5_results_with_dwell_time(
-            DateRange(date_from=date(2026, 1, 29), date_to=date(2026, 2, 28))
-        )
-    )
