@@ -1,3 +1,4 @@
+import gzip
 import logging
 import re
 from collections import Counter
@@ -357,7 +358,8 @@ def documents_passages_feed_materializer():
     length = 0
 
     output_file = OUTPUT_CACHE_DIR / "documents_passages_feed_materializer.jsonl"
-    with output_file.open("wb") as f:
+    output_file_gz = OUTPUT_CACHE_DIR / "documents_passages_feed_materializer.jsonl.gz"
+    with output_file.open("wb") as f, gzip.open(output_file_gz, "wb") as f_gz:
         for document_id, inference_result in read_embeddings_input_v2():
             pdf_data = inference_result.get("pdf_data")
             text_blocks = pdf_data.get("text_blocks") if pdf_data is not None else None
@@ -384,13 +386,21 @@ def documents_passages_feed_materializer():
                 "fields": {"passages": {"assign": passages}},
                 "create": False,
             }
-            f.write(orjson.dumps(update_op) + b"\n")
+            line = orjson.dumps(update_op) + b"\n"
+            f.write(line)
+            f_gz.write(line)
             length += 1
 
-    boto3.client("s3").upload_file(
+    s3 = boto3.client("s3")
+    s3.upload_file(
         str(output_file),
         "cpr-cache",
         "search/vespa/documents_passages_feed_materializer.jsonl",
+    )
+    s3.upload_file(
+        str(output_file_gz),
+        "cpr-cache",
+        "search/vespa/documents_passages_feed_materializer.jsonl.gz",
     )
     print(f"Uploaded {length} document passage updates to S3.")
 
