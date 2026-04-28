@@ -29,15 +29,15 @@ def test_parse_label_type_id_value(s, expected):
         (
             "attributes_published_date",
             "asc",
-            "+missing(attributes_published_date,last) +attributes_published_date",
+            "+missing(attributes_published_date,last)",
         ),
         (
             "attributes_published_date",
             "desc",
-            "+missing(attributes_published_date,last) -attributes_published_date",
+            "-missing(attributes_published_date,last)",
         ),
-        ("title_sort", "asc", "+missing(title_sort,last) +title_sort"),
-        ("title_sort", "desc", "+missing(title_sort,last) -title_sort"),
+        ("title_sort", "asc", "+missing(title_sort,last)"),
+        ("title_sort", "desc", "-missing(title_sort,last)"),
     ],
 )
 def test_document_sort_ranking_string_puts_missing_values_last(

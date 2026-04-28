@@ -242,11 +242,9 @@ def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     """
     sign = "+" if direction == "asc" else "-"
     if vespa_attr == "attributes_published_date":
-        return (
-            f"+missing(attributes_published_date,last) {sign}attributes_published_date"
-        )
+        return f"{sign}missing(attributes_published_date,last)"
     if vespa_attr == "title_sort":
-        return f"+missing(title_sort,last) {sign}{vespa_attr}"
+        return f"{sign}missing(title_sort,last)"
     raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")
 
 
