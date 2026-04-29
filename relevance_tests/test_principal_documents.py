@@ -358,6 +358,70 @@ test_cases = [
         ],
         description="searching for 'United Kingdom Nationally Determined Contribution. NDC3.0' should return that family as the top result",
     ),
+    PrecisionTestCase[Document](
+        category="non principal document by title",
+        search_terms="Regulation (EU) 2024/795",
+        expected_result_ids=[
+            "CCLW.family.10795.0",  # "Regulation (EU) 2021/1056 establishing the Just Transition Fund, amended by Regulation (EU) 2024/795 and Regulation (EU) 2025/1914"
+        ],
+        description="searching for the title of an amending regulation should return its parent family in principal search",
+    ),
+    PrecisionTestCase[Document](
+        category="non principal document by title",
+        search_terms="Decision Introducing the Natural Resources and Environment Action Program for Implementation of the National Green Growth Strategy",
+        expected_result_ids=[
+            "CCLW.family.1793.0",  # "National Green Growth Strategy"
+        ],
+        description="searching for a child document title should return its parent family in principal search",
+    ),
+    PrecisionTestCase[Document](
+        category="non principal document by title",
+        search_terms="Decision Approving the Cooperation Program for Climate Change and Green Growth in the 2016-2020 Period",
+        expected_result_ids=[
+            "CCLW.family.1793.0",  # "National Green Growth Strategy"
+        ],
+        description="searching for a child document title should return its parent family in principal search",
+    ),
+    PrecisionTestCase[Document](
+        category="non principal document by title",
+        search_terms="Decree No. 58/2025/ND-CP on the development of renewable energy and new energy electricity",
+        expected_result_ids=[
+            "CCLW.family.i00008825.n0000",
+        ],
+        description="searching for a child document title should return its parent family in principal search",
+    ),
+    PrecisionTestCase[Document](
+        category="non principal document by title",
+        search_terms="Long-term Energy Supply and Demand Outlook",
+        expected_result_ids=[
+            "CCLW.family.8646.0",  # 5th Strategic Energy Plan
+        ],
+        description="searching for a child document title should return its parent family in principal search",
+    ),
+    PrecisionTestCase[Document](
+        category="non principal document by title",
+        search_terms="The Plan to Deliver Net Zero the Australian Way",
+        expected_result_ids=[
+            "CCLW.family.10328.0",
+        ],
+        description="searching for a child document title should return its parent family in principal search",
+    ),
+    PrecisionTestCase[Document](
+        category="non principal document by title",
+        search_terms="13th Five-Year Plan for National Economic and Social Development",
+        expected_result_ids=[
+            "CCLW.family.10087.0",
+        ],
+        description="searching for a child document title should return its parent family in principal search",
+    ),
+    PrecisionTestCase[Document](
+        category="non principal document by title",
+        search_terms="Carbon Sinks Strategy",
+        expected_result_ids=[
+            "CCLW.family.i00000498.n0000",  # "Carbon Sinks Strategy (draft)"
+        ],
+        description="searching for a child document title should return its parent family in principal search",
+    ),
 ]
 
 
