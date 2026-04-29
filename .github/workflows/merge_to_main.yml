@@ -124,22 +124,22 @@ jobs:
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             exit 1
           fi
-  deploy:
+  deploy-api:
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-deploy == 'true'
 
-  deploy_prefect_labs:
-    name: Deploy Prefect Labs
+  deploy_prefect_prod:
+    name: Deploy Prefect Prod
     uses: ./.github/workflows/prefect_deploy.yml
     needs: [changes, tests]
     if: ${{ needs.changes.outputs.run-prefect-deploy == 'true' || github.event_name == 'workflow_dispatch' }}
     with:
-      aws-env: labs
+      aws-env: prod
     secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_LABS }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_LABS }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
       PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
 
