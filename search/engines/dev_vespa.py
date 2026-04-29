@@ -715,6 +715,44 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         raise NotImplementedError()
 
 
+class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
+    """
+    Search engine for principal documents.
+
+    Overrides calls to .search with a filter for principal documents, so the engine
+    can be used against relevance tests.
+    """
+
+    def search(
+        self,
+        query: str | None,
+        pagination: Pagination,
+        order_by: list[OrderBy],
+        filters_json_string: str | None = None,
+    ) -> ListResponse[Document]:
+        """Search principal documents"""
+
+        if filters_json_string is not None:
+            raise ValueError(
+                "Filters can't be used in this search engine. Use DevVespaDocumentSearchEngine directly instead."
+            )
+
+        filters_json_string = json.dumps(
+            {
+                "op": "and",
+                "filters": [
+                    {
+                        "field": "labels.value.id",
+                        "op": "contains",
+                        "value": "status::Principal",
+                    }
+                ],
+            }
+        )
+
+        return super().search(query, pagination, order_by, filters_json_string)
+
+
 class DevVespaPassageSearchEngine(SearchEngine[Passage]):
     """Search engine for passages in dev Vespa."""
 
