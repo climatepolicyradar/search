@@ -19,6 +19,7 @@ jobs:
       run-pulumi-up: ${{ steps.filter.outputs.run-pulumi-up }}
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
       run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
+      run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -40,6 +41,14 @@ jobs:
               - 'search/**'
             run-vespa-deploy:
               - 'vespa/app/**'
+            run-prefect-deploy:
+              - 'deployments.py'
+              - 'prefect/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'online_metrics/**'
+              - 'relevance_tests/**'
+              - 'search/vespa/**'
 
   lint:
     permissions:
@@ -120,6 +129,19 @@ jobs:
     secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-deploy == 'true'
+
+  deploy_prefect_labs:
+    name: Deploy Prefect Labs
+    uses: ./.github/workflows/prefect_deploy.yml
+    needs: [changes, tests]
+    if: ${{ needs.changes.outputs.run-prefect-deploy == 'true' || github.event_name == 'workflow_dispatch' }}
+    with:
+      aws-env: labs
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_LABS }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_LABS }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+      PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
 
   vespa_deploy:
     uses: ./.github/workflows/vespa_deploy.yml
