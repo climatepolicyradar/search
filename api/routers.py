@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic_settings import SettingsConfigDict
 
 from api.types import Aggregations, SearchResponse
-from api.utils import documents_order_by, order_by, pagination
+from api.utils import documents_order_by, normalise_filters, order_by, pagination
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
@@ -50,6 +50,8 @@ def read_documents(
         bool(filters_json_string),
     )
 
+    normalised_filters = normalise_filters(filters_json_string)
+
     engine = DevVespaDocumentSearchEngine(
         settings=settings, debug=debug, bolding=bolding
     )
@@ -58,11 +60,11 @@ def read_documents(
             query=query,
             pagination=pagination,
             order_by=order_by,
-            filters_json_string=filters_json_string,
+            filters_json_string=normalised_filters,
         )
         labels_aggregations = engine.aggregations(
             query=query,
-            filters_json_string=filters_json_string,
+            filters_json_string=normalised_filters,
         )
     except Exception:
         logger.exception(
@@ -115,11 +117,13 @@ def read_labels(
         bool(filters_json_string),
     )
 
+    normalised_filters = normalise_filters(filters_json_string)
+
     engine = DevVespaLabelSearchEngine(settings=settings)
     try:
         results = engine.search(
             query=query,
-            filters_json_string=filters_json_string,
+            filters_json_string=normalised_filters,
             pagination=pagination,
             order_by=order_by,
             label_type=type,

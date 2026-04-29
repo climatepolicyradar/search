@@ -19,6 +19,7 @@ For now we just use `requests` which yields the same results.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any, Literal
 
 import requests
@@ -58,10 +59,11 @@ class AttributesCondition(BaseModel):
         "attributes_double",
         "attributes_boolean",
         "attributes_identifiers",
+        "attributes.published_date",
     ]
     key: str
-    op: Literal["eq", "not_eq"]
-    value: str | float | bool
+    op: Literal["eq", "not_eq", "lt", "lte", "gt", "gte"]
+    value: str | int | float | bool
 
 
 class FieldFilter(BaseModel):
@@ -136,13 +138,33 @@ ComplexExampleFilter = Filter(
 )
 
 
-def _format_value(value: str | float | bool) -> str:
+def _format_value(value: str | int | float | bool) -> str:
     """Format a value for YQL: strings get quotes, numbers do not, bools become 1/0 (byte)."""
     if isinstance(value, bool):
         return "1" if value else "0"
     if isinstance(value, (int, float)):
         return str(value)
     return f'"{value}"'
+
+
+def _to_unix_timestamp(value: str) -> int:
+    """Convert an ISO datetime string to Unix timestamp (seconds)."""
+    normalised = value.replace("Z", "+00:00")
+    return int(datetime.fromisoformat(normalised).timestamp())
+
+
+def _published_date_operand(value: str | int | float, op: str) -> int:
+    """
+    Translate a published-date filter value into epoch seconds.
+
+    ``attributes.published_date`` is stored as a scalar Unix timestamp in
+    Vespa. The API normalises ISO datetime strings at the boundary, and we keep
+    this fallback conversion here to preserve existing callers.
+    """
+    _ = op
+    if isinstance(value, str):
+        return _to_unix_timestamp(value)
+    return int(value)
 
 
 filter_field_to_vespa_field_map = {
@@ -165,16 +187,52 @@ DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
 def _build_condition_yql(condition: Condition) -> str:
     match condition:
         case AttributesCondition():
+            if condition.field == "attributes.published_date":
+                vespa_field = sort_field_to_vespa_field_map.get(
+                    condition.field, [condition.field]
+                )[0]
+                op_to_symbol = {
+                    "eq": "=",
+                    "lt": "<",
+                    "lte": "<=",
+                    "gt": ">",
+                    "gte": ">=",
+                }
+                operand = _published_date_operand(condition.value, condition.op)
+                if condition.op == "not_eq":
+                    return f"!({vespa_field} = {operand})"
+                op_symbol = op_to_symbol.get(condition.op)
+                if op_symbol is None:
+                    raise ValueError(
+                        f"unsupported op={condition.op!r} for field={condition.field!r}"
+                    )
+                return f"{vespa_field} {op_symbol} {operand}"
+
             # Using `sameElement`, string fields use `contains`
             # while numeric/bool fields use comparison operators.
             # @see: https://docs.vespa.ai/en/querying/query-language.html#map
             value = condition.value
             if isinstance(value, str):
+                if condition.op not in ("eq", "not_eq"):
+                    raise ValueError(
+                        f"string attributes only support eq/not_eq, got {condition.op!r}"
+                    )
                 inner = f'key contains "{condition.key}", value contains "{value}"'
             else:
-                inner = (
-                    f'key contains "{condition.key}", value = {_format_value(value)}'
-                )
+                op_to_symbol = {
+                    "eq": "=",
+                    "not_eq": "=",
+                    "lt": "<",
+                    "lte": "<=",
+                    "gt": ">",
+                    "gte": ">=",
+                }
+                op_symbol = op_to_symbol.get(condition.op)
+                if op_symbol is None:
+                    raise ValueError(
+                        f"unsupported op={condition.op!r} for field={condition.field!r}"
+                    )
+                inner = f'key contains "{condition.key}", value {op_symbol} {_format_value(value)}'
             expr = f"{condition.field} contains sameElement({inner})"
             if condition.op == "not_eq":
                 return f"!({expr})"

@@ -3,7 +3,7 @@
 import pytest
 from fastapi import HTTPException
 
-from api.utils import documents_order_by, parse_order_by_clauses
+from api.utils import documents_order_by, normalise_filters, parse_order_by_clauses
 
 
 def test_parse_order_by_defaults_to_desc_direction() -> None:
@@ -73,3 +73,57 @@ def test_documents_order_by_rejects_invalid_direction() -> None:
         documents_order_by("title upward")
     assert exc_info.value.status_code == 400
     assert "asc or desc" in str(exc_info.value.detail)
+
+
+def test_normalise_filters_converts_published_date_iso_to_epoch() -> None:
+    """
+    Ensure ``published_date`` datetime values are normalised at API boundary.
+
+    :return: ``None``.
+    :rtype: None
+    """
+    normalised = normalise_filters(
+        """
+        {
+          "op": "and",
+          "filters": [
+            {
+              "field": "attributes.published_date",
+              "key": "published_date",
+              "op": "gte",
+              "value": "2020-01-01T00:00:00Z"
+            }
+          ]
+        }
+        """
+    )
+    assert normalised is not None
+    assert '"value":1577836800' in normalised
+
+
+def test_normalise_filters_rejects_invalid_published_date() -> None:
+    """
+    Ensure invalid datetime values return HTTP 400 for ``published_date``.
+
+    :raises HTTPException: when datetime parsing fails.
+    :return: ``None``.
+    :rtype: None
+    """
+    with pytest.raises(HTTPException) as exc_info:
+        normalise_filters(
+            """
+            {
+              "op": "and",
+              "filters": [
+                {
+                  "field": "attributes.published_date",
+                  "key": "published_date",
+                  "op": "gte",
+                  "value": "definitely-not-a-datetime"
+                }
+              ]
+            }
+            """
+        )
+    assert exc_info.value.status_code == 400
+    assert "ISO 8601" in str(exc_info.value.detail)
