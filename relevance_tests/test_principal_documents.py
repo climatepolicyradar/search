@@ -172,12 +172,13 @@ test_cases = [
         description="Searching for 'milieudefensie' should return cases with 'milieudefensie' in the name",
         k=5,
     ),
-    PrecisionTestCase[Document](
-        category="entity name",
-        search_terms="Municipalities of Puerto Rico v. Exxon Mobil Corp.",
-        expected_result_ids=[],
-        description="Searching for 'Municipalities of Puerto Rico v. Exxon Mobil Corp.' should return case Commonwealth of Puerto Rico v. Exxon Mobil Corp.",
-    ),
+    # TODO: not sure what the correct case is for this
+    # PrecisionTestCase[Document](
+    #     category="entity name",
+    #     search_terms="Municipalities of Puerto Rico v. Exxon Mobil Corp.",
+    #     expected_result_ids=[],
+    #     description="Searching for 'Municipalities of Puerto Rico v. Exxon Mobil Corp.' should return case Commonwealth of Puerto Rico v. Exxon Mobil Corp.",
+    # ),
     FieldCharacteristicsTestCase[Document](
         category="question",
         search_terms="what is the croatias climate strategy",
