@@ -188,6 +188,9 @@ def _build_condition_yql(condition: Condition) -> str:
     match condition:
         case AttributesCondition():
             if condition.field == "attributes.published_date":
+                vespa_field = sort_field_to_vespa_field_map.get(
+                    condition.field, [condition.field]
+                )[0]
                 op_to_symbol = {
                     "eq": "=",
                     "lt": "<",
@@ -197,13 +200,13 @@ def _build_condition_yql(condition: Condition) -> str:
                 }
                 operand = _published_date_operand(condition.value, condition.op)
                 if condition.op == "not_eq":
-                    return f"!({condition.field} = {operand})"
+                    return f"!({vespa_field} = {operand})"
                 op_symbol = op_to_symbol.get(condition.op)
                 if op_symbol is None:
                     raise ValueError(
                         f"unsupported op={condition.op!r} for field={condition.field!r}"
                     )
-                return f"{condition.field} {op_symbol} {operand}"
+                return f"{vespa_field} {op_symbol} {operand}"
 
             # Using `sameElement`, string fields use `contains`
             # while numeric/bool fields use comparison operators.
