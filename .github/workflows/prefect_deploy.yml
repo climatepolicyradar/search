@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy Prefect
 
 on:
   workflow_call:
