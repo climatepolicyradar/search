@@ -79,7 +79,7 @@ def create_deployment(
     version = importlib.metadata.version("search")
     flow_name = flow.name
     docker_registry = os.environ["DOCKER_REGISTRY"]
-    docker_repository = "search-prefect"
+    docker_repository = os.environ.get("DOCKER_REPOSITORY", "search-prefect")
     image_name = f"{docker_registry}/{docker_repository}"
 
     work_pool_name = "mvp-prod-ecs"
