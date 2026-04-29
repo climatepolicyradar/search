@@ -188,7 +188,8 @@ if __name__ == "__main__":
         flow=documents_feed_flow,
         description="Materialize documents feed",
         schedule="0 3 * * *",  # daily at 3am
-        flow_variables=DEFAULT_FLOW_VARIABLES,
+        flow_variables=DEFAULT_FLOW_VARIABLES
+        | {"ephemeralStorage": {"sizeInGiB": 100}},  # bump storage for 100GB
     )
     create_deployment(
         flow=labels_feed_flow,
