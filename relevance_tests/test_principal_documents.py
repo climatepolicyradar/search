@@ -27,7 +27,6 @@ test_cases = [
         search_terms="Directive (EU) 2022/2464 amending Regulation (EU) No 537/2014 and others, as regards corporate sustainability reporting (Corporate Sustainability Reporting Directive or CSRD)",
         expected_result_ids=[
             "CCLW.family.11041.0",
-            "CCLW.legislative.11041.6337",
         ],
         description="Searching for a document title should return the correct document, where the title has brackets.",
     ),
@@ -37,10 +36,8 @@ test_cases = [
         expected_result_ids=[
             # Act (2005:1248) on the obligation to provide renewable fuels
             "CCLW.family.11173.0",
-            "CCLW.legislative.11173.6585",
             # Act on the obligation to provide renewable fuels (2005:1248)
             "CCLW.family.i00006852.n0000",
-            "CCLW.document.i00006853.n0000",
         ],
         description="Searching for a document title where the words are in a different order.",
     ),
@@ -49,24 +46,22 @@ test_cases = [
         search_terms="National Climate Change Strategy 2021-2026",
         expected_result_ids=[
             "CCLW.family.1704.0",
-            "CCLW.executive.1704.1595",
         ],
         description="Searching for the document title should return the correct document.",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="fca rules of tcfd",
-        expected_result_ids=["CCLW.family.9956.0", "CCLW.executive.9956.4413"],
+        expected_result_ids=[
+            "CCLW.family.9956.0",
+        ],
         description="Acronyms in document titles",
     ),
     PrecisionTestCase[Document](
         category="specific document",
         search_terms="power up britain",
         expected_result_ids=[
-            "CCLW.executive.11174.6586",
-            "CCLW.executive.11174.6588",
             "CCLW.family.11174.2",
-            "CCLW.collection.11174.0",
         ],
         description="Stemmed words in document titles",
     ),
@@ -74,12 +69,7 @@ test_cases = [
         category="document name + geography",
         search_terms="UK Climate Change Act",
         expected_result_ids=[
-            # "UK Climate Change Act" with no geography
-            "CCLW.collection.1755.0",
-            # "Climate Change Act 2008" from "United Kingdom"
-            "CCLW.family.1755.0",
-            "CCLW.legislative.1755.2260",
-            "CCLW.legislative.1755.rtl_71",
+            "CCLW.family.1755.0",  # "Climate Change Act 2008" from "United Kingdom"
         ],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Climate Change Act 2008)",
     ),
@@ -87,12 +77,7 @@ test_cases = [
         category="document name + geography",
         search_terms="climate change law uk",
         expected_result_ids=[
-            # "UK Climate Change Act" with no geography
-            "CCLW.collection.1755.0",
-            # "Climate Change Act 2008" from "United Kingdom"
-            "CCLW.family.1755.0",
-            "CCLW.legislative.1755.2260",
-            "CCLW.legislative.1755.rtl_71",
+            "CCLW.family.1755.0",  # "Climate Change Act 2008" from "United Kingdom"
         ],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Climate Change Act 2008)",
     ),
@@ -101,7 +86,6 @@ test_cases = [
         search_terms="energy policy act us",
         expected_result_ids=[
             "CCLW.family.1776.0",
-            "CCLW.legislative.1776.2144",
         ],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Energy Policy Act 2005 (Energy Bill))",
     ),
@@ -144,7 +128,6 @@ test_cases = [
         search_terms="Law No. 018/2022 ratifying Ordinance No. 019/PR/2021 relating to climate change",
         expected_result_ids=[
             "CCLW.family.11091.1",
-            "CCLW.legislative.11091.6395",
         ],
         description="Searching for exact law title should return the correct document",
     ),
@@ -161,10 +144,7 @@ test_cases = [
         category="document name",
         search_terms="argentina LT-LEDS",
         expected_result_ids=[
-            # Argentina's Long-Term Strategies (LT-LEDS)
-            "UNFCCC.collection.i00006905.n0000",
-            # Argentina's Long-Term Low-Emission Development Strategy. LT-LEDS1
-            "UNFCCC.family.i00002621.n0000",
+            "UNFCCC.family.i00002621.n0000",  # Argentina's Long-Term Low-Emission Development Strategy. LT-LEDS1
         ],
         description="Searching for 'argentina LT-LEDS' should return Argentina's long-term low greenhouse gas emission development strategy",
     ),
@@ -218,12 +198,6 @@ test_cases = [
         category="docket number",
         search_terms="1:25-cv-02214",
         expected_result_ids=["Sabin.family.130975.0"],
-        # expected_result_ids=[
-        #     "Sabin.document.130975.130977",
-        #     "Sabin.document.130975.130978",
-        #     "Sabin.document.130975.130979",
-        # ],
-        # testing for returning the correct family until search result design is finalised.  Only families have docket numbers in current metadata
         description="Searching for docket number of US case should return all the documents from the case first.",
     ),
     PrecisionTestCase[Document](
@@ -299,10 +273,6 @@ test_cases = [
         search_terms="sfdr",
         expected_result_ids=[
             "CCLW.family.9520.0",
-            "CCLW.legislative.9520.3859",
-            "CCLW.legislative.9520.4620",
-            "CCLW.document.i00006386.n0000",  # this document has a different family ID but is included in the document family on the app.  It is "Regulation (EU) 2023/2869", slug "regulation-eu-2023-2869_73bf"
-            "CCLW.legislative.9520.6334",
         ],
         description="searching for 'sfdr' should return the EU Sustainable Finance Disclosure Regulation",
     ),
@@ -311,21 +281,21 @@ test_cases = [
         search_terms="ira",
         expected_result_ids=[
             "CCLW.family.10699.0",
-            "CCLW.legislative.10699.5931",
-            "CCLW.legislative.10699.5933",
         ],
         description="searching for 'ira' should return the Inflation Reduction Act",
     ),
     PrecisionTestCase[Document](
         category="document name",
         search_terms="uganda climate change act",
-        expected_result_ids=["CCLW.family.10180.0", "CCLW.legislative.10180.4758"],
+        expected_result_ids=["CCLW.family.10180.0"],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
     PrecisionTestCase[Document](
         category="document name",
         search_terms="climate change law uganda",
-        expected_result_ids=["CCLW.family.10180.0", "CCLW.legislative.10180.4758"],
+        expected_result_ids=[
+            "CCLW.family.10180.0",
+        ],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
     PrecisionTestCase[Document](
@@ -333,12 +303,7 @@ test_cases = [
         search_terms="ev mandate",
         expected_result_ids=[
             "CCLW.family.i00001515.n0000",  # there is a duplicate family with year 0 in the metadata (CCLW.family.i00000771.n0000, the-vehicle-emissions-trading-schemes-order-2023_260e)
-            # there are also two document pages on CCLW not accessible from the family page:
-            "CCLW.document.i00000772.n0000",
-            "CCLW.document.i00001516.n0000",
-            # Canada--also a document page not accessible from the family page:
             "CPR.family.i00000386.n0000",
-            "CPR.document.i00000387.n0000",
         ],
         description="searching for 'ev mandate' as the commonly understood topic of the legislation when not obvious from the title but stated in the summary should return the UK's Vehicle Emissions Trading Schemes Order 2023 and Canada's Electric Vehicle Availability Standard in the top results",
     ),
@@ -347,12 +312,7 @@ test_cases = [
         search_terms="zev mandate",
         expected_result_ids=[
             "CCLW.family.i00001515.n0000",  # there is a duplicate family with year 0 in the metadata (CCLW.family.i00000771.n0000, the-vehicle-emissions-trading-schemes-order-2023_260e)
-            # there are also two document pages on CCLW not accessible from the family page:
-            "CCLW.document.i00000772.n0000",
-            "CCLW.document.i00001516.n0000",
-            # Canada--also a document page not accessible from the family page:
             "CPR.family.i00000386.n0000",
-            "CPR.document.i00000387.n0000",
         ],
         description="searching for 'zev mandate' as the commonly understood topic of the legislation when not obvious from the title but stated in the summary should return the UK's Vechicle Emissions Trading Schemes Order 2023 and Canada's Electric Vehicle Availability Standard in the top results",
     ),
@@ -361,9 +321,7 @@ test_cases = [
         search_terms="safeguard mechanism",
         expected_result_ids=[
             "CCLW.family.i00006699.n0000",  # "National Greenhouse and Energy Reporting (Safeguard Mechanism) Rule 2015, Australia"
-            "CCLW.document.i00006700.n0000",
             "CCLW.family.11176.0",  # 'Safeguard Mechanism (Crediting) Amendment Act 2023, Australia
-            "CCLW.document.i00006698.n0000",
             # TODO: add more documents if they exist
         ],
         description="searching for 'safeguard mechanism' should return documents about the Australian policy instrument whose short name is 'safeguard mechanism'",
@@ -380,11 +338,6 @@ test_cases = [
         search_terms="governance regulation",
         expected_result_ids=[
             "CCLW.family.9492.0",  # "Regulation 2018/1999 on the Governance of the Energy Union and Climate Action" (regulation-2018-1999-on-the-governance-of-the-energy-union-and-climate-action_26fa) and all documents on the family page
-            "CCLW.legislative.9492.3806",  # "Regulation 2018/1999 on the Governance of the Energy Union and Climate Action (initial text)" (regulation-2018-1999-on-the-governance-of-the-energy-union-and-climate-action_0adc)
-            "CCLW.legislative.9492.rtl_142",  # "Regulation (EU) 2023/839 regarding improvement in monitoring, reporting, tracking of progress and review" (regulation-eu-2023839-regarding-improvement-in-monitoring-reporting-tracking-of-progress-and-review-4527)
-            "CCLW.legislative.9492.5884",  # "Regulation 2018/1999 on the Governance of the Energy Union and Climate Action: Consolidated Version" (regulation-2018-1999-on-the-governance-of-the-energy-union-and-climate-action-consolidated-version_4d0a)
-            "CCLW.document.i00006233.n0000",  # "Directive (EU) 2023/2413 amending as regards the promotion of energy from renewable sources" (directive-eu-2023-2413-amending-as-regards-the-promotion-of-energy-from-renewable-sources_fc66)
-            "CCLW.document.i00006232.n0000",  # "Decision (EU) 2019/504" (decision-eu-2019-504_272a)
         ],
         description="searching for 'governance regulation' should the EU Governance Regulation, even when the term is not in the title",
     ),
@@ -393,7 +346,6 @@ test_cases = [
         search_terms="five year plan",
         expected_result_ids=[
             "CCLW.family.10087.0",  # The most recent of China's five-year plans (15th).  Further guidance needed on which of the many other documents should be included in this test
-            "CCLW.document.i00008343.n0000",
         ],
         description="searching for 'five year plan' should return China's five-year plans first",
     ),
