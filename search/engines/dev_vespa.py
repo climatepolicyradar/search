@@ -19,7 +19,7 @@ For now we just use `requests` which yields the same results.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Literal
 
 import requests
@@ -153,60 +153,15 @@ def _to_unix_timestamp(value: str) -> int:
     return int(datetime.fromisoformat(normalised).timestamp())
 
 
-def _published_date_year_bounds(year: int) -> tuple[int, int]:
-    """Return inclusive Unix timestamp bounds for a UTC year."""
-    start = datetime(year, 1, 1, tzinfo=timezone.utc)
-    end = datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
-    return int(start.timestamp()), int(end.timestamp())
-
-
-def _published_date_value_bounds(value: str | int | float) -> tuple[int, int] | None:
-    """
-    Return year bounds when value is a year, otherwise None.
-
-    Supports numeric years (e.g. ``2020``) and year strings (e.g. ``"2020"``).
-    """
-    if isinstance(value, str) and value.isdigit() and len(value) == 4:
-        return _published_date_year_bounds(int(value))
-    if isinstance(value, (int, float)):
-        year = int(value)
-        if 1000 <= year <= 9999:
-            return _published_date_year_bounds(year)
-    return None
-
-
 def _published_date_operand(value: str | int | float, op: str) -> int:
     """
-    Translate date input into Unix timestamp for Vespa.
+    Translate a published-date filter value into epoch seconds.
 
-    Vespa compares ``attributes.published_date`` as a scalar Unix
-    timestamp. This helper converts the API filter value into the
-    comparison operator.
-
-    Behaviour:
-    - If ``value`` looks like a year (``2020`` or ``"2020"``), choose
-      either the start or end of that UTC year depending on the
-      operator.
-    - If ``value`` is an ISO datetime string (for example
-      ``"2020-06-01T12:00:00Z"``), convert that exact instant to Unix
-      seconds.
-    - If ``value`` is already numeric and not interpreted as a year,
-      treat it as epoch seconds directly.
-
-    Operator specific year boundaries:
-    - ``gte 2020`` -> compare against ``2020-01-01T00:00:00Z``
-    - ``lte 2020`` -> compare against ``2020-12-31T23:59:59Z``
-    - ``lt 2020`` -> compare against ``2020-01-01T00:00:00Z``
-    - ``gt 2020`` -> compare against ``2020-12-31T23:59:59Z``
-
-    This avoids the years being off by one in range filters.
+    ``attributes.published_date`` is stored as a scalar Unix timestamp in
+    Vespa. The API normalises ISO datetime strings at the boundary, and we keep
+    this fallback conversion here to preserve existing callers.
     """
-    year_bounds = _published_date_value_bounds(value)
-    if year_bounds is not None:
-        start, end = year_bounds
-        if op in ("gte", "lt"):
-            return start
-        return end
+    _ = op
     if isinstance(value, str):
         return _to_unix_timestamp(value)
     return int(value)

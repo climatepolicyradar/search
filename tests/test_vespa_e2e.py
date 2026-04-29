@@ -369,7 +369,7 @@ def test_attribute_identifiers_not_eq_excludes_matching_doc(vespa_app: Vespa):
     assert document_without_matching_attribute["id"] in ids
 
 
-def test_attribute_published_date_gte_filters_from_year(vespa_app: Vespa):
+def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa):
     document_before_range = SourceDocumentFactory.build(
         attributes={"published_date": "2019-12-31T23:59:59Z"},
         labels=[],
@@ -388,7 +388,7 @@ def test_attribute_published_date_gte_filters_from_year(vespa_app: Vespa):
                 field="attributes.published_date",
                 key="published_date",
                 op="gte",
-                value=2020,
+                value="2020-01-01T00:00:00Z",
             )
         ],
     )
@@ -397,7 +397,7 @@ def test_attribute_published_date_gte_filters_from_year(vespa_app: Vespa):
     assert document_in_range["id"] in ids
 
 
-def test_attribute_published_date_year_range_filters_inclusive(vespa_app: Vespa):
+def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa):
     document_before_range = SourceDocumentFactory.build(
         attributes={"published_date": "2017-06-01T00:00:00Z"},
         labels=[],
@@ -421,13 +421,13 @@ def test_attribute_published_date_year_range_filters_inclusive(vespa_app: Vespa)
                 field="attributes.published_date",
                 key="published_date",
                 op="gte",
-                value=2019,
+                value="2019-01-01T00:00:00Z",
             ),
             AttributesCondition(
                 field="attributes.published_date",
                 key="published_date",
                 op="lte",
-                value=2023,
+                value="2023-12-31T23:59:59Z",
             ),
         ],
     )
@@ -478,6 +478,12 @@ def test_attribute_published_date_year_operator_boundaries(
     vespa_app: Vespa, op: str, expected_keys: set[str]
 ):
     docs = _feed_published_date_boundary_docs(vespa_app)
+    op_values = {
+        "lt": "2020-01-01T00:00:00Z",
+        "lte": "2020-12-31T23:59:59Z",
+        "gt": "2020-12-31T23:59:59Z",
+        "gte": "2020-01-01T00:00:00Z",
+    }
     f = Filter(
         op="and",
         filters=[
@@ -485,7 +491,7 @@ def test_attribute_published_date_year_operator_boundaries(
                 field="attributes.published_date",
                 key="published_date",
                 op=op,  # type: ignore[arg-type]
-                value=2020,
+                value=op_values[op],
             )
         ],
     )
@@ -494,7 +500,7 @@ def test_attribute_published_date_year_operator_boundaries(
     assert ids == expected_ids
 
 
-def test_attribute_published_date_eq_year_matches_end_of_year_timestamp(
+def test_attribute_published_date_eq_datetime_matches_exact_timestamp(
     vespa_app: Vespa,
 ):
     docs = _feed_published_date_boundary_docs(vespa_app)
@@ -505,7 +511,7 @@ def test_attribute_published_date_eq_year_matches_end_of_year_timestamp(
                 field="attributes.published_date",
                 key="published_date",
                 op="eq",
-                value=2020,
+                value="2020-12-31T23:59:59Z",
             )
         ],
     )
