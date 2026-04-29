@@ -420,6 +420,10 @@ def relevance_tests_principal_documents():
         DevVespaPrincipalDocumentSearchEngine(settings=settings),
     ]
 
+    # Principals aren't a primitive, but we use the primitive name to determine where
+    # to store the results of the relevance tests. This is a hacky way to achieve this
+    # without having to maintain a new `Principal` type which might cause confusion
+    # if used elsewhere.
     Principal = Document
     Principal.__name__ = "Principal"
 
