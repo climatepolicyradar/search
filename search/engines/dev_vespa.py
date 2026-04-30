@@ -69,7 +69,7 @@ class AttributesCondition(BaseModel):
 class FieldFilter(BaseModel):
     field: str
     op: Literal["contains", "not_contains"]
-    value: str
+    value: str | float | bool
 
 
 Condition = AttributesCondition | FieldFilter
@@ -172,6 +172,13 @@ filter_field_to_vespa_field_map = {
     "labels.value.value": ["labels.value", "concepts.value"],
 }
 
+_value_type_to_vespa_attributes_field = {
+    str: "attributes_string",
+    float: "attributes_double",
+    int: "attributes_double",
+    bool: "attributes_boolean",
+}
+
 sort_field_to_vespa_field_map = {
     "attributes.published_date": ["attributes_published_date"],
     "title": ["title_sort"],
@@ -235,6 +242,22 @@ def _build_condition_yql(condition: Condition) -> str:
                 inner = f'key contains "{condition.key}", value {op_symbol} {_format_value(value)}'
             expr = f"{condition.field} contains sameElement({inner})"
             if condition.op == "not_eq":
+                return f"!({expr})"
+            return expr
+
+        case FieldFilter() if condition.field.startswith("attributes."):
+            key = condition.field.split(".", 1)[1]
+            vespa_field = _value_type_to_vespa_attributes_field[type(condition.value)]
+            # we need to use `contains` on strings
+            if isinstance(condition.value, str):
+                inner = f'key contains "{key}", value contains "{condition.value}"'
+            # and operators e.g. `=` on numerics & bools
+            else:
+                inner = (
+                    f'key contains "{key}", value = {_format_value(condition.value)}'
+                )
+            expr = f"{vespa_field} contains sameElement({inner})"
+            if condition.op == "not_contains":
                 return f"!({expr})"
             return expr
 

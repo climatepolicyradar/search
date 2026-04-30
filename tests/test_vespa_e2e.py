@@ -18,7 +18,7 @@ import shutil
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 
 import pytest
@@ -358,6 +358,57 @@ def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Ves
     assert docs["before_year"]["id"] in ids
     assert docs["year_end"]["id"] in ids
     assert docs["after_year"]["id"] in ids
+
+
+@pytest.mark.parametrize(
+    "filter_field, filter_value, matching_attrs, non_matching_attrs",
+    [
+        (
+            "attributes.status",
+            "published",
+            {"status": "published"},
+            {"status": "draft"},
+        ),
+        ("attributes.is_active", True, {"is_active": True}, {"is_active": False}),
+        (
+            "attributes.project_cost_usd",
+            1_000_000.0,
+            {"project_cost_usd": 1_000_000.0},
+            {"project_cost_usd": 500_000.0},
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "op, match_in, non_match_in",
+    [
+        ("contains", True, False),
+        ("not_contains", False, True),
+    ],
+)
+def test_field_filter_attribute(
+    vespa_app: Vespa,
+    filter_field: str,
+    filter_value: str | float | bool,
+    matching_attrs: dict,
+    non_matching_attrs: dict,
+    op: Literal["contains", "not_contains"],
+    match_in: bool,
+    non_match_in: bool,
+):
+    doc_matching = SourceDocumentFactory.build(attributes=matching_attrs, labels=[])
+    doc_non_matching = SourceDocumentFactory.build(
+        attributes=non_matching_attrs, labels=[]
+    )
+    _feed_document(vespa_app, doc_matching)
+    _feed_document(vespa_app, doc_non_matching)
+
+    f = Filter(
+        op="and",
+        filters=[FieldFilter(field=filter_field, op=op, value=filter_value)],
+    )
+    ids = _ids(f)
+    assert (doc_matching["id"] in ids) == match_in
+    assert (doc_non_matching["id"] in ids) == non_match_in
 
 
 # endregion Attributes
