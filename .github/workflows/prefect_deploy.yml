@@ -1,4 +1,4 @@
-name: Deploy Prefect
+name: Deploy Prefect to Production
 
 on:
   workflow_dispatch:
