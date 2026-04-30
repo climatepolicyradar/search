@@ -6,6 +6,13 @@ on:
       - main
   workflow_dispatch:
 
+# There is a lot of services deployed in this workflow, so this avoids
+# deploying over each other by using concurrent runs (cancel-in-progress: false)
+# We could use merge queues, but that is a little more inferred than explicit
+concurrency:
+  group: merge-to-main
+  cancel-in-progress: false
+
 permissions:
   contents: write
   # needed for reading the OIDC token and assuming the role
@@ -130,20 +137,13 @@ jobs:
     needs: [changes, tests]
     if: needs.changes.outputs.run-deploy == 'true'
 
-  deploy_prefect_prod:
-    name: Deploy Prefect Prod
+  deploy-prefect:
     uses: ./.github/workflows/prefect_deploy.yml
     needs: [changes, tests]
-    if: ${{ needs.changes.outputs.run-prefect-deploy == 'true' || github.event_name == 'workflow_dispatch' }}
-    with:
-      aws-env: prod
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
-      PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
+    if: ${{ needs.changes.outputs.run-prefect-deploy == 'true' }}
+    secrets: inherit
 
-  vespa_deploy:
+  vespa-deploy:
     uses: ./.github/workflows/vespa_deploy.yml
     secrets: inherit
     needs: [changes, tests]
