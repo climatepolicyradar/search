@@ -36,12 +36,9 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pre-commit>=3.5.0",
-<<<<<<< search-ecs-migration-to-ecs-express
   "pulumi-aws>=7.0.0,<8.0.0",
   "pulumi-aws-native>=1.0.0,<2.0.0",
-=======
   "pulumi-aws>=7.28.0,<8.0.0",
->>>>>>> main
   "pulumi-docker>=4.0.0,<5.0.0",
   "pulumi>=3.235.0,<4.0.0",
   "pytest>=9.0.1",
