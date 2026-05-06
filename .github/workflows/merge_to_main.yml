@@ -6,6 +6,13 @@ on:
       - main
   workflow_dispatch:
 
+# There is a lot of services deployed in this workflow, so this avoids
+# deploying over each other by using concurrent runs (cancel-in-progress: false)
+# We could use merge queues, but that is a little more inferred than explicit
+concurrency:
+  group: merge-to-main
+  cancel-in-progress: false
+
 permissions:
   contents: write
   # needed for reading the OIDC token and assuming the role
@@ -19,6 +26,7 @@ jobs:
       run-pulumi-up: ${{ steps.filter.outputs.run-pulumi-up }}
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
       run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
+      run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -40,6 +48,14 @@ jobs:
               - 'search/**'
             run-vespa-deploy:
               - 'vespa/app/**'
+            run-prefect-deploy:
+              - 'deployments.py'
+              - 'prefect/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'online_metrics/**'
+              - 'relevance_tests/**'
+              - 'search/vespa/**'
 
   lint:
     permissions:
@@ -115,13 +131,19 @@ jobs:
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             exit 1
           fi
-  deploy:
+  deploy-api:
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-deploy == 'true'
 
-  vespa_deploy:
+  deploy-prefect:
+    uses: ./.github/workflows/prefect_deploy.yml
+    needs: [changes, tests]
+    if: ${{ needs.changes.outputs.run-prefect-deploy == 'true' }}
+    secrets: inherit
+
+  vespa-deploy:
     uses: ./.github/workflows/vespa_deploy.yml
     secrets: inherit
     needs: [changes, tests]

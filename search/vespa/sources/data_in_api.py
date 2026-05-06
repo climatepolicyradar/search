@@ -29,11 +29,22 @@ class SourceLabelRelationship(TypedDict):
     timestamp: str | None
 
 
+class SourceDocumentReference(TypedDict):
+    id: str
+
+
+class SourceDocumentRelationship(TypedDict):
+    type: str
+    value: SourceDocumentReference
+    timestamp: str | None
+
+
 class SourceDocument(TypedDict, total=False):
     id: Required[str]
     title: Required[str]
     description: str | None
     labels: list[SourceLabelRelationship]
+    documents: list[SourceDocumentRelationship]
     attributes: dict[str, str | float | int | bool]
 
 

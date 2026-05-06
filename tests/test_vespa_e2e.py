@@ -18,7 +18,7 @@ import shutil
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 
 import pytest
@@ -72,6 +72,8 @@ class SourceDocumentFactory(TypedDictFactory):
     def build(cls, **kwargs: Any) -> SourceDocument:
         if "labels" not in kwargs:
             kwargs["labels"] = [SourceLabelRelationshipFactory.build()]
+        if "documents" not in kwargs:
+            kwargs["documents"] = []
         return super().build(**kwargs)
 
 
@@ -141,6 +143,24 @@ def _feed_document(app: Vespa, document: SourceDocument) -> None:
     r.raise_for_status()
 
 
+def _feed_document_without_title(app: Vespa, document: SourceDocument) -> None:
+    """
+    Feed a document update with ``title`` intentionally omitted.
+
+    This creates a true missing ``title_sort`` value in Vespa so we can verify
+    missing-title sort behaviour end-to-end.
+    """
+    op = _source_document_to_vespa_update(document)
+    fields = dict(op.get("fields", {}))
+    fields.pop("title", None)
+    r = req.put(
+        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
+        json={**op, "fields": fields, "create": True},
+        timeout=5,
+    )
+    r.raise_for_status()
+
+
 def _ids(filter_: Filter) -> set[str]:
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     docs = engine.search(
@@ -153,200 +173,242 @@ def _ids(filter_: Filter) -> set[str]:
 
 
 # region Attributes
-def test_attribute_string_eq_returns_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"country": "UK"}, labels=[]
+def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa):
+    document_before_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2019-12-31T23:59:59Z"},
+        labels=[],
     )
-    document_without_matching_attribute = SourceDocumentFactory.build(
-        attributes={}, labels=[]
+    document_in_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2021-06-01T00:00:00Z"},
+        labels=[],
     )
-    _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribute)
+    _feed_document(vespa_app, document_before_range)
+    _feed_document(vespa_app, document_in_range)
 
     f = Filter(
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_string", key="country", op="eq", value="UK"
+                field="attributes.published_date",
+                key="published_date",
+                op="gte",
+                value="2020-01-01T00:00:00Z",
             )
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute["id"] in ids
-    assert document_without_matching_attribute["id"] not in ids
+    assert document_before_range["id"] not in ids
+    assert document_in_range["id"] in ids
 
 
-def test_attribute_string_not_eq_excludes_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"country": "UK"}, labels=[]
+def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa):
+    document_before_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2017-06-01T00:00:00Z"},
+        labels=[],
     )
-    document_without_matching_attribute = SourceDocumentFactory.build(
-        attributes={}, labels=[]
+    document_in_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2020-06-01T00:00:00Z"},
+        labels=[],
     )
-    _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribute)
+    document_after_range = SourceDocumentFactory.build(
+        attributes={"published_date": "2024-01-01T00:00:00Z"},
+        labels=[],
+    )
+    _feed_document(vespa_app, document_before_range)
+    _feed_document(vespa_app, document_in_range)
+    _feed_document(vespa_app, document_after_range)
 
     f = Filter(
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_string", key="country", op="not_eq", value="UK"
+                field="attributes.published_date",
+                key="published_date",
+                op="gte",
+                value="2019-01-01T00:00:00Z",
+            ),
+            AttributesCondition(
+                field="attributes.published_date",
+                key="published_date",
+                op="lte",
+                value="2023-12-31T23:59:59Z",
+            ),
+        ],
+    )
+    ids = _ids(f)
+    assert document_before_range["id"] not in ids
+    assert document_in_range["id"] in ids
+    assert document_after_range["id"] not in ids
+
+
+def _feed_published_date_boundary_docs(vespa_app: Vespa) -> dict[str, SourceDocument]:
+    docs = {
+        "before_year": SourceDocumentFactory.build(
+            id="date-before-year",
+            attributes={"published_date": "2019-12-31T23:59:59Z"},
+            labels=[],
+        ),
+        "year_start": SourceDocumentFactory.build(
+            id="date-year-start",
+            attributes={"published_date": "2020-01-01T00:00:00Z"},
+            labels=[],
+        ),
+        "year_end": SourceDocumentFactory.build(
+            id="date-year-end",
+            attributes={"published_date": "2020-12-31T23:59:59Z"},
+            labels=[],
+        ),
+        "after_year": SourceDocumentFactory.build(
+            id="date-after-year",
+            attributes={"published_date": "2021-01-01T00:00:00Z"},
+            labels=[],
+        ),
+    }
+    for doc in docs.values():
+        _feed_document(vespa_app, doc)
+    return docs
+
+
+@pytest.mark.parametrize(
+    ("op", "expected_keys"),
+    [
+        ("lt", {"before_year"}),
+        ("lte", {"before_year", "year_start", "year_end"}),
+        ("gt", {"after_year"}),
+        ("gte", {"year_start", "year_end", "after_year"}),
+    ],
+)
+def test_attribute_published_date_year_operator_boundaries(
+    vespa_app: Vespa, op: str, expected_keys: set[str]
+):
+    docs = _feed_published_date_boundary_docs(vespa_app)
+    op_values = {
+        "lt": "2020-01-01T00:00:00Z",
+        "lte": "2020-12-31T23:59:59Z",
+        "gt": "2020-12-31T23:59:59Z",
+        "gte": "2020-01-01T00:00:00Z",
+    }
+    f = Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes.published_date",
+                key="published_date",
+                op=op,  # type: ignore[arg-type]
+                value=op_values[op],
             )
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute["id"] not in ids
-    assert document_without_matching_attribute["id"] in ids
+    expected_ids = {docs[key]["id"] for key in expected_keys}
+    assert ids == expected_ids
 
 
-def test_attribute_double_eq_returns_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"project_cost_usd": 1_000_000.0}, labels=[]
-    )
-    document_without_matching_attribute = SourceDocumentFactory.build(
-        attributes={}, labels=[]
-    )
-    _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribute)
-
+def test_attribute_published_date_eq_datetime_matches_exact_timestamp(
+    vespa_app: Vespa,
+):
+    docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_double",
-                key="project_cost_usd",
+                field="attributes.published_date",
+                key="published_date",
                 op="eq",
-                value=1_000_000.0,
+                value="2020-12-31T23:59:59Z",
             )
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute["id"] in ids
-    assert document_without_matching_attribute["id"] not in ids
+    assert ids == {docs["year_end"]["id"]}
 
 
-def test_attribute_double_not_eq_excludes_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"project_cost_usd": 1_000_000.0}, labels=[]
-    )
-    document_without_matching_attribute = SourceDocumentFactory.build(
-        attributes={}, labels=[]
-    )
-    _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribute)
-
+def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vespa):
+    docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_double",
-                key="project_cost_usd",
-                op="not_eq",
-                value=1_000_000.0,
-            )
-        ],
-    )
-    ids = _ids(f)
-    assert document_with_matching_attribute["id"] not in ids
-    assert document_without_matching_attribute["id"] in ids
-
-
-def test_attribute_bool_eq_returns_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"is_active": True}, labels=[]
-    )
-    document_without_matching_attribute = SourceDocumentFactory.build(
-        attributes={}, labels=[]
-    )
-    _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribute)
-
-    f = Filter(
-        op="and",
-        filters=[
-            AttributesCondition(
-                field="attributes_boolean", key="is_active", op="eq", value=True
-            )
-        ],
-    )
-    ids = _ids(f)
-    assert document_with_matching_attribute["id"] in ids
-    assert document_without_matching_attribute["id"] not in ids
-
-
-def test_attribute_bool_not_eq_excludes_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"is_active": True}, labels=[]
-    )
-    document_without_matching_attribute = SourceDocumentFactory.build(
-        attributes={}, labels=[]
-    )
-    _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribute)
-
-    f = Filter(
-        op="and",
-        filters=[
-            AttributesCondition(
-                field="attributes_boolean", key="is_active", op="not_eq", value=True
-            )
-        ],
-    )
-    ids = _ids(f)
-    assert document_with_matching_attribute["id"] not in ids
-    assert document_without_matching_attribute["id"] in ids
-
-
-def test_attribute_identifiers_eq_returns_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"identifier::project_id": "proj-123"}, labels=[]
-    )
-    document_without_matching_attribute = SourceDocumentFactory.build(
-        attributes={}, labels=[]
-    )
-    _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribute)
-
-    f = Filter(
-        op="and",
-        filters=[
-            AttributesCondition(
-                field="attributes_identifiers",
-                key="project_id",
+                field="attributes.published_date",
+                key="published_date",
                 op="eq",
-                value="proj-123",
+                value="2020-01-01T00:00:00Z",
             )
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute["id"] in ids
-    assert document_without_matching_attribute["id"] not in ids
+    assert ids == {docs["year_start"]["id"]}
 
 
-def test_attribute_identifiers_not_eq_excludes_matching_doc(vespa_app: Vespa):
-    document_with_matching_attribute = SourceDocumentFactory.build(
-        attributes={"identifier::project_id": "proj-123"}, labels=[]
-    )
-    document_without_matching_attribute = SourceDocumentFactory.build(
-        attributes={}, labels=[]
-    )
-    _feed_document(vespa_app, document_with_matching_attribute)
-    _feed_document(vespa_app, document_without_matching_attribute)
-
+def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Vespa):
+    docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
         op="and",
         filters=[
             AttributesCondition(
-                field="attributes_identifiers",
-                key="project_id",
+                field="attributes.published_date",
+                key="published_date",
                 op="not_eq",
-                value="proj-123",
+                value="2020-01-01T00:00:00Z",
             )
         ],
     )
     ids = _ids(f)
-    assert document_with_matching_attribute["id"] not in ids
-    assert document_without_matching_attribute["id"] in ids
+    assert docs["year_start"]["id"] not in ids
+    assert docs["before_year"]["id"] in ids
+    assert docs["year_end"]["id"] in ids
+    assert docs["after_year"]["id"] in ids
+
+
+@pytest.mark.parametrize(
+    "filter_field, filter_value, matching_attrs, non_matching_attrs",
+    [
+        (
+            "attributes.status",
+            "published",
+            {"status": "published"},
+            {"status": "draft"},
+        ),
+        ("attributes.is_active", True, {"is_active": True}, {"is_active": False}),
+        (
+            "attributes.project_cost_usd",
+            1_000_000.0,
+            {"project_cost_usd": 1_000_000.0},
+            {"project_cost_usd": 500_000.0},
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "op, match_in, non_match_in",
+    [
+        ("contains", True, False),
+        ("not_contains", False, True),
+    ],
+)
+def test_field_filter_attribute(
+    vespa_app: Vespa,
+    filter_field: str,
+    filter_value: str | float | bool,
+    matching_attrs: dict,
+    non_matching_attrs: dict,
+    op: Literal["contains", "not_contains"],
+    match_in: bool,
+    non_match_in: bool,
+):
+    doc_matching = SourceDocumentFactory.build(attributes=matching_attrs, labels=[])
+    doc_non_matching = SourceDocumentFactory.build(
+        attributes=non_matching_attrs, labels=[]
+    )
+    _feed_document(vespa_app, doc_matching)
+    _feed_document(vespa_app, doc_non_matching)
+
+    f = Filter(
+        op="and",
+        filters=[FieldFilter(field=filter_field, op=op, value=filter_value)],
+    )
+    ids = _ids(f)
+    assert (doc_matching["id"] in ids) == match_in
+    assert (doc_non_matching["id"] in ids) == non_match_in
 
 
 # endregion Attributes
@@ -748,10 +810,16 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
     doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
     doc_m = SourceDocumentFactory.build(title="Magpie brief", labels=[])
     doc_f = SourceDocumentFactory.build(title="Fig brief", labels=[])
+    doc_missing = SourceDocumentFactory.build(
+        id="e2e-title-missing-asc",
+        title="Will be dropped before feed",
+        labels=[],
+    )
     _feed_document(vespa_app, doc_z)
     _feed_document(vespa_app, doc_a)
     _feed_document(vespa_app, doc_m)
     _feed_document(vespa_app, doc_f)
+    _feed_document_without_title(vespa_app, doc_missing)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -760,12 +828,13 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
         order_by=[OrderBy(field="title", direction="asc")],
     ).results
 
-    assert [d.title for d in results] == [
+    assert [d.title for d in results[:4]] == [
         "Apple brief",
         "Fig brief",
         "Magpie brief",
         "Zebra memo",
     ]
+    assert results[-1].id == "e2e-title-missing-asc"
 
 
 def test_document_sort_title_sort_desc(vespa_app: Vespa):
@@ -773,10 +842,16 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
     doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
     doc_m = SourceDocumentFactory.build(title="Magpie brief", labels=[])
     doc_f = SourceDocumentFactory.build(title="Fig brief", labels=[])
+    doc_missing = SourceDocumentFactory.build(
+        id="e2e-title-missing-desc",
+        title="Will be dropped before feed",
+        labels=[],
+    )
     _feed_document(vespa_app, doc_z)
     _feed_document(vespa_app, doc_a)
     _feed_document(vespa_app, doc_m)
     _feed_document(vespa_app, doc_f)
+    _feed_document_without_title(vespa_app, doc_missing)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -785,12 +860,13 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
         order_by=[OrderBy(field="title", direction="desc")],
     ).results
 
-    assert [d.title for d in results] == [
+    assert [d.title for d in results[:4]] == [
         "Zebra memo",
         "Magpie brief",
         "Fig brief",
         "Apple brief",
     ]
+    assert results[-1].id == "e2e-title-missing-desc"
 
 
 def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
@@ -814,10 +890,16 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
         labels=[],
         attributes={"published_date": "2026-06-01T12:00:00Z"},
     )
+    doc_undated = SourceDocumentFactory.build(
+        title="Undated",
+        labels=[],
+        attributes={},
+    )
     _feed_document(vespa_app, doc_old)
     _feed_document(vespa_app, doc_new)
     _feed_document(vespa_app, doc_oldest)
     _feed_document(vespa_app, doc_newest)
+    _feed_document(vespa_app, doc_undated)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -826,7 +908,13 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
         order_by=[OrderBy(field="attributes.published_date", direction="desc")],
     ).results
 
-    assert [d.title for d in results] == ["Newest", "New", "Old", "Oldest"]
+    assert [d.title for d in results] == [
+        "Newest",
+        "New",
+        "Old",
+        "Oldest",
+        "Undated",
+    ]
 
 
 def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
@@ -850,10 +938,16 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
         labels=[],
         attributes={"published_date": "2026-06-01T12:00:00Z"},
     )
+    doc_undated = SourceDocumentFactory.build(
+        title="Undated",
+        labels=[],
+        attributes={},
+    )
     _feed_document(vespa_app, doc_old)
     _feed_document(vespa_app, doc_new)
     _feed_document(vespa_app, doc_oldest)
     _feed_document(vespa_app, doc_newest)
+    _feed_document(vespa_app, doc_undated)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     results = engine.search(
@@ -862,7 +956,13 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
         order_by=[OrderBy(field="attributes.published_date", direction="asc")],
     ).results
 
-    assert [d.title for d in results] == ["Oldest", "Old", "New", "Newest"]
+    assert [d.title for d in results] == [
+        "Oldest",
+        "Old",
+        "New",
+        "Newest",
+        "Undated",
+    ]
 
 
 def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):

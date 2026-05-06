@@ -19,6 +19,7 @@ For now we just use `requests` which yields the same results.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any, Literal
 
 import requests
@@ -58,16 +59,17 @@ class AttributesCondition(BaseModel):
         "attributes_double",
         "attributes_boolean",
         "attributes_identifiers",
+        "attributes.published_date",
     ]
     key: str
-    op: Literal["eq", "not_eq"]
-    value: str | float | bool
+    op: Literal["eq", "not_eq", "lt", "lte", "gt", "gte"]
+    value: str | int | float | bool
 
 
 class FieldFilter(BaseModel):
     field: str
     op: Literal["contains", "not_contains"]
-    value: str
+    value: str | float | bool
 
 
 Condition = AttributesCondition | FieldFilter
@@ -136,7 +138,7 @@ ComplexExampleFilter = Filter(
 )
 
 
-def _format_value(value: str | float | bool) -> str:
+def _format_value(value: str | int | float | bool) -> str:
     """Format a value for YQL: strings get quotes, numbers do not, bools become 1/0 (byte)."""
     if isinstance(value, bool):
         return "1" if value else "0"
@@ -145,9 +147,36 @@ def _format_value(value: str | float | bool) -> str:
     return f'"{value}"'
 
 
+def _to_unix_timestamp(value: str) -> int:
+    """Convert an ISO datetime string to Unix timestamp (seconds)."""
+    normalised = value.replace("Z", "+00:00")
+    return int(datetime.fromisoformat(normalised).timestamp())
+
+
+def _published_date_operand(value: str | int | float, op: str) -> int:
+    """
+    Translate a published-date filter value into epoch seconds.
+
+    ``attributes.published_date`` is stored as a scalar Unix timestamp in
+    Vespa. The API normalises ISO datetime strings at the boundary, and we keep
+    this fallback conversion here to preserve existing callers.
+    """
+    _ = op
+    if isinstance(value, str):
+        return _to_unix_timestamp(value)
+    return int(value)
+
+
 filter_field_to_vespa_field_map = {
     "labels.value.id": ["labels.id", "concepts.id"],
     "labels.value.value": ["labels.value", "concepts.value"],
+}
+
+_value_type_to_vespa_attributes_field = {
+    str: "attributes_string",
+    float: "attributes_double",
+    int: "attributes_double",
+    bool: "attributes_boolean",
 }
 
 sort_field_to_vespa_field_map = {
@@ -165,18 +194,70 @@ DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
 def _build_condition_yql(condition: Condition) -> str:
     match condition:
         case AttributesCondition():
+            if condition.field == "attributes.published_date":
+                vespa_field = sort_field_to_vespa_field_map.get(
+                    condition.field, [condition.field]
+                )[0]
+                op_to_symbol = {
+                    "eq": "=",
+                    "lt": "<",
+                    "lte": "<=",
+                    "gt": ">",
+                    "gte": ">=",
+                }
+                operand = _published_date_operand(condition.value, condition.op)
+                if condition.op == "not_eq":
+                    return f"!({vespa_field} = {operand})"
+                op_symbol = op_to_symbol.get(condition.op)
+                if op_symbol is None:
+                    raise ValueError(
+                        f"unsupported op={condition.op!r} for field={condition.field!r}"
+                    )
+                return f"{vespa_field} {op_symbol} {operand}"
+
             # Using `sameElement`, string fields use `contains`
             # while numeric/bool fields use comparison operators.
             # @see: https://docs.vespa.ai/en/querying/query-language.html#map
             value = condition.value
             if isinstance(value, str):
+                if condition.op not in ("eq", "not_eq"):
+                    raise ValueError(
+                        f"string attributes only support eq/not_eq, got {condition.op!r}"
+                    )
                 inner = f'key contains "{condition.key}", value contains "{value}"'
             else:
-                inner = (
-                    f'key contains "{condition.key}", value = {_format_value(value)}'
-                )
+                op_to_symbol = {
+                    "eq": "=",
+                    "not_eq": "=",
+                    "lt": "<",
+                    "lte": "<=",
+                    "gt": ">",
+                    "gte": ">=",
+                }
+                op_symbol = op_to_symbol.get(condition.op)
+                if op_symbol is None:
+                    raise ValueError(
+                        f"unsupported op={condition.op!r} for field={condition.field!r}"
+                    )
+                inner = f'key contains "{condition.key}", value {op_symbol} {_format_value(value)}'
             expr = f"{condition.field} contains sameElement({inner})"
             if condition.op == "not_eq":
+                return f"!({expr})"
+            return expr
+
+        case FieldFilter() if condition.field.startswith("attributes."):
+            key = condition.field.split(".", 1)[1]
+            vespa_field = _value_type_to_vespa_attributes_field[type(condition.value)]
+            # we need to use `contains` on strings
+            if isinstance(condition.value, str):
+                inner = f'key contains "{key}", value contains "{condition.value}"'
+            # and operators e.g. `=` on numerics & bools
+            else:
+                inner = (
+                    f'key contains "{key}", value = {_format_value(condition.value)}'
+                )
+            expr = f"{vespa_field} contains sameElement({inner})"
+            if condition.op == "not_contains":
                 return f"!({expr})"
             return expr
 
@@ -231,6 +312,9 @@ def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     """
     Build Vespa ``ranking.sorting`` for a document sort attribute.
 
+    Always pushes ``missing`` values to the end of the list.
+    https://docs.vespa.ai/en/reference/querying/sorting-language.html#missing
+
     :param vespa_attr: First mapped field name from
         :data:`sort_field_to_vespa_field_map`
     :type vespa_attr: str
@@ -240,13 +324,11 @@ def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     :rtype: str
     :raises AssertionError: if ``vespa_attr`` is not handled
     """
+    sign = "+" if direction == "asc" else "-"
     if vespa_attr == "attributes_published_date":
-        if direction == "desc":
-            return "-attributes_published_date"
-        return "+missing(attributes_published_date,last) +attributes_published_date"
+        return f"{sign}missing(attributes_published_date,last)"
     if vespa_attr == "title_sort":
-        sign = "+" if direction == "asc" else "-"
-        return f"{sign}{vespa_attr}"
+        return f"{sign}missing(title_sort,last)"
     raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")
 
 
@@ -472,6 +554,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             "ranking.profile": "nativerank",
         }
         request_body.update(sort_overrides)
+
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
         if not self.bolding:
@@ -533,6 +616,33 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 list[DocumentRelationship]
             ).validate_python(source.get("documents", []))
 
+            # `passages` and `passages_text` indices are aligned
+            # as `passages_text` is derived from `passages` in the schema.
+            # Vespa wraps matched terms with <hi>...</hi> on the bolded `passages_text` field.
+            # We use this to identify which `passages[i]` matched the query.
+            document_id = source.get("id", MISSING_PLACEHOLDER)
+            passages_field = fields.get("passages", [])
+            passages_text = fields.get("passages_text", [])
+            passages: list[Passage] = []
+            for i, passage in enumerate(passages_field):
+                if i >= len(passages_text):
+                    break
+                bolded_text = passages_text[i]
+                if "<hi>" not in bolded_text:
+                    continue
+                passages.append(
+                    Passage(
+                        text_block_id=passage.get("text_block_id", ""),
+                        text=bolded_text,
+                        language=passage.get("language", ""),
+                        type=passage.get("type", ""),
+                        type_confidence=passage.get("type_confidence", 0.0),
+                        page_number=passage.get("page_number", 0),
+                        heading_id=passage.get("heading_id"),
+                        document_id=document_id,
+                    )
+                )
+
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
@@ -541,6 +651,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                     labels=labels,
                     attributes=source.get("attributes", {}),
                     documents=document_relationships,
+                    passages=passages,
                 )
             )
 
@@ -683,6 +794,44 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     def count(self, query: str) -> int:
         """Return hit count"""
         raise NotImplementedError()
+
+
+class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
+    """
+    Search engine for principal documents.
+
+    Overrides calls to .search with a filter for principal documents, so the engine
+    can be used against relevance tests.
+    """
+
+    def search(
+        self,
+        query: str | None,
+        pagination: Pagination,
+        order_by: list[OrderBy],
+        filters_json_string: str | None = None,
+    ) -> ListResponse[Document]:
+        """Search principal documents"""
+
+        if filters_json_string is not None:
+            raise ValueError(
+                "Filters can't be used in this search engine. Use DevVespaDocumentSearchEngine directly instead."
+            )
+
+        filters_json_string = json.dumps(
+            {
+                "op": "and",
+                "filters": [
+                    {
+                        "field": "labels.value.id",
+                        "op": "contains",
+                        "value": "status::Principal",
+                    }
+                ],
+            }
+        )
+
+        return super().search(query, pagination, order_by, filters_json_string)
 
 
 class DevVespaPassageSearchEngine(SearchEngine[Passage]):

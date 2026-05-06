@@ -7,8 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
   "boto3>=1.35.0",
   "duckdb>=1.4.2",
-  "fastapi[standard]>=0.115.0",
-  "knowledge-graph @ git+https://github.com/climatepolicyradar/knowledge-graph@268d1baa221b8da51f88bc7affa31b4860da8dd0",
+  "fastapi[standard]>=0.136.0",
   "posthog>=7.5.1",
   "prefect>=3.4.25",
   "pydantic>=2.12.4",
@@ -31,6 +30,7 @@ dependencies = [
   "opentelemetry-instrumentation-requests>=0.59b0",
   "opentelemetry-instrumentation-httpx>=0.59b0",
   "pyright>=1.1.408",
+  "moto>=5.2.0",
 ]
 
 [dependency-groups]

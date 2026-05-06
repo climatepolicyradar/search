@@ -1,9 +1,14 @@
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import HTTPException, Query, status
 
 from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import DOCUMENT_SORT_API_FIELDS
+from search.engines.dev_vespa import (
+    DOCUMENT_SORT_API_FIELDS,
+    AttributesCondition,
+    Filter,
+)
 
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
@@ -128,3 +133,52 @@ def documents_order_by(
                 ),
             )
     return clauses
+
+
+def _normalise_datetime_value(value: str) -> int:
+    """Convert an ISO-8601 datetime string to epoch seconds."""
+    normalised = value.replace("Z", "+00:00")
+    return int(datetime.fromisoformat(normalised).timestamp())
+
+
+def _normalise_filter_group(filter_group: Filter) -> None:
+    """Normalise supported filter values in-place."""
+    for item in filter_group.filters:
+        if isinstance(item, Filter):
+            _normalise_filter_group(item)
+            continue
+        if (
+            isinstance(item, AttributesCondition)
+            and item.field == "attributes.published_date"
+            and isinstance(item.value, str)
+        ):
+            try:
+                item.value = _normalise_datetime_value(item.value)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "published_date filters must use ISO 8601 datetimes, "
+                        f"received {item.value!r}"
+                    ),
+                ) from exc
+
+
+def normalise_filters(filters_json_string: str | None) -> str | None:
+    """
+    Parse and normalise filter JSON before it reaches the search engine.
+
+    ``attributes.published_date`` values are converted from ISO-8601 datetime
+    strings to epoch seconds at the API boundary.
+    """
+    if filters_json_string is None:
+        return None
+    try:
+        filters = Filter.model_validate_json(filters_json_string)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    _normalise_filter_group(filters)
+    return filters.model_dump_json()

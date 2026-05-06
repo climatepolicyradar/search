@@ -29,6 +29,31 @@ test_cases = [
         ],  # NEW SOUTH WALES, AUSTRALIA
         description="search for new south wales should return new south wales and australia",
     ),
+    *[
+        RecallTestCase[Label](
+            category="place name",
+            search_terms=query,
+            expected_result_ids=["geography::USA"],
+            k=10,
+            description="ambiguous United States query variants should surface the United States geography label in the top 10",
+        )
+        for query in [
+            "united",
+            "states",
+        ]
+    ],
+    *[
+        PrecisionTestCase[Label](
+            category="place name",
+            search_terms=query,
+            expected_result_ids=["geography::USA"],
+            description="specific United States query variants should return the United States geography label first",
+        )
+        for query in [
+            "united states",
+            "united states of america",
+        ]
+    ],
     PrecisionTestCase[Label](
         category="place name + other terms",
         search_terms="Philippines policies in climate changes",
@@ -211,6 +236,24 @@ test_cases = [
         description="search for offshore wind roadmap should return wind energy or Roadmap labels",
     ),
     PrecisionTestCase[Label](
+        category="topic",
+        search_terms="phase out",
+        expected_result_ids=[
+            "concept::Q1285",  # ban (parent concept of phase-out)
+        ],
+        description="search for 'phase out' should return 'ban' label first",
+    ),
+    RecallTestCase[Label](
+        category="topic",
+        search_terms="phase out",
+        expected_result_ids=[],
+        forbidden_result_ids=[
+            "concept::Q1275",  # subsidy removal — ranks highly due to 'phasing out of subsidies' aliases
+        ],
+        k=5,
+        description="search for 'phase out' should not return 'subsidy removal' in top 5",
+    ),
+    PrecisionTestCase[Label](
         category="logic",
         search_terms="Adaptation (OR) resilience investment",
         expected_result_ids=[
@@ -247,6 +290,28 @@ test_cases = [
         ],
         description="search for indigenous people colombia laws should return relevant labels first",
     ),
+    RecallTestCase[Label](
+        category="topic",
+        search_terms="air",
+        expected_result_ids=["concept::Q412"],
+        k=10,
+        description="air query should surface concept::Q412 in the top 10",
+    ),
+    *[
+        RecallTestCase[Label](
+            category="topic",
+            search_terms=query,
+            expected_result_ids=["concept::Q412"],
+            k=5,
+            description="air pollution risk query variants should surface concept::Q412 in the top 5",
+        )
+        for query in [
+            "air pollution",
+            "air pollution risk",
+            "pollution risk",
+            "air pol",
+        ]
+    ],
 ]
 
 
