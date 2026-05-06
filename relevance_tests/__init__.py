@@ -2,7 +2,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Generic, Sequence, TypeVar
 
-from knowledge_graph.identifiers import Identifier
 from prefect.cache_policies import NO_CACHE
 from prefect.futures import wait
 from pydantic import BaseModel
@@ -12,6 +11,7 @@ from rich.table import Table
 from prefect import get_run_logger, task
 from search.data_in_models import Document
 from search.engines import SearchEngine
+from search.identifiers import Identifier, generate_id
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -29,7 +29,7 @@ class TestResult(BaseModel, Generic[T]):
 
     test_case: TestCase
     passed: bool
-    search_engine_id: Identifier
+    search_engine_id: str
     search_results: list[T]
 
 
@@ -51,7 +51,7 @@ def generate_test_run_id(
 ) -> Identifier:
     """Generate a unique identifier for a test run"""
 
-    test_run_id = Identifier.generate(engine.name, *test_cases, *test_results)
+    test_run_id = generate_id(engine.name, *test_cases, *test_results)
     logger.info(f"Generated test run id: {test_run_id}")
     return test_run_id
 

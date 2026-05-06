@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
-from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel
 
 from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Label as LabelModel
 from search.document import Document
+from search.identifiers import Identifier, generate_id
 from search.label import Label
 from search.passage import Passage
 
@@ -89,6 +89,4 @@ class SearchEngine(ABC, Generic[TModel]):
     def id(self) -> Identifier:
         """Canonical ID for search engine"""
 
-        return Identifier.generate(
-            str(self),
-        )
+        return generate_id(str(self))

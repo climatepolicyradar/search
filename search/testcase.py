@@ -2,11 +2,11 @@ import re
 from abc import ABC, abstractmethod
 from typing import Callable, Generic, Literal, TypeVar
 
-from knowledge_graph.identifiers import Identifier
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination, SearchEngine
+from search.identifiers import Identifier, generate_id
 from search.label import Label
 from search.passage import Passage
 
@@ -134,7 +134,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
     def id(self) -> Identifier:
         """Generated ID for a TestCase"""
 
-        return Identifier.generate(
+        return generate_id(
             self.name,
             self.category,
             self.search_terms,
@@ -249,7 +249,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
     def id(self) -> Identifier:
         """Generated ID for a TestCase"""
 
-        return Identifier.generate(
+        return generate_id(
             self.name,
             self.category,
             self.search_terms,
@@ -338,7 +338,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
     def id(self) -> Identifier:
         """Generated ID for a TestCase"""
 
-        return Identifier.generate(
+        return generate_id(
             self.name,
             self.category,
             self.search_terms,
@@ -445,7 +445,7 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
     def id(self) -> Identifier:
         """Generated ID for a TestCase"""
 
-        return Identifier.generate(
+        return generate_id(
             self.name,
             self.category,
             self.search_terms,
