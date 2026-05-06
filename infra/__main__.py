@@ -49,16 +49,29 @@ dockerfile_path = REPO_ROOT_DIR / "api" / "Dockerfile"
 bucket = s3.Bucket(
     "search-bucket",
     bucket=f"cpr-{stack}-search",
-    lifecycle_rules=[
-        s3.BucketLifecycleRuleArgs(
-            enabled=True,
+)
+
+bucket_versioning = s3.BucketVersioning(
+    "search-bucket-versioning",
+    bucket=bucket.id,
+    versioning_configuration=s3.BucketVersioningVersioningConfigurationArgs(
+        status="Enabled",
+    ),
+)
+
+bucket_lifecycle = s3.BucketLifecycleConfiguration(
+    "search-bucket-lifecycle",
+    bucket=bucket.id,
+    rules=[
+        s3.BucketLifecycleConfigurationRuleArgs(
             id="noncurrent-version-cleanup-90d",
-            noncurrent_version_expiration=s3.BucketLifecycleRuleNoncurrentVersionExpirationArgs(
-                days=90,
+            status="Enabled",
+            noncurrent_version_expiration=s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
+                noncurrent_days=90,
             ),
         ),
     ],
-    versioning=s3.BucketVersioningArgs(enabled=True),
+    opts=pulumi.ResourceOptions(depends_on=[bucket_versioning]),
 )
 
 # Create a private ECR repository to store the Docker image
