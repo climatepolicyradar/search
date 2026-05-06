@@ -6,11 +6,11 @@ import boto3
 import pytest
 from hypothesis import find
 from hypothesis import strategies as st
-from knowledge_graph.identifiers import Identifier
 from moto import mock_aws
 
 from relevance_tests import TestResult
 from search import Primitive
+from search.identifiers import generate_id
 from search.testcase import RecallTestCase
 from tests.common_strategies import (
     document_strategy,
@@ -180,7 +180,7 @@ def simple_test_result(simple_test_case, test_labels):
     :rtype: TestResult[Label]
     """
     # Create a deterministic engine ID for testing
-    engine_id = Identifier.generate("JSONLabelSearchEngine")
+    engine_id = generate_id("JSONLabelSearchEngine")
 
     return TestResult(
         test_case=simple_test_case,
