@@ -2175,20 +2175,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pulumi-aws-native"
-version = "1.62.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "parver" },
-    { name = "pulumi" },
-    { name = "semver" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/31/c9/c16986d407889a3fd0854b43287baf230dc810e2dccf49800e0b837e7de4/pulumi_aws_native-1.62.0.tar.gz", hash = "sha256:237e21edc00643d881201ba1f6c098290f988d66a7d8e92f5392ebe8ea366b7b", size = 8658744 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/ea/e03a8dd4e64290e9a1cd446c4a1dd724a498d85b482f4457913129a03f78/pulumi_aws_native-1.62.0-py3-none-any.whl", hash = "sha256:dd820ddab8fea62c762626ff7a7bf51efa10e5a8c572aaabd0fa33234a34cd86", size = 12269903 },
-]
-
-[[package]]
 name = "pulumi-docker"
 version = "4.11.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2976,7 +2962,6 @@ dev = [
     { name = "pre-commit" },
     { name = "pulumi" },
     { name = "pulumi-aws" },
-    { name = "pulumi-aws-native" },
     { name = "pulumi-docker" },
     { name = "pytest" },
     { name = "ruff" },
@@ -3018,9 +3003,7 @@ dev = [
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "pre-commit", specifier = ">=3.5.0" },
     { name = "pulumi", specifier = ">=3.235.0,<4.0.0" },
-    { name = "pulumi-aws", specifier = ">=7.0.0,<8.0.0" },
     { name = "pulumi-aws", specifier = ">=7.28.0,<8.0.0" },
-    { name = "pulumi-aws-native", specifier = ">=1.0.0,<2.0.0" },
     { name = "pulumi-docker", specifier = ">=4.0.0,<5.0.0" },
     { name = "pytest", specifier = ">=9.0.1" },
     { name = "ruff", specifier = ">=0.12.9" },
