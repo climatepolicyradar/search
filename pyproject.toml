@@ -20,12 +20,12 @@ dependencies = [
   "uvicorn>=0.32.0",
   "components>=1.0.5",
   "polyfactory>=3.3.0",
-  "opentelemetry-api>=1.38.0,<2.0.0",
+  "opentelemetry-api>=1.41.1,<2.0.0",
   "opentelemetry-distro>=0.59b0",
   "opentelemetry-exporter-otlp>=1.38.0,<2.0.0",
-  "opentelemetry-instrumentation-fastapi>=0.59b0",
+  "opentelemetry-instrumentation-fastapi>=0.62b1",
   "opentelemetry-instrumentation-logging>=0.59b0",
-  "opentelemetry-instrumentation-sqlalchemy>=0.59b0",
+  "opentelemetry-instrumentation-sqlalchemy>=0.62b1",
   "opentelemetry-sdk>=1.38.0,<2.0.0",
   "opentelemetry-instrumentation-requests>=0.59b0",
   "opentelemetry-instrumentation-httpx>=0.59b0",
@@ -36,10 +36,14 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pre-commit>=3.5.0",
+<<<<<<< search-ecs-migration-to-ecs-express
   "pulumi-aws>=7.0.0,<8.0.0",
   "pulumi-aws-native>=1.0.0,<2.0.0",
+=======
+  "pulumi-aws>=7.28.0,<8.0.0",
+>>>>>>> main
   "pulumi-docker>=4.0.0,<5.0.0",
-  "pulumi>=3.0.0,<4.0.0",
+  "pulumi>=3.235.0,<4.0.0",
   "pytest>=9.0.1",
   "ruff>=0.12.9",
   "hypothesis>=6.0.0",

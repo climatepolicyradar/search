@@ -136,7 +136,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - uses: extractions/setup-just@v4
       - run: just install
-      - uses: pulumi/actions@v6
+      - uses: pulumi/actions@v7
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - working-directory: ./infra
