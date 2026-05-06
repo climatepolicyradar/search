@@ -1,9 +1,9 @@
 """Tests for relevance tests."""
 
 import pytest
-from knowledge_graph.identifiers import Identifier
 
 from relevance_tests import TestResult, generate_test_run_id
+from search.identifiers import Identifier
 
 pytest.fixture()
 
