@@ -480,6 +480,10 @@ ecs_infrastructure_role = iam.Role(
 ecs_cluster = ecs.Cluster(
     f"{application_name}-ecs-cluster",
     name="search",
+    settings=[ecs.ClusterSettingArgs(
+        name="containerInsights",
+        value="enabled",
+    )]
 )
 
 ecs_express_service = ExpressGatewayService(
