@@ -214,13 +214,15 @@ schema documents {
     }
 
     field case_number type string {
-        indexing: input attributes_identifiers | get_value case_number | index
+        indexing: input attributes_identifiers | get_value case_number | lowercase | index | attribute | summary
         stemming: none
+        match: exact
     }
 
     field project_id type string {
-        indexing: input attributes_identifiers | get_value project_id | index
+        indexing: input attributes_identifiers | get_value project_id | lowercase | index | attribute | summary
         stemming: none
+        match: exact
     }
 
     fieldset identifiers {
@@ -249,6 +251,7 @@ schema documents {
             query(description_weight) double: 1.0
             query(passages_weight) double: 1.0
             query(geographies_weight) double: 1.0
+            query(identifier_weight) double: 10000.0
         }
     }
 
@@ -268,11 +271,16 @@ schema documents {
         function title_synonyms_score () {
             expression: nativeRank(title_synonyms)
         }
+        function identifiers_score() {
+            expression: query(identifier_weight) * (nativeRank(case_number) + nativeRank(project_id))
+        }
+
+
 
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score()
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + identifiers_score()
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms) identifiers_score()
     }
 
     rank-profile label-boosted inherits nativerank {
@@ -283,9 +291,9 @@ schema documents {
             expression: query(label_boost_factor) * (attributeMatch(labels_type_value_attribute) > 0)
         }
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + label_boost_score()
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + label_boost_score() + identifiers_score()
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms)
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms) identifiers_score()
     }
 
     # Used with ranking.sorting for non-relevance document lists. Declared explicitly so
