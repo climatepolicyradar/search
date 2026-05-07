@@ -131,11 +131,30 @@ jobs:
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             exit 1
           fi
-  deploy-api:
+  deploy-api-apprunner-deprecated:
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-deploy == 'true'
+
+  # @see: https://github.com/marketplace/actions/amazon-ecs-deploy-express-service-action-for-github-actions#complete-example-with-all-options
+  deploy-api:
+    runs-on: ubuntu-latest
+    needs: [changes, tests]
+    if: needs.changes.outputs.run-deploy == 'true'
+    environment: production
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-production-github-actions
+          role-session-name: GitHub_Deploy_API_ECS
+          aws-region: eu-west-1
+      - uses: aws-actions/amazon-ecs-deploy-express-service@v1
+        with:
+          service-name: search-api
+          image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/search-api:latest
+          execution-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole
+          infrastructure-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsInfrastructureRole
 
   deploy-prefect:
     uses: ./.github/workflows/prefect_deploy.yml
