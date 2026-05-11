@@ -317,15 +317,6 @@ def _facet_filter_label_type(condition: Condition) -> str | None:
     return None
 
 
-def _is_labels_filter(condition: Condition) -> bool:
-    """We use `label` to mean labels and concepts."""
-    if not isinstance(condition, FieldFilter):
-        return False
-    return condition.field.startswith("labels.") or condition.field.startswith(
-        "concepts."
-    )
-
-
 def _prune_filter(
     filter_group: Filter | None,
     filter_method: Callable[[Condition], bool],
@@ -350,7 +341,7 @@ def _get_label_types_from_filters(filter_group: Filter | None) -> set[str]:
     """Returns a set of `labels.types` recursively from the `filter_group`"""
     if filter_group is None:
         return set()
-    
+
     label_types: set[str] = set()
     for filter_item in filter_group.filters:
         # If this is a `Filter`, recurse
@@ -946,7 +937,6 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             else None
         )
 
-        
         facet_label_types = _get_label_types_from_filters(filters)
         facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
         for label_type in facet_label_types:
@@ -955,9 +945,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 lambda c, t=label_type: _facet_filter_label_type(c) == t,
             )
 
-        responses: dict[
-            str, dict[str, dict[tuple[str, str], tuple[Label, int]]]
-        ] = {}
+        responses: dict[str, dict[str, dict[tuple[str, str], tuple[Label, int]]]] = {}
         with ThreadPoolExecutor(max_workers=max(1, len(facet_requests))) as pool:
             futures = {
                 pool.submit(self._run_facet_query, query, plan): name

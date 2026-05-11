@@ -10,7 +10,6 @@ from search.engines.dev_vespa import (
     _build_filter_yql,
     _facet_filter_label_type,
     _get_label_types_from_filters,
-    _is_labels_filter,
     _prune_filter,
 )
 
@@ -232,27 +231,6 @@ def test_facet_filter_label_type_returns_none_for_attribute_condition() -> None:
     assert _facet_filter_label_type(condition) is None
 
 
-def test_is_labels_filter_matches_labels_and_concepts() -> None:
-    """Any FieldFilter on the label/concept axes is a facet filter."""
-    assert _is_labels_filter(
-        FieldFilter(field="labels.value.id", op="contains", value="category::Law")
-    )
-    assert _is_labels_filter(
-        FieldFilter(field="concepts.value.id", op="contains", value="topic::Mitigation")
-    )
-    assert not _is_labels_filter(
-        FieldFilter(field="title", op="contains", value="Foo")
-    )
-    assert not _is_labels_filter(
-        AttributesCondition(
-            field="attributes_double",
-            key="project_cost_usd",
-            op="eq",
-            value=1.0,
-        )
-    )
-
-
 def test_get_label_types_from_filters_walks_nested_groups() -> None:
     """All typed selections in a nested tree are collected."""
     tree = Filter(
@@ -315,9 +293,7 @@ def test_prune_filter_drops_matching_conditions_and_collapses_empty_groups() -> 
             ),
         ],
     )
-    pruned = _prune_filter(
-        tree, lambda c: _facet_filter_label_type(c) == "category"
-    )
+    pruned = _prune_filter(tree, lambda c: _facet_filter_label_type(c) == "category")
     assert pruned == Filter(
         op="and",
         filters=[
