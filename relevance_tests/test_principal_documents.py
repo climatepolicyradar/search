@@ -294,6 +294,8 @@ test_cases = [
         ],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
+    # TODO: this search returns a lot of uganda climate change laws, but not the climate change act specified as result number 1
+    # The results returned are: Uganda: National climate change policy; Uganda National Climate Change Act 2021; Uganda National Climate Change Communication Strategy (UNCCCS) 2017...
     PrecisionTestCase[Document](
         category="document name",
         search_terms="climate change law uganda",
