@@ -163,10 +163,10 @@ jobs:
 
   dependabot:
     name: Dependabot Auto-pilot
-    needs: [lint, test, tests, check-scripts-structure]
+    needs: [lint, tests]
     permissions:
       pull-requests: write
       contents: write
     uses: climatepolicyradar/reusable-workflows/.github/workflows/dependabot-autopilot.yml@v23
     with:
-      auto-approve: false
+      auto-approve: true
