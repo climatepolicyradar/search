@@ -17,6 +17,7 @@ T = TypeVar("T", bound=BaseModel)
 class Aggregations(BaseModel):
     labels: list[CountAggregation[Label]]
 
+
 class Facets(BaseModel):
     labels: dict[str, list[CountAggregation[Label]]]
 
@@ -35,5 +36,3 @@ class SearchResponse[T](BaseModel):
     aggregations: Aggregations | None = None
     facets: Facets | None = None
     debug_info: list[dict] | None = None
-    took_ms: int | None = None
-    
