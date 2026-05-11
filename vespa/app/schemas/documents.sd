@@ -257,7 +257,7 @@ schema documents {
 
     rank-profile nativerank inherits default {
         function title_score () {
-            expression: query(title_weight) * nativeRank(title) + nativeProximity(title)
+            expression: query(title_weight) * nativeRank(title) + nativeProximity(title) + fieldMatch(title).fieldCompleteness
         }
         function description_score () {
             expression: query(description_weight) * nativeRank(description)
@@ -275,12 +275,10 @@ schema documents {
             expression: query(identifier_weight) * (nativeRank(case_number) + nativeRank(project_id))
         }
 
-
-
         first-phase {
             expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + identifiers_score()
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms) identifiers_score()
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) fieldMatch(title).fieldCompleteness nativeRank(title_synonyms) identifiers_score()
     }
 
     rank-profile label-boosted inherits nativerank {
