@@ -266,7 +266,7 @@ schema documents {
             expression: query(passages_weight) * nativeRank(passages_text)
         }
         function geographies_score () {
-            expression: query(geographies_weight) * nativeRank(geographies)
+            expression: query(geographies_weight) * matches(geographies)
         }
         function title_synonyms_score () {
             expression: nativeRank(title_synonyms)
