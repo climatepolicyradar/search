@@ -1,0 +1,50 @@
+name: Pulumi Up
+
+on:
+  # checkov:skip=CKV_GHA_7: this is a deploy workflow, not a build; the environment input selects the target stack and does not affect a build artifact
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Pulumi stack environment to deploy
+        type: choice
+        options:
+          - production
+          - staging
+        default: production
+        required: true
+  workflow_call:
+    inputs:
+      environment:
+        description: Pulumi stack environment to deploy
+        type: string
+        required: true
+
+permissions:
+  contents: write
+  # needed for reading the OIDC token and assuming the role
+  id-token: write
+
+jobs:
+  pulumi_up:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ inputs.environment }}-github-actions
+          role-session-name: GitHub_Pulumi_up_${{ inputs.environment }}
+          aws-region: eu-west-1
+          # checkov:skip=CKV_GHA_7: this is a deploy workflow, not a build; the environment input selects the target stack and does not affect a build artifact
+          # trunk-ignore(actionlint/action): aws-profile is a valid v6 input; actionlint's popular-actions metadata is stale
+          aws-profile: ${{ inputs.environment }}
+      - uses: astral-sh/setup-uv@v7
+      - uses: extractions/setup-just@v4
+      - run: just install
+      - uses: pulumi/actions@v7
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - working-directory: ./infra
+        run: pulumi up --stack climatepolicyradar/search/${{ inputs.environment }} --yes --skip-preview
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

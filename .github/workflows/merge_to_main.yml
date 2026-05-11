@@ -131,11 +131,30 @@ jobs:
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             exit 1
           fi
-  deploy-api:
+  deploy-api-apprunner-deprecated:
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-deploy == 'true'
+
+  # @see: https://github.com/marketplace/actions/amazon-ecs-deploy-express-service-action-for-github-actions#complete-example-with-all-options
+  deploy-api:
+    runs-on: ubuntu-latest
+    needs: [changes, tests]
+    if: needs.changes.outputs.run-deploy == 'true'
+    environment: production
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-production-github-actions
+          role-session-name: GitHub_Deploy_API_ECS
+          aws-region: eu-west-1
+      - uses: aws-actions/amazon-ecs-deploy-express-service@v1
+        with:
+          service-name: search-api
+          image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/search-api:latest
+          execution-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole
+          infrastructure-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsInfrastructureRole
 
   deploy-prefect:
     uses: ./.github/workflows/prefect_deploy.yml
@@ -150,32 +169,9 @@ jobs:
     if: needs.changes.outputs.run-vespa-deploy == 'true'
 
   pulumi-up:
-    runs-on: ubuntu-latest
-    name: Pulumi Up
+    uses: ./.github/workflows/pulumi_up.yml
+    secrets: inherit
     needs: [changes]
     if: needs.changes.outputs.run-pulumi-up == 'true'
-    strategy:
-      matrix:
-        environment: [production]
-      fail-fast: false
-    environment: ${{ matrix.environment }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions
-          role-session-name: GitHub_Pulumi_up_production
-          aws-region: eu-west-1
-      - uses: astral-sh/setup-uv@v7
-      - uses: extractions/setup-just@v4
-      - run: just install
-      - name: Install Pulumi
-        uses: pulumi/actions@v7
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - name: Pulumi up
-        working-directory: ./infra
-        run: |
-          pulumi up --stack climatepolicyradar/search/${{ matrix.environment }} --yes --skip-preview
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+    with:
+      environment: production
