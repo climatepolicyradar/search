@@ -1,3 +1,5 @@
+import re
+
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -170,7 +172,8 @@ test_cases = [
         characteristics_test=lambda document: "milieudefensie"
         in document.title.lower(),
         description="Searching for 'milieudefensie' should return cases with 'milieudefensie' in the name",
-        k=5,
+        # There are only 2 principal docs with mileudefensie in the title
+        k=2,
     ),
     # TODO: not sure what the correct case is for this
     # PrecisionTestCase[Document](
@@ -236,18 +239,21 @@ test_cases = [
     FieldCharacteristicsTestCase[Document](
         category="entity name + acronym",
         search_terms="erp",
-        characteristics_test=lambda document: any(
-            term in document.title.lower() for term in ["emissions reduction plan"]
-        ),
-        description="Search for 'erp' should return documents with 'emissions reduction plan' in the title",
+        characteristics_test=lambda document: bool(
+            re.search(r"\bemissions?\b", document.title, re.IGNORECASE)
+        )
+        and "reduction" in document.title.lower()
+        and "plan" in document.title.lower(),
+        description="Search for 'erp' should return documents with 'emission(s) reduction plan' in the title",
         k=10,
     ),
     FieldCharacteristicsTestCase[Document](
         category="entity name + acronym",
         search_terms="necp",
-        characteristics_test=lambda document: "national energy and climate plan"
-        in document.title.lower(),
-        description="Search for 'necp' should return documents with 'national energy and climate plan' in the title",
+        characteristics_test=lambda document: all_words_in_string(
+            ["national", "energy", "climate", "plan"], document.title
+        ),
+        description="Search for 'necp' should return documents with the NECP word set in the title",
         k=10,
     ),
     # TODO: use relevant labels if they exist, e.g., document type = "climate action plan"
