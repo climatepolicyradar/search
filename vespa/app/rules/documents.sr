@@ -15,3 +15,6 @@ sfdr -> sustainable finance disclosure regulation;
 erp -> emissions reduction plan;
 necp -> national energy and climate plan;
 phaseout -> phase out;
+
+# Many climate/energy laws are titled "... act ..."
+law +> ?act;
