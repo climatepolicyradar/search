@@ -7,10 +7,18 @@ import pulumi
 from pulumi_aws import (
     apprunner,
     ecr,
+    ecs,
     get_caller_identity,
     iam,
     s3,
     ssm,
+)
+from pulumi_aws.ecs.express_gateway_service import (
+    ExpressGatewayService,
+    ExpressGatewayServicePrimaryContainerArgs,
+    ExpressGatewayServicePrimaryContainerEnvironmentArgs,
+    ExpressGatewayServicePrimaryContainerSecretArgs,
+    ExpressGatewayServiceScalingTargetArgs,
 )
 
 from search.config import (
@@ -368,6 +376,158 @@ wikibase_password_ssm = ssm.Parameter(
 # These exports are the public API for this stack, and consumed by external stacks
 # Edit with caution
 pulumi.export("apprunner_service_url", apprunner_service.service_url)
+
+# -----
+# ECS Express Mode (running in parallel with AppRunner during migration)
+# -----
+
+# Task role: runtime permissions (S3 read) — reuses the same policy as AppRunner
+ecs_task_role = iam.Role(
+    f"{application_name}-ecs-task-role",
+    name=f"{application_name}-ecs-task-role",
+    assume_role_policy=iam.get_policy_document(
+        statements=[
+            iam.GetPolicyDocumentStatementArgs(
+                effect="Allow",
+                principals=[
+                    iam.GetPolicyDocumentStatementPrincipalArgs(
+                        type="Service",
+                        identifiers=["ecs-tasks.amazonaws.com"],
+                    )
+                ],
+                actions=["sts:AssumeRole"],
+            )
+        ]
+    ).json,
+)
+iam.RolePolicyAttachment(
+    f"{application_name}-ecs-task-reads3-policy-attachment",
+    role=ecs_task_role.name,
+    policy_arn=apprunner_read_s3_policy.arn,
+)
+
+# Execution role: pulls the image and injects secrets at container startup
+ecs_task_execution_role = iam.Role(
+    f"{application_name}-ecs-task-execution-role",
+    name=f"{application_name}-ecs-task-execution-role",
+    assume_role_policy=iam.get_policy_document(
+        statements=[
+            iam.GetPolicyDocumentStatementArgs(
+                effect="Allow",
+                principals=[
+                    iam.GetPolicyDocumentStatementPrincipalArgs(
+                        type="Service",
+                        identifiers=["ecs-tasks.amazonaws.com"],
+                    )
+                ],
+                actions=["sts:AssumeRole"],
+            )
+        ]
+    ).json,
+    managed_policy_arns=[
+        "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+    ],
+)
+iam.RolePolicy(
+    f"{application_name}-ecs-execution-ssm-policy",
+    name=f"{application_name}-ecs-execution-ssm-policy",
+    role=ecs_task_execution_role.name,
+    policy=pulumi.Output.all(
+        vespa_endpoint_arn=vespa_endpoint.arn,
+        vespa_read_token_arn=vespa_read_token.arn,
+    ).apply(
+        lambda args: json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+                        "Resource": [
+                            args["vespa_endpoint_arn"],
+                            args["vespa_read_token_arn"],
+                        ],
+                    }
+                ],
+            }
+        )
+    ),
+)
+
+# Infrastructure role: manages the ALB, target groups, and security groups
+ecs_infrastructure_role = iam.Role(
+    f"{application_name}-ecs-infrastructure-role",
+    name=f"{application_name}-ecs-infrastructure-role",
+    assume_role_policy=iam.get_policy_document(
+        statements=[
+            iam.GetPolicyDocumentStatementArgs(
+                effect="Allow",
+                principals=[
+                    iam.GetPolicyDocumentStatementPrincipalArgs(
+                        type="Service",
+                        identifiers=["ecs.amazonaws.com"],
+                    )
+                ],
+                actions=["sts:AssumeRole"],
+            )
+        ]
+    ).json,
+    managed_policy_arns=[
+        "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices",
+    ],
+)
+
+ecs_cluster = ecs.Cluster(
+    f"{application_name}-ecs-cluster",
+    name="search",
+    settings=[ecs.ClusterSettingArgs(
+        name="containerInsights",
+        value="enabled",
+    )]
+)
+
+ecs_express_service = ExpressGatewayService(
+    f"{application_name}-ecs-express-service",
+    service_name=application_name,
+    cluster=ecs_cluster.arn,
+    execution_role_arn=ecs_task_execution_role.arn,
+    infrastructure_role_arn=ecs_infrastructure_role.arn,
+    task_role_arn=ecs_task_role.arn,
+    primary_container=ExpressGatewayServicePrimaryContainerArgs(
+        image=repo.repository_url.apply(lambda url: f"{url}:latest"),
+        container_port=8080,
+        environments=[
+            ExpressGatewayServicePrimaryContainerEnvironmentArgs(
+                name="BUCKET_NAME", value=bucket.bucket
+            ),
+        ],
+        secrets=[
+            ExpressGatewayServicePrimaryContainerSecretArgs(
+                name="VESPA_ENDPOINT", value_from=vespa_endpoint.arn
+            ),
+            ExpressGatewayServicePrimaryContainerSecretArgs(
+                name="VESPA_READ_TOKEN", value_from=vespa_read_token.arn
+            ),
+        ],
+    ),
+    health_check_path="/",
+    cpu="1024",
+    memory="2048",
+    scaling_targets=[
+        ExpressGatewayServiceScalingTargetArgs(
+            auto_scaling_metric="AVERAGE_CPU",
+            auto_scaling_target_value=70,
+            min_task_count=1,
+            max_task_count=4,
+        ),
+    ],
+)
+pulumi.export(
+    "ecs_express_service_url",
+    ecs_express_service.ingress_paths.apply(
+        lambda paths: paths[0].endpoint if paths else None
+    ),
+)
 
 # region Prefect
 ecr_repository = components_aws.ecr.Repository(

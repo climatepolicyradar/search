@@ -78,7 +78,7 @@ lint:
 
   enabled:
     - pyright@1.1.408
-    - actionlint@1.7.10
+    - actionlint@1.7.12
     - bandit@1.9.3
     - checkov@3.2.500
     - git-diff-check
