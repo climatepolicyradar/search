@@ -1,7 +1,10 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import APIRouter, Depends, Query
 from pydantic_settings import SettingsConfigDict
 
-from api.types import Aggregations, SearchResponse
+from api.types import Aggregations, Facets, SearchResponse
 from api.utils import documents_order_by, normalise_filters, order_by, pagination
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
@@ -38,6 +41,7 @@ def read_documents(
     debug: bool = False,
     bolding: bool = False,
 ):
+    start = time.perf_counter()
     logger.info(
         "Searching documents "
         "(query=%r, page_token=%s, page_size=%s, debug=%s, bolding=%s, "
@@ -56,16 +60,27 @@ def read_documents(
         settings=settings, debug=debug, bolding=bolding
     )
     try:
-        results = engine.search(
-            query=query,
-            pagination=pagination,
-            order_by=order_by,
-            filters_json_string=normalised_filters,
-        )
-        labels_aggregations = engine.aggregations(
-            query=query,
-            filters_json_string=normalised_filters,
-        )
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_search = pool.submit(
+                engine.search,
+                query=query,
+                pagination=pagination,
+                order_by=order_by,
+                filters_json_string=normalised_filters,
+            )
+            f_aggregations = pool.submit(
+                engine.aggregations,
+                query=query,
+                filters_json_string=normalised_filters,
+            )
+            f_facets = pool.submit(
+                engine.facets,
+                query=query,
+                filters_json_string=normalised_filters,
+            )
+        results = f_search.result()
+        labels_aggregations = f_aggregations.result()
+        labels_facets = f_facets.result()
     except Exception:
         logger.exception(
             "Error: document search request failed "
@@ -85,7 +100,9 @@ def read_documents(
     )
 
     # TODO: pagination
+    took_ms = int((time.perf_counter() - start) * 1000)
     return SearchResponse[Document](
+        took_ms=took_ms,
         total_size=results.total_size,
         page=0,
         page_size=0,
@@ -95,6 +112,7 @@ def read_documents(
         results=results.results,
         debug_info=engine.last_debug_info if debug else None,
         aggregations=Aggregations(labels=labels_aggregations),
+        facets=Facets(labels=labels_facets),
     )
 
 

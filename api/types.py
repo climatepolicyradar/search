@@ -18,9 +18,14 @@ class Aggregations(BaseModel):
     labels: list[CountAggregation[Label]]
 
 
+class Facets(BaseModel):
+    labels: dict[str, list[CountAggregation[Label]]]
+
+
 class SearchResponse[T](BaseModel):
     """Response model for search results."""
 
+    took_ms: int | None = None
     total_size: int | None = None
     page: int
     page_size: int
@@ -29,4 +34,5 @@ class SearchResponse[T](BaseModel):
     previous_page: AnyHttpUrl | None = None
     results: list[T]
     aggregations: Aggregations | None = None
+    facets: Facets | None = None
     debug_info: list[dict] | None = None

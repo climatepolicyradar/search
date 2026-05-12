@@ -8,6 +8,9 @@ from search.engines.dev_vespa import (
     Filter,
     _build_condition_yql,
     _build_filter_yql,
+    _facet_filter_label_type,
+    _get_label_types_from_filters,
+    _prune_filter,
 )
 
 
@@ -192,3 +195,130 @@ def test_nested_filter_group_renders_with_parentheses() -> None:
         'attributes_double contains sameElement(key contains "project_cost_usd", '
         "value > 100.0))"
     )
+
+
+# region Faceting helpers
+
+
+def test_facet_filter_label_type_extracts_prefix_from_id_value() -> None:
+    """`labels.value.id` filters carry the type as a prefix on their value."""
+    condition = FieldFilter(
+        field="labels.value.id",
+        op="contains",
+        value="category::Law",
+    )
+    assert _facet_filter_label_type(condition) == "category"
+
+
+def test_facet_filter_label_type_returns_none_for_value_filter() -> None:
+    """Value-based label filters carry no type prefix and return None."""
+    condition = FieldFilter(
+        field="labels.value.value",
+        op="contains",
+        value="Romania",
+    )
+    assert _facet_filter_label_type(condition) is None
+
+
+def test_facet_filter_label_type_returns_none_for_attribute_condition() -> None:
+    """Attribute conditions are never typed-facet selections."""
+    condition = AttributesCondition(
+        field="attributes_double",
+        key="project_cost_usd",
+        op="eq",
+        value=1.0,
+    )
+    assert _facet_filter_label_type(condition) is None
+
+
+def test_get_label_types_from_filters_walks_nested_groups() -> None:
+    """All typed selections in a nested tree are collected."""
+    tree = Filter(
+        op="and",
+        filters=[
+            Filter(
+                op="or",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.id",
+                        op="contains",
+                        value="category::Law",
+                    ),
+                    FieldFilter(
+                        field="labels.value.id",
+                        op="contains",
+                        value="category::Policy",
+                    ),
+                ],
+            ),
+            FieldFilter(
+                field="labels.value.id",
+                op="contains",
+                value="geography::USA",
+            ),
+            FieldFilter(
+                field="labels.value.value",
+                op="contains",
+                value="Romania",
+            ),
+        ],
+    )
+    assert _get_label_types_from_filters(tree) == {"category", "geography"}
+
+
+def test_prune_filter_drops_matching_conditions_and_collapses_empty_groups() -> None:
+    """Pruning removes hits and collapses groups that become empty."""
+    tree = Filter(
+        op="and",
+        filters=[
+            Filter(
+                op="or",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.id",
+                        op="contains",
+                        value="category::Law",
+                    ),
+                    FieldFilter(
+                        field="labels.value.id",
+                        op="contains",
+                        value="category::Policy",
+                    ),
+                ],
+            ),
+            FieldFilter(
+                field="labels.value.id",
+                op="contains",
+                value="geography::USA",
+            ),
+        ],
+    )
+    pruned = _prune_filter(tree, lambda c: _facet_filter_label_type(c) == "category")
+    assert pruned == Filter(
+        op="and",
+        filters=[
+            FieldFilter(
+                field="labels.value.id",
+                op="contains",
+                value="geography::USA",
+            ),
+        ],
+    )
+
+
+def test_prune_filter_collapses_to_none_when_everything_drops() -> None:
+    """A tree where every leaf is dropped collapses to None."""
+    tree = Filter(
+        op="and",
+        filters=[
+            FieldFilter(
+                field="labels.value.id",
+                op="contains",
+                value="category::Law",
+            ),
+        ],
+    )
+    assert _prune_filter(tree, lambda _c: True) is None
+
+
+# endregion
