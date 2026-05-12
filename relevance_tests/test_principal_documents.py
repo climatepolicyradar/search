@@ -444,8 +444,7 @@ def relevance_tests_principal_documents():
     """Run relevance tests for documents"""
 
     engines = [
-        # add debug=True to this engine for a debug summary
-        DevVespaPrincipalDocumentSearchEngine(settings=settings),
+        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
     ]
 
     # Principals aren't a primitive, but we use the primitive name to determine where
