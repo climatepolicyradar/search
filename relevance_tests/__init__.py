@@ -1,6 +1,7 @@
+import copy
 from collections import defaultdict
 from pathlib import Path
-from typing import Generic, Sequence, TypeVar
+from typing import Any, Generic, Sequence, TypeVar
 
 from prefect.cache_policies import NO_CACHE
 from prefect.futures import wait
@@ -31,6 +32,7 @@ class TestResult(BaseModel, Generic[T]):
     passed: bool
     search_engine_id: str
     search_results: list[T]
+    debug_info: list[dict[str, Any]] | None = None
 
 
 def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:
@@ -44,6 +46,25 @@ def save_test_results_as_jsonl(test_results: list[TestResult], file_path: Path) 
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(jsonl_results)
     logger.info(f"Saved test results to {file_path}")
+
+
+def save_test_results_as_html(
+    test_results: list[TestResult],
+    file_path: Path,
+    engine_name: str,
+    test_run_id: str,
+) -> None:
+    """Save test results as a self-contained HTML report for domain-expert review."""
+    from relevance_tests.html_report import render_test_results_html
+
+    html = render_test_results_html(
+        test_results=test_results,
+        engine_name=engine_name,
+        test_run_id=test_run_id,
+    )
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(html)
+    logger.info(f"Saved HTML test report to {file_path}")
 
 
 def generate_test_run_id(
@@ -214,11 +235,15 @@ def run_tests_for_engine(
             test_passed = False
             search_results = []
 
+        raw_debug_info = getattr(engine, "last_debug_info", None)
+        debug_info = copy.deepcopy(raw_debug_info) if raw_debug_info else None
+
         test_result = TestResult(
             test_case=test_case,
             passed=test_passed,
             search_engine_id=engine.id,
             search_results=search_results,
+            debug_info=debug_info,
         )
         engine_test_results.append(test_result)
 
@@ -230,11 +255,18 @@ def run_tests_for_engine(
     )
 
     test_run_id = generate_test_run_id(engine, test_cases, engine_test_results)
-    output_file_path = (
-        TEST_RESULTS_DIR / output_subdir / f"{engine.name}_{test_run_id}.jsonl"
-    )
+    output_dir = TEST_RESULTS_DIR / output_subdir
+    output_file_stem = output_dir / f"{engine.name}_{test_run_id}"
 
-    save_test_results_as_jsonl(engine_test_results, output_file_path)
+    save_test_results_as_jsonl(
+        engine_test_results, output_file_stem.with_suffix(".jsonl")
+    )
+    save_test_results_as_html(
+        engine_test_results,
+        output_file_stem.with_suffix(".html"),
+        engine_name=engine.name,
+        test_run_id=str(test_run_id),
+    )
 
 
 def run_relevance_tests_parallel(
