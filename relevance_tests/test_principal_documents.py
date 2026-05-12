@@ -10,6 +10,7 @@ from search.engines.dev_vespa import DevVespaPrincipalDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
+    RecallTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
 )
@@ -432,6 +433,23 @@ test_cases = [
             "CCLW.family.i00000498.n0000",  # "Carbon Sinks Strategy (draft)"
         ],
         description="searching for a child document title should return its parent family in principal search",
+    ),
+    # TODO: needs ability to filter on litigation corpus type
+    RecallTestCase[Document](
+        category="topic name",
+        search_terms="air pollution",
+        description="search for names of rarer topics (air pollution) should return consequential cases",
+        # Ohio v. EPA
+        # description = Challenge to EPA's reinstatement of the waiver allowing California to regulate greenhouse gas emissions from motor vehicles.
+        expected_result_ids=["Sabin.family.16851.0"],
+        k=20,
+    ),
+    RecallTestCase[Document](
+        category="topic name",
+        search_terms="loss & damage finance",
+        description="search for loss & damage finance should return NDCs from small island developing states in the top 20 results",
+        expected_result_ids=["UNFCCC.family.i00004847.n0000"],
+        k=20,
     ),
 ]
 

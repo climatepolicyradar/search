@@ -8,6 +8,7 @@ from search.engines.dev_vespa import DevVespaDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
+    RecallTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
 )
@@ -404,6 +405,21 @@ test_cases = [
             "UNFCCC.family.i00000492.n0000",  # "United Kingdom  Nationally Determined Contribution. NDC3.0" (united-kingdom-nationally-determined-contribution-ndc3-0_aad3)
         ],
         description="searching for 'United Kingdom Nationally Determined Contribution. NDC3.0' should return that family as the top result",
+    ),
+    # TODO: needs ability to filter on litigation corpus type
+    RecallTestCase[Document](
+        category="topic name",
+        search_terms="air pollution",
+        description="search for names of rarer topics should return important documents to that topic",
+        expected_result_ids=["Sabin.document.121443.127392"],
+        k=20,
+    ),
+    RecallTestCase[Document](
+        category="topic name",
+        search_terms="loss & damage finance",
+        description="search for loss & damage finance should return NDCs from small island developing states in the top 20 results",
+        expected_result_ids=["UNFCCC.document.i00004848.n0000"],
+        k=20,
     ),
 ]
 
