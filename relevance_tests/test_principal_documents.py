@@ -288,9 +288,14 @@ test_cases = [
     PrecisionTestCase[Document](
         category="document name",
         search_terms="uganda climate change act",
-        expected_result_ids=["CCLW.family.10180.0"],
+        expected_result_ids=[
+            "CCLW.family.10180.0",  # National Climate Change Act 2021
+            "CPR.family.i00002330.n0000",  # Uganda National Climate Change Act 2021
+        ],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
+    # TODO: this search returns a lot of uganda climate change laws, but not the climate change act specified as result number 1
+    # The results returned are: Uganda: National climate change policy; Uganda National Climate Change Act 2021; Uganda National Climate Change Communication Strategy (UNCCCS) 2017...
     PrecisionTestCase[Document](
         category="document name",
         search_terms="climate change law uganda",
