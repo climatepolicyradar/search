@@ -417,8 +417,7 @@ def relevance_tests_documents():
 
     engines = [
         # BM25TitleVespaDocumentSearchEngine(),
-        # add debug=True to this engine for a debug summary
-        DevVespaDocumentSearchEngine(settings=settings),
+        DevVespaDocumentSearchEngine(settings=settings, debug=True),
     ]
 
     run_relevance_tests_parallel(
