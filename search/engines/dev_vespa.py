@@ -992,25 +992,26 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
     ) -> ListResponse[Document]:
         """Search principal documents"""
 
-        if filters_json_string is not None:
-            raise ValueError(
-                "Filters can't be used in this search engine. Use DevVespaDocumentSearchEngine directly instead."
-            )
-
-        filters_json_string = json.dumps(
-            {
-                "op": "and",
-                "filters": [
-                    {
-                        "field": "labels.value.id",
-                        "op": "contains",
-                        "value": "status::Principal",
-                    }
-                ],
-            }
+        principal_filter = Filter(
+            op="and",
+            filters=[
+                FieldFilter(
+                    field="labels.value.id",
+                    op="contains",
+                    value="status::Principal",
+                )
+            ],
         )
 
-        return super().search(query, pagination, order_by, filters_json_string)
+        if filters_json_string is not None:
+            caller_filter = Filter.model_validate_json(filters_json_string)
+            merged_filter = Filter(op="and", filters=[principal_filter, caller_filter])
+        else:
+            merged_filter = principal_filter
+
+        return super().search(
+            query, pagination, order_by, merged_filter.model_dump_json()
+        )
 
 
 class DevVespaPassageSearchEngine(SearchEngine[Passage]):
