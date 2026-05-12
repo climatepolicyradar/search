@@ -434,10 +434,10 @@ test_cases = [
         ],
         description="searching for a child document title should return its parent family in principal search",
     ),
-    # TODO: needs ability to filter on litigation corpus type
     RecallTestCase[Document](
         category="topic name",
         search_terms="air pollution",
+        corpus="ccc",
         description="search for names of rarer topics (air pollution) should return consequential cases",
         # Ohio v. EPA
         # description = Challenge to EPA's reinstatement of the waiver allowing California to regulate greenhouse gas emissions from motor vehicles.

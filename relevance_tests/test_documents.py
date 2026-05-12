@@ -406,10 +406,10 @@ test_cases = [
         ],
         description="searching for 'United Kingdom Nationally Determined Contribution. NDC3.0' should return that family as the top result",
     ),
-    # TODO: needs ability to filter on litigation corpus type
     RecallTestCase[Document](
         category="topic name",
         search_terms="air pollution",
+        corpus="ccc",
         description="search for names of rarer topics should return important documents to that topic",
         expected_result_ids=["Sabin.document.121443.127392"],
         k=20,
