@@ -1,6 +1,6 @@
 from typing import TypeVar
 
-from pydantic import AnyHttpUrl, BaseModel
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
 from search.engines.dev_vespa import (
     CountAggregation,
@@ -19,7 +19,15 @@ class Aggregations(BaseModel):
 
 
 class Facets(BaseModel):
-    labels: dict[str, list[CountAggregation[Label]]]
+    # This allows pydatic to populat via the alias names or pythonic snake_case names.
+    model_config = ConfigDict(populate_by_name=True)
+
+    labels_value_type: dict[str, list[CountAggregation[Label]]] | None = Field(
+        None, alias="labels.value.type"
+    )
+    labels_type: dict[str, list[CountAggregation[Label]]] | None = Field(
+        None, alias="labels.type"
+    )
 
 
 class SearchResponse[T](BaseModel):
