@@ -32,9 +32,13 @@ class EvaluationReport(BaseModel):
 
 
 def _calculate_per_class_metrics(y_true: list[int], y_pred: list[int]) -> PerClass:
-    raw: dict = classification_report(
-        y_true, y_pred, labels=LABELS, output_dict=True, zero_division=0
-    )  # pyright: ignore[reportArgumentType, reportAssignmentType]
+    raw: dict = classification_report(  # pyright: ignore[reportAssignmentType]
+        y_true,
+        y_pred,
+        labels=LABELS,
+        output_dict=True,
+        zero_division=0,  # pyright: ignore[reportArgumentType]
+    )
     return {
         cls: ClassMetrics(
             precision=raw[str(cls)]["precision"],

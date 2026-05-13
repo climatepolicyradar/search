@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+from pydantic import AnyHttpUrl
 from rich.console import Console
 from rich.table import Table
 from src.models import Score
@@ -27,7 +28,8 @@ def load_evaluation_dataset(path: str) -> list[tuple[str, str, Score]]:
     melted["label"] = melted["label"].str.split("|").str[-1]
 
     len_before = len(melted)
-    melted = melted[pd.to_numeric(melted["score"], errors="coerce").notnull()].copy()
+    melted["score"] = pd.to_numeric(melted["score"], errors="coerce")
+    melted = melted.dropna(subset=["score"]).copy()
     skipped = len_before - len(melted)
     if skipped > 0:
         console.log(f"[yellow]Skipped {skipped} rows with non-integer scores[/yellow]")
@@ -72,7 +74,9 @@ def get_document(client: Vespa, document_id: str) -> Document | None:
     return Document(
         title=fields.get("title", ""),
         description=fields.get("description", ""),
-        source_url="https://app.climatepolicyradar.org/FIXME",  # not stored in schema
+        source_url=AnyHttpUrl(
+            "https://app.climatepolicyradar.org/FIXME"
+        ),  # not stored in schema
         original_document_id=document_id,
         labels=[label["id"] for label in fields.get("labels", [])]
         + [concept["id"] for concept in fields.get("concepts", [])],
