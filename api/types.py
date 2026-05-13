@@ -20,6 +20,7 @@ class Aggregations(BaseModel):
 
 class Facets(BaseModel):
     # This allows pydantic to populate via the alias names or pythonic snake_case names.
+    # e.g. both labels.value.type & labels_value_type
     model_config = ConfigDict(populate_by_name=True)
 
     labels_value_type: dict[str, list[CountAggregation[Label]]] | None = Field(
