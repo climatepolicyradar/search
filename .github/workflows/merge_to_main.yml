@@ -153,8 +153,8 @@ jobs:
         with:
           service-name: search-api
           image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/search-api:latest
-          execution-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskExecutionRole
-          infrastructure-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsInfrastructureRole
+          execution-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-api-ecs-task-execution-role
+          infrastructure-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-api-ecs-infrastructure-role
 
   deploy-prefect:
     uses: ./.github/workflows/prefect_deploy.yml
