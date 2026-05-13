@@ -82,7 +82,7 @@ def read_documents(
                 query=query,
                 filters_json_string=normalised_filters,
             )
-            facet_futures = {
+            f_facets = {
                 field: pool.submit(
                     {
                         "facets.labels.value.type": engine.labels_value_type_facets,
@@ -97,7 +97,7 @@ def read_documents(
         labels_aggregations = f_aggregations.result()
         facets_data = {
             field.removeprefix("facets."): future.result()
-            for field, future in facet_futures.items()
+            for field, future in f_facets.items()
         }
     except Exception:
         logger.exception(
