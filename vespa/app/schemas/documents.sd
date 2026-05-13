@@ -169,6 +169,10 @@ schema documents {
         indexing: input labels | for_each { get_field type . "::". get_field id . "::" . get_field value } | attribute
         attribute: fast-search
     }
+    field labels_relationship_id_value_attribute type array<string> {
+        indexing: input labels | for_each { get_field relationship . "::" . get_field id . "::" . get_field value } | attribute
+        attribute: fast-search
+    }
 
     field concepts_value type array<string> {
         indexing: input concepts | for_each { get_field value } | index | summary

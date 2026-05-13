@@ -11,6 +11,12 @@ extract-documents-concepts:
 feed-documents-concepts:
     vespa feed ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
+extract-documents-principal-concepts:
+    aws s3 cp s3://cpr-cache/search/vespa/documents_principal_concepts_feed_materializer.jsonl ../.data_cache/vespa/documents_principal_concepts_feed_materializer.jsonl
+
+feed-documents-principal-concepts:
+    vespa feed ../.data_cache/vespa/documents_principal_concepts_feed_materializer.jsonl --target http://localhost:8080 --progress 30
+
 extract-documents-passages:
     aws s3 cp s3://cpr-cache/search/vespa/documents_passages_feed_materializer.jsonl.gz ../.data_cache/vespa/documents_passages_feed_materializer.jsonl.gz
     gunzip -f ../.data_cache/vespa/documents_passages_feed_materializer.jsonl.gz
