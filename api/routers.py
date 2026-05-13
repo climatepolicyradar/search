@@ -36,11 +36,13 @@ router = APIRouter(prefix="/search")
 FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
 
 
-
 @router.get("/documents", response_model=SearchResponse[Document])
 def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
+    # @see: https://google.aip.dev/157#read-masks-as-a-request-field
+    # Currently this is only facet fields, but might start to include
+    # results and other fields
     fields: list[FacetField] | None = Query(None),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(documents_order_by),
