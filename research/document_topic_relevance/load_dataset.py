@@ -1,5 +1,6 @@
 import argparse
 import json
+from pathlib import Path
 
 import pandas as pd
 from rich.console import Console
@@ -35,6 +36,25 @@ def load_evaluation_dataset(path: str) -> list[tuple[str, str, Score]]:
     return list(melted.itertuples(index=False, name=None))
 
 
+def load_enriched_dataset_from_jsonl(path: str) -> list[tuple[Document, Label, Score]]:
+    """Load the enriched JSONL produced by this script's __main__ into tuples."""
+    out: list[tuple[Document, Label, Score]] = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            out.append(
+                (
+                    Document.model_validate(row["document"]),
+                    Label.model_validate(row["topic"]),
+                    row["score"],
+                )
+            )
+    return out
+
+
 def get_document(client: Vespa, document_id: str) -> Document | None:
     """Fetch a Document from Vespa by its original document ID, or None if missing."""
     console.log(f"📄 Fetching document [bold]{document_id}[/bold]")
@@ -54,7 +74,8 @@ def get_document(client: Vespa, document_id: str) -> Document | None:
         description=fields.get("description", ""),
         source_url="https://app.climatepolicyradar.org/FIXME",  # not stored in schema
         original_document_id=document_id,
-        labels=[label["id"] for label in fields.get("labels", [])],
+        labels=[label["id"] for label in fields.get("labels", [])]
+        + [concept["id"] for concept in fields.get("concepts", [])],
     )
 
 
@@ -92,8 +113,9 @@ if __name__ == "__main__":
         "--vespa-url", default="http://localhost", help="Vespa base URL"
     )
     parser.add_argument("--vespa-port", type=int, default=8080, help="Vespa port")
-    parser.add_argument("--output", default="dataset.jsonl", help="Output JSONL file")
     args = parser.parse_args()
+
+    output_path = Path(__file__).parent / Path("data/dataset.jsonl")
 
     client = Vespa(url=args.vespa_url, port=args.vespa_port)
     console.log(f"🔌 Connected to Vespa at {args.vespa_url}:{args.vespa_port}")
@@ -121,7 +143,7 @@ if __name__ == "__main__":
 
     written = 0
     skipped = 0
-    with open(args.output, "w") as f:
+    with open(output_path, "w") as f:
         for document_id, label_id, score in dataset:
             document = documents_by_id[document_id]
             label = labels_by_id[label_id]
@@ -155,7 +177,7 @@ if __name__ == "__main__":
             )
 
     console.log(
-        f"✅ Wrote {written} entries to [bold]{args.output}[/bold]"
+        f"✅ Wrote {written} entries to [bold]{output_path}[/bold]"
         + (f" ([yellow]{skipped} skipped[/yellow])" if skipped else "")
     )
     console.print(table)
