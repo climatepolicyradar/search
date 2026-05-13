@@ -313,10 +313,27 @@ search_api_github_actions_role = iam.Role(
                                 "iam:GetPolicy",
                                 "iam:GetRole",
                                 "acm:DescribeCertificate",
+                                # used for ECS deployment
+                                "ecs:DescribeServices",
+                                "ecs:DescribeExpressGatewayService",
+                                "ecs:CreateExpressGatewayService",
+                                "ecs:UpdateExpressGatewayService",
+                                "ecs:CreateCluster",
+                                "ecs:RegisterTaskDefinition",
+                                "ecs:ListServiceDeployments",
+                                "ecs:DescribeServiceDeployments",
                             ],
                             "Effect": "Allow",
                             "Resource": "*",
-                        }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": "sts:AssumeRole",
+                            "Resource": [
+                                f"arn:aws:iam::{account_id}:role/{application_name}-ecs-infrastructure-role",
+                                f"arn:aws:iam::{account_id}:role/{application_name}-ecs-task-execution-role",
+                            ],
+                        },
                     ],
                 }
             ),
@@ -421,7 +438,19 @@ ecs_task_execution_role = iam.Role(
                     )
                 ],
                 actions=["sts:AssumeRole"],
-            )
+            ),
+            iam.GetPolicyDocumentStatementArgs(
+                effect="Allow",
+                principals=[
+                    iam.GetPolicyDocumentStatementPrincipalArgs(
+                        type="AWS",
+                        identifiers=[
+                            f"arn:aws:iam::{account_id}:role/{name}-{stack}-github-actions"
+                        ],
+                    )
+                ],
+                actions=["sts:AssumeRole"],
+            ),
         ]
     ).json,
     managed_policy_arns=[
@@ -469,7 +498,19 @@ ecs_infrastructure_role = iam.Role(
                     )
                 ],
                 actions=["sts:AssumeRole"],
-            )
+            ),
+            iam.GetPolicyDocumentStatementArgs(
+                effect="Allow",
+                principals=[
+                    iam.GetPolicyDocumentStatementPrincipalArgs(
+                        type="AWS",
+                        identifiers=[
+                            f"arn:aws:iam::{account_id}:role/{name}-{stack}-github-actions"
+                        ],
+                    )
+                ],
+                actions=["sts:AssumeRole"],
+            ),
         ]
     ).json,
     managed_policy_arns=[
@@ -480,10 +521,12 @@ ecs_infrastructure_role = iam.Role(
 ecs_cluster = ecs.Cluster(
     f"{application_name}-ecs-cluster",
     name="search",
-    settings=[ecs.ClusterSettingArgs(
-        name="containerInsights",
-        value="enabled",
-    )]
+    settings=[
+        ecs.ClusterSettingArgs(
+            name="containerInsights",
+            value="enabled",
+        )
+    ],
 )
 
 ecs_express_service = ExpressGatewayService(
