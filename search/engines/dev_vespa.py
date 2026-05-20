@@ -1284,6 +1284,147 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
 
         return types
 
+    def tmp_labels(self) -> ListResponse[DataInLabel]:
+        """Labels for UI testing"""
+        return ListResponse(
+            results=[
+                DataInLabel(
+                    id="region::South Asia",
+                    type="region",
+                    value="South Asia",
+                    labels=[],
+                ),
+                DataInLabel(
+                    id="country::India",
+                    type="country",
+                    value="India",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="region::South Asia",
+                                type="region",
+                                value="South Asia",
+                            )
+                        ),
+                    ]
+                ),
+                DataInLabel(
+                    id="subdivision::Kerela",
+                    type="subdivision",
+                    value="Kerela",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::India",
+                                type="country",
+                                value="India",
+                            )
+                        ),
+                    ]
+                ),
+                DataInLabel(
+                    id="subdivision::Punjab",
+                    type="subdivision",
+                    value="Punjab",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::India",
+                                type="country",
+                                value="India",
+                            )
+                        ),
+                    ]
+                ),
+                DataInLabel(
+                    id="region::North America",
+                    type="region",
+                    value="North America",
+                    labels=[],
+                ),
+                DataInLabel(
+                    id="country::USA",
+                    type="country",
+                    value="USA",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="region::North America",
+                                type="region",
+                                value="North America",
+                            )
+                        ),
+                    ]
+                ),
+                DataInLabel(
+                    id="country::Canada",
+                    type="country",
+                    value="Canada",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="region::North America",
+                                type="region",
+                                value="North America",
+                            )
+                        ),
+                    ]
+                ),
+                DataInLabel(
+                    id="subdivision::Texas",
+                    type="subdivision",
+                    value="Texas",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::USA",
+                                type="country",
+                                value="USA",
+                            )
+                        ),
+                    ]
+                ),
+                DataInLabel(
+                    id="subdivision::California",
+                    type="subdivision",
+                    value="California",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::USA",
+                                type="country",
+                                value="USA",
+                            )
+                        ),
+                    ]
+                ),
+                DataInLabel(
+                    id="subdivision::British Columbia",
+                    type="subdivision",
+                    value="British Columbia",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::Canada",
+                                type="country",
+                                value="Canada",
+                            )
+                        ),
+                    ]
+                ),
+            ],
+            total_size=0,
+            next_page_token=None,
+        )
+
     def count(self, query: str) -> int:
         """Return hit count for DevVespaLabelSearchEngine."""
         raise NotImplementedError()
