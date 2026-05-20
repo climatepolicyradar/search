@@ -29,7 +29,11 @@ jobs:
           aws-region: eu-west-1
       - uses: aws-actions/amazon-ecr-login@v2
       - run: just prefect-build
+        env:
+          DOCKER_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com
       - run: just prefect-push
+        env:
+          DOCKER_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com
       - run: just prefect-deploy
         env:
           DOCKER_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com
