@@ -23,6 +23,7 @@ class VespaLabel(TypedDict):
     subconcept_labels: list[str]
     description: str
     negative_labels: list[str]
+    label_source: str
 
 
 class VespaLabelUpdate(TypedDict):
@@ -33,6 +34,7 @@ class VespaLabelUpdate(TypedDict):
     subconcept_labels: VespaAssign[list[str]]
     description: VespaAssign[str]
     negative_labels: VespaAssign[list[str]]
+    label_source: VespaAssign[str]
 
 
 def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpdate]:
@@ -48,6 +50,7 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
             "subconcept_labels": {"assign": label["subconcept_labels"]},
             "description": {"assign": label["description"]},
             "negative_labels": {"assign": label["negative_labels"]},
+            "label_source": {"assign": label["label_source"]},
         },
     }
 
@@ -68,6 +71,7 @@ def labels_feed_materializer():
                 "subconcept_labels": [],
                 "description": "",
                 "negative_labels": [],
+                "label_source": orjson.dumps(label_rel).decode(),
             }
 
     inference_results = read_inference_results()
@@ -102,6 +106,7 @@ def labels_feed_materializer():
             "subconcept_labels": concept["subconcept_labels"],
             "description": concept["description"] or "",
             "negative_labels": concept["negative_labels"],
+            # label_source should be added here as string representation of data in label_rel
         }
     unique_labels = list(labels.values())
 
