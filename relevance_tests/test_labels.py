@@ -323,7 +323,7 @@ def relevance_tests_labels():
     """Run relevance tests for labels"""
 
     engines = [
-        DevVespaLabelSearchEngine(settings=settings),
+        DevVespaLabelSearchEngine(settings=settings, debug=True),
         # VespaLabelSearchEngine(),
     ]
 

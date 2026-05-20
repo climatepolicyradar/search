@@ -19,6 +19,8 @@ For now we just use `requests` which yields the same results.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any, Literal
 
@@ -170,6 +172,7 @@ def _published_date_operand(value: str | int | float, op: str) -> int:
 filter_field_to_vespa_field_map = {
     "labels.value.id": ["labels.id", "concepts.id"],
     "labels.value.value": ["labels.value", "concepts.value"],
+    "labels.type": ["labels.relationship"],
 }
 
 _value_type_to_vespa_attributes_field = {
@@ -301,6 +304,63 @@ def _build_filter_query(filter_group: Filter | None) -> str:
         return ""
     yql = _build_filter_yql(filter_group)
     return f" and {yql}" if yql else ""
+
+
+def _facet_filter_label_type(condition: Condition) -> str | None:
+    """Returns the label.type parsed label.id"""
+    if (
+        isinstance(condition, FieldFilter)
+        and condition.field in ("labels.value.id", "concepts.value.id")
+        and isinstance(condition.value, str)
+    ):
+        prefix, sep, _ = condition.value.partition("::")
+        return prefix if sep else None
+    if (
+        isinstance(condition, FieldFilter)
+        and condition.field == "labels.type"
+        and isinstance(condition.value, str)
+    ):
+        return condition.value
+    return None
+
+
+def _prune_filter(
+    filter_group: Filter | None,
+    filter_method: Callable[[Condition], bool],
+) -> Filter | None:
+    """Return a copy of `filter_group` with a filter_method applied"""
+    if filter_group is None:
+        return None
+    new_filters: list[Condition | Filter] = []
+    for item in filter_group.filters:
+        if isinstance(item, Filter):
+            pruned = _prune_filter(item, filter_method)
+            if pruned is not None:
+                new_filters.append(pruned)
+        elif not filter_method(item):
+            new_filters.append(item)
+    if not new_filters:
+        return None
+    return Filter(op=filter_group.op, filters=new_filters)
+
+
+def _get_label_types_from_filters(filter_group: Filter | None) -> set[str]:
+    """Returns a set of `labels.types` recursively from the `filter_group`"""
+    if filter_group is None:
+        return set()
+
+    label_types: set[str] = set()
+    for filter_item in filter_group.filters:
+        # If this is a `Filter`, recurse
+        if isinstance(filter_item, Filter):
+            label_types |= _get_label_types_from_filters(filter_item)
+        # Otherwise get the `label_type` from the condition
+        else:
+            label_type = _facet_filter_label_type(filter_item)
+            if label_type is not None:
+                label_types.add(label_type)
+
+    return label_types
 
 
 # endregion Filters
@@ -790,6 +850,178 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 )
             )
         return count_aggregations
+
+    def _run_facet_query(
+        self,
+        query: str | None,
+        where_filter: Filter | None,
+        group_attributes: list[str],
+    ) -> dict[str, dict[tuple[str, str], tuple[Label, int]]]:
+        """Run a Vespa grouping query and return label/concept buckets partitioned by attribute."""
+        where = "true"
+        if query:
+            where += self._userQuery
+        where += _build_filter_query(where_filter)
+
+        inner_groups = [
+            G.all(
+                G.group(attr),
+                # TODO: Pagination on groups if we hit this limit
+                G.max(5000),
+                G.order(-G.count()),
+                G.each(G.output(G.count())),
+            )
+            for attr in group_attributes
+        ]
+        grouping = G.all(*inner_groups)
+        yql = f"select {', '.join(group_attributes)} from documents where {where} | {grouping}"
+
+        request_body = {
+            "yql": yql,
+            "query": query,
+            "hits": 0,
+            "timeout": "5s",
+            "model.language": "en",
+            "ranking.profile": "nativerank",
+        }
+        response = _execute_vespa_query(
+            endpoint=f"{self.settings.vespa_endpoint}/search",
+            token=self.settings.vespa_read_token,
+            request_body=request_body,
+            request_context="documents.facets",
+        )
+        if response is None:
+            return {}
+
+        root_children: list[dict] = response.get("root", {}).get("children") or []
+        groups: list[dict] = (
+            root_children[0].get("children", []) if root_children else []
+        )
+        group_values: list[dict] = []
+        for group in groups:
+            group_values.extend(group.get("children", []))
+
+        by_type: dict[str, dict[tuple[str, str], tuple[Label, int]]] = {}
+        for gv in group_values:
+            label_type, label_id, label_value = self.parse_label_type_id_value(
+                gv.get("value", "")
+            )
+            label_type = label_type or MISSING_PLACEHOLDER
+            count = gv.get("fields", {}).get("count()", 0)
+            label = Label(id=label_id, value=label_value, type=label_type)
+            by_type.setdefault(label_type, {})[(label_id, label_value)] = (
+                label,
+                count,
+            )
+        return by_type
+
+    def labels_value_type_facets(
+        self,
+        query: str | None,
+        filters_json_string: str | None = None,
+    ) -> dict[str, list[CountAggregation[Label]]]:
+        """
+        Compute disjunctive facet counts partitioned by `label.type`. AKA faceted search.
+
+        The query generally coming across is
+        - grouped by `label.type`
+        - each filter within that is joined by `OR`
+        - each group is joined by `AND`
+
+        Example:
+        - (category::1 OR category::2) OR (geography::USA OR geography::GBR)
+        """
+        filters = (
+            Filter.model_validate_json(filters_json_string)
+            if filters_json_string
+            else None
+        )
+
+        facet_label_types = _get_label_types_from_filters(filters)
+        facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
+        for label_type in facet_label_types:
+            facet_requests[f"filter_{label_type}"] = _prune_filter(
+                filters,
+                lambda c, t=label_type: _facet_filter_label_type(c) == t,
+            )
+
+        responses: dict[str, dict[str, dict[tuple[str, str], tuple[Label, int]]]] = {}
+        with ThreadPoolExecutor(max_workers=max(1, len(facet_requests))) as pool:
+            futures = {
+                pool.submit(self._run_facet_query, query, plan, [
+                    "labels_type_id_value_attribute",
+                    "concepts_type_id_value_attribute",
+                ]): name
+                for name, plan in facet_requests.items()
+            }
+            for future in as_completed(futures):
+                responses[futures[future]] = future.result()
+
+        result: dict[str, list[CountAggregation[Label]]] = {}
+        for label_type, labels_for_type in responses["filtered_labels"].items():
+            if label_type in facet_label_types:
+                counts_for_type = responses[f"filter_{label_type}"].get(label_type, {})
+            else:
+                counts_for_type = labels_for_type
+
+            entries: list[CountAggregation[Label]] = [
+                CountAggregation(count=count, value=label)
+                for label, count in counts_for_type.values()
+            ]
+            entries.sort(key=lambda c: -c.count)
+            result[label_type] = entries
+
+        return result
+
+    def labels_type_facets(
+        self,
+        query: str | None,
+        filters_json_string: str | None = None,
+    ) -> dict[str, list[CountAggregation[Label]]]:
+        """Compute disjunctive facet counts partitioned by `label.relationship`."""
+        filters = (
+            Filter.model_validate_json(filters_json_string)
+            if filters_json_string
+            else None
+        )
+
+        facet_label_types = _get_label_types_from_filters(filters)
+        facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
+        for label_type in facet_label_types:
+            facet_requests[f"filter_{label_type}"] = _prune_filter(
+                filters,
+                lambda c, t=label_type: _facet_filter_label_type(c) == t,
+            )
+
+        responses: dict[str, dict[str, dict[tuple[str, str], tuple[Label, int]]]] = {}
+        with ThreadPoolExecutor(max_workers=max(1, len(facet_requests))) as pool:
+            futures = {
+                pool.submit(
+                    self._run_facet_query,
+                    query,
+                    plan,
+                    ["labels_relationship_id_value_attribute"],
+                ): name
+                for name, plan in facet_requests.items()
+            }
+            for future in as_completed(futures):
+                responses[futures[future]] = future.result()
+
+        result: dict[str, list[CountAggregation[Label]]] = {}
+        for label_type, labels_for_type in responses["filtered_labels"].items():
+            if label_type in facet_label_types:
+                counts_for_type = responses[f"filter_{label_type}"].get(label_type, {})
+            else:
+                counts_for_type = labels_for_type
+
+            entries: list[CountAggregation[Label]] = [
+                CountAggregation(count=count, value=label)
+                for label, count in counts_for_type.values()
+            ]
+            entries.sort(key=lambda c: -c.count)
+            result[label_type] = entries
+
+        return result
 
     def count(self, query: str) -> int:
         """Return hit count"""

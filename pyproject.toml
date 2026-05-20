@@ -44,6 +44,7 @@ dev = [
   "hypothesis>=6.0.0",
   "boto3-stubs[s3,ssm]>=1.41.5",
 ]
+research = ["pandas>=2.2.0", "scikit-learn>=1.5.0"]
 
 [tool.uv.sources]
 components = { git = "https://github.com/climatepolicyradar/infra", subdirectory = "components", tag = "v1.0.5" }

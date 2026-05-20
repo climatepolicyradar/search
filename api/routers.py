@@ -1,7 +1,11 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from pydantic_settings import SettingsConfigDict
 
-from api.types import Aggregations, SearchResponse
+from api.types import Aggregations, Facets, SearchResponse
 from api.utils import documents_order_by, normalise_filters, order_by, pagination
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
@@ -29,15 +33,23 @@ settings = EnvSettings()  # pyright: ignore[reportCallIssue]
 router = APIRouter(prefix="/search")
 
 
+FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
+
+
 @router.get("/documents", response_model=SearchResponse[Document])
 def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
+    # @see: https://google.aip.dev/157#read-masks-as-a-request-field
+    # Currently this is only facet fields, but might start to include
+    # results and other fields
+    fields: list[FacetField] | None = Query(None),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(documents_order_by),
     debug: bool = False,
     bolding: bool = False,
 ):
+    start = time.perf_counter()
     logger.info(
         "Searching documents "
         "(query=%r, page_token=%s, page_size=%s, debug=%s, bolding=%s, "
@@ -51,21 +63,42 @@ def read_documents(
     )
 
     normalised_filters = normalise_filters(filters_json_string)
+    requested_facet_fields = fields or []
 
     engine = DevVespaDocumentSearchEngine(
         settings=settings, debug=debug, bolding=bolding
     )
     try:
-        results = engine.search(
-            query=query,
-            pagination=pagination,
-            order_by=order_by,
-            filters_json_string=normalised_filters,
-        )
-        labels_aggregations = engine.aggregations(
-            query=query,
-            filters_json_string=normalised_filters,
-        )
+        with ThreadPoolExecutor(max_workers=2 + len(requested_facet_fields)) as pool:
+            f_search = pool.submit(
+                engine.search,
+                query=query,
+                pagination=pagination,
+                order_by=order_by,
+                filters_json_string=normalised_filters,
+            )
+            f_aggregations = pool.submit(
+                engine.aggregations,
+                query=query,
+                filters_json_string=normalised_filters,
+            )
+            f_facets = {
+                field: pool.submit(
+                    {
+                        "facets.labels.value.type": engine.labels_value_type_facets,
+                        "facets.labels.type": engine.labels_type_facets,
+                    }[field],
+                    query=query,
+                    filters_json_string=normalised_filters,
+                )
+                for field in requested_facet_fields
+            }
+        results = f_search.result()
+        labels_aggregations = f_aggregations.result()
+        facets_data = {
+            field.removeprefix("facets."): future.result()
+            for field, future in f_facets.items()
+        }
     except Exception:
         logger.exception(
             "Error: document search request failed "
@@ -85,7 +118,9 @@ def read_documents(
     )
 
     # TODO: pagination
+    took_ms = int((time.perf_counter() - start) * 1000)
     return SearchResponse[Document](
+        took_ms=took_ms,
         total_size=results.total_size,
         page=0,
         page_size=0,
@@ -95,6 +130,7 @@ def read_documents(
         results=results.results,
         debug_info=engine.last_debug_info if debug else None,
         aggregations=Aggregations(labels=labels_aggregations),
+        facets=Facets.model_validate(facets_data) if facets_data else None,
     )
 
 

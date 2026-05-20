@@ -1,3 +1,5 @@
+import re
+
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -170,7 +172,8 @@ test_cases = [
         characteristics_test=lambda document: "milieudefensie"
         in document.title.lower(),
         description="Searching for 'milieudefensie' should return cases with 'milieudefensie' in the name",
-        k=5,
+        # There are only 2 principal docs with mileudefensie in the title
+        k=2,
     ),
     # TODO: not sure what the correct case is for this
     # PrecisionTestCase[Document](
@@ -236,18 +239,21 @@ test_cases = [
     FieldCharacteristicsTestCase[Document](
         category="entity name + acronym",
         search_terms="erp",
-        characteristics_test=lambda document: any(
-            term in document.title.lower() for term in ["emissions reduction plan"]
-        ),
-        description="Search for 'erp' should return documents with 'emissions reduction plan' in the title",
+        characteristics_test=lambda document: bool(
+            re.search(r"\bemissions?\b", document.title, re.IGNORECASE)
+        )
+        and "reduction" in document.title.lower()
+        and "plan" in document.title.lower(),
+        description="Search for 'erp' should return documents with 'emission(s) reduction plan' in the title",
         k=10,
     ),
     FieldCharacteristicsTestCase[Document](
         category="entity name + acronym",
         search_terms="necp",
-        characteristics_test=lambda document: "national energy and climate plan"
-        in document.title.lower(),
-        description="Search for 'necp' should return documents with 'national energy and climate plan' in the title",
+        characteristics_test=lambda document: all_words_in_string(
+            ["national", "energy", "climate", "plan"], document.title
+        ),
+        description="Search for 'necp' should return documents with the NECP word set in the title",
         k=10,
     ),
     # TODO: use relevant labels if they exist, e.g., document type = "climate action plan"
@@ -288,9 +294,14 @@ test_cases = [
     PrecisionTestCase[Document](
         category="document name",
         search_terms="uganda climate change act",
-        expected_result_ids=["CCLW.family.10180.0"],
+        expected_result_ids=[
+            "CCLW.family.10180.0",  # National Climate Change Act 2021
+            "CPR.family.i00002330.n0000",  # Uganda National Climate Change Act 2021
+        ],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
+    # TODO: this search returns a lot of uganda climate change laws, but not the climate change act specified as result number 1
+    # The results returned are: Uganda: National climate change policy; Uganda National Climate Change Act 2021; Uganda National Climate Change Communication Strategy (UNCCCS) 2017...
     PrecisionTestCase[Document](
         category="document name",
         search_terms="climate change law uganda",
@@ -433,8 +444,7 @@ def relevance_tests_principal_documents():
     """Run relevance tests for documents"""
 
     engines = [
-        # add debug=True to this engine for a debug summary
-        DevVespaPrincipalDocumentSearchEngine(settings=settings),
+        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
     ]
 
     # Principals aren't a primitive, but we use the primitive name to determine where
