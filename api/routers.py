@@ -8,6 +8,7 @@ from pydantic_settings import SettingsConfigDict
 from api.types import Aggregations, Facets, SearchResponse
 from api.utils import documents_order_by, normalise_filters, order_by, pagination
 from search.data_in_models import Document
+from search.data_in_models import Label as DataInLabel
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
@@ -236,6 +237,22 @@ def read_passages(
     )
 
     return SearchResponse[Passage](
+        total_size=results.total_size,
+        page=0,
+        page_size=0,
+        total_pages=0,
+        next_page=None,
+        previous_page=None,
+        results=results.results,
+        aggregations=None,
+    )
+
+
+@router.get("/test_labels", response_model=SearchResponse[DataInLabel])
+def read_tmp_labels():
+    engine = DevVespaLabelSearchEngine(settings=settings)
+    results = engine.tmp_labels()
+    return SearchResponse[DataInLabel](
         total_size=results.total_size,
         page=0,
         page_size=0,

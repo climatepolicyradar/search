@@ -19,7 +19,7 @@ clean:
 
 # install dependencies and set up the project
 install +OPTS="":
-    GIT_LFS_SKIP_SMUDGE=1 uv sync --group dev --group research {{ OPTS }}
+    GIT_LFS_SKIP_SMUDGE=1 uv sync --group dev {{ OPTS }}
 
 # setup the project
 setup: install
