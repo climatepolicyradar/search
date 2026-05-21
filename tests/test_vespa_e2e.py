@@ -1,16 +1,13 @@
 """
-E2E test: AttributesCondition filters documents correctly.
+E2E tests for document search: attributes, field filters, linguistics, sorting.
 
-Spins up an isolated Vespa container, feeds two documents (one with a
-country attribute, one without), then verifies the filter returns only
-the matching document.
+Label-specific tests live in ``test_vespa_labels_e2e.py``; facets in
+``test_vespa_facets_e2e.py``; passages in ``test_vespa_passages_e2e.py``.
 
-If the test container is already running (from a previous run), it is
-reused — skipping the slow deploy — and only the test documents are
-cleaned up at the end. Set TEST_VESPA_REMOVE_CONTAINER=1 to remove the
-container after the test.
+Spins up an isolated Vespa container on port 8089 (reused if already running).
+Set TEST_VESPA_REMOVE_CONTAINER=1 to remove the container after the test.
 
-Run with: pytest tests/test_attribute_filter_e2e.py
+Run with: uv run pytest tests/test_vespa_e2e.py
 """
 
 import os
@@ -19,7 +16,6 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import quote
 
 import pytest
 import requests as req
@@ -31,19 +27,13 @@ from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
-    DevVespaLabelSearchEngine,
     FieldFilter,
     Filter,
     Settings,
 )
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from search.vespa.labels_feed_materializer import (
-    VespaLabel,
-    _vespa_label_to_vespa_update,
-)
 from search.vespa.sources.data_in_api import (
     SourceDocument,
-    SourceLabel,
     SourceLabelRelationship,
 )
 
@@ -414,201 +404,6 @@ def test_field_filter_attribute(
 # endregion Attributes
 
 
-# region Labels
-def _make_label(label_id: str) -> SourceLabelRelationship:
-    return {
-        "type": "entity_type",
-        "value": SourceLabel(id=label_id, value=label_id, type="entity_type"),
-        "timestamp": None,
-    }
-
-
-def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
-    doc_with_label = SourceDocumentFactory.build(labels=[_make_label("Romania")])
-    doc_without_label = SourceDocumentFactory.build(labels=[])
-    _feed_document(vespa_app, doc_with_label)
-    _feed_document(vespa_app, doc_without_label)
-
-    f = Filter(
-        op="and",
-        filters=[
-            FieldFilter(field="labels.value.value", op="contains", value="Romania")
-        ],
-    )
-    ids = _ids(f)
-    assert doc_with_label["id"] in ids
-    assert doc_without_label["id"] not in ids
-
-
-def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
-    doc_with_different_label = SourceDocumentFactory.build(
-        labels=[_make_label("France")]
-    )
-    doc_without_label = SourceDocumentFactory.build(labels=[])
-    _feed_document(vespa_app, doc_with_different_label)
-    _feed_document(vespa_app, doc_without_label)
-
-    f = Filter(
-        op="and",
-        filters=[
-            FieldFilter(field="labels.value.value", op="contains", value="Romania")
-        ],
-    )
-    ids = _ids(f)
-    assert doc_with_different_label["id"] not in ids
-    assert doc_without_label["id"] not in ids
-
-
-def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
-    doc_with_label = SourceDocumentFactory.build(labels=[_make_label("Romania")])
-    doc_without_label = SourceDocumentFactory.build(labels=[])
-    _feed_document(vespa_app, doc_with_label)
-    _feed_document(vespa_app, doc_without_label)
-
-    f = Filter(
-        op="and",
-        filters=[
-            FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
-        ],
-    )
-    ids = _ids(f)
-    assert doc_with_label["id"] not in ids
-    assert doc_without_label["id"] in ids
-
-
-def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
-    doc_with_different_label = SourceDocumentFactory.build(
-        labels=[_make_label("France")]
-    )
-    doc_with_matching_label = SourceDocumentFactory.build(
-        labels=[_make_label("Romania")]
-    )
-    _feed_document(vespa_app, doc_with_different_label)
-    _feed_document(vespa_app, doc_with_matching_label)
-
-    f = Filter(
-        op="and",
-        filters=[
-            FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
-        ],
-    )
-    ids = _ids(f)
-    assert doc_with_different_label["id"] in ids
-    assert doc_with_matching_label["id"] not in ids
-
-
-# endregion Labels
-
-# region Concepts
-
-
-def _feed_concepts(
-    app: Vespa, document: SourceDocument, concept_id: str, concept_name: str
-) -> None:
-    """Update an existing document with a single concept."""
-    # concept struct only has id/type/value/count/passages_id — no relationship/timestamp
-    vespa_concepts = [
-        {
-            "id": concept_id,
-            "type": "concept",
-            "value": concept_name,
-            "count": 1,
-            "passages_id": "test",
-        }
-    ]
-
-    update_op = {
-        "update": f"id:documents:documents::{document['id']}",
-        "fields": {
-            "concepts": {"assign": vespa_concepts},
-        },
-        "create": False,
-    }
-
-    r = req.put(
-        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
-        json={"fields": update_op["fields"]},
-        timeout=5,
-    )
-    r.raise_for_status()
-
-
-def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
-    doc_with_concept = SourceDocumentFactory.build(labels=[])
-    doc_without_concept = SourceDocumentFactory.build(labels=[])
-    _feed_document(vespa_app, doc_with_concept)
-    _feed_document(vespa_app, doc_without_concept)
-    _feed_concepts(vespa_app, doc_with_concept, "Romania", "Romania")
-
-    f = Filter(
-        op="and",
-        filters=[
-            FieldFilter(field="labels.value.value", op="contains", value="Romania")
-        ],
-    )
-    ids = _ids(f)
-    assert doc_with_concept["id"] in ids
-    assert doc_without_concept["id"] not in ids
-
-
-def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
-    doc_with_different_concept = SourceDocumentFactory.build(labels=[])
-    doc_without_concept = SourceDocumentFactory.build(labels=[])
-    _feed_document(vespa_app, doc_with_different_concept)
-    _feed_document(vespa_app, doc_without_concept)
-    _feed_concepts(vespa_app, doc_with_different_concept, "France", "France")
-
-    f = Filter(
-        op="and",
-        filters=[
-            FieldFilter(field="labels.value.value", op="contains", value="Romania")
-        ],
-    )
-    ids = _ids(f)
-    assert doc_with_different_concept["id"] not in ids
-    assert doc_without_concept["id"] not in ids
-
-
-def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
-    doc_with_concept = SourceDocumentFactory.build(labels=[])
-    doc_without_concept = SourceDocumentFactory.build(labels=[])
-    _feed_document(vespa_app, doc_with_concept)
-    _feed_document(vespa_app, doc_without_concept)
-    _feed_concepts(vespa_app, doc_with_concept, "Romania", "Romania")
-
-    f = Filter(
-        op="and",
-        filters=[
-            FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
-        ],
-    )
-    ids = _ids(f)
-    assert doc_with_concept["id"] not in ids
-    assert doc_without_concept["id"] in ids
-
-
-def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
-    doc_with_different_concept = SourceDocumentFactory.build(labels=[])
-    doc_with_matching_concept = SourceDocumentFactory.build(labels=[])
-    _feed_document(vespa_app, doc_with_different_concept)
-    _feed_document(vespa_app, doc_with_matching_concept)
-    _feed_concepts(vespa_app, doc_with_different_concept, "France", "France")
-    _feed_concepts(vespa_app, doc_with_matching_concept, "Romania", "Romania")
-
-    f = Filter(
-        op="and",
-        filters=[
-            FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
-        ],
-    )
-    ids = _ids(f)
-    assert doc_with_different_concept["id"] in ids
-    assert doc_with_matching_concept["id"] not in ids
-
-
-# endregion Concepts
-
-
 # region Linguistics
 def _flatten_tokens(token_field: Any) -> list[str]:
     """
@@ -661,106 +456,6 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     assert "run" in values, f"Expected 'run' in title tokens, got: {values}"
     assert "water" in values, f"Expected 'water' in title tokens, got: {values}"
     assert "is" not in values, f"Stop word 'is' should be removed, got: {values}"
-
-
-def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
-    """
-    Labels use label_analysis profile: lowercase only, no stemming.
-
-    "Running" should become "running" (not "run").
-    Search by title so userQuery() matches via the default fieldset.
-    """
-    doc = SourceDocumentFactory.build(
-        title="Running Waters document",
-        description="Test description",
-        labels=[
-            {
-                "type": "topic",
-                "value": SourceLabel(
-                    id="running-waters", value="Running Waters", type="topic"
-                ),
-                "timestamp": None,
-            }
-        ],
-    )
-    _feed_document(vespa_app, doc)
-
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
-    # Search for "running" — matches title via default fieldset
-    results = engine.search(
-        query="running",
-        pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
-    assert len(results) >= 1, f"Expected results, got: {results}"
-
-    debug = engine.last_debug_info[0]
-    values = _flatten_tokens(debug.get("labels_value_tokens"))
-
-    # label_analysis: lowercase only — "Running" -> "running", not stemmed to "run"
-    assert "running" in values, f"Expected 'running' in label tokens, got: {values}"
-    assert "waters" in values, f"Expected 'waters' in label tokens, got: {values}"
-    assert "run" not in values, f"'run' should NOT be in label tokens, got: {values}"
-    assert "water" not in values, (
-        f"'water' should NOT be in label tokens, got: {values}"
-    )
-
-
-def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
-    """
-    Test geography query rewrites from semantic rules.
-
-    Note: this test could end up *not* applying to the DevVespaDocumentSearchEngine
-    for valid reasons. In that case, we could remove this test or apply it to a specific
-    SearchEngine.
-
-    See: https://docs.vespa.ai/en/linguistics/query-rewriting.html
-    """
-    doc_uk = SourceDocumentFactory.build(
-        title="xyzzygeotestuk document",
-        description="A climate policy document",
-        labels=[
-            {
-                "type": "geography",
-                "value": SourceLabel(
-                    id="united-kingdom", value="United Kingdom", type="geography"
-                ),
-                "timestamp": None,
-            }
-        ],
-    )
-    doc_us = SourceDocumentFactory.build(
-        title="xyzzygeotestus document",
-        description="A US environmental policy document",
-        labels=[
-            {
-                "type": "geography",
-                "value": SourceLabel(
-                    id="united-states", value="United States", type="geography"
-                ),
-                "timestamp": None,
-            }
-        ],
-    )
-    _feed_document(vespa_app, doc_uk)
-    _feed_document(vespa_app, doc_us)
-
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
-    results = engine.search(
-        query="UK",
-        pagination=Pagination(page_token=1, page_size=50),
-        order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
-    result_ids = {doc.id for doc in results}
-
-    assert doc_uk["id"] in result_ids, (
-        f"Expected doc with geography 'United Kingdom' to match 'UK', "
-        f"got ids: {result_ids}"
-    )
-    assert doc_us["id"] not in result_ids, (
-        f"Doc with geography 'United States' should NOT match 'UK', "
-        f"got ids: {result_ids}"
-    )
 
 
 def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
@@ -1113,106 +808,3 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
 
 
 # endregion Document sorting
-
-
-# region /labels
-@pytest.fixture(autouse=True)
-def clean_labels(vespa_app: Vespa):
-    yield
-    vespa_app.delete_all_docs(content_cluster_name="search-production", schema="labels")
-
-
-def _feed_label(vespa_app: Vespa, vespa_label: VespaLabel) -> None:
-    vespa_update = _vespa_label_to_vespa_update(vespa_label)
-    response = req.put(
-        f"{vespa_app.end_point}/document/v1/labels/labels/docid/{quote(vespa_update['update'], safe='')}?create=true",
-        json={"fields": vespa_update["fields"]},
-        timeout=5,
-    )
-    if not response.ok:
-        print(f"Feed label error {response.status_code}: {response.text}")
-    response.raise_for_status()
-
-
-def test_label_search_returns_exact_match_first(vespa_app: Vespa):
-    _feed_label(
-        vespa_app,
-        VespaLabel(
-            id="category::Law",
-            type="category",
-            value="Law",
-            alternative_labels=[],
-            subconcept_labels=[],
-            description="",
-            negative_labels=[],
-        ),
-    )
-    _feed_label(
-        vespa_app,
-        VespaLabel(
-            id="category::Policy",
-            type="category",
-            value="Policy",
-            alternative_labels=[],
-            subconcept_labels=[],
-            description="",
-            negative_labels=[],
-        ),
-    )
-
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
-        query="Law",
-        pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
-
-    assert results, "Expected at least one result"
-    assert results[0].value == "Law"
-
-
-def test_label_field_filter_type_not_contains_returns_matching_type_only(
-    vespa_app: Vespa,
-):
-    _feed_label(
-        vespa_app,
-        VespaLabel(
-            id="category::Law",
-            type="category",
-            value="Law",
-            alternative_labels=[],
-            subconcept_labels=[],
-            description="",
-            negative_labels=[],
-        ),
-    )
-    _feed_label(
-        vespa_app,
-        VespaLabel(
-            id="geography::Romania",
-            type="geography",
-            value="Romania",
-            alternative_labels=[],
-            subconcept_labels=[],
-            description="",
-            negative_labels=[],
-        ),
-    )
-
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
-        query=None,
-        pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="relevance", direction="desc")],
-        filters_json_string=Filter(
-            op="and",
-            filters=[FieldFilter(field="type", op="not_contains", value="category")],
-        ).model_dump_json(),
-    ).results
-
-    result_ids = {label.id for label in results}
-    assert "category::Law" not in result_ids
-    assert "geography::Romania" in result_ids
-
-
-# endregion /labels
