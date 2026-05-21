@@ -39,6 +39,9 @@ schema labels {
         field negative_labels type array<string> {
             indexing: attribute | summary
         }
+        field label_source type string {
+            indexing: summary
+        }
     }
 
     field value_attribute type string {

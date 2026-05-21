@@ -4,6 +4,7 @@ from typing import TypedDict
 import boto3
 import orjson
 
+from search.data_in_models import Label as DataInLabel
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
@@ -23,6 +24,7 @@ class VespaLabel(TypedDict):
     subconcept_labels: list[str]
     description: str
     negative_labels: list[str]
+    label_source: str
 
 
 class VespaLabelUpdate(TypedDict):
@@ -33,6 +35,7 @@ class VespaLabelUpdate(TypedDict):
     subconcept_labels: VespaAssign[list[str]]
     description: VespaAssign[str]
     negative_labels: VespaAssign[list[str]]
+    label_source: VespaAssign[str]
 
 
 def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpdate]:
@@ -48,6 +51,7 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
             "subconcept_labels": {"assign": label["subconcept_labels"]},
             "description": {"assign": label["description"]},
             "negative_labels": {"assign": label["negative_labels"]},
+            "label_source": {"assign": label["label_source"]},
         },
     }
 
@@ -68,6 +72,7 @@ def labels_feed_materializer():
                 "subconcept_labels": [],
                 "description": "",
                 "negative_labels": [],
+                "label_source": orjson.dumps(label_rel).decode(),
             }
 
     inference_results = read_inference_results()
@@ -102,7 +107,11 @@ def labels_feed_materializer():
             "subconcept_labels": concept["subconcept_labels"],
             "description": concept["description"] or "",
             "negative_labels": concept["negative_labels"],
+            "label_source": DataInLabel(
+                id=identifier, type="concept", value=concept["preferred_label"]
+            ).model_dump_json(),
         }
+
     unique_labels = list(labels.values())
 
     print(f"Collected {len(unique_labels)} unique labels.")
