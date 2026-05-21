@@ -103,6 +103,6 @@ prefect-push:
     docker push ${DOCKER_REGISTRY}/search-prefect:latest
 
 prefect-deploy:
-    uv run python deployments
+    uv run python deployments.py
 
 # endregion
