@@ -449,4 +449,18 @@ def test_label_field_filter_type_not_contains_returns_matching_type_only(
     assert "geography::Romania" in result_ids
 
 
+def test_label_search_returns_non_empty_label_source(vespa_app: Vespa):
+    label = _taxonomy_vespa_label("geography::Romania", "geography", "Romania")
+    _feed_label(vespa_app, label)
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query="Romania",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+    assert isinstance(results[0], DataInLabel)
+    assert results[0] is not None
+    assert results[0] != ""
+
+
 # endregion Labels schema
