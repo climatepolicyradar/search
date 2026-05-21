@@ -4,6 +4,7 @@ from typing import TypedDict
 import boto3
 import orjson
 
+from search.data_in_models import Label as DataInLabel
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
@@ -106,8 +107,11 @@ def labels_feed_materializer():
             "subconcept_labels": concept["subconcept_labels"],
             "description": concept["description"] or "",
             "negative_labels": concept["negative_labels"],
-            # label_source should be added here as string representation of data in label_rel
+            "label_source": DataInLabel(
+                id=identifier, type="concept", value=concept["preferred_label"]
+            ).model_dump_json(),
         }
+
     unique_labels = list(labels.values())
 
     print(f"Collected {len(unique_labels)} unique labels.")
