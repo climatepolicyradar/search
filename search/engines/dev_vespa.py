@@ -1227,8 +1227,11 @@ class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
                 subconcept_labels = []
 
             label_source = fields.get("label_source", "")
-            if label_source is not None and label_source != "":
-                label_source = json.loads(label_source)
+            if (
+                label_source is not None
+                and isinstance(label_source, str)
+                and label_source != ""
+            ):
                 try:
                     label = DataInLabel.model_validate_json(label_source)
                     labels.append(label)
