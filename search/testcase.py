@@ -4,6 +4,7 @@ from typing import Callable, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
+from search.corpora import Corpus, build_corpus_filter
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination, SearchEngine
 from search.identifiers import Identifier, generate_id
@@ -21,6 +22,7 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
     category: str | None = None
     search_terms: str
     description: str
+    corpus: Corpus | None = None
 
     @field_validator("category", mode="before")
     @classmethod
@@ -29,6 +31,12 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
         if value is None:
             return value
         return value.strip().lower().replace("-", "_").replace(" ", "_")
+
+    def filters_json_string(self) -> str | None:
+        """Vespa filter JSON for this test case's corpus, or None."""
+        if self.corpus is None:
+            return None
+        return build_corpus_filter(self.corpus).model_dump_json()
 
     @property
     def name(self) -> str:
@@ -79,7 +87,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=None,
+            filters_json_string=self.filters_json_string(),
         )
         result_ids = [result.id for result in search_results.results]
 
@@ -140,6 +148,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
             self.search_terms,
             self.expected_result_ids,
             self.strict_order,
+            self.corpus,
         )
 
 
@@ -224,9 +233,9 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
 
         search_results = engine.search(
             query=self.search_terms,
-            pagination=Pagination(page_token=1, page_size=10),
+            pagination=Pagination(page_token=1, page_size=max(10, self.k)),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=None,
+            filters_json_string=self.filters_json_string(),
         )
         result_ids = [result.id for result in search_results.results]
 
@@ -256,6 +265,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             self.expected_result_ids,
             self.forbidden_result_ids,
             self.k,
+            self.corpus,
         )
 
 
@@ -315,7 +325,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=self.k),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=None,
+            filters_json_string=self.filters_json_string(),
         )
         results = search_results.results[: self.k]
         passing_results = [
@@ -344,6 +354,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             self.search_terms,
             self.all_or_any,
             self.k,
+            self.corpus,
         )
 
 
@@ -407,17 +418,18 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
     def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
         """Run the test case against the given engine."""
 
+        filters_json_string = self.filters_json_string()
         search_results_1 = engine.search(
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=self.k),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=None,
+            filters_json_string=filters_json_string,
         )
         search_results_2 = engine.search(
             query=self.search_terms_to_compare,
             pagination=Pagination(page_token=1, page_size=self.k),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=None,
+            filters_json_string=filters_json_string,
         )
 
         results_1_limited = search_results_1.results[: self.k]
@@ -453,6 +465,7 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             self.minimum_overlap,
             self.strict_order,
             self.k,
+            self.corpus,
         )
 
 

@@ -948,10 +948,15 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         responses: dict[str, dict[str, dict[tuple[str, str], tuple[Label, int]]]] = {}
         with ThreadPoolExecutor(max_workers=max(1, len(facet_requests))) as pool:
             futures = {
-                pool.submit(self._run_facet_query, query, plan, [
-                    "labels_type_id_value_attribute",
-                    "concepts_type_id_value_attribute",
-                ]): name
+                pool.submit(
+                    self._run_facet_query,
+                    query,
+                    plan,
+                    [
+                        "labels_type_id_value_attribute",
+                        "concepts_type_id_value_attribute",
+                    ],
+                ): name
                 for name, plan in facet_requests.items()
             }
             for future in as_completed(futures):
@@ -1045,25 +1050,26 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
     ) -> ListResponse[Document]:
         """Search principal documents"""
 
-        if filters_json_string is not None:
-            raise ValueError(
-                "Filters can't be used in this search engine. Use DevVespaDocumentSearchEngine directly instead."
-            )
-
-        filters_json_string = json.dumps(
-            {
-                "op": "and",
-                "filters": [
-                    {
-                        "field": "labels.value.id",
-                        "op": "contains",
-                        "value": "status::Principal",
-                    }
-                ],
-            }
+        principal_filter = Filter(
+            op="and",
+            filters=[
+                FieldFilter(
+                    field="labels.value.id",
+                    op="contains",
+                    value="status::Principal",
+                )
+            ],
         )
 
-        return super().search(query, pagination, order_by, filters_json_string)
+        if filters_json_string is not None:
+            caller_filter = Filter.model_validate_json(filters_json_string)
+            merged_filter = Filter(op="and", filters=[principal_filter, caller_filter])
+        else:
+            merged_filter = principal_filter
+
+        return super().search(
+            query, pagination, order_by, merged_filter.model_dump_json()
+        )
 
 
 class DevVespaPassageSearchEngine(SearchEngine[Passage]):
@@ -1148,10 +1154,10 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         raise NotImplementedError()
 
 
-class DevVespaLabelSearchEngine(SearchEngine[Label]):
+class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
     """Search engine for labels in dev Vespa."""
 
-    model_class = Label
+    model_class = DataInLabel
 
     def __init__(self, settings: Settings, debug: bool = False) -> None:
         self.debug = debug
@@ -1165,7 +1171,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
         order_by: list[OrderBy],  # noqa: ARG002
         filters_json_string: str | None = None,  # noqa: ARG002
         label_type: str | None = None,
-    ) -> ListResponse[Label]:
+    ) -> ListResponse[DataInLabel]:
         """Fetch a list of relevant label search results."""
 
         where = " true "
@@ -1209,7 +1215,7 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
         )
         if response is None:
             return ListResponse(results=[], total_size=None, next_page_token=None)
-        labels: list[Label] = []
+        labels: list[DataInLabel] = []
         debug_info: list[dict[str, Any]] = []
 
         for hit in response.get("root", {}).get("children", []):
@@ -1220,16 +1226,25 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             subconcept_labels = fields.get("subconcept_labels", [])
             if not isinstance(subconcept_labels, list):
                 subconcept_labels = []
-            labels.append(
-                Label(
-                    id=fields.get("id", ""),
-                    type=fields.get("type", ""),
-                    value=fields.get("value", ""),
-                    alternative_labels=alternative_labels,
-                    subconcept_labels=subconcept_labels,
-                    description=fields.get("description", ""),
-                )
-            )
+
+            label_source = fields.get("label_source", "")
+            if (
+                label_source is not None
+                and isinstance(label_source, str)
+                and label_source != ""
+            ):
+                try:
+                    label = DataInLabel.model_validate_json(label_source)
+                    labels.append(label)
+                except Exception:
+                    logger.warning(
+                        "Label source is invalid for hit id=%r", hit.get("id")
+                    )
+                    continue
+            else:
+                logger.warning("Label source is empty for hit id=%r", hit.get("id"))
+                continue
+
             if self.debug:
                 debug_info.append(
                     {
@@ -1283,6 +1298,147 @@ class DevVespaLabelSearchEngine(SearchEngine[Label]):
             types.append(group.get("value", ""))
 
         return types
+
+    def tmp_labels(self) -> ListResponse[DataInLabel]:
+        """Labels for UI testing"""
+        return ListResponse(
+            results=[
+                DataInLabel(
+                    id="region::South Asia",
+                    type="region",
+                    value="South Asia",
+                    labels=[],
+                ),
+                DataInLabel(
+                    id="country::India",
+                    type="country",
+                    value="India",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="region::South Asia",
+                                type="region",
+                                value="South Asia",
+                            ),
+                        ),
+                    ],
+                ),
+                DataInLabel(
+                    id="subdivision::Kerela",
+                    type="subdivision",
+                    value="Kerela",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::India",
+                                type="country",
+                                value="India",
+                            ),
+                        ),
+                    ],
+                ),
+                DataInLabel(
+                    id="subdivision::Punjab",
+                    type="subdivision",
+                    value="Punjab",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::India",
+                                type="country",
+                                value="India",
+                            ),
+                        ),
+                    ],
+                ),
+                DataInLabel(
+                    id="region::North America",
+                    type="region",
+                    value="North America",
+                    labels=[],
+                ),
+                DataInLabel(
+                    id="country::USA",
+                    type="country",
+                    value="USA",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="region::North America",
+                                type="region",
+                                value="North America",
+                            ),
+                        ),
+                    ],
+                ),
+                DataInLabel(
+                    id="country::Canada",
+                    type="country",
+                    value="Canada",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="region::North America",
+                                type="region",
+                                value="North America",
+                            ),
+                        ),
+                    ],
+                ),
+                DataInLabel(
+                    id="subdivision::Texas",
+                    type="subdivision",
+                    value="Texas",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::USA",
+                                type="country",
+                                value="USA",
+                            ),
+                        ),
+                    ],
+                ),
+                DataInLabel(
+                    id="subdivision::California",
+                    type="subdivision",
+                    value="California",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::USA",
+                                type="country",
+                                value="USA",
+                            ),
+                        ),
+                    ],
+                ),
+                DataInLabel(
+                    id="subdivision::British Columbia",
+                    type="subdivision",
+                    value="British Columbia",
+                    labels=[
+                        LabelRelationship(
+                            type="subconcept_of",
+                            value=DataInLabel(
+                                id="country::Canada",
+                                type="country",
+                                value="Canada",
+                            ),
+                        ),
+                    ],
+                ),
+            ],
+            total_size=0,
+            next_page_token=None,
+        )
 
     def count(self, query: str) -> int:
         """Return hit count for DevVespaLabelSearchEngine."""
