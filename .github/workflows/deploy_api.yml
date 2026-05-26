@@ -32,10 +32,14 @@ jobs:
         with:
           python-version-file: pyproject.toml
       - run: just build-image
-      - run: just push-image
-      - uses: aws-actions/amazon-ecs-deploy-express-service@v1
+      # Push :latest for humans/runtime, plus the commit SHA as an immutable tag
+      # so each deploy gets a unique image reference (otherwise ECS Express may
+      # see no diff and skip rolling a new deployment).
+      - run: just push-image "${{ github.sha }}"
+      - id: deploy
+        uses: aws-actions/amazon-ecs-deploy-express-service@v1
         with:
           service-name: search-api
-          image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/search-api:latest
+          image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/search-api:${{ github.sha }}
           execution-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-api-ecs-task-execution-role
           infrastructure-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-api-ecs-infrastructure-role

@@ -64,9 +64,10 @@ run-image cmd="sh":
 ecr-login:
     aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
 
-# Push Docker image to ECR
-push-image:
+# Push Docker image to ECR. Always pushes :latest; also pushes :{{ tag }} when provided.
+push-image tag="":
     docker push ${DOCKER_REGISTRY}/search-api:latest
+    if [ -n "{{ tag }}" ]; then docker tag ${DOCKER_REGISTRY}/search-api:latest ${DOCKER_REGISTRY}/search-api:{{ tag }} && docker push ${DOCKER_REGISTRY}/search-api:{{ tag }}; fi
 
 # Deploy flows to Prefect Cloud (build, push, and register)
 deploy-flows-from-local:
