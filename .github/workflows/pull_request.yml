@@ -168,5 +168,3 @@ jobs:
       pull-requests: write
       contents: write
     uses: climatepolicyradar/reusable-workflows/.github/workflows/dependabot-autopilot.yml@v23
-    with:
-      auto-approve: true
