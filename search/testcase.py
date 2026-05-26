@@ -233,7 +233,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
 
         search_results = engine.search(
             query=self.search_terms,
-            pagination=Pagination(page_token=1, page_size=10),
+            pagination=Pagination(page_token=1, page_size=max(10, self.k)),
             order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=self.filters_json_string(),
         )
