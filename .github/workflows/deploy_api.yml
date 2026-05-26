@@ -39,6 +39,10 @@ jobs:
       - id: deploy
         uses: aws-actions/amazon-ecs-deploy-express-service@v1
         with:
+          # The live API runs in the `search` cluster. There is also an orphan
+          # `default/search-api` service (0 running tasks) which previous runs
+          # were silently deploying to.
+          cluster: search
           service-name: search-api
           image: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com/search-api:${{ github.sha }}
           execution-role-arn: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-api-ecs-task-execution-role
@@ -61,7 +65,7 @@ jobs:
           fi
           echo "Looking up most recent deployment for ${SERVICE_ARN}"
           DEPLOY_ARN=$(aws ecs list-service-deployments \
-            --cluster default \
+            --cluster search \
             --service "${SERVICE_ARN}" \
             --query 'serviceDeployments[0].serviceDeploymentArn' \
             --output text)
