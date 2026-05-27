@@ -7,11 +7,15 @@ import orjson
 from search.data_in_models import Label as DataInLabel
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import (
+    SourceLabel,
     SourceLabelRelationship,
 )
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
-from search.vespa.sources.wikibase import fetch_concepts_at_timestamps_sync
+from search.vespa.sources.wikibase import (
+    WikibaseConcept,
+    fetch_concepts_at_timestamps_sync,
+)
 
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -59,6 +63,20 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
     }
 
 
+def _label_source_json(source_label: SourceLabel) -> str:
+    """
+    Serialise a flat source label for Vespa ``label_source``.
+
+    The labels search engine parses this field as :class:`DataInLabel`. Only
+    pass :class:`SourceLabel`, not :class:`SourceLabelRelationship`.
+    """
+    return DataInLabel(
+        id=source_label["id"],
+        type=source_label["type"],
+        value=source_label["value"],
+    ).model_dump_json()
+
+
 def _source_label_relationship_to_vespa_label(
     label_rel: SourceLabelRelationship,
 ) -> VespaLabel:
@@ -71,7 +89,7 @@ def _source_label_relationship_to_vespa_label(
     read time.
     """
     value = label_rel["value"]
-    return {
+    vespa_label: VespaLabel = {
         "id": value["id"],
         "type": value["type"],
         "value": value["value"],
@@ -79,8 +97,30 @@ def _source_label_relationship_to_vespa_label(
         "subconcept_labels": [],
         "description": "",
         "negative_labels": [],
-        "label_source": orjson.dumps(value).decode(),
+        "label_source": _label_source_json(value),
     }
+    return vespa_label
+
+
+def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
+    """Convert a Wikibase concept into a ``VespaLabel`` row."""
+    identifier = f"concept::{concept['wikibase_id']}"
+    source_label: SourceLabel = {
+        "id": identifier,
+        "type": "concept",
+        "value": concept["preferred_label"],
+    }
+    vespa_label: VespaLabel = {
+        "id": identifier,
+        "type": "concept",
+        "value": concept["preferred_label"],
+        "alternative_labels": concept["alternative_labels"],
+        "subconcept_labels": concept["subconcept_labels"],
+        "description": concept["description"] or "",
+        "negative_labels": concept["negative_labels"],
+        "label_source": _label_source_json(source_label),
+    }
+    return vespa_label
 
 
 def labels_feed_materializer():
@@ -115,19 +155,8 @@ def labels_feed_materializer():
         print("WARNING: fewer concepts returned from Wikibase than requested.")
 
     for concept in wikibase_concepts:
-        identifier = f"concept::{concept['wikibase_id']}"
-        labels[identifier] = {
-            "id": identifier,
-            "type": "concept",
-            "value": concept["preferred_label"],
-            "alternative_labels": concept["alternative_labels"],
-            "subconcept_labels": concept["subconcept_labels"],
-            "description": concept["description"] or "",
-            "negative_labels": concept["negative_labels"],
-            "label_source": DataInLabel(
-                id=identifier, type="concept", value=concept["preferred_label"]
-            ).model_dump_json(),
-        }
+        vespa_label = _wikibase_concept_to_vespa_label(concept)
+        labels[vespa_label["id"]] = vespa_label
 
     unique_labels = list(labels.values())
 
