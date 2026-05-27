@@ -16,7 +16,6 @@ from search.engines.dev_vespa import (
     DevVespaPassageSearchEngine,
     Settings,
 )
-from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
 
@@ -135,7 +134,7 @@ def read_documents(
     )
 
 
-@router.get("/labels", response_model=SearchResponse[Label])
+@router.get("/labels", response_model=SearchResponse[DataInLabel])
 def read_labels(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
@@ -165,7 +164,7 @@ def read_labels(
             order_by=order_by,
             label_type=type,
         )
-        engine.all_label_types()
+        engine.all_label_types()  # NOTE: Is this still being used?
     except Exception:
         logger.exception(
             "Error: label search request failed "
@@ -186,7 +185,7 @@ def read_labels(
         results.total_size,
     )
 
-    return SearchResponse[Label](
+    return SearchResponse[DataInLabel](
         total_size=results.total_size,
         page=0,
         page_size=0,
