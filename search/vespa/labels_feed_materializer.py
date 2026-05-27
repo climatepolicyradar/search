@@ -6,6 +6,9 @@ import orjson
 
 from search.data_in_models import Label as DataInLabel
 from search.vespa.models import VespaAssign, VespaUpdate
+from search.vespa.sources.data_in_api import (
+    SourceLabelRelationship,
+)
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
 from search.vespa.sources.wikibase import fetch_concepts_at_timestamps_sync
@@ -56,24 +59,38 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
     }
 
 
+def _source_label_relationship_to_vespa_label(
+    label_rel: SourceLabelRelationship,
+) -> VespaLabel:
+    """
+    Convert a document's label relationship into a ``VespaLabel`` row.
+
+    ``label_source`` must be the flat label (``id``/``type``/``value``) so the
+    labels search engine can parse it as :class:`DataInLabel`. Storing the
+    relationship envelope here silently drops every document-derived label at
+    read time.
+    """
+    value = label_rel["value"]
+    return {
+        "id": value["id"],
+        "type": value["type"],
+        "value": value["value"],
+        "alternative_labels": [],
+        "subconcept_labels": [],
+        "description": "",
+        "negative_labels": [],
+        "label_source": orjson.dumps(value).decode(),
+    }
+
+
 def labels_feed_materializer():
     labels: dict[str, VespaLabel] = {}
 
     documents = read_documents()
     for document in documents:
         for label_rel in document.get("labels") or []:
-            value = label_rel["value"]
-            identifier = value["id"]
-            labels[identifier] = {
-                "id": identifier,
-                "type": value["type"],
-                "value": value["value"],
-                "alternative_labels": [],
-                "subconcept_labels": [],
-                "description": "",
-                "negative_labels": [],
-                "label_source": orjson.dumps(label_rel).decode(),
-            }
+            vespa_label = _source_label_relationship_to_vespa_label(label_rel)
+            labels[vespa_label["id"]] = vespa_label
 
     inference_results = read_inference_results()
 
