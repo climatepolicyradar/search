@@ -1,0 +1,364 @@
+schema documents {
+    document documents {
+        field id type string {}
+        field title type string {
+            indexing: index | summary
+            stemming: multiple
+            linguistics {
+                profile: passage_analysis
+            }
+            bolding: on
+        }
+        field description type string {
+            indexing: index | summary
+            stemming: multiple
+            linguistics {
+                profile: passage_analysis
+            }
+            bolding: on
+        }
+
+        struct label {
+            field id type string {}
+            field type type string {}
+            field value type string {}
+            field timestamp type long {}
+            field relationship type string {}
+            field count type int {}
+            field passages_id type string {}
+        }
+        field labels type array<label> {
+            struct-field id {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field type {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field value {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field timestamp {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field relationship {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+        }
+
+        field geographies type array<string> {
+            indexing: index | attribute | summary
+            linguistics {
+                profile {
+                    index: geo_analysis
+                    search: geo_analysis_search
+                }
+            }
+        }
+
+        struct concept {
+            field id type string {}
+            field type type string {}
+            field value type string {}
+            field count type int {}
+            field passages_id type string {}
+        }
+        field concepts type array<concept> {
+            struct-field id {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field type {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field value {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field count {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field passages_id {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+        }
+
+        field attributes_double type map<string, double> {
+            struct-field key { indexing: attribute }
+            struct-field value { indexing: attribute }
+        }
+        field attributes_string type map<string, string> {
+            struct-field key { indexing: attribute }
+            struct-field value { indexing: attribute }
+        }
+        field attributes_boolean type map<string, byte> {
+            struct-field key { indexing: attribute }
+            struct-field value { indexing: attribute }
+        }
+        field attributes_identifiers type map<string, string> {
+            struct-field key { indexing: attribute }
+            struct-field value { indexing: attribute }
+        }
+
+        struct passage {
+            field text_block_id type string {}
+            field language type string {}
+            field type type string {}
+            field type_confidence type float {}
+            field page_number type int {}
+            field text type string {}
+            field heading_id type string {}
+        }
+        field passages type array<passage> {
+            indexing: summary
+        }
+
+        field document_source type string {
+            indexing: summary
+        }
+
+        field attributes_published_date type long {
+            indexing: attribute | summary
+        }
+
+        field principal_id type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field topic_tfidf type tensor<float>(topic{}) {
+            indexing: attribute | summary
+        }
+        field document_topics type tensor<float>(topic{}) {
+            indexing: attribute | summary
+        }
+    }
+
+    field title_sort type string {
+        indexing: input title | attribute | summary | lowercase
+    }
+
+    # These are used as references by the passages schema
+    field geographies_attribute type array<string> {
+        indexing: input geographies | attribute
+    }
+    field title_attribute type string {
+        indexing: input title | attribute
+    }
+
+    field labels_value type array<string> {
+        indexing: input labels | for_each { get_field value } | index | summary
+        stemming: none
+        linguistics {
+            profile: document_label_analysis
+        }
+    }
+    field labels_value_attribute type array<string> {
+        indexing: input labels | for_each { get_field value } | attribute
+        attribute: fast-search
+    }
+    field labels_type_attribute type array<string> {
+        indexing: input labels | for_each { get_field type } | attribute
+        attribute: fast-search
+    }
+    field labels_type_value_attribute type array<string> {
+        indexing: input labels | for_each { get_field type . "::". get_field value } | attribute
+        attribute: fast-search
+    }
+    field labels_type_id_value_attribute type array<string> {
+        indexing: input labels | for_each { get_field type . "::". get_field id . "::" . get_field value } | attribute
+        attribute: fast-search
+    }
+    field labels_relationship_id_value_attribute type array<string> {
+        indexing: input labels | for_each { get_field relationship . "::" . get_field id . "::" . get_field value } | attribute
+        attribute: fast-search
+    }
+
+    field concepts_value type array<string> {
+        indexing: input concepts | for_each { get_field value } | index | summary
+        stemming: none
+        linguistics {
+            profile: document_label_analysis
+        }
+    }
+    field concepts_value_attribute type array<string> {
+        indexing: input concepts | for_each { get_field value } | attribute
+        attribute: fast-search
+    }
+    field concepts_type_attribute type array<string> {
+        indexing: input concepts | for_each { get_field type } | attribute
+        attribute: fast-search
+    }
+    field concepts_type_value_attribute type array<string> {
+        indexing: input concepts | for_each { get_field type . "::". get_field value } | attribute
+        attribute: fast-search
+    }
+    field concepts_type_id_value_attribute type array<string> {
+        indexing: input concepts | for_each { get_field type . "::". get_field id . "::" . get_field value } | attribute
+        attribute: fast-search
+    }
+
+    field passages_text type array<string> {
+        indexing: input passages | for_each { get_field text } | index | summary
+        stemming: multiple
+        linguistics {
+            profile: passage_analysis
+        }
+        bolding: on
+    }
+
+    field title_synonyms type string {
+        indexing: input title | index
+        stemming: multiple
+        linguistics {
+            profile {
+                index: title_analysis
+            }
+        }
+    }
+
+    field case_number type string {
+        indexing: input attributes_identifiers | get_value case_number | lowercase | index | attribute | summary
+        stemming: none
+        match: exact
+    }
+
+    field project_id type string {
+        indexing: input attributes_identifiers | get_value project_id | lowercase | index | attribute | summary
+        stemming: none
+        match: exact
+    }
+
+    fieldset identifiers {
+        fields: case_number, project_id
+    }
+
+    fieldset default {
+        fields: title, description, passages_text
+    }
+
+    fieldset geographies {
+        fields: geographies
+    }
+
+    fieldset title_synonyms_fieldset {
+        fields: title_synonyms
+    }
+
+    fieldset labels_fieldset {
+        fields: labels_value
+    }
+
+    rank-profile default {
+        inputs {
+            query(title_weight) double: 3.0
+            query(description_weight) double: 1.0
+            query(passages_weight) double: 1.0
+            query(geographies_weight) double: 1.0
+            query(identifier_weight) double: 10000.0
+        }
+    }
+
+    rank-profile nativerank inherits default {
+        function title_score () {
+            expression: query(title_weight) * nativeRank(title) + nativeProximity(title) + fieldMatch(title).fieldCompleteness
+        }
+        function description_score () {
+            expression: query(description_weight) * nativeRank(description)
+        }
+        function passages_score () {
+            expression: query(passages_weight) * nativeRank(passages_text)
+        }
+        function geographies_score () {
+            expression: query(geographies_weight) * matches(geographies)
+        }
+        function title_synonyms_score () {
+            expression: nativeRank(title_synonyms)
+        }
+        function identifiers_score() {
+            expression: query(identifier_weight) * (nativeRank(case_number) + nativeRank(project_id))
+        }
+
+        first-phase {
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + identifiers_score()
+        }
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) fieldMatch(title).fieldCompleteness nativeRank(title_synonyms) identifiers_score()
+    }
+
+    rank-profile label-boosted inherits nativerank {
+        inputs {
+            query(label_boost_factor) double: 0.2
+        }
+        function label_boost_score() {
+            expression: query(label_boost_factor) * (attributeMatch(labels_type_value_attribute) > 0)
+        }
+        first-phase {
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + label_boost_score() + identifiers_score()
+        }
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) nativeRank(title_synonyms) identifiers_score()
+    }
+
+    rank-profile topic-ranked inherits nativerank {
+        inputs {
+            query(topic_tfidf_q) tensor<float>(topic{})
+            query(document_topics_q) tensor<float>(topic{})
+            query(topic_tfidf_weight) double: 1.0
+            query(document_topics_weight) double: 1.0
+        }
+        function topic_tfidf_score() {
+            expression: query(topic_tfidf_weight) * sum(attribute(topic_tfidf) * query(topic_tfidf_q))
+        }
+        function document_topics_score() {
+            expression: query(document_topics_weight) * sum(attribute(document_topics) * query(document_topics_q))
+        }
+        first-phase {
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + identifiers_score() + topic_tfidf_score() + document_topics_score()
+        }
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() identifiers_score() topic_tfidf_score() document_topics_score()
+    }
+
+    # Used with ranking.sorting for non-relevance document lists. Declared explicitly so
+    # sort queries do not depend on an implicit container default.
+    rank-profile unranked {
+        first-phase {
+            expression: 1
+        }
+    }
+
+    document-summary default {
+    }
+
+    document-summary debug-summary inherits default {
+        summary title_tokens {
+            source: title
+            tokens
+        }
+        summary description_tokens {
+            source: description
+            tokens
+        }
+        summary labels_value {}
+        summary labels_value_tokens {
+            source: labels_value
+            tokens
+        }
+        summary labels_type_value_attribute {}
+        summary concepts_value {}
+        summary geographies_tokens {
+            source: geographies
+            tokens
+        }
+        summary title_synonyms_tokens {
+            source: title_synonyms
+            tokens
+        }
+        from-disk
+    }
+}
