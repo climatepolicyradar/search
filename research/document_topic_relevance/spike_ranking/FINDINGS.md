@@ -5,6 +5,37 @@
 `sum(attribute * query_tensor)` in a rank profile, ranks documents exactly as
 designed. Math checks out to the 4th decimal place across all four test queries.
 
+## Why tensors, not `weightedSet` + `dotProduct`
+
+The alternative was `weightedset<string>` fields with Vespa's
+[`dotProduct` query operator](https://docs.vespa.ai/en/multivalue-query-operators.html).
+We chose
+[`tensor<float>(topic{})`](https://docs.vespa.ai/en/tensor-user-guide.html)
+instead for three reasons:
+
+1. **Float weights.**
+   [`weightedset` weights are signed int32](https://docs.vespa.ai/en/reference/schema-reference.html#weightedset)
+   — tfidf scores (0.0–1.0) would need to be scaled on the way in (e.g.
+   `round(tfidf × 10_000)`) and decoded on the way out. Tensors store native
+   floats, so 0.98 goes in and comes out as 0.98.
+
+2. **No recall blow-up.** The `dotProduct` YQL operator is a _matching_
+   operator: "documents where the weighted set field contains at least one of
+   the tokens in the query." Putting it in the WHERE clause widens recall to
+   every doc carrying any of the queried topic IDs, even ones the text query
+   would never return. The tensor approach is purely a _scoring_ expression — it
+   runs only on docs already retrieved by `userQuery()` and doesn't widen
+   recall.
+
+3. **Forward compatible.** Embeddings, cross-encoder rerankers, and multi-phase
+   ranking are all
+   [tensor-native in Vespa](https://docs.vespa.ai/en/tensor-user-guide.html).
+   The Vespa docs themselves note that weightedsets can be converted to tensors
+   via
+   [`tensorFromWeightedSet()`](<https://docs.vespa.ai/en/reference/rank-features.html#tensorFromWeightedSet(name,dimension)>),
+   signalling tensors as the direction of travel. Starting here avoids a
+   migration later.
+
 ## What was deployed
 
 - `vespa/app/schemas/documents.sd`: two new tensor fields (`topic_tfidf`,
