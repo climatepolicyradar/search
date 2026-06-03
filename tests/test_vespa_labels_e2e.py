@@ -30,7 +30,7 @@ from search.vespa.labels_feed_materializer import (
     VespaLabel,
     _vespa_label_to_vespa_update,
 )
-from tests.vespa_e2e import _TEST_SETTINGS, _ids
+from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids
 
 pytest_plugins = ["tests.vespa_e2e"]
 
@@ -167,7 +167,7 @@ def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
-    ids = _ids(f)
+    ids = get_search_ids(f)
     assert doc_with_label.id in ids
     assert doc_without_label.id not in ids
 
@@ -186,7 +186,7 @@ def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
-    ids = _ids(f)
+    ids = get_search_ids(f)
     assert doc_with_different_label.id not in ids
     assert doc_without_label.id not in ids
 
@@ -203,7 +203,7 @@ def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
-    ids = _ids(f)
+    ids = get_search_ids(f)
     assert doc_with_label.id not in ids
     assert doc_without_label.id in ids
 
@@ -224,7 +224,7 @@ def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
-    ids = _ids(f)
+    ids = get_search_ids(f)
     assert doc_with_different_label.id in ids
     assert doc_with_matching_label.id not in ids
 
@@ -247,7 +247,7 @@ def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
-    ids = _ids(f)
+    ids = get_search_ids(f)
     assert doc_with_concept.id in ids
     assert doc_without_concept.id not in ids
 
@@ -265,7 +265,7 @@ def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
-    ids = _ids(f)
+    ids = get_search_ids(f)
     assert doc_with_different_concept.id not in ids
     assert doc_without_concept.id not in ids
 
@@ -283,7 +283,7 @@ def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
-    ids = _ids(f)
+    ids = get_search_ids(f)
     assert doc_with_concept.id not in ids
     assert doc_without_concept.id in ids
 
@@ -302,7 +302,7 @@ def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
-    ids = _ids(f)
+    ids = get_search_ids(f)
     assert doc_with_different_concept.id in ids
     assert doc_with_matching_concept.id not in ids
 
