@@ -2,12 +2,12 @@
 
 from typing import Any
 
-from vespa.application import Vespa
-
-from search.engines.dev_vespa import DevVespaDocumentSearchEngine, FieldFilter, Filter
 import requests as req
 from cpr_contracts import Document, LabelRelationship, LabelWithoutLabelRelationships
 from polyfactory.factories.pydantic_factory import ModelFactory
+from vespa.application import Vespa
+
+from search.engines.dev_vespa import DevVespaDocumentSearchEngine, FieldFilter, Filter
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from tests.vespa_e2e import _TEST_SETTINGS
 

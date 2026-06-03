@@ -13,10 +13,10 @@ from urllib.parse import quote
 
 import pytest
 import requests as req
+from cpr_contracts import Document, LabelRelationship, LabelWithoutLabelRelationships
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 
-from cpr_contracts import Document, LabelRelationship, LabelWithoutLabelRelationships
 from search.data_in_models import Label as DataInLabel
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (

@@ -19,6 +19,8 @@ from typing import Any, Literal
 
 import pytest
 import requests as req
+from cpr_contracts import Document, LabelRelationship
+from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
@@ -31,8 +33,6 @@ from search.engines.dev_vespa import (
     Settings,
 )
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from cpr_contracts import Document, LabelRelationship
-from polyfactory.factories.pydantic_factory import ModelFactory
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 # we try not to use 8080 as this _might_ be the currently running local server
