@@ -13,7 +13,7 @@ from urllib.parse import quote
 
 import pytest
 import requests as req
-from cpr_contracts import Document, LabelRelationship, LabelWithoutLabelRelationships
+from cpr_contracts import Document, DocumentLabelRelationship, Label, LabelWithoutLabelRelationships
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 
@@ -35,9 +35,9 @@ from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids
 pytest_plugins = ["tests.vespa_e2e"]
 
 
-class LabelRelationshipFactory(ModelFactory[LabelRelationship]):
+class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
     @classmethod
-    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> LabelRelationship:
+    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> DocumentLabelRelationship:
         kwargs.setdefault("timestamp", None)
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
@@ -46,16 +46,16 @@ class DocumentFactory(ModelFactory[Document]):
     @classmethod
     def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> Document:
         if "labels" not in kwargs:
-            kwargs["labels"] = [LabelRelationshipFactory.build()]
+            kwargs["labels"] = [DocumentLabelRelationshipFactory.build()]
         if "documents" not in kwargs:
             kwargs["documents"] = []
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
 
-def _make_label(label_id: str) -> LabelRelationship:
-    return LabelRelationship(
+def _make_label(label_id: str) -> DocumentLabelRelationship:
+    return DocumentLabelRelationship(
         type="entity_type",
-        value=LabelWithoutLabelRelationships(id=label_id, value=label_id, type="entity_type"),
+        value=Label(id=label_id, value=label_id, type="entity_type", labels=[]),
         timestamp=None,
     )
 
@@ -323,9 +323,9 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
         title="Running Waters document",
         description="Test description",
         labels=[
-            LabelRelationship(
+            DocumentLabelRelationship(
                 type="topic",
-                value=LabelWithoutLabelRelationships(id="running-waters", value="Running Waters", type="topic"),
+                value=Label(id="running-waters", value="Running Waters", type="topic", labels=[]),
                 timestamp=None,
             )
         ],
@@ -361,9 +361,9 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
         title="xyzzygeotestuk document",
         description="A climate policy document",
         labels=[
-            LabelRelationship(
+            DocumentLabelRelationship(
                 type="geography",
-                value=LabelWithoutLabelRelationships(id="united-kingdom", value="United Kingdom", type="geography"),
+                value=Label(id="united-kingdom", value="United Kingdom", type="geography", labels=[]),
                 timestamp=None,
             )
         ],
@@ -372,9 +372,9 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
         title="xyzzygeotestus document",
         description="A US environmental policy document",
         labels=[
-            LabelRelationship(
+            DocumentLabelRelationship(
                 type="geography",
-                value=LabelWithoutLabelRelationships(id="united-states", value="United States", type="geography"),
+                value=Label(id="united-states", value="United States", type="geography", labels=[]),
                 timestamp=None,
             )
         ],

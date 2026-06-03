@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 import pytest
 import requests as req
-from cpr_contracts import Document, LabelRelationship
+from cpr_contracts import Document, DocumentLabelRelationship
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
@@ -43,9 +43,9 @@ _TEST_SETTINGS = Settings(
 )
 
 
-class LabelRelationshipFactory(ModelFactory[LabelRelationship]):
+class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
     @classmethod
-    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> LabelRelationship:
+    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> DocumentLabelRelationship:
         kwargs.setdefault("timestamp", None)
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
@@ -54,7 +54,7 @@ class DocumentFactory(ModelFactory[Document]):
     @classmethod
     def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> Document:
         if "labels" not in kwargs:
-            kwargs["labels"] = [LabelRelationshipFactory.build(factory_use_construct=factory_use_construct)]
+            kwargs["labels"] = [DocumentLabelRelationshipFactory.build(factory_use_construct=factory_use_construct)]
         if "documents" not in kwargs:
             kwargs["documents"] = []
         return super().build(factory_use_construct=factory_use_construct, **kwargs)

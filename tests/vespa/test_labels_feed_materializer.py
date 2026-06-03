@@ -6,7 +6,7 @@ engine parses ``label_source`` as a flat :class:`DataInLabel`, so the
 materialiser must store it in the same shape.
 """
 
-from cpr_contracts import LabelRelationship, LabelWithoutLabelRelationships
+from cpr_contracts import DocumentLabelRelationship, Label
 
 from search.data_in_models import Label as DataInLabel
 from search.vespa.labels_feed_materializer import (
@@ -25,12 +25,13 @@ def test_source_label_relationship_to_vespa_label_label_source_round_trips() -> 
     search engine drops every document-derived label at read time with a
     "Label source is invalid" warning and returns zero results.
     """
-    label_rel: LabelRelationship = LabelRelationship(
+    label_rel: DocumentLabelRelationship = DocumentLabelRelationship(
         type="related",
-        value=LabelWithoutLabelRelationships(
+        value=Label(
             id="principal_law::Bavaria Climate Protection Act",
             type="principal_law",
             value="Bavaria Climate Protection Act",
+            labels=[]
         ),
         timestamp= None,
     )

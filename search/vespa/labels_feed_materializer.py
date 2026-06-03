@@ -3,7 +3,7 @@ from typing import TypedDict
 
 import boto3
 import orjson
-from cpr_contracts import Label, LabelRelationship
+from cpr_contracts import Label, DocumentLabelRelationship
 
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
@@ -60,7 +60,7 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
 
 
 def _source_label_relationship_to_vespa_label(
-    label_rel: LabelRelationship,
+    label_rel: DocumentLabelRelationship,
 ) -> VespaLabel:
     """
     Convert a document's label relationship into a ``VespaLabel`` row.

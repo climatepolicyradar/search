@@ -516,8 +516,8 @@ wheels = [
 
 [[package]]
 name = "cpr-contracts"
-version = "0.1.1"
-source = { git = "https://github.com/climatepolicyradar/contracts?tag=v0.1.1#9e328c4d54e6b49cc5c889182f750fa9112307ee" }
+version = "0.1.3"
+source = { git = "https://github.com/climatepolicyradar/contracts?tag=v0.1.3#8b35ea524c4acfb911aa53f6c2713d24e4f320b6" }
 dependencies = [
     { name = "pydantic" },
 ]
@@ -3193,7 +3193,7 @@ dev = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.43.14" },
     { name = "components", git = "https://github.com/climatepolicyradar/infra?subdirectory=components&tag=v1.0.5" },
-    { name = "cpr-contracts", git = "https://github.com/climatepolicyradar/contracts?tag=v0.1.1" },
+    { name = "cpr-contracts", git = "https://github.com/climatepolicyradar/contracts?tag=v0.1.3" },
     { name = "duckdb", specifier = ">=1.5.3" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.136.3" },
     { name = "moto", specifier = ">=5.2.1" },

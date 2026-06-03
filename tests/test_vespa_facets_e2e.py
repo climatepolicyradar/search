@@ -3,7 +3,7 @@
 from typing import Any
 
 import requests as req
-from cpr_contracts import Document, LabelRelationship, LabelWithoutLabelRelationships
+from cpr_contracts import Document, DocumentLabelRelationship, LabelWithoutLabelRelationships, Label
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 
@@ -14,9 +14,9 @@ from tests.vespa_e2e import _TEST_SETTINGS
 pytest_plugins = ["tests.vespa_e2e"]
 
 
-class LabelRelationshipFactory(ModelFactory[LabelRelationship]):
+class LabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
     @classmethod
-    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> LabelRelationship:
+    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> DocumentLabelRelationship:
         kwargs.setdefault("timestamp", None)
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
@@ -31,18 +31,18 @@ class DocumentFactory(ModelFactory[Document]):
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
 
-def _label(label_id: str, value: str, label_type: str) -> LabelRelationship:
-    return LabelRelationship(
+def _label(label_id: str, value: str, label_type: str) -> DocumentLabelRelationship:
+    return DocumentLabelRelationship(
         type=label_type,
-        value=LabelWithoutLabelRelationships(id=label_id, value=value, type=label_type),
+        value=Label(id=label_id, value=value, type=label_type, labels=[]),
         timestamp=None,
     )
 
 
-def _label_rel(label_id: str, value: str, label_type: str, relationship: str) -> LabelRelationship:
-    return LabelRelationship(
+def _label_rel(label_id: str, value: str, label_type: str, relationship: str) -> DocumentLabelRelationship:
+    return DocumentLabelRelationship(
         type=relationship,
-        value=LabelWithoutLabelRelationships(id=label_id, value=value, type=label_type),
+        value=Label(id=label_id, value=value, type=label_type, labels=[]),
         timestamp=None,
     )
 
