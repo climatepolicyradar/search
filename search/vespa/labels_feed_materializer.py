@@ -3,13 +3,9 @@ from typing import TypedDict
 
 import boto3
 import orjson
+from cpr_contracts import Label, LabelRelationship
 
-from search.data_in_models import Label as DataInLabel
 from search.vespa.models import VespaAssign, VespaUpdate
-from search.vespa.sources.data_in_api import (
-    SourceLabel,
-    SourceLabelRelationship,
-)
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
 from search.vespa.sources.wikibase import (
@@ -63,22 +59,8 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
     }
 
 
-def _label_source_json(source_label: SourceLabel) -> str:
-    """
-    Serialise a flat source label for Vespa ``label_source``.
-
-    The labels search engine parses this field as :class:`DataInLabel`. Only
-    pass :class:`SourceLabel`, not :class:`SourceLabelRelationship`.
-    """
-    return DataInLabel(
-        id=source_label["id"],
-        type=source_label["type"],
-        value=source_label["value"],
-    ).model_dump_json()
-
-
 def _source_label_relationship_to_vespa_label(
-    label_rel: SourceLabelRelationship,
+    label_rel: LabelRelationship,
 ) -> VespaLabel:
     """
     Convert a document's label relationship into a ``VespaLabel`` row.
@@ -88,16 +70,16 @@ def _source_label_relationship_to_vespa_label(
     relationship envelope here silently drops every document-derived label at
     read time.
     """
-    value = label_rel["value"]
+    value = label_rel.value
     vespa_label: VespaLabel = {
-        "id": value["id"],
-        "type": value["type"],
-        "value": value["value"],
+        "id": value.id,
+        "type": value.type,
+        "value": value.value,
         "alternative_labels": [],
         "subconcept_labels": [],
         "description": "",
         "negative_labels": [],
-        "label_source": _label_source_json(value),
+        "label_source": value.model_dump_json(),
     }
     return vespa_label
 
@@ -105,11 +87,12 @@ def _source_label_relationship_to_vespa_label(
 def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
     """Convert a Wikibase concept into a ``VespaLabel`` row."""
     identifier = f"concept::{concept['wikibase_id']}"
-    source_label: SourceLabel = {
-        "id": identifier,
-        "type": "concept",
-        "value": concept["preferred_label"],
-    }
+    source_label= Label(
+        id=identifier,
+        type="concept",
+        value=concept["preferred_label"],
+        labels = []
+    )
     vespa_label: VespaLabel = {
         "id": identifier,
         "type": "concept",
@@ -118,7 +101,7 @@ def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
         "subconcept_labels": concept["subconcept_labels"],
         "description": concept["description"] or "",
         "negative_labels": concept["negative_labels"],
-        "label_source": _label_source_json(source_label),
+        "label_source": source_label.model_dump_json(),
     }
     return vespa_label
 
@@ -128,7 +111,7 @@ def labels_feed_materializer():
 
     documents = read_documents()
     for document in documents:
-        for label_rel in document.get("labels") or []:
+        for label_rel in document.labels or []:
             vespa_label = _source_label_relationship_to_vespa_label(label_rel)
             labels[vespa_label["id"]] = vespa_label
 

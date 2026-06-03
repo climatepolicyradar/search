@@ -19,7 +19,6 @@ from typing import Any, Literal
 
 import pytest
 import requests as req
-from polyfactory.factories.typed_dict_factory import TypedDictFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
@@ -32,10 +31,8 @@ from search.engines.dev_vespa import (
     Settings,
 )
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from search.vespa.sources.data_in_api import (
-    SourceDocument,
-    SourceLabelRelationship,
-)
+from cpr_contracts import Document, LabelRelationship
+from polyfactory.factories.pydantic_factory import ModelFactory
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 # we try not to use 8080 as this _might_ be the currently running local server
@@ -46,25 +43,22 @@ _TEST_SETTINGS = Settings(
 )
 
 
-class SourceLabelRelationshipFactory(TypedDictFactory):
-    __model__ = SourceLabelRelationship
-
+class LabelRelationshipFactory(ModelFactory[LabelRelationship]):
     @classmethod
-    def build(cls, **kwargs: Any) -> SourceLabelRelationship:
+    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> LabelRelationship:
         kwargs.setdefault("timestamp", None)
-        return super().build(**kwargs)
+        return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
 
-class SourceDocumentFactory(TypedDictFactory):
-    __model__ = SourceDocument
-
+class DocumentFactory(ModelFactory[Document]):
     @classmethod
-    def build(cls, **kwargs: Any) -> SourceDocument:
+    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> Document:
         if "labels" not in kwargs:
-            kwargs["labels"] = [SourceLabelRelationshipFactory.build()]
+            kwargs["labels"] = [LabelRelationshipFactory.build(factory_use_construct=factory_use_construct)]
         if "documents" not in kwargs:
             kwargs["documents"] = []
-        return super().build(**kwargs)
+        return super().build(factory_use_construct=factory_use_construct, **kwargs)
+
 
 
 def _vespa_ready() -> bool:
@@ -122,18 +116,18 @@ def clean_docs(vespa_app: Vespa):
     )
 
 
-def _feed_document(app: Vespa, document: SourceDocument) -> None:
+def _feed_document(app: Vespa, document: Document) -> None:
     """Feed a document as an update operation — same format as JSONL feed."""
     op = _source_document_to_vespa_update(document)
     r = req.put(
-        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
-        json={**op, "create": True},
+        f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
+        json={**op, "create": True},  # type: ignore[arg-type]
         timeout=5,
     )
     r.raise_for_status()
 
 
-def _feed_document_without_title(app: Vespa, document: SourceDocument) -> None:
+def _feed_document_without_title(app: Vespa, document: Document) -> None:
     """
     Feed a document update with ``title`` intentionally omitted.
 
@@ -144,8 +138,8 @@ def _feed_document_without_title(app: Vespa, document: SourceDocument) -> None:
     fields = dict(op.get("fields", {}))
     fields.pop("title", None)
     r = req.put(
-        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
-        json={**op, "fields": fields, "create": True},
+        f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
+        json={**op, "fields": fields, "create": True},  # type: ignore[arg-type]
         timeout=5,
     )
     r.raise_for_status()
@@ -164,11 +158,11 @@ def _ids(filter_: Filter) -> set[str]:
 
 # region Attributes
 def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa):
-    document_before_range = SourceDocumentFactory.build(
+    document_before_range = DocumentFactory.build(
         attributes={"published_date": "2019-12-31T23:59:59Z"},
         labels=[],
     )
-    document_in_range = SourceDocumentFactory.build(
+    document_in_range = DocumentFactory.build(
         attributes={"published_date": "2021-06-01T00:00:00Z"},
         labels=[],
     )
@@ -187,20 +181,20 @@ def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert document_before_range["id"] not in ids
-    assert document_in_range["id"] in ids
+    assert document_before_range.id not in ids
+    assert document_in_range.id in ids
 
 
 def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa):
-    document_before_range = SourceDocumentFactory.build(
+    document_before_range = DocumentFactory.build(
         attributes={"published_date": "2017-06-01T00:00:00Z"},
         labels=[],
     )
-    document_in_range = SourceDocumentFactory.build(
+    document_in_range = DocumentFactory.build(
         attributes={"published_date": "2020-06-01T00:00:00Z"},
         labels=[],
     )
-    document_after_range = SourceDocumentFactory.build(
+    document_after_range = DocumentFactory.build(
         attributes={"published_date": "2024-01-01T00:00:00Z"},
         labels=[],
     )
@@ -226,29 +220,29 @@ def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa):
         ],
     )
     ids = _ids(f)
-    assert document_before_range["id"] not in ids
-    assert document_in_range["id"] in ids
-    assert document_after_range["id"] not in ids
+    assert document_before_range.id not in ids
+    assert document_in_range.id in ids
+    assert document_after_range.id not in ids
 
 
-def _feed_published_date_boundary_docs(vespa_app: Vespa) -> dict[str, SourceDocument]:
+def _feed_published_date_boundary_docs(vespa_app: Vespa) -> dict[str, Document]:
     docs = {
-        "before_year": SourceDocumentFactory.build(
+        "before_year": DocumentFactory.build(
             id="date-before-year",
             attributes={"published_date": "2019-12-31T23:59:59Z"},
             labels=[],
         ),
-        "year_start": SourceDocumentFactory.build(
+        "year_start": DocumentFactory.build(
             id="date-year-start",
             attributes={"published_date": "2020-01-01T00:00:00Z"},
             labels=[],
         ),
-        "year_end": SourceDocumentFactory.build(
+        "year_end": DocumentFactory.build(
             id="date-year-end",
             attributes={"published_date": "2020-12-31T23:59:59Z"},
             labels=[],
         ),
-        "after_year": SourceDocumentFactory.build(
+        "after_year": DocumentFactory.build(
             id="date-after-year",
             attributes={"published_date": "2021-01-01T00:00:00Z"},
             labels=[],
@@ -290,7 +284,7 @@ def test_attribute_published_date_year_operator_boundaries(
         ],
     )
     ids = _ids(f)
-    expected_ids = {docs[key]["id"] for key in expected_keys}
+    expected_ids = {docs[key].id for key in expected_keys}
     assert ids == expected_ids
 
 
@@ -310,7 +304,7 @@ def test_attribute_published_date_eq_datetime_matches_exact_timestamp(
         ],
     )
     ids = _ids(f)
-    assert ids == {docs["year_end"]["id"]}
+    assert ids == {docs["year_end"].id}
 
 
 def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vespa):
@@ -327,7 +321,7 @@ def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vesp
         ],
     )
     ids = _ids(f)
-    assert ids == {docs["year_start"]["id"]}
+    assert ids == {docs["year_start"].id}
 
 
 def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Vespa):
@@ -344,10 +338,10 @@ def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Ves
         ],
     )
     ids = _ids(f)
-    assert docs["year_start"]["id"] not in ids
-    assert docs["before_year"]["id"] in ids
-    assert docs["year_end"]["id"] in ids
-    assert docs["after_year"]["id"] in ids
+    assert docs["year_start"].id not in ids
+    assert docs["before_year"].id in ids
+    assert docs["year_end"].id in ids
+    assert docs["after_year"].id in ids
 
 
 @pytest.mark.parametrize(
@@ -385,8 +379,8 @@ def test_field_filter_attribute(
     match_in: bool,
     non_match_in: bool,
 ):
-    doc_matching = SourceDocumentFactory.build(attributes=matching_attrs, labels=[])
-    doc_non_matching = SourceDocumentFactory.build(
+    doc_matching = DocumentFactory.build(attributes=matching_attrs, labels=[])
+    doc_non_matching = DocumentFactory.build(
         attributes=non_matching_attrs, labels=[]
     )
     _feed_document(vespa_app, doc_matching)
@@ -397,8 +391,8 @@ def test_field_filter_attribute(
         filters=[FieldFilter(field=filter_field, op=op, value=filter_value)],
     )
     ids = _ids(f)
-    assert (doc_matching["id"] in ids) == match_in
-    assert (doc_non_matching["id"] in ids) == non_match_in
+    assert (doc_matching.id in ids) == match_in
+    assert (doc_non_matching.id in ids) == non_match_in
 
 
 # endregion Attributes
@@ -435,7 +429,7 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     "Running" should stem to "run", "waters" to "water",
     and "is" should be removed as a stop word.
     """
-    doc = SourceDocumentFactory.build(
+    doc = DocumentFactory.build(
         title="Running waters is beautiful",
         description="A short description",
         labels=[],
@@ -466,12 +460,12 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     titles contain the expanded forms ("Financial Conduct Authority",
     "Task Force on Climate-related Financial Disclosures").
     """
-    doc_with_full_forms = SourceDocumentFactory.build(
+    doc_with_full_forms = DocumentFactory.build(
         title="Financial Conduct Authority rules on Task Force on Climate-related Financial Disclosures",
         description="A climate disclosure document",
         labels=[],
     )
-    doc_without_match = SourceDocumentFactory.build(
+    doc_without_match = DocumentFactory.build(
         title="xyzzytitlesyntest unrelated environmental policy",
         description="An unrelated document",
         labels=[],
@@ -487,11 +481,11 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     ).results
     result_ids = {doc.id for doc in results}
 
-    assert doc_with_full_forms["id"] in result_ids, (
+    assert doc_with_full_forms.id in result_ids, (
         f"Expected doc with expanded title to match acronym search 'fca rules tcfd', "
         f"got ids: {result_ids}"
     )
-    assert doc_without_match["id"] not in result_ids, (
+    assert doc_without_match.id not in result_ids, (
         f"Unrelated doc should NOT match 'fca rules tcfd', got ids: {result_ids}"
     )
 
@@ -501,11 +495,11 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
 
 # region Document sorting (API JSON paths via Vespa ranking.sorting)
 def test_document_sort_title_sort_asc(vespa_app: Vespa):
-    doc_z = SourceDocumentFactory.build(title="Zebra memo", labels=[])
-    doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
-    doc_m = SourceDocumentFactory.build(title="Magpie brief", labels=[])
-    doc_f = SourceDocumentFactory.build(title="Fig brief", labels=[])
-    doc_missing = SourceDocumentFactory.build(
+    doc_z = DocumentFactory.build(title="Zebra memo", labels=[])
+    doc_a = DocumentFactory.build(title="Apple brief", labels=[])
+    doc_m = DocumentFactory.build(title="Magpie brief", labels=[])
+    doc_f = DocumentFactory.build(title="Fig brief", labels=[])
+    doc_missing = DocumentFactory.build(
         id="e2e-title-missing-asc",
         title="Will be dropped before feed",
         labels=[],
@@ -533,11 +527,11 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
 
 
 def test_document_sort_title_sort_desc(vespa_app: Vespa):
-    doc_z = SourceDocumentFactory.build(title="Zebra memo", labels=[])
-    doc_a = SourceDocumentFactory.build(title="Apple brief", labels=[])
-    doc_m = SourceDocumentFactory.build(title="Magpie brief", labels=[])
-    doc_f = SourceDocumentFactory.build(title="Fig brief", labels=[])
-    doc_missing = SourceDocumentFactory.build(
+    doc_z = DocumentFactory.build(title="Zebra memo", labels=[])
+    doc_a = DocumentFactory.build(title="Apple brief", labels=[])
+    doc_m = DocumentFactory.build(title="Magpie brief", labels=[])
+    doc_f = DocumentFactory.build(title="Fig brief", labels=[])
+    doc_missing = DocumentFactory.build(
         id="e2e-title-missing-desc",
         title="Will be dropped before feed",
         labels=[],
@@ -565,27 +559,27 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
 
 
 def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
-    doc_old = SourceDocumentFactory.build(
+    doc_old = DocumentFactory.build(
         title="Old",
         labels=[],
         attributes={"published_date": "2020-01-01T00:00:00Z"},
     )
-    doc_new = SourceDocumentFactory.build(
+    doc_new = DocumentFactory.build(
         title="New",
         labels=[],
         attributes={"published_date": "2024-06-01T12:00:00Z"},
     )
-    doc_oldest = SourceDocumentFactory.build(
+    doc_oldest = DocumentFactory.build(
         title="Oldest",
         labels=[],
         attributes={"published_date": "2010-01-01T00:00:00Z"},
     )
-    doc_newest = SourceDocumentFactory.build(
+    doc_newest = DocumentFactory.build(
         title="Newest",
         labels=[],
         attributes={"published_date": "2026-06-01T12:00:00Z"},
     )
-    doc_undated = SourceDocumentFactory.build(
+    doc_undated = DocumentFactory.build(
         title="Undated",
         labels=[],
         attributes={},
@@ -613,27 +607,27 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
 
 
 def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
-    doc_old = SourceDocumentFactory.build(
+    doc_old = DocumentFactory.build(
         title="Old",
         labels=[],
         attributes={"published_date": "2020-01-01T00:00:00Z"},
     )
-    doc_new = SourceDocumentFactory.build(
+    doc_new = DocumentFactory.build(
         title="New",
         labels=[],
         attributes={"published_date": "2024-06-01T12:00:00Z"},
     )
-    doc_oldest = SourceDocumentFactory.build(
+    doc_oldest = DocumentFactory.build(
         title="Oldest",
         labels=[],
         attributes={"published_date": "2010-01-01T00:00:00Z"},
     )
-    doc_newest = SourceDocumentFactory.build(
+    doc_newest = DocumentFactory.build(
         title="Newest",
         labels=[],
         attributes={"published_date": "2026-06-01T12:00:00Z"},
     )
-    doc_undated = SourceDocumentFactory.build(
+    doc_undated = DocumentFactory.build(
         title="Undated",
         labels=[],
         attributes={},
@@ -670,31 +664,31 @@ def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
     Five docs with unambiguous lexical order; assert full permuted order, not only
     the first row.
     """
-    doc_a = SourceDocumentFactory.build(
+    doc_a = DocumentFactory.build(
         id="e2e-sort-title-aaa",
         title="Aaa ascending leader",
         labels=[],
         attributes={"published_date": "2015-01-01T00:00:00Z"},
     )
-    doc_b = SourceDocumentFactory.build(
+    doc_b = DocumentFactory.build(
         id="e2e-sort-title-bbb",
         title="Bbb noise",
         labels=[],
         attributes={"published_date": "2015-02-01T00:00:00Z"},
     )
-    doc_m = SourceDocumentFactory.build(
+    doc_m = DocumentFactory.build(
         id="e2e-sort-title-mmm",
         title="Mmm middle",
         labels=[],
         attributes={"published_date": "2015-03-01T00:00:00Z"},
     )
-    doc_y = SourceDocumentFactory.build(
+    doc_y = DocumentFactory.build(
         id="e2e-sort-title-yyy",
         title="Yyy noise",
         labels=[],
         attributes={"published_date": "2015-04-01T00:00:00Z"},
     )
-    doc_z = SourceDocumentFactory.build(
+    doc_z = DocumentFactory.build(
         id="e2e-sort-title-zzz",
         title="Zzz descending leader",
         labels=[],
@@ -725,8 +719,8 @@ def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
     ).results
     assert [d.title for d in asc[:5]] == expected_asc_titles
     assert [d.title for d in desc[:5]] == expected_desc_titles
-    assert asc[0].id == doc_a["id"], asc
-    assert desc[0].id == doc_z["id"], desc
+    assert asc[0].id == doc_a.id, asc
+    assert desc[0].id == doc_z.id, desc
     assert asc[0].id != desc[0].id
 
 
@@ -740,31 +734,31 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
     ``title``, so date-desc leader and title-asc leader must differ; we also
     assert full expected order for each sort mode.
     """
-    doc_ancient = SourceDocumentFactory.build(
+    doc_ancient = DocumentFactory.build(
         id="e2e-sort-mixed-ancient",
         title="Zebra ancient",
         labels=[],
         attributes={"published_date": "2000-01-01T00:00:00Z"},
     )
-    doc_older_a = SourceDocumentFactory.build(
+    doc_older_a = DocumentFactory.build(
         id="e2e-sort-mixed-older-a",
         title="Apple older",
         labels=[],
         attributes={"published_date": "2010-01-01T00:00:00Z"},
     )
-    doc_mid = SourceDocumentFactory.build(
+    doc_mid = DocumentFactory.build(
         id="e2e-sort-mixed-mid",
         title="Middle road",
         labels=[],
         attributes={"published_date": "2015-06-01T00:00:00Z"},
     )
-    doc_newer_z = SourceDocumentFactory.build(
+    doc_newer_z = DocumentFactory.build(
         id="e2e-sort-mixed-newer-z",
         title="Zebra newer",
         labels=[],
         attributes={"published_date": "2024-01-01T00:00:00Z"},
     )
-    doc_newest_banana = SourceDocumentFactory.build(
+    doc_newest_banana = DocumentFactory.build(
         id="e2e-sort-mixed-newest-banana",
         title="Banana latest",
         labels=[],
@@ -802,8 +796,8 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
     ).results
     assert [d.title for d in by_date[:5]] == expected_date_desc
     assert [d.title for d in by_title[:5]] == expected_title_asc
-    assert by_date[0].id == doc_newest_banana["id"], by_date
-    assert by_title[0].id == doc_older_a["id"], by_title
+    assert by_date[0].id == doc_newest_banana.id, by_date
+    assert by_title[0].id == doc_older_a.id, by_title
     assert by_date[0].id != by_title[0].id
 
 
