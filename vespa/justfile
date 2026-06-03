@@ -143,3 +143,22 @@ remote-delete-document id:
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     vespa document remove "id:documents:documents::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
+
+remote-get-labels hits="10":
+    #!/usr/bin/env bash
+    set -e
+    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    curl -G "$vespa_endpoint/search/" \
+     --header "Authorization: Bearer $vespa_read_token" \
+     --data-urlencode 'yql=select * from labels where true' \
+     --data-urlencode 'hits={{ hits }}'
+
+remote-get-label id="un_convention::CBD":
+    #!/usr/bin/env bash
+    set -e
+    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa document get "id:labels:labels::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
+
+
