@@ -1,13 +1,12 @@
 import pandas as pd
 from pydantic import BaseModel
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, precision_recall_fscore_support
 
-from research.document_topic_relevance.src.models import Score
+from research.document_topic_relevance.src.models import EvalExample
 from research.document_topic_relevance.src.predictors import DTPredictor
-from search.document import Document
-from search.label import Label
 
 LABELS: list[int] = [0, 1, 2]
+RELEVANT_LABELS: list[int] = [1, 2]
 
 
 class ClassMetrics(BaseModel):
@@ -20,6 +19,15 @@ class ClassMetrics(BaseModel):
 PerClass = dict[int, ClassMetrics]
 
 
+class BinaryMetrics(BaseModel):
+    """Detection metrics for the positive class = {1, 2} collapsed against 0."""
+
+    precision: float
+    recall: float
+    f1: float
+    positives: int
+
+
 class GroupedMetrics(BaseModel):
     per_group: dict[str, PerClass]
     macro_average: PerClass
@@ -27,6 +35,7 @@ class GroupedMetrics(BaseModel):
 
 class EvaluationReport(BaseModel):
     pointwise: PerClass
+    binary: BinaryMetrics
     by_document: GroupedMetrics
     by_topic: GroupedMetrics
 
@@ -73,33 +82,55 @@ def _macro(groups: dict[str, PerClass]) -> PerClass:
     return out
 
 
+def _binary_metrics(y_true: list[int], y_pred: list[int]) -> BinaryMetrics:
+    """Detection metrics treating classes 1 & 2 as one positive class vs 0."""
+    yt = [1 if v in RELEVANT_LABELS else 0 for v in y_true]
+    yp = [1 if v in RELEVANT_LABELS else 0 for v in y_pred]
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        yt,
+        yp,
+        average="binary",
+        pos_label=1,
+        zero_division=0,  # pyright: ignore[reportArgumentType]
+    )
+    return BinaryMetrics(
+        precision=float(precision),
+        recall=float(recall),
+        f1=float(f1),
+        positives=sum(yt),
+    )
+
+
 def evaluate(
     predictor: DTPredictor,
-    dataset: list[tuple[Document, Label, Score]],
+    dataset: list[EvalExample],
 ) -> EvaluationReport:
     """
     Run `predictor` over dataset and compute multiclass P/R/F1 metrics.
 
-    Reports three views:
+    Reports four views:
     - `pointwise`: per-class metrics over every (document, topic) pair.
+    - `binary`: detection metrics with classes 1 & 2 collapsed into one positive
+      class against 0.
     - `by_document`: per-class metrics for each document plus a macro-average.
     - `by_topic`: per-class metrics for each topic plus a macro-average.
     """
     df = pd.DataFrame(
         [
             {
-                "doc_id": doc.original_document_id,
-                "topic_id": topic.id,
-                "y_true": int(score),
-                "y_pred": int(predictor.predict(doc, topic)),
+                "doc_id": ex.input.document.original_document_id,
+                "topic_id": ex.input.topic.id,
+                "y_true": int(ex.score),
+                "y_pred": int(predictor.predict(ex.input)),
             }
-            for doc, topic, score in dataset
+            for ex in dataset
         ]
     )
 
     pointwise = _calculate_per_class_metrics(
         df["y_true"].tolist(), df["y_pred"].tolist()
     )
+    binary = _binary_metrics(df["y_true"].tolist(), df["y_pred"].tolist())
 
     metrics_by_doc = {
         str(doc_id): _calculate_per_class_metrics(
@@ -116,6 +147,7 @@ def evaluate(
 
     return EvaluationReport(
         pointwise=pointwise,
+        binary=binary,
         by_document=GroupedMetrics(
             per_group=metrics_by_doc, macro_average=_macro(metrics_by_doc)
         ),
@@ -140,6 +172,60 @@ def _md_table(reports: dict[str, PerClass]) -> str:
     return "\n".join(lines)
 
 
+def _f1_relevant(per_class: PerClass) -> float:
+    """Arithmetic mean of F1 over the relevant classes (RELEVANT_LABELS) only."""
+    return sum(per_class[c].f1 for c in RELEVANT_LABELS) / len(RELEVANT_LABELS)
+
+
+def _summary_table(reports: dict[str, PerClass]) -> str:
+    """
+    Render a leaderboard with one row per predictor
+
+    Predictions are sorted by F1 on classes 1 & 2 descending.
+
+    Precision/recall/F1 are arithmetic means across the classes in LABELS; support
+    is the total across those classes. `F1 (cls 1&2)` is the arithmetic mean of F1
+    over only the classes in RELEVANT_LABELS, and is the sort key. The per-class
+    precision/recall columns report classes 1 and 2 individually.
+    """
+    ordered = sorted(reports.items(), key=lambda kv: _f1_relevant(kv[1]), reverse=True)
+
+    n = len(LABELS)
+    lines = [
+        "| Predictor | Precision | Recall | F1 | F1 (cls 1&2) "
+        "| P (cls1) | R (cls1) | P (cls2) | R (cls2) | Support |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for predictor_name, per_class in ordered:
+        precision = sum(per_class[c].precision for c in LABELS) / n
+        recall = sum(per_class[c].recall for c in LABELS) / n
+        f1 = sum(per_class[c].f1 for c in LABELS) / n
+        support = sum(per_class[c].support for c in LABELS)
+        lines.append(
+            f"| {predictor_name} | {precision:.3f} | {recall:.3f} | {f1:.3f} "
+            f"| {_f1_relevant(per_class):.3f} "
+            f"| {per_class[1].precision:.3f} | {per_class[1].recall:.3f} "
+            f"| {per_class[2].precision:.3f} | {per_class[2].recall:.3f} "
+            f"| {support} |"
+        )
+    return "\n".join(lines)
+
+
+def _binary_table(reports: dict[str, BinaryMetrics]) -> str:
+    """Leaderboard for the binary detection task, sorted by F1 descending."""
+    ordered = sorted(reports.items(), key=lambda kv: kv[1].f1, reverse=True)
+    lines = [
+        "| Predictor | Precision | Recall | F1 | Positives |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for predictor_name, m in ordered:
+        lines.append(
+            f"| {predictor_name} | {m.precision:.3f} | {m.recall:.3f} "
+            f"| {m.f1:.3f} | {m.positives} |"
+        )
+    return "\n".join(lines)
+
+
 def render_evaluation_report(
     reports: dict[str, EvaluationReport],
     *,
@@ -152,9 +238,11 @@ def render_evaluation_report(
     """
     Render one markdown report comparing multiple predictors.
 
-    With include_breakdowns=False, only the three headline tables are produced
-    — suitable for terminal display. With True (default), the per-document and
-    per-topic detail sections are appended — suitable for committing.
+    Opens with three leaderboards (one row per predictor, sorted by F1 on classes
+    1 & 2): pointwise over all pairs, macro-averaged by document, and macro-averaged
+    by topic. With include_breakdowns=False only the headline leaderboards and tables
+    are produced — suitable for terminal display. With True (default), the per-document
+    and per-topic detail sections are appended — suitable for committing.
     """
     sections: list[str] = [
         "# Document-topic relevance evaluation",
@@ -164,6 +252,24 @@ def render_evaluation_report(
         if n_examples is not None
         else "",
         f"- Predictors: {', '.join(reports)}",
+        "",
+        "## Summary — pointwise over all pairs (sorted by F1 on classes 1 & 2)",
+        "",
+        _summary_table({name: r.pointwise for name, r in reports.items()}),
+        "",
+        "## Summary — macro-averaged by document (sorted by F1 on classes 1 & 2)",
+        "",
+        _summary_table(
+            {name: r.by_document.macro_average for name, r in reports.items()}
+        ),
+        "",
+        "## Summary — macro-averaged by topic (sorted by F1 on classes 1 & 2)",
+        "",
+        _summary_table({name: r.by_topic.macro_average for name, r in reports.items()}),
+        "",
+        "## Summary — binary: relevant (1 or 2) vs not (0), sorted by F1",
+        "",
+        _binary_table({name: r.binary for name, r in reports.items()}),
         "",
         "## Pointwise (over all pairs)",
         "",
