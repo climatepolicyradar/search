@@ -3,7 +3,7 @@ from typing import TypedDict
 
 import boto3
 import orjson
-from cpr_contracts import DocumentLabelRelationship, Label
+from cpr_contracts import DocumentLabelRelationship, Label, LabelLabelRelationship
 
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
@@ -19,6 +19,14 @@ OUTPUT_CACHE_DIR = REPO_ROOT_DIR / ".data_cache" / "vespa"
 OUTPUT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+class VespaLabelLabelRelationship(TypedDict):
+    id: str
+    type: str
+    value: str
+    timestamp: int | None
+    relationship: str | None
+
+
 class VespaLabel(TypedDict):
     id: str
     type: str
@@ -28,6 +36,7 @@ class VespaLabel(TypedDict):
     description: str
     negative_labels: list[str]
     label_source: str
+    labels: list[VespaLabelLabelRelationship]
 
 
 class VespaLabelUpdate(TypedDict):
@@ -39,6 +48,25 @@ class VespaLabelUpdate(TypedDict):
     description: VespaAssign[str]
     negative_labels: VespaAssign[list[str]]
     label_source: VespaAssign[str]
+    labels: VespaAssign[list[VespaLabelLabelRelationship]]
+
+
+def _label_relationship_to_vespa_label_relationship(
+    label_relationship: LabelLabelRelationship,
+) -> VespaLabelLabelRelationship:
+    """Transform and flatten `LabelLabelRelationship` to `VespaLabelLabelRelationship`."""
+    value = label_relationship.value
+    return {
+        "id": value.id,
+        "type": value.type,
+        "value": value.value,
+        "timestamp": (
+            int(label_relationship.timestamp.timestamp())
+            if label_relationship.timestamp is not None
+            else None
+        ),
+        "relationship": label_relationship.type,
+    }
 
 
 def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpdate]:
@@ -55,6 +83,7 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
             "description": {"assign": label["description"]},
             "negative_labels": {"assign": label["negative_labels"]},
             "label_source": {"assign": label["label_source"]},
+            "labels": {"assign": label["labels"]},
         },
     }
 
@@ -80,6 +109,7 @@ def _source_label_relationship_to_vespa_label(
         "description": "",
         "negative_labels": [],
         "label_source": value.model_dump_json(),
+        "labels": [_label_relationship_to_vespa_label_relationship(label_relationship) for label_relationship in value.labels],
     }
     return vespa_label
 
@@ -102,6 +132,7 @@ def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
         "description": concept["description"] or "",
         "negative_labels": concept["negative_labels"],
         "label_source": source_label.model_dump_json(),
+        "labels": [],
     }
     return vespa_label
 
