@@ -4,9 +4,9 @@ from typing import NotRequired, TypedDict
 
 import boto3
 import orjson
+from cpr_contracts import Document
 
 from search.vespa.models import VespaAssign, VespaUpdate
-from search.vespa.sources.data_in_api import SourceDocument
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.embeddings_input_v2 import TextBlock
 from search.vespa.sources.embeddings_input_v2 import read as read_embeddings_input_v2
@@ -39,20 +39,20 @@ class VespaPassageUpdate(TypedDict):
 BATCH_SIZE = 10_000
 
 
-def _is_principal(document: SourceDocument) -> bool:
+def _is_principal(document: Document) -> bool:
     return any(
-        label["value"]["id"] == "status::Principal"
-        for label in (document.get("labels") or [])
+        label.value.id == "status::Principal"
+        for label in (document.labels or [])
     )
 
 
-def _derive_principal_id(document: SourceDocument) -> str | None:
+def _derive_principal_id(document: Document) -> str | None:
     """Return the id of this document's Principal, or None if it has none."""
     if _is_principal(document):
-        return document["id"]
-    for rel in document.get("documents") or []:
-        if rel.get("type") in {"member_of", "is_version_of"}:
-            return rel["value"]["id"]
+        return document.id
+    for rel in document.documents or []:
+        if rel.type in {"member_of", "is_version_of"}:
+            return rel.value.id
     return None
 
 
@@ -62,7 +62,7 @@ def _build_principal_id_lookup() -> dict[str, str]:
     for doc in read_documents():
         principal_id = _derive_principal_id(doc)
         if principal_id is not None:
-            lookup[doc["id"]] = principal_id
+            lookup[doc.id] = principal_id
     return lookup
 
 

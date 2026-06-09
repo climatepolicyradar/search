@@ -15,10 +15,6 @@ from search.engines.dev_vespa import (
     Filter,
     Settings,
 )
-from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from search.vespa.sources.data_in_api import (
-    SourceDocument,
-)
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 # we try not to use 8080 as this _might_ be the currently running local server
@@ -84,36 +80,8 @@ def clean_docs(vespa_app: Vespa):
     )
 
 
-def _feed_document(app: Vespa, document: SourceDocument) -> None:
-    """Feed a document as an update operation — same format as JSONL feed."""
-    op = _source_document_to_vespa_update(document)
-    r = req.put(
-        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
-        json={**op, "create": True},
-        timeout=5,
-    )
-    r.raise_for_status()
 
-
-def _feed_document_without_title(app: Vespa, document: SourceDocument) -> None:
-    """
-    Feed a document update with ``title`` intentionally omitted.
-
-    This creates a true missing ``title_sort`` value in Vespa so we can verify
-    missing-title sort behaviour end-to-end.
-    """
-    op = _source_document_to_vespa_update(document)
-    fields = dict(op.get("fields", {}))
-    fields.pop("title", None)
-    r = req.put(
-        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
-        json={**op, "fields": fields, "create": True},
-        timeout=5,
-    )
-    r.raise_for_status()
-
-
-def _ids(filter_: Filter) -> set[str]:
+def get_search_ids(filter_: Filter) -> set[str]:
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     docs = engine.search(
         query=None,

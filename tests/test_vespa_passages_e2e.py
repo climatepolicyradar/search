@@ -20,18 +20,18 @@ from typing import Any
 
 import pytest
 import requests as req
-from polyfactory.factories.typed_dict_factory import TypedDictFactory
+from cpr_contracts import (
+    Document,
+    DocumentLabelRelationship,
+    Label,
+)
+from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
 from search.engines.dev_vespa import Settings
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.passages_feed_materializer import _text_block_to_vespa_update
-from search.vespa.sources.data_in_api import (
-    SourceDocument,
-    SourceLabel,
-    SourceLabelRelationship,
-)
 from search.vespa.sources.embeddings_input_v2 import TextBlock
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
@@ -42,25 +42,21 @@ _TEST_SETTINGS = Settings(
 )
 
 
-class SourceLabelRelationshipFactory(TypedDictFactory):
-    __model__ = SourceLabelRelationship
-
+class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
     @classmethod
-    def build(cls, **kwargs: Any) -> SourceLabelRelationship:
+    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> DocumentLabelRelationship:
         kwargs.setdefault("timestamp", None)
-        return super().build(**kwargs)
+        return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
 
-class SourceDocumentFactory(TypedDictFactory):
-    __model__ = SourceDocument
-
+class DocumentFactory(ModelFactory[Document]):
     @classmethod
-    def build(cls, **kwargs: Any) -> SourceDocument:
+    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> Document:
         if "labels" not in kwargs:
-            kwargs["labels"] = [SourceLabelRelationshipFactory.build()]
+            kwargs["labels"] = [DocumentLabelRelationshipFactory.build(factory_use_construct=factory_use_construct)]
         if "documents" not in kwargs:
             kwargs["documents"] = []
-        return super().build(**kwargs)
+        return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
 
 def _vespa_ready() -> bool:
@@ -127,12 +123,12 @@ def clean_passages(vespa_app: Vespa):
     )
 
 
-def _feed_document(app: Vespa, document: SourceDocument) -> None:
+def _feed_document(app: Vespa, document: Document) -> None:
     """Feed a document as an update operation — same format as JSONL feed."""
     op = _source_document_to_vespa_update(document)
     r = req.put(
-        f"{app.end_point}/document/v1/documents/documents/docid/{document['id']}",
-        json={**op, "create": True},
+        f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
+        json={**op, "create": True},  # type: ignore[arg-type]
         timeout=5,
     )
     r.raise_for_status()
@@ -148,18 +144,17 @@ def _feed_passage(
     op = _text_block_to_vespa_update(block, document_id, principal_id=principal_id)
     r = req.put(
         f"{app.end_point}/document/v1/passages/passages/docid/{block['id']}",
-        json={**op, "create": True},
+        json={**op, "create": True},  # type: ignore[arg-type]
         timeout=5,
     )
     r.raise_for_status()
 
 
-def _principal_label() -> SourceLabelRelationship:
-    return {
-        "type": "status",
-        "value": SourceLabel(id="status::Principal", type="status", value="Principal"),
-        "timestamp": None,
-    }
+def _principal_label() -> DocumentLabelRelationship:
+    return DocumentLabelRelationship(
+        type="status",
+        value=Label(id="status::Principal", type="status", value="Principal", labels=[]),
+        timestamp=None,)
 
 
 def _text_block(
@@ -185,7 +180,7 @@ def test_passage_imported_principal_id_resolves_to_parent(vespa_app: Vespa):
     feeder assigns document_ref correctly, and (c) the imported
     principal_id is filterable on the passage side.
     """
-    principal = SourceDocumentFactory.build(
+    principal = DocumentFactory.build(
         id="principal-1",
         title="Principal doc",
         labels=[_principal_label()],
@@ -219,12 +214,12 @@ def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: 
     a passage in the child; queries the passage and asserts principal_title
     resolves to the Principal's title.
     """
-    principal = SourceDocumentFactory.build(
+    principal = DocumentFactory.build(
         id="principal-climate",
         title="Climate Framework Act",
         labels=[_principal_label()],
     )
-    child = SourceDocumentFactory.build(
+    child = DocumentFactory.build(
         id="child-1",
         title="Supporting memo",
         labels=[],

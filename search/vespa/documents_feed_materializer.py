@@ -8,9 +8,9 @@ from typing import NotRequired, TypedDict
 
 import boto3
 import orjson
+from cpr_contracts import Document
 
 from search.vespa.models import VespaAssign, VespaUpdate
-from search.vespa.sources.data_in_api import SourceDocument
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.embeddings_input_v2 import read as read_embeddings_input_v2
 from search.vespa.sources.inference_results import read as read_inference_results
@@ -52,12 +52,14 @@ def _strip_control_chars(s: str) -> str:
     return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", s) if s else s
 
 
-def _to_unix_timestamp(ts_str: str | None) -> int | None:
-    """Safely convert ISO string to int, returns None if invalid/missing."""
-    if not ts_str:
+def _to_unix_timestamp(ts: str | datetime | None) -> int | None:
+    """Safely convert ISO string or datetime to Unix timestamp, returns None if invalid/missing."""
+    if not ts:
         return None
+    if isinstance(ts, datetime):
+        return int(ts.timestamp())
     try:
-        normalised = ts_str.replace("Z", "+00:00")
+        normalised = ts.replace("Z", "+00:00")
         return int(datetime.fromisoformat(normalised).timestamp())
     except (ValueError, TypeError):
         return None
@@ -82,23 +84,23 @@ def _published_timestamp_from_attributes(
     return None
 
 
-def _derive_principal_id(document: SourceDocument) -> str | None:
+def _derive_principal_id(document: Document) -> str | None:
     """Return the id of this document's Principal, or None if there is none."""
 
     # A document with a `status::Principal` label is itself a Principal.
     # Its principal_id is its own id - self-referential, so it appears in its own grouping bucket.
     is_principal = any(
-        label["value"]["id"] == "status::Principal"
-        for label in (document.get("labels") or [])
+        label.value.id == "status::Principal"
+        for label in document.labels
     )
     if is_principal:
-        return document["id"]
+        return document.id
 
     # Otherwise, the first `member_of` / `is_version_of` relationship target is the parent Principal.
     matches = [
         rel
-        for rel in (document.get("documents") or [])
-        if rel.get("type") in {"member_of", "is_version_of"}
+        for rel in document.documents
+        if rel.type in {"member_of", "is_version_of"}
     ]
 
     if not matches:
@@ -107,10 +109,10 @@ def _derive_principal_id(document: SourceDocument) -> str | None:
     # If multiple candidates exist, take the first and log a warning.
     if len(matches) > 1:
         logger.warning(
-            f"document {document['id']} has multiple principal-candidate relationships - using the first."
+            f"document {document.id} has multiple principal-candidate relationships - using the first."
         )
 
-    return matches[0]["value"]["id"]
+    return matches[0].value.id
 
 
 def _build_principal_id_lookup() -> dict[str, str]:
@@ -119,46 +121,46 @@ def _build_principal_id_lookup() -> dict[str, str]:
     for doc in read_documents():
         principal_id = _derive_principal_id(doc)
         if principal_id is not None:
-            lookup[doc["id"]] = principal_id
+            lookup[doc.id] = principal_id
     return lookup
 
 
 def _source_document_to_vespa_update(
-    document: SourceDocument,
+    document: Document,
 ) -> VespaUpdate[VespaDocument]:
-    attrs = document.get("attributes") or {}
-    title_clean = _strip_control_chars(document["title"])
+    attrs = document.attributes or {}
+    title_clean = _strip_control_chars(document.title)
     published_ts = _published_timestamp_from_attributes(attrs)
     principal_id = _derive_principal_id(document)
     fields: VespaDocument = {
         "title": {"assign": title_clean},
         "description": {
-            "assign": _strip_control_chars(document.get("description") or "")
-            if document.get("description")
+            "assign": _strip_control_chars(document.description or "")
+            if document.description
             else None
         },
         "labels": {
             "assign": [
                 {
-                    "id": label["value"]["id"],
-                    "type": label["value"]["type"],
-                    "value": label["value"]["value"],
-                    "timestamp": _to_unix_timestamp(label.get("timestamp")),
-                    "relationship": label.get("type", "related"),
+                    "id": label.value.id,
+                    "type": label.value.type,
+                    "value": label.value.value,
+                    "timestamp": _to_unix_timestamp(label.timestamp),
+                    "relationship": label.type,
                     "count": None,
                     "passages_id": None,
                 }
-                for label in (document.get("labels") or [])
+                for label in (document.labels or [])
             ]
         },
         "geographies": {
             "assign": [
-                label["value"]["value"]
-                for label in (document.get("labels") or [])
-                if label.get("type") == "geography"
+                label.value.value
+                for label in (document.labels or [])
+                if label.type == "geography"
             ]
         },
-        "document_source": {"assign": orjson.dumps(document).decode()},
+        "document_source": {"assign": document.model_dump_json()},
         "attributes_string": {
             "assign": {k: str(v) for k, v in attrs.items() if isinstance(v, str)}
         },
@@ -195,7 +197,7 @@ def _source_document_to_vespa_update(
         fields["principal_id"] = {"assign": principal_id}
 
     vespa_update: VespaUpdate[VespaDocument] = {
-        "update": f"id:documents:documents::{document.get('id')}",
+        "update": f"id:documents:documents::{document.id}",
         "create": True,
         "fields": fields,
     }
