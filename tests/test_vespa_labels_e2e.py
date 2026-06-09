@@ -79,6 +79,7 @@ def _taxonomy_vespa_label(label_id: str, label_type: str, value: str) -> VespaLa
         subconcept_labels=[],
         description="",
         negative_labels=[],
+        labels=[],
         label_source=_label_source_from_taxonomy(label_id, label_type, value),
     )
 
