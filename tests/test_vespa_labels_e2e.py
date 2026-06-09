@@ -13,7 +13,11 @@ from urllib.parse import quote
 
 import pytest
 import requests as req
-from cpr_contracts import Document, DocumentLabelRelationship, Label, LabelWithoutLabelRelationships
+from cpr_contracts import (
+    Document,
+    DocumentLabelRelationship,
+    Label,
+)
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 

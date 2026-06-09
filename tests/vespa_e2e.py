@@ -15,8 +15,6 @@ from search.engines.dev_vespa import (
     Filter,
     Settings,
 )
-from cpr_contracts import Document
-from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 # we try not to use 8080 as this _might_ be the currently running local server

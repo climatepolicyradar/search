@@ -3,7 +3,11 @@
 from typing import Any
 
 import requests as req
-from cpr_contracts import Document, DocumentLabelRelationship, LabelWithoutLabelRelationships, Label
+from cpr_contracts import (
+    Document,
+    DocumentLabelRelationship,
+    Label,
+)
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 

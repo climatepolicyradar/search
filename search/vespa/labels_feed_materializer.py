@@ -3,7 +3,7 @@ from typing import TypedDict
 
 import boto3
 import orjson
-from cpr_contracts import Label, DocumentLabelRelationship
+from cpr_contracts import DocumentLabelRelationship, Label
 
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
