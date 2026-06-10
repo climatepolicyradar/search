@@ -1,3 +1,4 @@
+import math
 from typing import Literal
 
 from pydantic import BaseModel
@@ -6,6 +7,39 @@ from search.document import Document
 from search.label import Label
 
 Score = Literal[0, 1, 2]
+
+
+class TopicCorpusStats(BaseModel):
+    """
+    Corpus-wide frequency of one topic – the IDF side of a TF-IDF feature.
+
+    Counts how common the topic is across the *whole* warehouse, so an
+    in-document mention count can be weighted by how discriminating the topic is
+    (a few mentions of a rare topic say more than the same count of a ubiquitous
+    one). These are per-topic constants, identical for every document of a topic.
+    """
+
+    collection_frequency: int
+    """Total passage occurrences of the topic across the whole corpus."""
+    document_frequency: int
+    """Number of distinct corpus documents that mention the topic."""
+    corpus_total_documents: int
+    """Total documents in the corpus – the IDF denominator for `idf_df`."""
+    corpus_total_passages: int
+    """Total passages in the corpus – the IDF denominator for `idf_cf`."""
+
+    def idf_df(self) -> float:
+        """Standard smoothed inverse *document* frequency: log(N_docs / (1 + df))."""
+        return math.log(self.corpus_total_documents / (1 + self.document_frequency))
+
+    def idf_cf(self) -> float:
+        """
+        Inverse *collection* frequency: log(N_passages / (1 + cf)).
+
+        The literal "normalise by the topic's total occurrence in Snowflake"
+        variant, using passage-level occurrences rather than document frequency.
+        """
+        return math.log(self.corpus_total_passages / (1 + self.collection_frequency))
 
 
 class TopicMention(BaseModel):
@@ -128,6 +162,8 @@ class PredictorInput(BaseModel):
     document: Document
     topic: Label
     mentions: TopicMentions
+    topic_corpus: TopicCorpusStats | None = None
+    """Corpus-wide frequency of the topic (IDF input); None when unavailable."""
 
 
 class EvalExample(BaseModel):

@@ -267,6 +267,63 @@ class DecayWeightedPredictor(ThresholdPredictor):
         )
 
 
+TfIdfTfMode = Literal["count", "density", "lognorm"]
+TfIdfIdfMode = Literal["df", "cf"]
+
+
+class TfIdfPredictor(ThresholdPredictor):
+    """
+    Score from a TF-IDF feature: in-document frequency weighted by topic rarity.
+
+    `TF` is an in-document mention signal (`count`, `density`, or `lognorm` = the
+    log-dampened count); `IDF` weights it by how rare the topic is across the whole
+    corpus (`df` = inverse document frequency, `cf` = inverse collection frequency).
+    Rarer topics get a larger weight, so a few mentions of a rare topic can outscore
+    many mentions of a ubiquitous one.
+
+    IDF is a per-topic constant, so it does not change the ranking of documents
+    *within* a single topic – its value is in making one global threshold (and the
+    cross-topic ranking) comparable across common and rare topics. When corpus stats
+    are missing the IDF falls back to 1.0, degrading gracefully to the plain TF.
+    """
+
+    higher_is_better = True
+
+    def __init__(
+        self,
+        low: float,
+        high: float,
+        tf_mode: TfIdfTfMode = "density",
+        idf_mode: TfIdfIdfMode = "df",
+    ) -> None:
+        super().__init__(low=low, high=high)
+        self.tf_mode: TfIdfTfMode = tf_mode
+        self.idf_mode: TfIdfIdfMode = idf_mode
+
+    def _tf(self, x: PredictorInput) -> float:
+        if self.tf_mode == "count":
+            return float(x.mentions.count)
+        if self.tf_mode == "density":
+            return x.mentions.density
+        # lognorm: dampen raw count; 0 mentions ⇒ 0 (also short-circuited upstream).
+        return 1 + math.log(x.mentions.count) if x.mentions.count else 0.0
+
+    def _idf(self, x: PredictorInput) -> float:
+        if x.topic_corpus is None:
+            return 1.0  # neutral: no corpus stats ⇒ plain TF
+        idf = (
+            x.topic_corpus.idf_df()
+            if self.idf_mode == "df"
+            else x.topic_corpus.idf_cf()
+        )
+        # Smoothing can drive IDF to ~0 (or below) for a near-ubiquitous topic; clamp
+        # so it can never flip the feature's sign.
+        return max(idf, 0.0)
+
+    def _feature(self, x: PredictorInput) -> float:
+        return self._tf(x) * self._idf(x)
+
+
 def sweep(
     prefix: str,
     predictor_cls: type[ThresholdPredictor],

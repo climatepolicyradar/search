@@ -1,6 +1,12 @@
+from collections import defaultdict
+
 import pandas as pd
 from pydantic import BaseModel
-from sklearn.metrics import classification_report, precision_recall_fscore_support
+from sklearn.metrics import (
+    classification_report,
+    ndcg_score,
+    precision_recall_fscore_support,
+)
 
 from research.document_topic_relevance.src.models import EvalExample
 from research.document_topic_relevance.src.predictors import DTPredictor
@@ -33,9 +39,30 @@ class GroupedMetrics(BaseModel):
     macro_average: PerClass
 
 
+class NdcgMetrics(BaseModel):
+    """
+    Ranking quality of the predictor's continuous score against graded labels.
+
+    `per_document_macro` ranks each document's *topics* and averages – the
+    "most relevant topics for a document" view, and the one a per-topic weighting
+    like IDF can improve (IDF varies across the topics within a document, so it
+    reweights their order). `global_pooled` ranks *all* (document, topic) pairs
+    together. `per_topic_macro` ranks each topic's *documents* and averages; it is
+    invariant to any per-topic constant, so IDF cannot change it (kept as a
+    feature-quality cross-check).
+    """
+
+    per_document_macro: float
+    global_pooled: float
+    per_topic_macro: float
+    n_documents_scored: int
+    n_topics_scored: int
+
+
 class EvaluationReport(BaseModel):
     pointwise: PerClass
     binary: BinaryMetrics
+    ndcg: NdcgMetrics
     by_document: GroupedMetrics
     by_topic: GroupedMetrics
 
@@ -101,6 +128,79 @@ def _binary_metrics(y_true: list[int], y_pred: list[int]) -> BinaryMetrics:
     )
 
 
+def _ranking_scores(predictor: DTPredictor, dataset: list[EvalExample]) -> list[float]:
+    """
+    A continuous "higher ⇒ more relevant" score per example, for ranking.
+
+    For a `ThresholdPredictor` the raw feature is used (negated when smaller means
+    more relevant), mirroring the threshold-tuning convention; pairs with no mentions
+    have no meaningful feature and are floored below every real score so they rank
+    last. Non-threshold predictors fall back to their `{0,1,2}` prediction.
+
+    Detection is by duck typing (a `feature` method + `higher_is_better` flag) rather
+    than `isinstance`: scripts import predictors as `src.predictors` while this module
+    imports the fully-qualified path, so the classes are distinct objects at runtime.
+    """
+    is_threshold = hasattr(predictor, "feature") and hasattr(
+        predictor, "higher_is_better"
+    )
+    raw: list[float | None] = []
+    for ex in dataset:
+        x = ex.input
+        if is_threshold:
+            if not x.mentions.mentions:
+                raw.append(None)
+            else:
+                feature = predictor.feature(x)  # pyright: ignore[reportAttributeAccessIssue]
+                higher_is_better = predictor.higher_is_better  # pyright: ignore[reportAttributeAccessIssue]
+                raw.append(feature if higher_is_better else -feature)
+        else:
+            raw.append(float(predictor.predict(x)))
+    finite = [r for r in raw if r is not None]
+    floor = (min(finite) - 1.0) if finite else 0.0
+    return [floor if r is None else r for r in raw]
+
+
+def _ndcg_metrics(predictor: DTPredictor, dataset: list[EvalExample]) -> NdcgMetrics:
+    """Per-document, global-pooled and per-topic NDCG over the ranking score."""
+    y_true = [int(ex.score) for ex in dataset]
+    scores = _ranking_scores(predictor, dataset)
+
+    def _ndcg(true: list[int], score: list[float]) -> float | None:
+        # NDCG needs ≥2 items and some non-zero relevance to be well defined.
+        if len(true) < 2 or not any(true):
+            return None
+        return float(ndcg_score([true], [score]))
+
+    def _grouped_macro(key) -> tuple[float, int]:
+        """Macro-average NDCG over groups keyed by `key`, skipping degenerate ones."""
+        groups: dict[str, tuple[list[int], list[float]]] = defaultdict(lambda: ([], []))
+        for ex, yt, sc in zip(dataset, y_true, scores):
+            trues, scs = groups[key(ex)]
+            trues.append(yt)
+            scs.append(sc)
+        scored = [
+            ndcg
+            for trues, scs in groups.values()
+            if (ndcg := _ndcg(trues, scs)) is not None
+        ]
+        return (sum(scored) / len(scored) if scored else 0.0), len(scored)
+
+    global_pooled = _ndcg(y_true, scores) or 0.0
+    per_document_macro, n_documents = _grouped_macro(
+        lambda ex: ex.input.document.original_document_id
+    )
+    per_topic_macro, n_topics = _grouped_macro(lambda ex: ex.input.topic.id)
+
+    return NdcgMetrics(
+        per_document_macro=per_document_macro,
+        global_pooled=global_pooled,
+        per_topic_macro=per_topic_macro,
+        n_documents_scored=n_documents,
+        n_topics_scored=n_topics,
+    )
+
+
 def evaluate(
     predictor: DTPredictor,
     dataset: list[EvalExample],
@@ -131,6 +231,7 @@ def evaluate(
         df["y_true"].tolist(), df["y_pred"].tolist()
     )
     binary = _binary_metrics(df["y_true"].tolist(), df["y_pred"].tolist())
+    ndcg = _ndcg_metrics(predictor, dataset)
 
     metrics_by_doc = {
         str(doc_id): _calculate_per_class_metrics(
@@ -148,6 +249,7 @@ def evaluate(
     return EvaluationReport(
         pointwise=pointwise,
         binary=binary,
+        ndcg=ndcg,
         by_document=GroupedMetrics(
             per_group=metrics_by_doc, macro_average=_macro(metrics_by_doc)
         ),
@@ -226,6 +328,24 @@ def _binary_table(reports: dict[str, BinaryMetrics]) -> str:
     return "\n".join(lines)
 
 
+def _ndcg_table(reports: dict[str, NdcgMetrics]) -> str:
+    """Ranking leaderboard, sorted by per-document NDCG (top topics per document)."""
+    ordered = sorted(
+        reports.items(), key=lambda kv: kv[1].per_document_macro, reverse=True
+    )
+    lines = [
+        "| Predictor | NDCG (by document) | NDCG (global pooled) | "
+        "NDCG (by topic) | Docs scored | Topics scored |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for predictor_name, m in ordered:
+        lines.append(
+            f"| {predictor_name} | {m.per_document_macro:.3f} | {m.global_pooled:.3f} "
+            f"| {m.per_topic_macro:.3f} | {m.n_documents_scored} | {m.n_topics_scored} |"
+        )
+    return "\n".join(lines)
+
+
 def render_evaluation_report(
     reports: dict[str, EvaluationReport],
     *,
@@ -270,6 +390,17 @@ def render_evaluation_report(
         "## Summary — binary: relevant (1 or 2) vs not (0), sorted by F1",
         "",
         _binary_table({name: r.binary for name, r in reports.items()}),
+        "",
+        "## Summary — ranking quality (NDCG), sorted by NDCG by document",
+        "",
+        "Ranks pairs by the predictor's continuous score against graded {0,1,2} "
+        "labels. *By document* ranks each document's topics — the "
+        '"most relevant topics for a document" view, where IDF (which varies '
+        "across a document's topics) can reorder them. *Global pooled* ranks all "
+        "pairs together. *By topic* ranks documents within a topic and is invariant "
+        "to per-topic constants, so TF and TF×IDF score identically there.",
+        "",
+        _ndcg_table({name: r.ndcg for name, r in reports.items()}),
         "",
         "## Pointwise (over all pairs)",
         "",

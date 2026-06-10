@@ -7,33 +7,41 @@
   max-mentions-per-page, max-section-density, earliest-mention,
   earliest-mention-page, first-fraction, decay-weighted, first-3-pages,
   first-5-pages, first-10-pages, first-15-pages, first-10-pages-density, (count
-  or density) and early, density and early
+  or density) and early, density and early, tfidf-density-df, tfidf-density-cf,
+  tfidf-count-df, tfidf-count-cf, tfidf-lognorm-df
 
 ## Summary — pointwise over all pairs (sorted by F1 on classes 1 & 2)
 
 | Predictor                    | Precision | Recall |    F1 | F1 (cls 1&2) | P (cls1) | R (cls1) | P (cls2) | R (cls2) | Support |
 | ---------------------------- | --------: | -----: | ----: | -----------: | -------: | -------: | -------: | -------: | ------: |
 | mention-density              |     0.702 |  0.748 | 0.717 |        0.615 |    0.514 |    0.736 |    0.622 |    0.630 |     784 |
+| tfidf-density-cf             |     0.685 |  0.774 | 0.718 |        0.615 |    0.541 |    0.620 |    0.541 |    0.822 |     784 |
+| tfidf-density-df             |     0.698 |  0.744 | 0.714 |        0.609 |    0.514 |    0.736 |    0.608 |    0.616 |     784 |
 | first-10-pages               |     0.660 |  0.733 | 0.659 |        0.575 |    0.359 |    0.806 |    0.625 |    0.685 |     784 |
 | (count or density) and early |     0.687 |  0.709 | 0.686 |        0.574 |    0.475 |    0.744 |    0.623 |    0.521 |     784 |
 | first-10-pages-density       |     0.635 |  0.758 | 0.658 |        0.574 |    0.371 |    0.744 |    0.541 |    0.822 |     784 |
 | decay-weighted               |     0.747 |  0.682 | 0.687 |        0.569 |    0.519 |    0.744 |    0.784 |    0.397 |     784 |
 | mention-count                |     0.741 |  0.704 | 0.686 |        0.568 |    0.495 |    0.853 |    0.757 |    0.384 |     784 |
 | first-5-pages                |     0.647 |  0.723 | 0.649 |        0.559 |    0.355 |    0.791 |    0.590 |    0.671 |     784 |
+| tfidf-count-cf               |     0.662 |  0.702 | 0.675 |        0.554 |    0.465 |    0.674 |    0.554 |    0.562 |     784 |
 | first-15-pages               |     0.649 |  0.709 | 0.643 |        0.550 |    0.341 |    0.775 |    0.610 |    0.644 |     784 |
 | density and early            |     0.680 |  0.681 | 0.670 |        0.547 |    0.481 |    0.690 |    0.607 |    0.466 |     784 |
 | max-mentions-per-page        |     0.652 |  0.691 | 0.664 |        0.539 |    0.447 |    0.659 |    0.541 |    0.548 |     784 |
 | earliest-mention-page        |     0.616 |  0.702 | 0.644 |        0.525 |    0.420 |    0.612 |    0.463 |    0.685 |     784 |
+| tfidf-count-df               |     0.634 |  0.668 | 0.645 |        0.514 |    0.435 |    0.620 |    0.514 |    0.521 |     784 |
 | first-fraction               |     0.652 |  0.643 | 0.646 |        0.512 |    0.509 |    0.426 |    0.545 |    0.575 |     784 |
 | first-3-pages                |     0.602 |  0.699 | 0.615 |        0.509 |    0.347 |    0.705 |    0.463 |    0.685 |     784 |
 | earliest-mention             |     0.615 |  0.667 | 0.616 |        0.497 |    0.367 |    0.736 |    0.500 |    0.507 |     784 |
 | max-section-density          |     0.620 |  0.630 | 0.610 |        0.464 |    0.413 |    0.682 |    0.491 |    0.356 |     784 |
+| tfidf-lognorm-df             |     0.498 |  0.548 | 0.493 |        0.325 |    0.250 |    0.426 |    0.250 |    0.507 |     784 |
 | any-mention-is-relevant      |     0.397 |  0.569 | 0.386 |        0.165 |    0.000 |    0.000 |    0.197 |    1.000 |     784 |
 
 ## Summary — macro-averaged by document (sorted by F1 on classes 1 & 2)
 
 | Predictor                    | Precision | Recall |    F1 | F1 (cls 1&2) | P (cls1) | R (cls1) | P (cls2) | R (cls2) | Support |
 | ---------------------------- | --------: | -----: | ----: | -----------: | -------: | -------: | -------: | -------: | ------: |
+| tfidf-density-cf             |     0.687 |  0.752 | 0.684 |        0.567 |    0.493 |    0.542 |    0.597 |    0.831 |     784 |
+| tfidf-density-df             |     0.688 |  0.718 | 0.676 |        0.556 |    0.487 |    0.640 |    0.607 |    0.636 |     784 |
 | mention-density              |     0.680 |  0.725 | 0.670 |        0.546 |    0.502 |    0.672 |    0.570 |    0.620 |     784 |
 | first-10-pages-density       |     0.641 |  0.710 | 0.610 |        0.524 |    0.346 |    0.641 |    0.580 |    0.808 |     784 |
 | first-5-pages                |     0.653 |  0.685 | 0.610 |        0.523 |    0.400 |    0.720 |    0.562 |    0.657 |     784 |
@@ -42,19 +50,24 @@
 | first-15-pages               |     0.627 |  0.667 | 0.586 |        0.487 |    0.367 |    0.730 |    0.519 |    0.593 |     784 |
 | mention-count                |     0.632 |  0.674 | 0.619 |        0.478 |    0.509 |    0.808 |    0.413 |    0.355 |     784 |
 | density and early            |     0.625 |  0.674 | 0.618 |        0.472 |    0.486 |    0.677 |    0.442 |    0.452 |     784 |
+| tfidf-count-cf               |     0.614 |  0.668 | 0.608 |        0.466 |    0.453 |    0.632 |    0.414 |    0.523 |     784 |
 | earliest-mention-page        |     0.597 |  0.685 | 0.598 |        0.463 |    0.411 |    0.576 |    0.418 |    0.674 |     784 |
 | max-mentions-per-page        |     0.620 |  0.664 | 0.606 |        0.460 |    0.467 |    0.652 |    0.422 |    0.488 |     784 |
 | first-3-pages                |     0.583 |  0.661 | 0.559 |        0.446 |    0.333 |    0.630 |    0.418 |    0.674 |     784 |
 | decay-weighted               |     0.594 |  0.640 | 0.591 |        0.432 |    0.437 |    0.652 |    0.401 |    0.372 |     784 |
+| tfidf-count-df               |     0.591 |  0.633 | 0.578 |        0.428 |    0.448 |    0.581 |    0.360 |    0.477 |     784 |
 | earliest-mention             |     0.569 |  0.637 | 0.553 |        0.419 |    0.374 |    0.724 |    0.354 |    0.453 |     784 |
 | first-fraction               |     0.596 |  0.622 | 0.580 |        0.417 |    0.431 |    0.400 |    0.452 |    0.547 |     784 |
 | max-section-density          |     0.539 |  0.581 | 0.532 |        0.359 |    0.388 |    0.616 |    0.271 |    0.297 |     784 |
+| tfidf-lognorm-df             |     0.531 |  0.543 | 0.483 |        0.332 |    0.304 |    0.477 |    0.294 |    0.471 |     784 |
 | any-mention-is-relevant      |     0.414 |  0.560 | 0.387 |        0.189 |    0.000 |    0.000 |    0.245 |    1.000 |     784 |
 
 ## Summary — macro-averaged by topic (sorted by F1 on classes 1 & 2)
 
 | Predictor                    | Precision | Recall |    F1 | F1 (cls 1&2) | P (cls1) | R (cls1) | P (cls2) | R (cls2) | Support |
 | ---------------------------- | --------: | -----: | ----: | -----------: | -------: | -------: | -------: | -------: | ------: |
+| tfidf-density-df             |     0.675 |  0.729 | 0.669 |        0.558 |    0.507 |    0.711 |    0.551 |    0.635 |     784 |
+| tfidf-density-cf             |     0.652 |  0.725 | 0.657 |        0.541 |    0.518 |    0.600 |    0.462 |    0.738 |     784 |
 | first-10-pages-density       |     0.636 |  0.724 | 0.609 |        0.524 |    0.410 |    0.794 |    0.503 |    0.715 |     784 |
 | mention-density              |     0.673 |  0.670 | 0.632 |        0.510 |    0.566 |    0.692 |    0.475 |    0.495 |     784 |
 | first-5-pages                |     0.644 |  0.695 | 0.597 |        0.506 |    0.393 |    0.844 |    0.544 |    0.577 |     784 |
@@ -62,36 +75,77 @@
 | (count or density) and early |     0.638 |  0.649 | 0.602 |        0.467 |    0.502 |    0.702 |    0.450 |    0.427 |     784 |
 | earliest-mention-page        |     0.587 |  0.652 | 0.581 |        0.452 |    0.435 |    0.602 |    0.365 |    0.590 |     784 |
 | first-3-pages                |     0.583 |  0.672 | 0.559 |        0.449 |    0.388 |    0.760 |    0.365 |    0.590 |     784 |
+| tfidf-count-cf               |     0.593 |  0.665 | 0.597 |        0.448 |    0.492 |    0.723 |    0.334 |    0.427 |     784 |
 | density and early            |     0.640 |  0.617 | 0.590 |        0.446 |    0.523 |    0.608 |    0.448 |    0.405 |     784 |
 | mention-count                |     0.611 |  0.648 | 0.596 |        0.444 |    0.518 |    0.825 |    0.348 |    0.270 |     784 |
 | first-15-pages               |     0.592 |  0.654 | 0.551 |        0.436 |    0.363 |    0.832 |    0.417 |    0.467 |     784 |
 | decay-weighted               |     0.625 |  0.598 | 0.589 |        0.435 |    0.502 |    0.677 |    0.454 |    0.238 |     784 |
 | max-mentions-per-page        |     0.591 |  0.642 | 0.584 |        0.432 |    0.475 |    0.695 |    0.341 |    0.394 |     784 |
 | earliest-mention             |     0.574 |  0.638 | 0.555 |        0.423 |    0.399 |    0.723 |    0.349 |    0.469 |     784 |
+| tfidf-count-df               |     0.564 |  0.647 | 0.570 |        0.412 |    0.430 |    0.681 |    0.330 |    0.414 |     784 |
 | max-section-density          |     0.543 |  0.605 | 0.539 |        0.371 |    0.444 |    0.697 |    0.243 |    0.294 |     784 |
 | first-fraction               |     0.545 |  0.571 | 0.541 |        0.365 |    0.409 |    0.376 |    0.346 |    0.432 |     784 |
+| tfidf-lognorm-df             |     0.474 |  0.573 | 0.432 |        0.255 |    0.144 |    0.299 |    0.283 |    0.746 |     784 |
 | any-mention-is-relevant      |     0.391 |  0.555 | 0.354 |        0.141 |    0.000 |    0.000 |    0.176 |    1.000 |     784 |
 
 ## Summary — binary: relevant (1 or 2) vs not (0), sorted by F1
 
 | Predictor                    | Precision | Recall |    F1 | Positives |
 | ---------------------------- | --------: | -----: | ----: | --------: |
+| tfidf-density-cf             |     0.730 |  0.936 | 0.820 |       202 |
+| tfidf-density-df             |     0.726 |  0.931 | 0.816 |       202 |
 | mention-count                |     0.722 |  0.926 | 0.811 |       202 |
 | mention-density              |     0.722 |  0.926 | 0.811 |       202 |
+| tfidf-count-cf               |     0.709 |  0.916 | 0.799 |       202 |
 | max-mentions-per-page        |     0.705 |  0.921 | 0.798 |       202 |
 | density and early            |     0.726 |  0.866 | 0.790 |       202 |
 | decay-weighted               |     0.752 |  0.827 | 0.788 |       202 |
 | (count or density) and early |     0.696 |  0.906 | 0.787 |       202 |
+| tfidf-count-df               |     0.690 |  0.881 | 0.774 |       202 |
 | max-section-density          |     0.677 |  0.891 | 0.769 |       202 |
 | earliest-mention-page        |     0.625 |  0.916 | 0.743 |       202 |
 | first-fraction               |     0.773 |  0.708 | 0.739 |       202 |
 | earliest-mention             |     0.577 |  0.950 | 0.718 |       202 |
+| tfidf-lognorm-df             |     0.543 |  0.990 | 0.702 |       202 |
 | any-mention-is-relevant      |     0.541 |  0.990 | 0.699 |       202 |
 | first-3-pages                |     0.541 |  0.990 | 0.699 |       202 |
 | first-5-pages                |     0.541 |  0.990 | 0.699 |       202 |
 | first-10-pages               |     0.541 |  0.990 | 0.699 |       202 |
 | first-15-pages               |     0.541 |  0.990 | 0.699 |       202 |
 | first-10-pages-density       |     0.541 |  0.990 | 0.699 |       202 |
+
+## Summary — ranking quality (NDCG), sorted by NDCG by document
+
+Ranks pairs by the predictor's continuous score against graded {0,1,2} labels.
+_By document_ ranks each document's topics — the "most relevant topics for a
+document" view, where IDF (which varies across a document's topics) can reorder
+them. _Global pooled_ ranks all pairs together. _By topic_ ranks documents
+within a topic and is invariant to per-topic constants, so TF and TF×IDF score
+identically there.
+
+| Predictor                    | NDCG (by document) | NDCG (global pooled) | NDCG (by topic) | Docs scored | Topics scored |
+| ---------------------------- | -----------------: | -------------------: | --------------: | ----------: | ------------: |
+| tfidf-density-cf             |              0.939 |                0.950 |           0.921 |          46 |            15 |
+| tfidf-count-cf               |              0.939 |                0.952 |           0.878 |          46 |            15 |
+| tfidf-density-df             |              0.928 |                0.939 |           0.921 |          46 |            15 |
+| tfidf-count-df               |              0.928 |                0.949 |           0.878 |          46 |            15 |
+| mention-count                |              0.919 |                0.954 |           0.878 |          46 |            15 |
+| mention-density              |              0.919 |                0.950 |           0.921 |          46 |            15 |
+| first-15-pages               |              0.912 |                0.960 |           0.863 |          46 |            15 |
+| decay-weighted               |              0.910 |                0.954 |           0.875 |          46 |            15 |
+| first-10-pages-density       |              0.909 |                0.945 |           0.845 |          46 |            15 |
+| first-10-pages               |              0.906 |                0.956 |           0.845 |          46 |            15 |
+| max-mentions-per-page        |              0.904 |                0.949 |           0.885 |          46 |            15 |
+| max-section-density          |              0.898 |                0.913 |           0.839 |          46 |            15 |
+| first-fraction               |              0.897 |                0.940 |           0.849 |          46 |            15 |
+| earliest-mention             |              0.888 |                0.929 |           0.833 |          46 |            15 |
+| first-5-pages                |              0.888 |                0.945 |           0.837 |          46 |            15 |
+| earliest-mention-page        |              0.880 |                0.893 |           0.824 |          46 |            15 |
+| density and early            |              0.866 |                0.907 |           0.819 |          46 |            15 |
+| (count or density) and early |              0.864 |                0.911 |           0.821 |          46 |            15 |
+| first-3-pages                |              0.842 |                0.927 |           0.814 |          46 |            15 |
+| tfidf-lognorm-df             |              0.826 |                0.857 |           0.878 |          46 |            15 |
+| any-mention-is-relevant      |              0.737 |                0.797 |           0.706 |          46 |            15 |
 
 ## Pointwise (over all pairs)
 
@@ -145,6 +199,21 @@
 | density and early            |     0 |     0.950 |  0.887 | 0.917 |     582 |
 | density and early            |     1 |     0.481 |  0.690 | 0.567 |     129 |
 | density and early            |     2 |     0.607 |  0.466 | 0.527 |      73 |
+| tfidf-density-df             |     0 |     0.973 |  0.878 | 0.923 |     582 |
+| tfidf-density-df             |     1 |     0.514 |  0.736 | 0.605 |     129 |
+| tfidf-density-df             |     2 |     0.608 |  0.616 | 0.612 |      73 |
+| tfidf-density-cf             |     0 |     0.975 |  0.880 | 0.925 |     582 |
+| tfidf-density-cf             |     1 |     0.541 |  0.620 | 0.578 |     129 |
+| tfidf-density-cf             |     2 |     0.541 |  0.822 | 0.652 |      73 |
+| tfidf-count-df               |     0 |     0.954 |  0.863 | 0.906 |     582 |
+| tfidf-count-df               |     1 |     0.435 |  0.620 | 0.511 |     129 |
+| tfidf-count-df               |     2 |     0.514 |  0.521 | 0.517 |      73 |
+| tfidf-count-cf               |     0 |     0.967 |  0.869 | 0.916 |     582 |
+| tfidf-count-cf               |     1 |     0.465 |  0.674 | 0.551 |     129 |
+| tfidf-count-cf               |     2 |     0.554 |  0.562 | 0.558 |      73 |
+| tfidf-lognorm-df             |     0 |     0.995 |  0.711 | 0.830 |     582 |
+| tfidf-lognorm-df             |     1 |     0.250 |  0.426 | 0.315 |     129 |
+| tfidf-lognorm-df             |     2 |     0.250 |  0.507 | 0.335 |      73 |
 
 ## Macro average across documents (skipping zero-support groups per class)
 
@@ -198,6 +267,21 @@
 | density and early            |     0 |     0.947 |  0.893 | 0.912 |     582 |
 | density and early            |     1 |     0.486 |  0.677 | 0.531 |     129 |
 | density and early            |     2 |     0.442 |  0.452 | 0.412 |      73 |
+| tfidf-density-df             |     0 |     0.969 |  0.877 | 0.917 |     582 |
+| tfidf-density-df             |     1 |     0.487 |  0.640 | 0.534 |     129 |
+| tfidf-density-df             |     2 |     0.607 |  0.636 | 0.577 |      73 |
+| tfidf-density-cf             |     0 |     0.969 |  0.881 | 0.919 |     582 |
+| tfidf-density-cf             |     1 |     0.493 |  0.542 | 0.481 |     129 |
+| tfidf-density-cf             |     2 |     0.597 |  0.831 | 0.652 |      73 |
+| tfidf-count-df               |     0 |     0.964 |  0.840 | 0.878 |     582 |
+| tfidf-count-df               |     1 |     0.448 |  0.581 | 0.477 |     129 |
+| tfidf-count-df               |     2 |     0.360 |  0.477 | 0.378 |      73 |
+| tfidf-count-cf               |     0 |     0.975 |  0.849 | 0.893 |     582 |
+| tfidf-count-cf               |     1 |     0.453 |  0.632 | 0.502 |     129 |
+| tfidf-count-cf               |     2 |     0.414 |  0.523 | 0.429 |      73 |
+| tfidf-lognorm-df             |     0 |     0.996 |  0.682 | 0.786 |     582 |
+| tfidf-lognorm-df             |     1 |     0.304 |  0.477 | 0.339 |     129 |
+| tfidf-lognorm-df             |     2 |     0.294 |  0.471 | 0.324 |      73 |
 
 ## Macro-average across topics (skipping zero-support groups per class)
 
@@ -251,6 +335,21 @@
 | density and early            |     0 |     0.951 |  0.840 | 0.879 |     582 |
 | density and early            |     1 |     0.523 |  0.608 | 0.534 |     129 |
 | density and early            |     2 |     0.448 |  0.405 | 0.359 |      73 |
+| tfidf-density-df             |     0 |     0.966 |  0.841 | 0.892 |     582 |
+| tfidf-density-df             |     1 |     0.507 |  0.711 | 0.580 |     129 |
+| tfidf-density-df             |     2 |     0.551 |  0.635 | 0.536 |      73 |
+| tfidf-density-cf             |     0 |     0.978 |  0.837 | 0.890 |     582 |
+| tfidf-density-cf             |     1 |     0.518 |  0.600 | 0.549 |     129 |
+| tfidf-density-cf             |     2 |     0.462 |  0.738 | 0.532 |      73 |
+| tfidf-count-df               |     0 |     0.933 |  0.845 | 0.885 |     582 |
+| tfidf-count-df               |     1 |     0.430 |  0.681 | 0.511 |     129 |
+| tfidf-count-df               |     2 |     0.330 |  0.414 | 0.314 |      73 |
+| tfidf-count-cf               |     0 |     0.953 |  0.846 | 0.895 |     582 |
+| tfidf-count-cf               |     1 |     0.492 |  0.723 | 0.561 |     129 |
+| tfidf-count-cf               |     2 |     0.334 |  0.427 | 0.334 |      73 |
+| tfidf-lognorm-df             |     0 |     0.996 |  0.673 | 0.788 |     582 |
+| tfidf-lognorm-df             |     1 |     0.144 |  0.299 | 0.186 |     129 |
+| tfidf-lognorm-df             |     2 |     0.283 |  0.746 | 0.323 |      73 |
 
 ## Per-document breakdowns
 
@@ -306,6 +405,21 @@
 | density and early            |     0 |     1.000 |  0.714 | 0.833 |      14 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.714 | 0.833 |      14 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.714 | 0.833 |      14 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.643 | 0.783 |      14 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.643 | 0.783 |      14 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.500 | 0.667 |      14 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
 
 ### `CCLW.document.i00003683.n0000`
 
@@ -359,6 +473,21 @@
 | density and early            |     0 |     1.000 |  0.846 | 0.917 |      13 |
 | density and early            |     1 |     0.500 |  1.000 | 0.667 |       2 |
 | density and early            |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-density-df             |     1 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-density-df             |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-density-cf             |     1 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-density-cf             |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-count-df               |     0 |     0.923 |  0.923 | 0.923 |      13 |
+| tfidf-count-df               |     1 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-count-df               |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-count-cf               |     1 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-cf               |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.769 | 0.870 |      13 |
+| tfidf-lognorm-df             |     1 |     0.250 |  0.500 | 0.333 |       2 |
+| tfidf-lognorm-df             |     2 |     0.500 |  1.000 | 0.667 |       1 |
 
 ### `CCLW.document.i00005517.n0000`
 
@@ -412,6 +541,21 @@
 | density and early            |     0 |     1.000 |  1.000 | 1.000 |      11 |
 | density and early            |     1 |     0.750 |  1.000 | 0.857 |       3 |
 | density and early            |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |      11 |
+| tfidf-density-df             |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-density-df             |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |      11 |
+| tfidf-density-cf             |     1 |     1.000 |  1.000 | 1.000 |       3 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-count-df               |     0 |     0.917 |  1.000 | 0.957 |      11 |
+| tfidf-count-df               |     1 |     0.667 |  0.667 | 0.667 |       3 |
+| tfidf-count-df               |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      11 |
+| tfidf-count-cf               |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-cf               |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.909 | 0.952 |      11 |
+| tfidf-lognorm-df             |     1 |     0.500 |  0.667 | 0.571 |       3 |
+| tfidf-lognorm-df             |     2 |     0.500 |  0.500 | 0.500 |       2 |
 
 ### `CCLW.document.i00006704.n0000`
 
@@ -465,6 +609,21 @@
 | density and early            |     0 |     1.000 |  0.846 | 0.917 |      13 |
 | density and early            |     1 |     0.333 |  1.000 | 0.500 |       1 |
 | density and early            |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-density-df             |     1 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.846 | 0.917 |      13 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-count-df               |     1 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-count-df               |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      13 |
+| tfidf-count-cf               |     1 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-cf               |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.692 | 0.818 |      13 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     2 |     0.500 |  0.500 | 0.500 |       2 |
 
 ### `CCLW.document.i00007888.n0000`
 
@@ -518,6 +677,21 @@
 | density and early            |     0 |     1.000 |  0.857 | 0.923 |      14 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.857 | 0.923 |      14 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.857 | 0.923 |      14 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  1.000 | 1.000 |      14 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      14 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.857 | 0.923 |      14 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     1.000 |  0.500 | 0.667 |       2 |
 
 ### `CCLW.executive.10182.4764`
 
@@ -571,6 +745,21 @@
 | density and early            |     0 |     1.000 |  0.867 | 0.929 |      15 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.867 | 0.929 |      15 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.867 | 0.929 |      15 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-count-df               |     0 |     0.938 |  1.000 | 0.968 |      15 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      15 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.867 | 0.929 |      15 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `CCLW.executive.10356.4997`
 
@@ -624,6 +813,21 @@
 | density and early            |     0 |     1.000 |  0.750 | 0.857 |      12 |
 | density and early            |     1 |     0.250 |  0.333 | 0.286 |       3 |
 | density and early            |     2 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.750 | 0.857 |      12 |
+| tfidf-density-df             |     1 |     0.400 |  0.667 | 0.500 |       3 |
+| tfidf-density-df             |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.750 | 0.857 |      12 |
+| tfidf-density-cf             |     1 |     0.250 |  0.333 | 0.286 |       3 |
+| tfidf-density-cf             |     2 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  0.833 | 0.909 |      12 |
+| tfidf-count-df               |     1 |     0.500 |  0.667 | 0.571 |       3 |
+| tfidf-count-df               |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.833 | 0.909 |      12 |
+| tfidf-count-cf               |     1 |     0.500 |  0.667 | 0.571 |       3 |
+| tfidf-count-cf               |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.750 | 0.857 |      12 |
+| tfidf-lognorm-df             |     1 |     0.500 |  0.667 | 0.571 |       3 |
+| tfidf-lognorm-df             |     2 |     0.333 |  1.000 | 0.500 |       1 |
 
 ### `CCLW.executive.9192.1221`
 
@@ -677,6 +881,21 @@
 | density and early            |     0 |     1.000 |  0.933 | 0.966 |      15 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.933 | 0.966 |      15 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.933 | 0.966 |      15 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-count-df               |     0 |     0.938 |  1.000 | 0.968 |      15 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.938 |  1.000 | 0.968 |      15 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.933 | 0.966 |      15 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `CCLW.legislative.10843.6116`
 
@@ -730,6 +949,21 @@
 | density and early            |     0 |     1.000 |  0.692 | 0.818 |      13 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       1 |
 | density and early            |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.769 | 0.870 |      13 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.769 | 0.870 |      13 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-count-df               |     1 |     0.250 |  1.000 | 0.400 |       1 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-count-cf               |     1 |     0.250 |  1.000 | 0.400 |       1 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.692 | 0.818 |      13 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
 
 ### `CCLW.legislative.rtl_3.rtl_5`
 
@@ -783,6 +1017,21 @@
 | density and early            |     0 |     1.000 |  1.000 | 1.000 |      12 |
 | density and early            |     1 |     0.750 |  1.000 | 0.857 |       3 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |      12 |
+| tfidf-density-df             |     1 |     1.000 |  1.000 | 1.000 |       3 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |      12 |
+| tfidf-density-cf             |     1 |     1.000 |  1.000 | 1.000 |       3 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-df               |     0 |     0.923 |  1.000 | 0.960 |      12 |
+| tfidf-count-df               |     1 |     0.667 |  0.667 | 0.667 |       3 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      12 |
+| tfidf-count-cf               |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.750 | 0.857 |      12 |
+| tfidf-lognorm-df             |     1 |     0.500 |  1.000 | 0.667 |       3 |
+| tfidf-lognorm-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
 
 ### `CPR.document.i00003375.n0000`
 
@@ -836,6 +1085,21 @@
 | density and early            |     0 |     1.000 |  1.000 | 1.000 |      10 |
 | density and early            |     1 |     1.000 |  1.000 | 1.000 |       6 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |      10 |
+| tfidf-density-df             |     1 |     1.000 |  1.000 | 1.000 |       6 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |      10 |
+| tfidf-density-cf             |     1 |     1.000 |  1.000 | 1.000 |       6 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     0 |     1.000 |  1.000 | 1.000 |      10 |
+| tfidf-count-df               |     1 |     1.000 |  1.000 | 1.000 |       6 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      10 |
+| tfidf-count-cf               |     1 |     1.000 |  1.000 | 1.000 |       6 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.600 | 0.750 |      10 |
+| tfidf-lognorm-df             |     1 |     0.556 |  0.833 | 0.667 |       6 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
 
 ### `CPR.document.i00004424.n0000`
 
@@ -889,6 +1153,21 @@
 | density and early            |     0 |     0.800 |  1.000 | 0.889 |       8 |
 | density and early            |     1 |     0.833 |  0.714 | 0.769 |       7 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.875 | 0.933 |       8 |
+| tfidf-density-df             |     1 |     0.778 |  1.000 | 0.875 |       7 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |       8 |
+| tfidf-density-cf             |     1 |     1.000 |  1.000 | 1.000 |       7 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  0.500 | 0.667 |       8 |
+| tfidf-count-df               |     1 |     0.500 |  0.571 | 0.533 |       7 |
+| tfidf-count-df               |     2 |     0.250 |  1.000 | 0.400 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.625 | 0.769 |       8 |
+| tfidf-count-cf               |     1 |     0.571 |  0.571 | 0.571 |       7 |
+| tfidf-count-cf               |     2 |     0.250 |  1.000 | 0.400 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.500 | 0.667 |       8 |
+| tfidf-lognorm-df             |     1 |     0.500 |  0.429 | 0.462 |       7 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `GCF.document.FP051_16090.21078`
 
@@ -942,6 +1221,21 @@
 | density and early            |     0 |     0.818 |  0.900 | 0.857 |      10 |
 | density and early            |     1 |     0.250 |  0.250 | 0.250 |       4 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     0 |     0.900 |  0.900 | 0.900 |      10 |
+| tfidf-density-df             |     1 |     0.400 |  0.500 | 0.444 |       4 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-cf             |     0 |     0.900 |  0.900 | 0.900 |      10 |
+| tfidf-density-cf             |     1 |     0.500 |  0.500 | 0.500 |       4 |
+| tfidf-density-cf             |     2 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-count-df               |     0 |     0.900 |  0.900 | 0.900 |      10 |
+| tfidf-count-df               |     1 |     0.400 |  0.500 | 0.444 |       4 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-count-cf               |     0 |     0.900 |  0.900 | 0.900 |      10 |
+| tfidf-count-cf               |     1 |     0.400 |  0.500 | 0.444 |       4 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.800 | 0.889 |      10 |
+| tfidf-lognorm-df             |     1 |     0.333 |  0.500 | 0.400 |       4 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
 
 ### `GCF.document.FP199_23210.17324`
 
@@ -995,6 +1289,21 @@
 | density and early            |     0 |     0.917 |  1.000 | 0.957 |      11 |
 | density and early            |     1 |     1.000 |  0.500 | 0.667 |       4 |
 | density and early            |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-df             |     0 |     0.917 |  1.000 | 0.957 |      11 |
+| tfidf-density-df             |     1 |     0.667 |  0.500 | 0.571 |       4 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     0.917 |  1.000 | 0.957 |      11 |
+| tfidf-density-cf             |     1 |     1.000 |  0.250 | 0.400 |       4 |
+| tfidf-density-cf             |     2 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-count-df               |     0 |     0.917 |  1.000 | 0.957 |      11 |
+| tfidf-count-df               |     1 |     0.667 |  0.500 | 0.571 |       4 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.917 |  1.000 | 0.957 |      11 |
+| tfidf-count-cf               |     1 |     1.000 |  0.500 | 0.667 |       4 |
+| tfidf-count-cf               |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.818 | 0.900 |      11 |
+| tfidf-lognorm-df             |     1 |     0.400 |  0.500 | 0.444 |       4 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `GCF.document.FP215_24850.16116`
 
@@ -1048,6 +1357,21 @@
 | density and early            |     0 |     1.000 |  0.900 | 0.947 |      10 |
 | density and early            |     1 |     0.750 |  0.750 | 0.750 |       4 |
 | density and early            |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |      10 |
+| tfidf-density-df             |     1 |     1.000 |  0.750 | 0.857 |       4 |
+| tfidf-density-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-density-cf             |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-density-cf             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-count-df               |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-count-df               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-count-cf               |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-count-cf               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.500 | 0.667 |      10 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       4 |
+| tfidf-lognorm-df             |     2 |     0.200 |  0.500 | 0.286 |       2 |
 
 ### `GCF.document.FP228_27310.17090`
 
@@ -1101,6 +1425,21 @@
 | density and early            |     0 |     0.900 |  1.000 | 0.947 |       9 |
 | density and early            |     1 |     0.750 |  0.600 | 0.667 |       5 |
 | density and early            |     2 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.778 | 0.875 |       9 |
+| tfidf-density-df             |     1 |     0.667 |  0.800 | 0.727 |       5 |
+| tfidf-density-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-cf             |     0 |     0.875 |  0.778 | 0.824 |       9 |
+| tfidf-density-cf             |     1 |     0.500 |  0.400 | 0.444 |       5 |
+| tfidf-density-cf             |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.667 | 0.800 |       9 |
+| tfidf-count-df               |     1 |     0.571 |  0.800 | 0.667 |       5 |
+| tfidf-count-df               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.667 | 0.800 |       9 |
+| tfidf-count-cf               |     1 |     0.571 |  0.800 | 0.667 |       5 |
+| tfidf-count-cf               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.444 | 0.615 |       9 |
+| tfidf-lognorm-df             |     1 |     0.167 |  0.200 | 0.182 |       5 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
 
 ### `GEF.document.11136.n0000`
 
@@ -1154,6 +1493,21 @@
 | density and early            |     0 |     1.000 |  0.900 | 0.947 |      10 |
 | density and early            |     1 |     0.600 |  0.750 | 0.667 |       4 |
 | density and early            |     2 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-density-df             |     1 |     0.500 |  0.750 | 0.600 |       4 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-density-cf             |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-density-cf             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-count-df               |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-count-df               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-count-cf               |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-count-cf               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.700 | 0.824 |      10 |
+| tfidf-lognorm-df             |     1 |     0.167 |  0.250 | 0.200 |       4 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
 
 ### `GEF.document.11143.n0000`
 
@@ -1207,6 +1561,21 @@
 | density and early            |     0 |     1.000 |  0.900 | 0.947 |      10 |
 | density and early            |     1 |     0.667 |  0.500 | 0.571 |       4 |
 | density and early            |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-density-df             |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-density-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-density-cf             |     1 |     0.667 |  0.500 | 0.571 |       4 |
+| tfidf-density-cf             |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-count-df               |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-count-df               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-count-cf               |     1 |     0.667 |  0.500 | 0.571 |       4 |
+| tfidf-count-cf               |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.700 | 0.824 |      10 |
+| tfidf-lognorm-df             |     1 |     0.333 |  0.500 | 0.400 |       4 |
+| tfidf-lognorm-df             |     2 |     0.333 |  0.500 | 0.400 |       2 |
 
 ### `OEP.document.i00000091.n0000`
 
@@ -1260,6 +1629,21 @@
 | density and early            |     0 |     0.917 |  0.846 | 0.880 |      13 |
 | density and early            |     1 |     0.333 |  1.000 | 0.500 |       1 |
 | density and early            |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.769 | 0.870 |      13 |
+| tfidf-density-df             |     1 |     0.200 |  1.000 | 0.333 |       1 |
+| tfidf-density-df             |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-density-cf             |     1 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-density-cf             |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.692 | 0.818 |      13 |
+| tfidf-count-df               |     1 |     0.167 |  1.000 | 0.286 |       1 |
+| tfidf-count-df               |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.692 | 0.818 |      13 |
+| tfidf-count-cf               |     1 |     0.167 |  1.000 | 0.286 |       1 |
+| tfidf-count-cf               |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.462 | 0.632 |      13 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     2 |     0.400 |  1.000 | 0.571 |       2 |
 
 ### `Sabin.document.10287.10288`
 
@@ -1313,6 +1697,21 @@
 | density and early            |     0 |     1.000 |  0.929 | 0.963 |      14 |
 | density and early            |     1 |     0.333 |  1.000 | 0.500 |       1 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-density-df             |     1 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-density-cf             |     1 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  1.000 | 1.000 |      14 |
+| tfidf-count-df               |     1 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-df               |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-count-cf               |     1 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-count-cf               |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.786 | 0.880 |      14 |
+| tfidf-lognorm-df             |     1 |     0.250 |  1.000 | 0.400 |       1 |
+| tfidf-lognorm-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
 
 ### `Sabin.document.109700.130909`
 
@@ -1366,6 +1765,21 @@
 | density and early            |     0 |     1.000 |  0.917 | 0.957 |      12 |
 | density and early            |     1 |     0.600 |  1.000 | 0.750 |       3 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     0.846 |  0.917 | 0.880 |      12 |
+| tfidf-density-df             |     1 |     0.500 |  0.333 | 0.400 |       3 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     0.917 |  0.917 | 0.917 |      12 |
+| tfidf-density-cf             |     1 |     0.667 |  0.667 | 0.667 |       3 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     0 |     0.917 |  0.917 | 0.917 |      12 |
+| tfidf-count-df               |     1 |     0.667 |  0.667 | 0.667 |       3 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.917 | 0.957 |      12 |
+| tfidf-count-cf               |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.667 | 0.800 |      12 |
+| tfidf-lognorm-df             |     1 |     0.429 |  1.000 | 0.600 |       3 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `Sabin.document.126888.126889`
 
@@ -1419,6 +1833,21 @@
 | density and early            |     0 |     1.000 |  1.000 | 1.000 |      13 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       1 |
 | density and early            |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |      13 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |      13 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-df               |     0 |     0.867 |  1.000 | 0.929 |      13 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-count-cf               |     0 |     0.867 |  1.000 | 0.929 |      13 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  1.000 | 1.000 |      13 |
+| tfidf-lognorm-df             |     1 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
 
 ### `Sabin.document.12885.14299`
 
@@ -1472,6 +1901,21 @@
 | density and early            |     0 |     1.000 |  0.833 | 0.909 |      12 |
 | density and early            |     1 |     0.500 |  0.667 | 0.571 |       3 |
 | density and early            |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.833 | 0.909 |      12 |
+| tfidf-density-df             |     1 |     0.600 |  1.000 | 0.750 |       3 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.833 | 0.909 |      12 |
+| tfidf-density-cf             |     1 |     0.333 |  0.333 | 0.333 |       3 |
+| tfidf-density-cf             |     2 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  1.000 | 1.000 |      12 |
+| tfidf-count-df               |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      12 |
+| tfidf-count-cf               |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.833 | 0.909 |      12 |
+| tfidf-lognorm-df             |     1 |     0.400 |  0.667 | 0.500 |       3 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `Sabin.document.14285.14286`
 
@@ -1525,6 +1969,21 @@
 | density and early            |     0 |     1.000 |  0.938 | 0.968 |      16 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     0 |     1.000 |  0.938 | 0.968 |      16 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     0 |     1.000 |  0.938 | 0.968 |      16 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.938 | 0.968 |      16 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
 
 ### `Sabin.document.155.7947`
 
@@ -1578,6 +2037,21 @@
 | density and early            |     0 |     1.000 |  1.000 | 1.000 |      13 |
 | density and early            |     1 |     0.667 |  1.000 | 0.800 |       2 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     0.923 |  0.923 | 0.923 |      13 |
+| tfidf-density-df             |     1 |     0.333 |  0.500 | 0.400 |       2 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-density-cf             |     1 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  0.231 | 0.375 |      13 |
+| tfidf-count-df               |     1 |     0.091 |  0.500 | 0.154 |       2 |
+| tfidf-count-df               |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.385 | 0.556 |      13 |
+| tfidf-count-cf               |     1 |     0.111 |  0.500 | 0.182 |       2 |
+| tfidf-count-cf               |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.231 | 0.375 |      13 |
+| tfidf-lognorm-df             |     1 |     0.200 |  0.500 | 0.286 |       2 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `Sabin.document.16314.67362`
 
@@ -1631,6 +2105,21 @@
 | density and early            |     0 |     1.000 |  0.929 | 0.963 |      14 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       1 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     2 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-count-df               |     0 |     0.875 |  1.000 | 0.933 |      14 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.875 |  1.000 | 0.933 |      14 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-lognorm-df             |     1 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `Sabin.document.18913.67778`
 
@@ -1684,6 +2173,21 @@
 | density and early            |     0 |     0.889 |  0.571 | 0.696 |      14 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       1 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     0.900 |  0.643 | 0.750 |      14 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     0.889 |  0.571 | 0.696 |      14 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     0 |     0.867 |  0.929 | 0.897 |      14 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.867 |  0.929 | 0.897 |      14 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     0.900 |  0.643 | 0.750 |      14 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `Sabin.document.19022.19276`
 
@@ -1737,6 +2241,21 @@
 | density and early            |     0 |     1.000 |  0.857 | 0.923 |      14 |
 | density and early            |     1 |     0.250 |  1.000 | 0.400 |       1 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     0.923 |  0.857 | 0.889 |      14 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.857 | 0.923 |      14 |
+| tfidf-density-cf             |     1 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     0 |     0.857 |  0.857 | 0.857 |      14 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.857 |  0.857 | 0.857 |      14 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.857 | 0.923 |      14 |
+| tfidf-lognorm-df             |     1 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `Sabin.document.3635.3636`
 
@@ -1790,6 +2309,21 @@
 | density and early            |     0 |     0.923 |  0.857 | 0.889 |      14 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       1 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     0.923 |  0.857 | 0.889 |      14 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-cf             |     0 |     0.923 |  0.857 | 0.889 |      14 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-count-df               |     0 |     0.929 |  0.929 | 0.929 |      14 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.929 |  0.929 | 0.929 |      14 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     0.923 |  0.857 | 0.889 |      14 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
 
 ### `Sabin.document.43062.43063`
 
@@ -1843,6 +2377,21 @@
 | density and early            |     0 |     0.733 |  1.000 | 0.846 |      11 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       4 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.545 | 0.706 |      11 |
+| tfidf-density-df             |     1 |     0.444 |  1.000 | 0.615 |       4 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.636 | 0.778 |      11 |
+| tfidf-density-cf             |     1 |     0.500 |  1.000 | 0.667 |       4 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  0.182 | 0.308 |      11 |
+| tfidf-count-df               |     1 |     0.250 |  0.750 | 0.375 |       4 |
+| tfidf-count-df               |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.273 | 0.429 |      11 |
+| tfidf-count-cf               |     1 |     0.333 |  1.000 | 0.500 |       4 |
+| tfidf-count-cf               |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.182 | 0.308 |      11 |
+| tfidf-lognorm-df             |     1 |     0.333 |  0.500 | 0.400 |       4 |
+| tfidf-lognorm-df             |     2 |     0.125 |  1.000 | 0.222 |       1 |
 
 ### `Sabin.document.6700.6809`
 
@@ -1896,6 +2445,21 @@
 | density and early            |     0 |     1.000 |  0.750 | 0.857 |      16 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     0 |     1.000 |  0.938 | 0.968 |      16 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     0 |     1.000 |  0.875 | 0.933 |      16 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.812 | 0.897 |      16 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
 
 ### `Sabin.document.7023.7024`
 
@@ -1949,6 +2513,21 @@
 | density and early            |     0 |     1.000 |  0.933 | 0.966 |      15 |
 | density and early            |     1 |     0.500 |  1.000 | 0.667 |       1 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     0 |     1.000 |  0.933 | 0.966 |      15 |
+| tfidf-density-df             |     1 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     0 |     1.000 |  0.933 | 0.966 |      15 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     0 |     0.938 |  1.000 | 0.968 |      15 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     0 |     0.938 |  1.000 | 0.968 |      15 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.933 | 0.966 |      15 |
+| tfidf-lognorm-df             |     1 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
 
 ### `Sabin.document.8001.8002`
 
@@ -2002,6 +2581,21 @@
 | density and early            |     0 |     1.000 |  1.000 | 1.000 |      16 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     0 |     1.000 |  1.000 | 1.000 |      16 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
 
 ### `UNFCCC.document.i00000279.n0000`
 
@@ -2055,6 +2649,21 @@
 | density and early            |     0 |     1.000 |  0.923 | 0.960 |      13 |
 | density and early            |     1 |     0.500 |  0.500 | 0.500 |       2 |
 | density and early            |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-density-df             |     1 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-density-df             |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-density-cf             |     1 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-cf             |     2 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-count-df               |     0 |     0.929 |  1.000 | 0.963 |      13 |
+| tfidf-count-df               |     1 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.923 |  0.923 | 0.923 |      13 |
+| tfidf-count-cf               |     1 |     0.333 |  0.500 | 0.400 |       2 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.923 | 0.960 |      13 |
+| tfidf-lognorm-df             |     1 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-lognorm-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
 
 ### `UNFCCC.document.i00000326.n0000`
 
@@ -2108,6 +2717,21 @@
 | density and early            |     0 |     1.000 |  1.000 | 1.000 |      11 |
 | density and early            |     1 |     1.000 |  1.000 | 1.000 |       3 |
 | density and early            |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |      11 |
+| tfidf-density-df             |     1 |     1.000 |  1.000 | 1.000 |       3 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |      11 |
+| tfidf-density-cf             |     1 |     1.000 |  0.333 | 0.500 |       3 |
+| tfidf-density-cf             |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-count-df               |     0 |     0.917 |  1.000 | 0.957 |      11 |
+| tfidf-count-df               |     1 |     0.500 |  0.667 | 0.571 |       3 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      11 |
+| tfidf-count-cf               |     1 |     0.600 |  1.000 | 0.750 |       3 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  1.000 | 1.000 |      11 |
+| tfidf-lognorm-df             |     1 |     0.600 |  1.000 | 0.750 |       3 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
 
 ### `UNFCCC.document.i00002301.n0000`
 
@@ -2161,6 +2785,21 @@
 | density and early            |     0 |     1.000 |  0.846 | 0.917 |      13 |
 | density and early            |     1 |     0.250 |  1.000 | 0.400 |       1 |
 | density and early            |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.846 | 0.917 |      13 |
+| tfidf-density-df             |     1 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.846 | 0.917 |      13 |
+| tfidf-density-cf             |     1 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.615 | 0.762 |      13 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.615 | 0.762 |      13 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.385 | 0.556 |      13 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     2 |     0.500 |  1.000 | 0.667 |       2 |
 
 ### `UNFCCC.document.i00003501.n0000`
 
@@ -2214,6 +2853,21 @@
 | density and early            |     0 |     1.000 |  0.818 | 0.900 |      11 |
 | density and early            |     1 |     0.500 |  1.000 | 0.667 |       3 |
 | density and early            |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.727 | 0.842 |      11 |
+| tfidf-density-df             |     1 |     0.200 |  0.333 | 0.250 |       3 |
+| tfidf-density-df             |     2 |     0.333 |  0.500 | 0.400 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.727 | 0.842 |      11 |
+| tfidf-density-cf             |     1 |     0.250 |  0.333 | 0.286 |       3 |
+| tfidf-density-cf             |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.636 | 0.778 |      11 |
+| tfidf-count-df               |     1 |     0.167 |  0.333 | 0.222 |       3 |
+| tfidf-count-df               |     2 |     0.333 |  0.500 | 0.400 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.636 | 0.778 |      11 |
+| tfidf-count-cf               |     1 |     0.286 |  0.667 | 0.400 |       3 |
+| tfidf-count-cf               |     2 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.545 | 0.706 |      11 |
+| tfidf-lognorm-df             |     1 |     0.167 |  0.333 | 0.222 |       3 |
+| tfidf-lognorm-df             |     2 |     0.250 |  0.500 | 0.333 |       2 |
 
 ### `UNFCCC.document.i00003855.n0000`
 
@@ -2267,6 +2921,21 @@
 | density and early            |     0 |     0.900 |  1.000 | 0.947 |       9 |
 | density and early            |     1 |     0.667 |  0.800 | 0.727 |       5 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     0 |     0.889 |  0.889 | 0.889 |       9 |
+| tfidf-density-df             |     1 |     0.667 |  0.800 | 0.727 |       5 |
+| tfidf-density-df             |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-cf             |     0 |     0.889 |  0.889 | 0.889 |       9 |
+| tfidf-density-cf             |     1 |     0.800 |  0.800 | 0.800 |       5 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.667 | 0.800 |       9 |
+| tfidf-count-df               |     1 |     0.400 |  0.400 | 0.400 |       5 |
+| tfidf-count-df               |     2 |     0.400 |  1.000 | 0.571 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.667 | 0.800 |       9 |
+| tfidf-count-cf               |     1 |     0.500 |  0.600 | 0.545 |       5 |
+| tfidf-count-cf               |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.444 | 0.615 |       9 |
+| tfidf-lognorm-df             |     1 |     0.333 |  0.200 | 0.250 |       5 |
+| tfidf-lognorm-df             |     2 |     0.222 |  1.000 | 0.364 |       2 |
 
 ### `UNFCCC.document.i00004003.n0000`
 
@@ -2320,6 +2989,21 @@
 | density and early            |     0 |     0.667 |  0.857 | 0.750 |       7 |
 | density and early            |     1 |     0.429 |  0.600 | 0.500 |       5 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       4 |
+| tfidf-density-df             |     0 |     0.857 |  0.857 | 0.857 |       7 |
+| tfidf-density-df             |     1 |     0.500 |  0.800 | 0.615 |       5 |
+| tfidf-density-df             |     2 |     1.000 |  0.250 | 0.400 |       4 |
+| tfidf-density-cf             |     0 |     0.750 |  0.857 | 0.800 |       7 |
+| tfidf-density-cf             |     1 |     0.400 |  0.400 | 0.400 |       5 |
+| tfidf-density-cf             |     2 |     0.667 |  0.500 | 0.571 |       4 |
+| tfidf-count-df               |     0 |     1.000 |  0.571 | 0.727 |       7 |
+| tfidf-count-df               |     1 |     0.429 |  0.600 | 0.500 |       5 |
+| tfidf-count-df               |     2 |     0.600 |  0.750 | 0.667 |       4 |
+| tfidf-count-cf               |     0 |     1.000 |  0.714 | 0.833 |       7 |
+| tfidf-count-cf               |     1 |     0.500 |  0.600 | 0.545 |       5 |
+| tfidf-count-cf               |     2 |     0.600 |  0.750 | 0.667 |       4 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.429 | 0.600 |       7 |
+| tfidf-lognorm-df             |     1 |     0.333 |  0.200 | 0.250 |       5 |
+| tfidf-lognorm-df             |     2 |     0.400 |  1.000 | 0.571 |       4 |
 
 ### `UNFCCC.document.i00004212.n0000`
 
@@ -2373,6 +3057,21 @@
 | density and early            |     0 |     1.000 |  0.900 | 0.947 |      10 |
 | density and early            |     1 |     0.333 |  1.000 | 0.500 |       2 |
 | density and early            |     2 |     1.000 |  0.250 | 0.400 |       4 |
+| tfidf-density-df             |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-density-df             |     1 |     0.333 |  1.000 | 0.500 |       2 |
+| tfidf-density-df             |     2 |     1.000 |  0.250 | 0.400 |       4 |
+| tfidf-density-cf             |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-density-cf             |     1 |     0.333 |  1.000 | 0.500 |       2 |
+| tfidf-density-cf             |     2 |     1.000 |  0.250 | 0.400 |       4 |
+| tfidf-count-df               |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-count-df               |     1 |     0.333 |  1.000 | 0.500 |       2 |
+| tfidf-count-df               |     2 |     1.000 |  0.250 | 0.400 |       4 |
+| tfidf-count-cf               |     0 |     1.000 |  0.900 | 0.947 |      10 |
+| tfidf-count-cf               |     1 |     0.333 |  1.000 | 0.500 |       2 |
+| tfidf-count-cf               |     2 |     1.000 |  0.250 | 0.400 |       4 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.500 | 0.667 |      10 |
+| tfidf-lognorm-df             |     1 |     0.111 |  0.500 | 0.182 |       2 |
+| tfidf-lognorm-df             |     2 |     0.500 |  0.250 | 0.333 |       4 |
 
 ### `UNFCCC.document.i00005049.n0000`
 
@@ -2426,6 +3125,21 @@
 | density and early            |     0 |     1.000 |  0.909 | 0.952 |      11 |
 | density and early            |     1 |     0.750 |  1.000 | 0.857 |       3 |
 | density and early            |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.909 | 0.952 |      11 |
+| tfidf-density-df             |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.909 | 0.952 |      11 |
+| tfidf-density-cf             |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.909 | 0.952 |      11 |
+| tfidf-count-df               |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-df               |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.909 | 0.952 |      11 |
+| tfidf-count-cf               |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-cf               |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.636 | 0.778 |      11 |
+| tfidf-lognorm-df             |     1 |     0.250 |  0.333 | 0.286 |       3 |
+| tfidf-lognorm-df             |     2 |     0.400 |  1.000 | 0.571 |       2 |
 
 ### `UNFCCC.non-party.1262.0`
 
@@ -2479,6 +3193,21 @@
 | density and early            |     0 |     1.000 |  0.929 | 0.963 |      14 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-df               |     0 |     0.933 |  1.000 | 0.966 |      14 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      14 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     1.000 |  0.500 | 0.667 |       2 |
 
 ### `UNFCCC.non-party.1720.0`
 
@@ -2532,6 +3261,21 @@
 | density and early            |     0 |     1.000 |  0.615 | 0.762 |      13 |
 | density and early            |     1 |     0.250 |  1.000 | 0.400 |       2 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.692 | 0.818 |      13 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     2 |     0.333 |  1.000 | 0.500 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.692 | 0.818 |      13 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-cf             |     2 |     0.250 |  1.000 | 0.400 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  0.846 | 0.917 |      13 |
+| tfidf-count-df               |     1 |     0.400 |  1.000 | 0.571 |       2 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.846 | 0.917 |      13 |
+| tfidf-count-cf               |     1 |     0.400 |  1.000 | 0.571 |       2 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.615 | 0.762 |      13 |
+| tfidf-lognorm-df             |     1 |     0.167 |  0.500 | 0.250 |       2 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `UNFCCC.non-party.1820.0`
 
@@ -2585,6 +3329,21 @@
 | density and early            |     0 |     1.000 |  0.727 | 0.842 |      11 |
 | density and early            |     1 |     0.500 |  1.000 | 0.667 |       3 |
 | density and early            |     2 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.727 | 0.842 |      11 |
+| tfidf-density-df             |     1 |     0.250 |  0.333 | 0.286 |       3 |
+| tfidf-density-df             |     2 |     0.250 |  0.500 | 0.333 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.727 | 0.842 |      11 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       3 |
+| tfidf-density-cf             |     2 |     0.333 |  1.000 | 0.500 |       2 |
+| tfidf-count-df               |     0 |     0.833 |  0.909 | 0.870 |      11 |
+| tfidf-count-df               |     1 |     0.500 |  0.667 | 0.571 |       3 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-count-cf               |     0 |     0.909 |  0.909 | 0.909 |      11 |
+| tfidf-count-cf               |     1 |     0.400 |  0.667 | 0.500 |       3 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.727 | 0.842 |      11 |
+| tfidf-lognorm-df             |     1 |     0.286 |  0.667 | 0.400 |       3 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
 
 ### `UNFCCC.party.1513.0`
 
@@ -2638,6 +3397,21 @@
 | density and early            |     0 |     1.000 |  1.000 | 1.000 |       9 |
 | density and early            |     1 |     0.714 |  1.000 | 0.833 |       5 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |       9 |
+| tfidf-density-df             |     1 |     0.714 |  1.000 | 0.833 |       5 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |       9 |
+| tfidf-density-cf             |     1 |     0.833 |  1.000 | 0.909 |       5 |
+| tfidf-density-cf             |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.667 | 0.800 |       9 |
+| tfidf-count-df               |     1 |     0.500 |  0.600 | 0.545 |       5 |
+| tfidf-count-df               |     2 |     0.500 |  1.000 | 0.667 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.667 | 0.800 |       9 |
+| tfidf-count-cf               |     1 |     0.571 |  0.800 | 0.667 |       5 |
+| tfidf-count-cf               |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.333 | 0.500 |       9 |
+| tfidf-lognorm-df             |     1 |     0.143 |  0.200 | 0.167 |       5 |
+| tfidf-lognorm-df             |     2 |     0.167 |  0.500 | 0.250 |       2 |
 
 ### `UNFCCC.party.1785.0`
 
@@ -2691,6 +3465,21 @@
 | density and early            |     0 |     1.000 |  0.929 | 0.963 |      14 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       2 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     0 |     0.933 |  1.000 | 0.966 |      14 |
+| tfidf-count-df               |     1 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     0 |     0.875 |  1.000 | 0.933 |      14 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.929 | 0.963 |      14 |
+| tfidf-lognorm-df             |     1 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
 
 ### `UNFCCC.party.631.0`
 
@@ -2744,6 +3533,21 @@
 | density and early            |     0 |     0.625 |  0.833 | 0.714 |       6 |
 | density and early            |     1 |     0.625 |  0.625 | 0.625 |       8 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     0 |     0.833 |  0.833 | 0.833 |       6 |
+| tfidf-density-df             |     1 |     0.875 |  0.875 | 0.875 |       8 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-cf             |     0 |     0.833 |  0.833 | 0.833 |       6 |
+| tfidf-density-cf             |     1 |     0.857 |  0.750 | 0.800 |       8 |
+| tfidf-density-cf             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.333 | 0.500 |       6 |
+| tfidf-count-df               |     1 |     0.556 |  0.625 | 0.588 |       8 |
+| tfidf-count-df               |     2 |     0.400 |  1.000 | 0.571 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.333 | 0.500 |       6 |
+| tfidf-count-cf               |     1 |     0.500 |  0.500 | 0.500 |       8 |
+| tfidf-count-cf               |     2 |     0.333 |  1.000 | 0.500 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.167 | 0.286 |       6 |
+| tfidf-lognorm-df             |     1 |     0.333 |  0.125 | 0.182 |       8 |
+| tfidf-lognorm-df             |     2 |     0.167 |  1.000 | 0.286 |       2 |
 
 ### `UNFCCC.party.770.0`
 
@@ -2797,6 +3601,21 @@
 | density and early            |     0 |     0.545 |  1.000 | 0.706 |       6 |
 | density and early            |     1 |     1.000 |  0.500 | 0.667 |       8 |
 | density and early            |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-df             |     0 |     0.857 |  1.000 | 0.923 |       6 |
+| tfidf-density-df             |     1 |     0.875 |  0.875 | 0.875 |       8 |
+| tfidf-density-df             |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-cf             |     0 |     0.857 |  1.000 | 0.923 |       6 |
+| tfidf-density-cf             |     1 |     0.833 |  0.625 | 0.714 |       8 |
+| tfidf-density-cf             |     2 |     0.333 |  0.500 | 0.400 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.667 | 0.800 |       6 |
+| tfidf-count-df               |     1 |     0.500 |  0.375 | 0.429 |       8 |
+| tfidf-count-df               |     2 |     0.167 |  0.500 | 0.250 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.667 | 0.800 |       6 |
+| tfidf-count-cf               |     1 |     0.500 |  0.375 | 0.429 |       8 |
+| tfidf-count-cf               |     2 |     0.167 |  0.500 | 0.250 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.667 | 0.800 |       6 |
+| tfidf-lognorm-df             |     1 |     1.000 |  0.125 | 0.222 |       8 |
+| tfidf-lognorm-df             |     2 |     0.182 |  1.000 | 0.308 |       2 |
 
 ### `UNFCCC.party.82.0`
 
@@ -2850,6 +3669,21 @@
 | density and early            |     0 |     0.778 |  1.000 | 0.875 |       7 |
 | density and early            |     1 |     0.800 |  0.667 | 0.727 |       6 |
 | density and early            |     2 |     1.000 |  0.667 | 0.800 |       3 |
+| tfidf-density-df             |     0 |     0.714 |  0.714 | 0.714 |       7 |
+| tfidf-density-df             |     1 |     0.500 |  0.667 | 0.571 |       6 |
+| tfidf-density-df             |     2 |     1.000 |  0.333 | 0.500 |       3 |
+| tfidf-density-cf             |     0 |     0.750 |  0.857 | 0.800 |       7 |
+| tfidf-density-cf             |     1 |     0.750 |  0.500 | 0.600 |       6 |
+| tfidf-density-cf             |     2 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-df               |     0 |     1.000 |  0.714 | 0.833 |       7 |
+| tfidf-count-df               |     1 |     0.600 |  0.500 | 0.545 |       6 |
+| tfidf-count-df               |     2 |     0.500 |  1.000 | 0.667 |       3 |
+| tfidf-count-cf               |     0 |     1.000 |  0.714 | 0.833 |       7 |
+| tfidf-count-cf               |     1 |     0.667 |  0.667 | 0.667 |       6 |
+| tfidf-count-cf               |     2 |     0.600 |  1.000 | 0.750 |       3 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.286 | 0.444 |       7 |
+| tfidf-lognorm-df             |     1 |     0.250 |  0.167 | 0.200 |       6 |
+| tfidf-lognorm-df             |     2 |     0.300 |  1.000 | 0.462 |       3 |
 
 ## Per-topic breakdowns
 
@@ -2905,6 +3739,21 @@
 | density and early            |     0 |     0.927 |  0.950 | 0.938 |      40 |
 | density and early            |     1 |     0.571 |  0.571 | 0.571 |       7 |
 | density and early            |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-density-df             |     0 |     0.925 |  0.925 | 0.925 |      40 |
+| tfidf-density-df             |     1 |     0.571 |  0.571 | 0.571 |       7 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-density-cf             |     0 |     0.925 |  0.925 | 0.925 |      40 |
+| tfidf-density-cf             |     1 |     0.571 |  0.571 | 0.571 |       7 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       2 |
+| tfidf-count-df               |     0 |     0.968 |  0.750 | 0.845 |      40 |
+| tfidf-count-df               |     1 |     0.353 |  0.857 | 0.500 |       7 |
+| tfidf-count-df               |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-count-cf               |     0 |     0.968 |  0.750 | 0.845 |      40 |
+| tfidf-count-cf               |     1 |     0.353 |  0.857 | 0.500 |       7 |
+| tfidf-count-cf               |     2 |     1.000 |  0.500 | 0.667 |       2 |
+| tfidf-lognorm-df             |     0 |     0.962 |  0.625 | 0.758 |      40 |
+| tfidf-lognorm-df             |     1 |     0.077 |  0.143 | 0.100 |       7 |
+| tfidf-lognorm-df             |     2 |     0.200 |  1.000 | 0.333 |       2 |
 
 ### `concept::Q1346`
 
@@ -2958,6 +3807,21 @@
 | density and early            |     0 |     0.978 |  1.000 | 0.989 |      44 |
 | density and early            |     1 |     1.000 |  0.500 | 0.667 |       4 |
 | density and early            |     2 |     0.500 |  1.000 | 0.667 |       1 |
+| tfidf-density-df             |     0 |     0.978 |  1.000 | 0.989 |      44 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       4 |
+| tfidf-density-df             |     2 |     0.250 |  1.000 | 0.400 |       1 |
+| tfidf-density-cf             |     0 |     0.978 |  1.000 | 0.989 |      44 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       4 |
+| tfidf-density-cf             |     2 |     0.250 |  1.000 | 0.400 |       1 |
+| tfidf-count-df               |     0 |     0.978 |  1.000 | 0.989 |      44 |
+| tfidf-count-df               |     1 |     0.750 |  0.750 | 0.750 |       4 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.936 |  1.000 | 0.967 |      44 |
+| tfidf-count-cf               |     1 |     0.500 |  0.250 | 0.333 |       4 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     0.978 |  1.000 | 0.989 |      44 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       4 |
+| tfidf-lognorm-df             |     2 |     0.250 |  1.000 | 0.400 |       1 |
 
 ### `concept::Q1652`
 
@@ -3011,6 +3875,21 @@
 | density and early            |     0 |     0.878 |  0.973 | 0.923 |      37 |
 | density and early            |     1 |     0.714 |  0.625 | 0.667 |       8 |
 | density and early            |     2 |     1.000 |  0.250 | 0.400 |       4 |
+| tfidf-density-df             |     0 |     0.921 |  0.946 | 0.933 |      37 |
+| tfidf-density-df             |     1 |     0.500 |  0.500 | 0.500 |       8 |
+| tfidf-density-df             |     2 |     0.667 |  0.500 | 0.571 |       4 |
+| tfidf-density-cf             |     0 |     0.923 |  0.973 | 0.947 |      37 |
+| tfidf-density-cf             |     1 |     0.500 |  0.375 | 0.429 |       8 |
+| tfidf-density-cf             |     2 |     0.500 |  0.500 | 0.500 |       4 |
+| tfidf-count-df               |     0 |     0.943 |  0.892 | 0.917 |      37 |
+| tfidf-count-df               |     1 |     0.462 |  0.750 | 0.571 |       8 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       4 |
+| tfidf-count-cf               |     0 |     0.943 |  0.892 | 0.917 |      37 |
+| tfidf-count-cf               |     1 |     0.462 |  0.750 | 0.571 |       8 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       4 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.730 | 0.844 |      37 |
+| tfidf-lognorm-df             |     1 |     0.231 |  0.375 | 0.286 |       8 |
+| tfidf-lognorm-df             |     2 |     0.333 |  0.750 | 0.462 |       4 |
 
 ### `concept::Q1829`
 
@@ -3064,6 +3943,21 @@
 | density and early            |     0 |     1.000 |  0.533 | 0.696 |      15 |
 | density and early            |     1 |     0.593 |  0.842 | 0.696 |      19 |
 | density and early            |     2 |     0.643 |  0.600 | 0.621 |      15 |
+| tfidf-density-df             |     0 |     0.818 |  0.600 | 0.692 |      15 |
+| tfidf-density-df             |     1 |     0.607 |  0.895 | 0.723 |      19 |
+| tfidf-density-df             |     2 |     0.900 |  0.600 | 0.720 |      15 |
+| tfidf-density-cf             |     0 |     1.000 |  0.533 | 0.696 |      15 |
+| tfidf-density-cf             |     1 |     0.632 |  0.632 | 0.632 |      19 |
+| tfidf-density-cf             |     2 |     0.591 |  0.867 | 0.703 |      15 |
+| tfidf-count-df               |     0 |     0.579 |  0.733 | 0.647 |      15 |
+| tfidf-count-df               |     1 |     0.565 |  0.684 | 0.619 |      19 |
+| tfidf-count-df               |     2 |     0.571 |  0.267 | 0.364 |      15 |
+| tfidf-count-cf               |     0 |     0.769 |  0.667 | 0.714 |      15 |
+| tfidf-count-cf               |     1 |     0.522 |  0.632 | 0.571 |      19 |
+| tfidf-count-cf               |     2 |     0.462 |  0.400 | 0.429 |      15 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.533 | 0.696 |      15 |
+| tfidf-lognorm-df             |     1 |     0.463 |  1.000 | 0.633 |      19 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |      15 |
 
 ### `concept::Q1832`
 
@@ -3117,6 +4011,21 @@
 | density and early            |     0 |     0.900 |  0.818 | 0.857 |      33 |
 | density and early            |     1 |     0.625 |  0.714 | 0.667 |      14 |
 | density and early            |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-df             |     0 |     0.963 |  0.788 | 0.867 |      33 |
+| tfidf-density-df             |     1 |     0.632 |  0.857 | 0.727 |      14 |
+| tfidf-density-df             |     2 |     0.667 |  1.000 | 0.800 |       2 |
+| tfidf-density-cf             |     0 |     0.963 |  0.788 | 0.867 |      33 |
+| tfidf-density-cf             |     1 |     0.647 |  0.786 | 0.710 |      14 |
+| tfidf-density-cf             |     2 |     0.400 |  1.000 | 0.571 |       2 |
+| tfidf-count-df               |     0 |     0.962 |  0.758 | 0.847 |      33 |
+| tfidf-count-df               |     1 |     0.611 |  0.786 | 0.688 |      14 |
+| tfidf-count-df               |     2 |     0.400 |  1.000 | 0.571 |       2 |
+| tfidf-count-cf               |     0 |     0.962 |  0.758 | 0.847 |      33 |
+| tfidf-count-cf               |     1 |     0.611 |  0.786 | 0.688 |      14 |
+| tfidf-count-cf               |     2 |     0.400 |  1.000 | 0.571 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.636 | 0.778 |      33 |
+| tfidf-lognorm-df             |     1 |     0.364 |  0.286 | 0.320 |      14 |
+| tfidf-lognorm-df             |     2 |     0.118 |  1.000 | 0.211 |       2 |
 
 ### `concept::Q218`
 
@@ -3170,6 +4079,21 @@
 | density and early            |     0 |     1.000 |  0.577 | 0.732 |      26 |
 | density and early            |     1 |     0.304 |  0.778 | 0.438 |       9 |
 | density and early            |     2 |     0.545 |  0.429 | 0.480 |      14 |
+| tfidf-density-df             |     0 |     0.905 |  0.731 | 0.809 |      26 |
+| tfidf-density-df             |     1 |     0.417 |  0.556 | 0.476 |       9 |
+| tfidf-density-df             |     2 |     0.688 |  0.786 | 0.733 |      14 |
+| tfidf-density-cf             |     0 |     0.947 |  0.692 | 0.800 |      26 |
+| tfidf-density-cf             |     1 |     0.500 |  0.667 | 0.571 |       9 |
+| tfidf-density-cf             |     2 |     0.667 |  0.857 | 0.750 |      14 |
+| tfidf-count-df               |     0 |     0.875 |  0.808 | 0.840 |      26 |
+| tfidf-count-df               |     1 |     0.417 |  0.556 | 0.476 |       9 |
+| tfidf-count-df               |     2 |     0.923 |  0.857 | 0.889 |      14 |
+| tfidf-count-cf               |     0 |     0.913 |  0.808 | 0.857 |      26 |
+| tfidf-count-cf               |     1 |     0.462 |  0.667 | 0.545 |       9 |
+| tfidf-count-cf               |     2 |     0.923 |  0.857 | 0.889 |      14 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.462 | 0.632 |      26 |
+| tfidf-lognorm-df             |     1 |     0.321 |  1.000 | 0.486 |       9 |
+| tfidf-lognorm-df             |     2 |     1.000 |  0.643 | 0.783 |      14 |
 
 ### `concept::Q226`
 
@@ -3223,6 +4147,21 @@
 | density and early            |     0 |     0.950 |  0.974 | 0.962 |      39 |
 | density and early            |     1 |     0.667 |  0.750 | 0.706 |       8 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.974 | 0.987 |      39 |
+| tfidf-density-df             |     1 |     0.778 |  0.875 | 0.824 |       8 |
+| tfidf-density-df             |     2 |     0.500 |  0.500 | 0.500 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.974 | 0.987 |      39 |
+| tfidf-density-cf             |     1 |     0.750 |  0.750 | 0.750 |       8 |
+| tfidf-density-cf             |     2 |     0.333 |  0.500 | 0.400 |       2 |
+| tfidf-count-df               |     0 |     1.000 |  0.974 | 0.987 |      39 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       8 |
+| tfidf-count-df               |     2 |     0.111 |  0.500 | 0.182 |       2 |
+| tfidf-count-cf               |     0 |     1.000 |  0.974 | 0.987 |      39 |
+| tfidf-count-cf               |     1 |     0.714 |  0.625 | 0.667 |       8 |
+| tfidf-count-cf               |     2 |     0.250 |  0.500 | 0.333 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.846 | 0.917 |      39 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       8 |
+| tfidf-lognorm-df             |     2 |     0.182 |  1.000 | 0.308 |       2 |
 
 ### `concept::Q557`
 
@@ -3276,6 +4215,21 @@
 | density and early            |     0 |     0.900 |  0.429 | 0.581 |      21 |
 | density and early            |     1 |     0.269 |  0.700 | 0.389 |      10 |
 | density and early            |     2 |     0.769 |  0.556 | 0.645 |      18 |
+| tfidf-density-df             |     0 |     1.000 |  0.476 | 0.645 |      21 |
+| tfidf-density-df             |     1 |     0.292 |  0.700 | 0.412 |      10 |
+| tfidf-density-df             |     2 |     0.667 |  0.556 | 0.606 |      18 |
+| tfidf-density-cf             |     0 |     1.000 |  0.429 | 0.600 |      21 |
+| tfidf-density-cf             |     1 |     0.400 |  0.600 | 0.480 |      10 |
+| tfidf-density-cf             |     2 |     0.680 |  0.944 | 0.791 |      18 |
+| tfidf-count-df               |     0 |     0.778 |  0.667 | 0.718 |      21 |
+| tfidf-count-df               |     1 |     0.294 |  0.500 | 0.370 |      10 |
+| tfidf-count-df               |     2 |     0.786 |  0.611 | 0.688 |      18 |
+| tfidf-count-cf               |     0 |     0.867 |  0.619 | 0.722 |      21 |
+| tfidf-count-cf               |     1 |     0.316 |  0.600 | 0.414 |      10 |
+| tfidf-count-cf               |     2 |     0.800 |  0.667 | 0.727 |      18 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.333 | 0.500 |      21 |
+| tfidf-lognorm-df             |     1 |     0.265 |  0.900 | 0.409 |      10 |
+| tfidf-lognorm-df             |     2 |     0.875 |  0.389 | 0.538 |      18 |
 
 ### `concept::Q567`
 
@@ -3329,6 +4283,21 @@
 | density and early            |     0 |     0.938 |  0.600 | 0.732 |      25 |
 | density and early            |     1 |     0.467 |  0.933 | 0.622 |      15 |
 | density and early            |     2 |     1.000 |  0.333 | 0.500 |       9 |
+| tfidf-density-df             |     0 |     1.000 |  0.680 | 0.810 |      25 |
+| tfidf-density-df             |     1 |     0.536 |  1.000 | 0.698 |      15 |
+| tfidf-density-df             |     2 |     1.000 |  0.444 | 0.615 |       9 |
+| tfidf-density-cf             |     0 |     1.000 |  0.640 | 0.780 |      25 |
+| tfidf-density-cf             |     1 |     0.478 |  0.733 | 0.579 |      15 |
+| tfidf-density-cf             |     2 |     0.600 |  0.667 | 0.632 |       9 |
+| tfidf-count-df               |     0 |     0.909 |  0.800 | 0.851 |      25 |
+| tfidf-count-df               |     1 |     0.471 |  0.533 | 0.500 |      15 |
+| tfidf-count-df               |     2 |     0.500 |  0.556 | 0.526 |       9 |
+| tfidf-count-cf               |     0 |     0.952 |  0.800 | 0.870 |      25 |
+| tfidf-count-cf               |     1 |     0.500 |  0.600 | 0.545 |      15 |
+| tfidf-count-cf               |     2 |     0.500 |  0.556 | 0.526 |       9 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.440 | 0.611 |      25 |
+| tfidf-lognorm-df             |     1 |     0.320 |  0.533 | 0.400 |      15 |
+| tfidf-lognorm-df             |     2 |     0.462 |  0.667 | 0.545 |       9 |
 
 ### `concept::Q615`
 
@@ -3382,6 +4351,21 @@
 | density and early            |     0 |     1.000 |  0.980 | 0.990 |      49 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       0 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     0 |     1.000 |  0.959 | 0.979 |      49 |
+| tfidf-density-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     0 |     1.000 |  0.980 | 0.990 |      49 |
+| tfidf-density-cf             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     0 |     1.000 |  0.878 | 0.935 |      49 |
+| tfidf-count-df               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     0 |     1.000 |  0.918 | 0.957 |      49 |
+| tfidf-count-cf               |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.857 | 0.923 |      49 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
 
 ### `concept::Q69`
 
@@ -3435,6 +4419,21 @@
 | density and early            |     0 |     0.938 |  0.978 | 0.957 |      46 |
 | density and early            |     1 |     0.000 |  0.000 | 0.000 |       2 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.957 | 0.978 |      46 |
+| tfidf-density-df             |     1 |     0.400 |  1.000 | 0.571 |       2 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     0.978 |  0.978 | 0.978 |      46 |
+| tfidf-density-cf             |     1 |     0.333 |  0.500 | 0.400 |       2 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  0.913 | 0.955 |      46 |
+| tfidf-count-df               |     1 |     0.286 |  1.000 | 0.444 |       2 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.913 | 0.955 |      46 |
+| tfidf-count-cf               |     1 |     0.286 |  1.000 | 0.444 |       2 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.783 | 0.878 |      46 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-lognorm-df             |     2 |     0.143 |  1.000 | 0.250 |       1 |
 
 ### `concept::Q701`
 
@@ -3488,6 +4487,21 @@
 | density and early            |     0 |     0.978 |  1.000 | 0.989 |      45 |
 | density and early            |     1 |     0.667 |  0.667 | 0.667 |       3 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     0.977 |  0.956 | 0.966 |      45 |
+| tfidf-density-df             |     1 |     0.400 |  0.667 | 0.500 |       3 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-cf             |     0 |     0.977 |  0.956 | 0.966 |      45 |
+| tfidf-density-cf             |     1 |     0.400 |  0.667 | 0.500 |       3 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-df               |     0 |     0.976 |  0.889 | 0.930 |      45 |
+| tfidf-count-df               |     1 |     0.375 |  1.000 | 0.545 |       3 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     0.977 |  0.933 | 0.955 |      45 |
+| tfidf-count-cf               |     1 |     0.500 |  1.000 | 0.667 |       3 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.778 | 0.875 |      45 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       3 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       1 |
 
 ### `concept::Q704`
 
@@ -3541,6 +4555,21 @@
 | density and early            |     0 |     0.933 |  0.824 | 0.875 |      34 |
 | density and early            |     1 |     0.500 |  0.429 | 0.462 |      14 |
 | density and early            |     2 |     0.143 |  1.000 | 0.250 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  0.765 | 0.867 |      34 |
+| tfidf-density-df             |     1 |     0.467 |  0.500 | 0.483 |      14 |
+| tfidf-density-df             |     2 |     0.125 |  1.000 | 0.222 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  0.794 | 0.885 |      34 |
+| tfidf-density-cf             |     1 |     0.538 |  0.500 | 0.519 |      14 |
+| tfidf-density-cf             |     2 |     0.111 |  1.000 | 0.200 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  0.824 | 0.903 |      34 |
+| tfidf-count-df               |     1 |     0.538 |  0.500 | 0.519 |      14 |
+| tfidf-count-df               |     2 |     0.125 |  1.000 | 0.222 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  0.853 | 0.921 |      34 |
+| tfidf-count-cf               |     1 |     0.615 |  0.571 | 0.593 |      14 |
+| tfidf-count-cf               |     2 |     0.143 |  1.000 | 0.250 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.618 | 0.764 |      34 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |      14 |
+| tfidf-lognorm-df             |     2 |     0.056 |  1.000 | 0.105 |       1 |
 
 ### `concept::Q715`
 
@@ -3594,6 +4623,21 @@
 | density and early            |     0 |     1.000 |  0.846 | 0.917 |      39 |
 | density and early            |     1 |     0.467 |  0.875 | 0.609 |       8 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       2 |
+| tfidf-density-df             |     0 |     1.000 |  0.795 | 0.886 |      39 |
+| tfidf-density-df             |     1 |     0.429 |  0.750 | 0.545 |       8 |
+| tfidf-density-df             |     2 |     0.250 |  0.500 | 0.333 |       2 |
+| tfidf-density-cf             |     0 |     1.000 |  0.795 | 0.886 |      39 |
+| tfidf-density-cf             |     1 |     0.417 |  0.625 | 0.500 |       8 |
+| tfidf-density-cf             |     2 |     0.333 |  1.000 | 0.500 |       2 |
+| tfidf-count-df               |     0 |     0.969 |  0.795 | 0.873 |      39 |
+| tfidf-count-df               |     1 |     0.333 |  0.500 | 0.400 |       8 |
+| tfidf-count-df               |     2 |     0.200 |  0.500 | 0.286 |       2 |
+| tfidf-count-cf               |     0 |     0.969 |  0.795 | 0.873 |      39 |
+| tfidf-count-cf               |     1 |     0.333 |  0.500 | 0.400 |       8 |
+| tfidf-count-cf               |     2 |     0.200 |  0.500 | 0.286 |       2 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.462 | 0.632 |      39 |
+| tfidf-lognorm-df             |     1 |     0.118 |  0.250 | 0.160 |       8 |
+| tfidf-lognorm-df             |     2 |     0.143 |  1.000 | 0.250 |       2 |
 
 ### `concept::Q979`
 
@@ -3647,6 +4691,21 @@
 | density and early            |     0 |     0.933 |  0.955 | 0.944 |      44 |
 | density and early            |     1 |     0.500 |  0.400 | 0.444 |       5 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-df             |     0 |     0.976 |  0.909 | 0.941 |      44 |
+| tfidf-density-df             |     1 |     0.571 |  0.800 | 0.667 |       5 |
+| tfidf-density-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-density-cf             |     0 |     0.953 |  0.932 | 0.943 |      44 |
+| tfidf-density-cf             |     1 |     0.600 |  0.600 | 0.600 |       5 |
+| tfidf-density-cf             |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-df               |     0 |     1.000 |  0.864 | 0.927 |      44 |
+| tfidf-count-df               |     1 |     0.400 |  0.800 | 0.533 |       5 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-count-cf               |     0 |     1.000 |  0.864 | 0.927 |      44 |
+| tfidf-count-cf               |     1 |     0.455 |  1.000 | 0.625 |       5 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       0 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.773 | 0.872 |      44 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       5 |
+| tfidf-lognorm-df             |     2 |     0.000 |  0.000 | 0.000 |       0 |
 
 ### `concept::Q983`
 
@@ -3700,3 +4759,18 @@
 | density and early            |     0 |     0.957 |  1.000 | 0.978 |      45 |
 | density and early            |     1 |     0.500 |  0.333 | 0.400 |       3 |
 | density and early            |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-density-df             |     0 |     1.000 |  1.000 | 1.000 |      45 |
+| tfidf-density-df             |     1 |     1.000 |  1.000 | 1.000 |       3 |
+| tfidf-density-df             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-density-cf             |     0 |     1.000 |  1.000 | 1.000 |      45 |
+| tfidf-density-cf             |     1 |     1.000 |  1.000 | 1.000 |       3 |
+| tfidf-density-cf             |     2 |     1.000 |  1.000 | 1.000 |       1 |
+| tfidf-count-df               |     0 |     1.000 |  0.978 | 0.989 |      45 |
+| tfidf-count-df               |     1 |     0.600 |  1.000 | 0.750 |       3 |
+| tfidf-count-df               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-count-cf               |     0 |     1.000 |  1.000 | 1.000 |      45 |
+| tfidf-count-cf               |     1 |     0.750 |  1.000 | 0.857 |       3 |
+| tfidf-count-cf               |     2 |     0.000 |  0.000 | 0.000 |       1 |
+| tfidf-lognorm-df             |     0 |     1.000 |  0.889 | 0.941 |      45 |
+| tfidf-lognorm-df             |     1 |     0.000 |  0.000 | 0.000 |       3 |
+| tfidf-lognorm-df             |     2 |     0.200 |  1.000 | 0.333 |       1 |

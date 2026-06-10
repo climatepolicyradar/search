@@ -16,6 +16,7 @@ from src.predictors import (
     MaxSectionDensityPredictor,
     MentionCountPredictor,
     MentionDensityPredictor,
+    TfIdfPredictor,
     ThresholdPredictor,
 )
 from src.tuning import TuningResult, render_tuning_report, tune_predictor
@@ -39,6 +40,22 @@ TUNING: list[tuple[str, ThresholdPredictor]] = [
     ("first-10-pages", FirstNPagesPredictor(low=0, high=0, n_pages=10)),
     ("first-15-pages", FirstNPagesPredictor(low=0, high=0, n_pages=15)),
     ("first-10-pages-density", FirstNPagesDensityPredictor(low=0, high=0, n_pages=10)),
+    # TF-IDF: an in-document mention signal (TF) weighted by topic rarity across the
+    # corpus (IDF). df = inverse document frequency, cf = inverse collection frequency.
+    (
+        "tfidf-density-df",
+        TfIdfPredictor(low=0, high=0, tf_mode="density", idf_mode="df"),
+    ),
+    (
+        "tfidf-density-cf",
+        TfIdfPredictor(low=0, high=0, tf_mode="density", idf_mode="cf"),
+    ),
+    ("tfidf-count-df", TfIdfPredictor(low=0, high=0, tf_mode="count", idf_mode="df")),
+    ("tfidf-count-cf", TfIdfPredictor(low=0, high=0, tf_mode="count", idf_mode="cf")),
+    (
+        "tfidf-lognorm-df",
+        TfIdfPredictor(low=0, high=0, tf_mode="lognorm", idf_mode="df"),
+    ),
 ]
 
 

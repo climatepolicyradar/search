@@ -18,6 +18,7 @@ from src.predictors import (
     MaxSectionDensityPredictor,
     MentionCountPredictor,
     MentionDensityPredictor,
+    TfIdfPredictor,
 )
 
 console = Console()
@@ -57,6 +58,23 @@ PREDICTORS: dict[str, DTPredictor] = {
         [CombinationPredictor([_count, _density], "or"), _early_page], "and"
     ),
     "density and early": CombinationPredictor([_density, _early_page], "and"),
+    # TF-IDF: in-document mention signal weighted by topic rarity across the corpus.
+    # (low, high) tuned via document-grouped cross-validation; see THRESHOLD_TUNING.md.
+    "tfidf-density-df": TfIdfPredictor(
+        low=0.0017, high=0.03091, tf_mode="density", idf_mode="df"
+    ),
+    "tfidf-density-cf": TfIdfPredictor(
+        low=0.00969, high=0.09477, tf_mode="density", idf_mode="cf"
+    ),
+    "tfidf-count-df": TfIdfPredictor(
+        low=3.809, high=73.6, tf_mode="count", idf_mode="df"
+    ),
+    "tfidf-count-cf": TfIdfPredictor(
+        low=20.73, high=404.2, tf_mode="count", idf_mode="cf"
+    ),
+    "tfidf-lognorm-df": TfIdfPredictor(
+        low=0.2851, high=3.514, tf_mode="lognorm", idf_mode="df"
+    ),
 }
 
 

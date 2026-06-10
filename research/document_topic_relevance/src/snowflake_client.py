@@ -14,7 +14,11 @@ from collections import defaultdict
 
 import snowflake.connector
 
-from research.document_topic_relevance.src.models import TopicMention, TopicMentions
+from research.document_topic_relevance.src.models import (
+    TopicCorpusStats,
+    TopicMention,
+    TopicMentions,
+)
 
 # Tables queried (see eval_set_selection.sql for the same sources).
 PASSAGES_TABLE = "production.published.PIPELINE_PASSAGES_V1"
@@ -176,6 +180,67 @@ def fetch_topic_mentions(
             mentions=sorted(mentions, key=lambda m: m.passage_index),
             section_sizes=section_sizes,
             passages_per_page=dict(pages_by_doc.get(document_id, {})),
+        )
+
+    return result
+
+
+def fetch_topic_corpus_stats(
+    conn: snowflake.connector.SnowflakeConnection,
+    topic_names: list[str],
+) -> dict[str, TopicCorpusStats]:
+    """
+    Fetch corpus-wide frequency of each topic – the IDF side of a TF-IDF feature.
+
+    Returns a mapping keyed by `lower(trim(topic_name))` (matching `Label.value`
+    against the warehouse's `TOPIC_NAME`, as in `fetch_topic_mentions`). For each
+    topic it counts, across the *whole* corpus (not just the eval documents):
+      - `collection_frequency`: total passage occurrences of the topic,
+      - `document_frequency`: distinct documents mentioning the topic.
+    The corpus totals (`corpus_total_documents`, `corpus_total_passages`) are the
+    same for every topic and form the IDF denominators. Topics with no corpus
+    match simply don't appear in the result – callers should default sensibly.
+    """
+    if not topic_names:
+        return {}
+
+    cur = conn.cursor()
+    topic_ph, topic_binds = _in_list([t.lower().strip() for t in topic_names])
+
+    # Corpus totals: denominators shared by every topic's IDF.
+    cur.execute(
+        f"""
+        SELECT COUNT(*)                  AS TOTAL_PASSAGES,
+               COUNT(DISTINCT DOCUMENT_ID) AS TOTAL_DOCUMENTS
+        FROM {PASSAGES_TABLE}
+        """
+    )
+    total_passages_row = cur.fetchone()
+    if total_passages_row is None:
+        return {}
+    corpus_total_passages = int(total_passages_row[0])
+    corpus_total_documents = int(total_passages_row[1])
+
+    # Per-topic collection and document frequency across the whole corpus.
+    cur.execute(
+        f"""
+        SELECT LOWER(TRIM(TOPIC_NAME))    AS TOPIC_NAME,
+               COUNT(*)                   AS COLLECTION_FREQUENCY,
+               COUNT(DISTINCT DOCUMENT_ID) AS DOCUMENT_FREQUENCY
+        FROM {TOPICS_TABLE}
+        WHERE LOWER(TRIM(TOPIC_NAME)) IN {topic_ph}
+        GROUP BY LOWER(TRIM(TOPIC_NAME))
+        """,
+        topic_binds,
+    )
+
+    result: dict[str, TopicCorpusStats] = {}
+    for topic_name, collection_frequency, document_frequency in cur.fetchall():
+        result[topic_name] = TopicCorpusStats(
+            collection_frequency=int(collection_frequency),
+            document_frequency=int(document_frequency),
+            corpus_total_documents=corpus_total_documents,
+            corpus_total_passages=corpus_total_passages,
         )
 
     return result
