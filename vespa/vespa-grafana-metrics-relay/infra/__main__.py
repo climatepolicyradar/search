@@ -16,10 +16,14 @@ cloudwatch_namespace = pulumi_config.require("cloudwatch_namespace")
 metric_collection_rate = pulumi_config.require("metric_collection_rate")
 lambda_timeout_seconds = pulumi_config.require("lambda_timeout_seconds")
 
-
+# SSM parameter names default to the original values so existing stacks are unaffected.
+# These are needed to avoid collisions as the prod stack and the search-production stack
+# share the same AWS account.
+ssm_cert_name = pulumi_config.get("ssm_cert_name") or "VESPA_PUBLIC_CERT"
+ssm_key_name = pulumi_config.get("ssm_key_name") or "VESPA_PRIVATE_KEY"
 ssm_parameter_vespa_public_cert = aws.ssm.Parameter(
-    "VESPA_PUBLIC_CERT",
-    name="VESPA_PUBLIC_CERT",
+    ssm_cert_name,
+    name=ssm_cert_name,
     type="SecureString",
     value=str(VESPA_PUBLIC_CERT),
     overwrite=True,
@@ -28,8 +32,8 @@ pulumi.export("ssm_parameter_vespa_public_cert", ssm_parameter_vespa_public_cert
 
 
 ssm_parameter_vespa_private_key = aws.ssm.Parameter(
-    "VESPA_PRIVATE_KEY",
-    name="VESPA_PRIVATE_KEY",
+    ssm_key_name,
+    name=ssm_key_name,
     type="SecureString",
     value=str(VESPA_PRIVATE_KEY),
     overwrite=True,
@@ -93,8 +97,8 @@ lambda_function = aws.lambda_.Function(
     code=pulumi.AssetArchive({".": pulumi.FileArchive("./lambda_code/")}),
     environment=aws.lambda_.FunctionEnvironmentArgs(
         variables={
-            "CERT_NAME": "VESPA_PUBLIC_CERT",
-            "KEY_NAME": "VESPA_PRIVATE_KEY",
+            "CERT_NAME": ssm_cert_name,
+            "KEY_NAME": ssm_key_name,
             "SSM_REGION": AWS_REGION,
             "VESPA_ENDPOINT": VESPA_ENDPOINT,
             "CLOUDWATCH_NAMESPACE": cloudwatch_namespace,
