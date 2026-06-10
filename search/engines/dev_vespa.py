@@ -22,7 +22,7 @@ import json
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 import requests
 from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
@@ -82,6 +82,13 @@ class Filter(BaseModel):
 
     op: Literal["and", "or"]
     filters: list[Condition | Filter]
+
+
+class ArrayStructField(NamedTuple):
+    """Used to locate a subfield within a Vespa array-of-structs field."""
+
+    array_field: str
+    subfield: str
 
 
 # Simple example: label contains "Romania"
@@ -169,12 +176,6 @@ def _published_date_operand(value: str | int | float, op: str) -> int:
     return int(value)
 
 
-filter_field_to_vespa_field_map = {
-    "labels.value.id": ["labels.id", "concepts.id"],
-    "labels.value.value": ["labels.value", "concepts.value"],
-    "labels.type": ["labels.relationship"],
-}
-
 _value_type_to_vespa_attributes_field = {
     str: "attributes_string",
     float: "attributes_double",
@@ -194,7 +195,10 @@ DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
 )
 
 
-def _build_condition_yql(condition: Condition) -> str:
+def _build_condition_yql(
+    condition: Condition,
+    field_map: dict[str, list[str]],
+) -> str:
     match condition:
         case AttributesCondition():
             if condition.field == "attributes.published_date":
@@ -265,9 +269,7 @@ def _build_condition_yql(condition: Condition) -> str:
             return expr
 
         case FieldFilter():
-            fields = filter_field_to_vespa_field_map.get(
-                condition.field, [condition.field]
-            )
+            fields = field_map.get(condition.field, [condition.field])
             value = _format_value(condition.value)
             exprs = [f"{field} contains {value}" for field in fields]
             combined = " or ".join(exprs)
@@ -276,33 +278,57 @@ def _build_condition_yql(condition: Condition) -> str:
             return f"({combined})" if len(exprs) > 1 else combined
 
 
-def _build_filter_yql(filter_group: Filter) -> str:
-    """Recursively build YQL for a filter group."""
+def _build_filter_yql(
+    filter_group: Filter,
+    field_map: dict[str, list[str]],
+    struct_map: dict[str, ArrayStructField],
+) -> str:
+    """Recursively build YQL for a filter group"""
     parts: list[str] = []
+    # `contains` conditions grouped by struct to allow us to filter on more than 1 field of a struct.
+    struct_operands: dict[str, list[str]] = {}
 
     for item in filter_group.filters:
         if isinstance(item, Filter):
-            # Recurse into nested group
-            parts.append(_build_filter_yql(item))
+            parts.append(_build_filter_yql(item, field_map, struct_map))
+        elif isinstance(item, FieldFilter) and item.field in struct_map:
+            struct = struct_map[item.field]
+            operand = f"{struct.subfield} contains {_format_value(item.value)}"
+            if item.op == "not_contains":
+                parts.append(f"!({struct.array_field} contains sameElement({operand}))")
+            else:
+                struct_operands.setdefault(struct.array_field, []).append(operand)
         else:
-            # It's a Condition
-            parts.append(_build_condition_yql(item))
+            parts.append(_build_condition_yql(item, field_map))
+
+    for array_field, operands in struct_operands.items():
+        if filter_group.op == "and":
+            # All conditions must match the same element.
+            parts.append(f"{array_field} contains sameElement({', '.join(operands)})")
+        else:
+            # OR: each condition may match a different element.
+            parts.extend(
+                f"{array_field} contains sameElement({operand})" for operand in operands
+            )
 
     if not parts:
         return ""
 
-    join_op = f" {filter_group.op} "
-    joined = join_op.join(parts)
+    joined = f" {filter_group.op} ".join(parts)
 
     # Wrap in parentheses if multiple parts
     return f"({joined})" if len(parts) > 1 else joined
 
 
-def _build_filter_query(filter_group: Filter | None) -> str:
+def _build_filter_query(
+    filter_group: Filter | None,
+    field_map: dict[str, list[str]],
+    struct_map: dict[str, ArrayStructField],
+) -> str:
     """Build the WHERE clause from a filter group."""
     if filter_group is None:
         return ""
-    yql = _build_filter_yql(filter_group)
+    yql = _build_filter_yql(filter_group, field_map, struct_map)
     return f" and {yql}" if yql else ""
 
 
@@ -530,6 +556,15 @@ def _execute_vespa_query(
     return response_json
 
 
+# region Documents
+documents_filter_field_to_vespa_field_map = {
+    "labels.value.id": ["labels.id", "concepts.id"],
+    "labels.value.value": ["labels.value", "concepts.value"],
+    "labels.type": ["labels.relationship"],
+}
+documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
+
+
 class DevVespaDocumentSearchEngine(SearchEngine[Document]):
     """
     Search engine for dev Vespa
@@ -592,7 +627,11 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
-            where += _build_filter_query(filters)
+            where += _build_filter_query(
+                filters,
+                field_map=documents_filter_field_to_vespa_field_map,
+                struct_map=documents_filter_struct_field_to_vespa_field_map,
+            )
 
         yql = f"select * from sources documents where {where}"
         if query:
@@ -774,7 +813,11 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
-            where += _build_filter_query(filters)
+            where += _build_filter_query(
+                filters,
+                field_map=documents_filter_field_to_vespa_field_map,
+                struct_map=documents_filter_struct_field_to_vespa_field_map,
+            )
 
         # Group labels and concepts across all documents matching the search query.
         # The top-level `where` already scopes the document set.
@@ -861,7 +904,11 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         where = "true"
         if query:
             where += self._userQuery
-        where += _build_filter_query(where_filter)
+        where += _build_filter_query(
+            where_filter,
+            field_map=documents_filter_field_to_vespa_field_map,
+            struct_map=documents_filter_struct_field_to_vespa_field_map,
+        )
 
         inner_groups = [
             G.all(
@@ -1154,6 +1201,18 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         raise NotImplementedError()
 
 
+# region Labels
+
+
+labels_filter_field_to_vespa_field_map: dict[str, list[str]] = {}
+labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
+    "labels.type": ArrayStructField("labels", "relationship"),
+    "labels.value.id": ArrayStructField("labels", "id"),
+    "labels.value.value": ArrayStructField("labels", "value"),
+    "labels.value.type": ArrayStructField("labels", "type"),
+}
+
+
 class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
     """Search engine for labels in dev Vespa."""
 
@@ -1178,7 +1237,11 @@ class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
-            where += _build_filter_query(filters)
+            where += _build_filter_query(
+                filters,
+                field_map=labels_filter_field_to_vespa_field_map,
+                struct_map=labels_filter_struct_field_to_vespa_field_map,
+            )
 
         yql = f"select * from sources labels where {where}"
         if query:

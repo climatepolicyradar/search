@@ -4,6 +4,7 @@ import pytest
 
 from search.engines.dev_vespa import (
     AttributesCondition,
+    Condition,
     FieldFilter,
     Filter,
     _build_condition_yql,
@@ -11,7 +12,34 @@ from search.engines.dev_vespa import (
     _facet_filter_label_type,
     _get_label_types_from_filters,
     _prune_filter,
+    documents_filter_field_to_vespa_field_map,
+    documents_filter_struct_field_to_vespa_field_map,
+    labels_filter_field_to_vespa_field_map,
+    labels_filter_struct_field_to_vespa_field_map,
 )
+
+
+def _documents_yql(filter_group: Filter) -> str:
+    """Build YQL the way the document engine does (field map, no struct map)."""
+    return _build_filter_yql(
+        filter_group,
+        field_map=documents_filter_field_to_vespa_field_map,
+        struct_map=documents_filter_struct_field_to_vespa_field_map,
+    )
+
+
+def _documents_condition_yql(condition: Condition) -> str:
+    """Build a single document condition's YQL with the document field map."""
+    return _build_condition_yql(condition, documents_filter_field_to_vespa_field_map)
+
+
+def _labels_yql(filter_group: Filter) -> str:
+    """Build YQL the way the labels engine does (struct map, empty field map)."""
+    return _build_filter_yql(
+        filter_group,
+        field_map=labels_filter_field_to_vespa_field_map,
+        struct_map=labels_filter_struct_field_to_vespa_field_map,
+    )
 
 
 def test_published_date_filter_targets_scalar_vespa_field() -> None:
@@ -27,7 +55,9 @@ def test_published_date_filter_targets_scalar_vespa_field() -> None:
         op="gte",
         value="2020-01-01T00:00:00Z",
     )
-    assert _build_condition_yql(condition) == "attributes_published_date >= 1577836800"
+    assert (
+        _documents_condition_yql(condition) == "attributes_published_date >= 1577836800"
+    )
 
 
 def test_published_date_not_eq_uses_negated_scalar_field() -> None:
@@ -44,7 +74,8 @@ def test_published_date_not_eq_uses_negated_scalar_field() -> None:
         value="2020-01-01T00:00:00Z",
     )
     assert (
-        _build_condition_yql(condition) == "!(attributes_published_date = 1577836800)"
+        _documents_condition_yql(condition)
+        == "!(attributes_published_date = 1577836800)"
     )
 
 
@@ -56,7 +87,7 @@ def test_attributes_string_eq_uses_contains_same_element() -> None:
         op="eq",
         value="UK",
     )
-    assert _build_condition_yql(condition) == (
+    assert _documents_condition_yql(condition) == (
         'attributes_string contains sameElement(key contains "country", '
         'value contains "UK")'
     )
@@ -70,7 +101,7 @@ def test_attributes_string_not_eq_wraps_negation() -> None:
         op="not_eq",
         value="UK",
     )
-    assert _build_condition_yql(condition) == (
+    assert _documents_condition_yql(condition) == (
         '!(attributes_string contains sameElement(key contains "country", '
         'value contains "UK"))'
     )
@@ -90,7 +121,7 @@ def test_attributes_double_numeric_ops_render_expected_symbol(
         op=op,  # type: ignore[arg-type]
         value=1_000_000.0,
     )
-    assert _build_condition_yql(condition) == (
+    assert _documents_condition_yql(condition) == (
         "attributes_double contains "
         f'sameElement(key contains "project_cost_usd", value {expected_symbol} 1000000.0)'
     )
@@ -104,7 +135,7 @@ def test_attributes_double_not_eq_wraps_eq_expression() -> None:
         op="not_eq",
         value=1_000_000.0,
     )
-    assert _build_condition_yql(condition) == (
+    assert _documents_condition_yql(condition) == (
         "!(attributes_double contains "
         'sameElement(key contains "project_cost_usd", value = 1000000.0))'
     )
@@ -118,7 +149,7 @@ def test_attributes_boolean_eq_renders_as_byte_value() -> None:
         op="eq",
         value=True,
     )
-    assert _build_condition_yql(condition) == (
+    assert _documents_condition_yql(condition) == (
         'attributes_boolean contains sameElement(key contains "is_active", value = 1)'
     )
 
@@ -131,7 +162,7 @@ def test_attributes_identifiers_eq_renders_string_contains() -> None:
         op="eq",
         value="proj-123",
     )
-    assert _build_condition_yql(condition) == (
+    assert _documents_condition_yql(condition) == (
         'attributes_identifiers contains sameElement(key contains "project_id", '
         'value contains "proj-123")'
     )
@@ -144,7 +175,7 @@ def test_labels_field_filter_expands_to_labels_and_concepts() -> None:
         op="contains",
         value="Romania",
     )
-    assert _build_condition_yql(condition) == (
+    assert _documents_condition_yql(condition) == (
         '(labels.value contains "Romania" or concepts.value contains "Romania")'
     )
 
@@ -156,8 +187,74 @@ def test_labels_not_contains_wraps_mapped_or_expression() -> None:
         op="not_contains",
         value="Romania",
     )
-    assert _build_condition_yql(condition) == (
+    assert _documents_condition_yql(condition) == (
         '!(labels.value contains "Romania" or concepts.value contains "Romania")'
+    )
+
+
+def test_labels_struct_map_groups_and_conditions_into_same_element() -> None:
+    """An AND group of struct fields renders one ``sameElement`` (same element)."""
+    filter_group = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="labels.type", op="contains", value="subconcept_of"),
+            FieldFilter(
+                field="labels.value.id",
+                op="contains",
+                value="category::UN Submission",
+            ),
+        ],
+    )
+    assert _labels_yql(filter_group) == (
+        'labels contains sameElement(relationship contains "subconcept_of", '
+        'id contains "category::UN Submission")'
+    )
+
+
+def test_labels_struct_map_or_conditions_use_separate_same_elements() -> None:
+    """An OR group renders one ``sameElement`` per condition (different elements)."""
+    filter_group = Filter(
+        op="or",
+        filters=[
+            FieldFilter(field="labels.value.id", op="contains", value="a"),
+            FieldFilter(field="labels.value.id", op="contains", value="b"),
+        ],
+    )
+    assert _labels_yql(filter_group) == (
+        '(labels contains sameElement(id contains "a") '
+        'or labels contains sameElement(id contains "b"))'
+    )
+
+
+def test_labels_struct_map_not_contains_negates_same_element() -> None:
+    """A ``not_contains`` struct condition wraps its own ``sameElement``."""
+    filter_group = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="labels.type", op="not_contains", value="related_to"),
+        ],
+    )
+    assert _labels_yql(filter_group) == (
+        '!(labels contains sameElement(relationship contains "related_to"))'
+    )
+
+
+def test_labels_struct_map_mixes_struct_and_top_level_fields() -> None:
+    """Non-struct fields fall through to ``_build_condition_yql`` unchanged."""
+    filter_group = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="type", op="not_contains", value="category"),
+            FieldFilter(
+                field="labels.value.id",
+                op="contains",
+                value="category::UN Submission",
+            ),
+        ],
+    )
+    assert _labels_yql(filter_group) == (
+        '(!(type contains "category") '
+        'and labels contains sameElement(id contains "category::UN Submission"))'
     )
 
 
@@ -189,7 +286,7 @@ def test_nested_filter_group_renders_with_parentheses() -> None:
             ),
         ],
     )
-    assert _build_filter_yql(filter_group) == (
+    assert _documents_yql(filter_group) == (
         '(((labels.value contains "UN" or concepts.value contains "UN") or '
         '(labels.value contains "Romania" or concepts.value contains "Romania")) and '
         'attributes_double contains sameElement(key contains "project_cost_usd", '
