@@ -1,0 +1,18 @@
+# Build the enriched dataset from the eval CSV (needs local Vespa + Snowflake local_dev)
+load csv:
+    uv run python load_dataset.py {{ csv }}
+
+# Tune (low, high) thresholds per predictor with grouped CV -> THRESHOLD_TUNING.md
+tune +OPTS="":
+    uv run python tune_thresholds.py {{ OPTS }}
+
+# Evaluate all predictors against the dataset -> PREDICTOR_METRICS.md
+evaluate:
+    uv run python evaluate_predictors.py
+
+# Run the whole pipeline: build dataset -> tune thresholds -> evaluate
+pipeline csv:
+    just load {{ csv }}
+    just tune
+    just evaluate
+    @echo "NOTE: tuning wrote THRESHOLD_TUNING.md; copy the tuned (low, high) for any changed predictors into evaluate_predictors.py, then re-run 'just evaluate'."

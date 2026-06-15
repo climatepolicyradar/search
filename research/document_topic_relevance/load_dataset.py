@@ -1,14 +1,24 @@
 import argparse
-import json
 from pathlib import Path
 
 import pandas as pd
 from pydantic import AnyHttpUrl
 from rich.console import Console
 from rich.table import Table
-from src.models import Score
 from vespa.application import Vespa
 
+from research.document_topic_relevance.src.models import (
+    EvalExample,
+    PredictorInput,
+    Score,
+    TopicCorpusStats,
+    TopicMentions,
+)
+from research.document_topic_relevance.src.snowflake_client import (
+    connect,
+    fetch_topic_corpus_stats,
+    fetch_topic_mentions,
+)
 from search.document import Document
 from search.label import Label
 
@@ -38,22 +48,15 @@ def load_evaluation_dataset(path: str) -> list[tuple[str, str, Score]]:
     return list(melted.itertuples(index=False, name=None))
 
 
-def load_enriched_dataset_from_jsonl(path: str) -> list[tuple[Document, Label, Score]]:
-    """Load the enriched JSONL produced by this script's __main__ into tuples."""
-    out: list[tuple[Document, Label, Score]] = []
+def load_enriched_dataset_from_jsonl(path: str) -> list[EvalExample]:
+    """Load the enriched JSONL produced by this script's __main__ into EvalExamples."""
+    out: list[EvalExample] = []
     with open(path) as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            row = json.loads(line)
-            out.append(
-                (
-                    Document.model_validate(row["document"]),
-                    Label.model_validate(row["topic"]),
-                    row["score"],
-                )
-            )
+            out.append(EvalExample.model_validate_json(line))
     return out
 
 
@@ -117,6 +120,11 @@ if __name__ == "__main__":
         "--vespa-url", default="http://localhost", help="Vespa base URL"
     )
     parser.add_argument("--vespa-port", type=int, default=8080, help="Vespa port")
+    parser.add_argument(
+        "--skip-snowflake",
+        action="store_true",
+        help="Skip Snowflake enrichment; mentions are left empty.",
+    )
     args = parser.parse_args()
 
     output_path = Path(__file__).parent / Path("data/dataset.jsonl")
@@ -139,6 +147,39 @@ if __name__ == "__main__":
     labels_by_id: dict[str, Label | None] = {
         label_id: get_label(client, label_id) for label_id in unique_label_ids
     }
+
+    # Enrich each (document, topic) pair with passage-level mentions from Snowflake,
+    # keyed by (document_id, lower(trim(topic name))). Topics are joined by their
+    # human-readable value, which matches the warehouse's TOPIC_NAME.
+    mentions_by_pair: dict[tuple[str, str], TopicMentions] = {}
+    corpus_stats_by_topic: dict[str, TopicCorpusStats] = {}
+    if args.skip_snowflake:
+        console.log("[yellow]Skipping Snowflake enrichment (--skip-snowflake)[/yellow]")
+    else:
+        topic_names = [
+            label.value for label in labels_by_id.values() if label and label.value
+        ]
+        console.log("❄️  Fetching topic mentions from Snowflake")
+        conn = connect()
+        try:
+            mentions_by_pair = fetch_topic_mentions(
+                conn, unique_document_ids, topic_names
+            )
+            console.log("❄️  Fetching corpus-wide topic frequencies from Snowflake")
+            corpus_stats_by_topic = fetch_topic_corpus_stats(conn, topic_names)
+        finally:
+            conn.close()
+        console.log(f"❄️  Got mentions for {len(mentions_by_pair)} document-topic pairs")
+        missing_corpus = sorted(
+            name.lower().strip()
+            for name in topic_names
+            if name.lower().strip() not in corpus_stats_by_topic
+        )
+        if missing_corpus:
+            console.log(
+                f"[yellow]No corpus stats for {len(missing_corpus)} topic(s): "
+                f"{', '.join(missing_corpus)}[/yellow]"
+            )
 
     table = Table(title="Evaluation dataset", show_lines=True)
     table.add_column("Document", style="cyan")
@@ -165,16 +206,21 @@ if __name__ == "__main__":
                 skipped += 1
                 continue
 
-            f.write(
-                json.dumps(
-                    {
-                        "document": document.model_dump(mode="json"),
-                        "topic": label.model_dump(mode="json"),
-                        "score": score,
-                    }
-                )
-                + "\n"
+            topic_key = label.value.lower().strip()
+            mentions = mentions_by_pair.get(
+                (document_id, topic_key),
+                TopicMentions(total_passages=0),
             )
+            example = EvalExample(
+                input=PredictorInput(
+                    document=document,
+                    topic=label,
+                    mentions=mentions,
+                    topic_corpus=corpus_stats_by_topic.get(topic_key),
+                ),
+                score=score,
+            )
+            f.write(example.model_dump_json() + "\n")
             written += 1
             table.add_row(
                 document.title or document_id, label.value or label_id, str(score)
