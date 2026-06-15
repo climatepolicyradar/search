@@ -37,10 +37,8 @@ dependencies = [
   "cpr-contracts",
 ]
 
-[project.optional-dependencies]
-research = ["snowflake-connector-python>=4.6.0"]
-
 [dependency-groups]
+research = ["snowflake-connector-python>=4.6.0"]
 dev = [
   "pre-commit>=4.6.0",
   "pulumi-aws>=7.32.0,<8.0.0",
