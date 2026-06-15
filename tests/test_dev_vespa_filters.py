@@ -19,27 +19,9 @@ from search.engines.dev_vespa import (
 )
 
 
-def _documents_yql(filter_group: Filter) -> str:
-    """Build YQL the way the document engine does (field map, no struct map)."""
-    return _build_filter_yql(
-        filter_group,
-        field_map=documents_filter_field_to_vespa_field_map,
-        struct_map=documents_filter_struct_field_to_vespa_field_map,
-    )
-
-
 def _documents_condition_yql(condition: Condition) -> str:
     """Build a single document condition's YQL with the document field map."""
     return _build_condition_yql(condition, documents_filter_field_to_vespa_field_map)
-
-
-def _labels_yql(filter_group: Filter) -> str:
-    """Build YQL the way the labels engine does (struct map, empty field map)."""
-    return _build_filter_yql(
-        filter_group,
-        field_map=labels_filter_field_to_vespa_field_map,
-        struct_map=labels_filter_struct_field_to_vespa_field_map,
-    )
 
 
 def test_published_date_filter_targets_scalar_vespa_field() -> None:
@@ -168,6 +150,15 @@ def test_attributes_identifiers_eq_renders_string_contains() -> None:
     )
 
 
+def _labels_yql(filter_group: Filter) -> str:
+    """Build YQL the way the labels engine does (struct map, empty field map)."""
+    return _build_filter_yql(
+        filter_group,
+        field_map=labels_filter_field_to_vespa_field_map,
+        struct_map=labels_filter_struct_field_to_vespa_field_map,
+    )
+
+
 def test_labels_field_filter_expands_to_labels_and_concepts() -> None:
     """Ensure mapped label field generates a two-field OR expression."""
     condition = FieldFilter(
@@ -286,7 +277,12 @@ def test_nested_filter_group_renders_with_parentheses() -> None:
             ),
         ],
     )
-    assert _documents_yql(filter_group) == (
+
+    assert _build_filter_yql(
+        filter_group,
+        field_map=documents_filter_field_to_vespa_field_map,
+        struct_map=documents_filter_struct_field_to_vespa_field_map,
+    ) == (
         '(((labels.value contains "UN" or concepts.value contains "UN") or '
         '(labels.value contains "Romania" or concepts.value contains "Romania")) and '
         'attributes_double contains sameElement(key contains "project_cost_usd", '
