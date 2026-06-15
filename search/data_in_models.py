@@ -28,7 +28,7 @@ class Label(BaseModel):
     id: str
     type: str
     value: str
-    labels: list[LabelRelationship] =[]
+    labels: list[LabelRelationship] = []
 
 
 class LabelRelationship(BaseModel):

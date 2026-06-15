@@ -149,6 +149,9 @@
             <client id="search-production-write" permissions="read,write">
                 <token id="search-production-write"/>
             </client>
+            <client id="vespa-metrics-reader" permissions="read">
+                <certificate file="security/vespa-metrics-reader.pem"/>
+            </client>
         </clients>
         <document-api/>
 

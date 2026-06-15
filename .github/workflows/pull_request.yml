@@ -89,6 +89,14 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.run-test == 'true'
     steps:
+      # The e2e tests run Vespa in a container; Vespa feed blocks (HTTP 507) once
+      # disk usage crosses ~75%. ubuntu-latest only ships ~14GB free.
+      # This reclaims space from preinstalled tooling before the tests run.
+      - uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          large-packages: false # removing these is slow and not needed here
+
       - name: Check out repository code
         uses: actions/checkout@v6
         with:

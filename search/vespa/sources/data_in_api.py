@@ -4,6 +4,7 @@ from typing import Required, TypedDict
 
 import boto3
 import orjson
+from cpr_contracts import Document
 
 from search.config import REPO_ROOT_DIR
 
@@ -66,8 +67,8 @@ def extract() -> Path:
     return DATA_CACHE_FILE
 
 
-def read() -> Iterator[SourceDocument]:
+def read() -> Iterator[Document]:
     file = extract()
     with file.open("rb") as f:
         for line in f:
-            yield orjson.loads(line)
+            yield Document.model_validate(orjson.loads(line))
