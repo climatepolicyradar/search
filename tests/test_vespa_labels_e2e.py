@@ -32,6 +32,7 @@ from search.engines.dev_vespa import (
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.labels_feed_materializer import (
     VespaLabel,
+    VespaLabelLabelRelationship,
     _vespa_label_to_vespa_update,
 )
 from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids
@@ -69,7 +70,12 @@ def _label_source_from_taxonomy(label_id: str, label_type: str, value: str) -> s
     return DataInLabel(id=label_id, type=label_type, value=value).model_dump_json()
 
 
-def _taxonomy_vespa_label(label_id: str, label_type: str, value: str) -> VespaLabel:
+def _taxonomy_vespa_label(
+    label_id: str,
+    label_type: str,
+    value: str,
+    labels: list[VespaLabelLabelRelationship] | None = None,
+) -> VespaLabel:
     """Build a ``VespaLabel`` for direct feed to the labels schema in e2e tests."""
     return VespaLabel(
         id=label_id,
@@ -79,9 +85,20 @@ def _taxonomy_vespa_label(label_id: str, label_type: str, value: str) -> VespaLa
         subconcept_labels=[],
         description="",
         negative_labels=[],
-        labels=[],
+        labels=labels or [],
         label_source=_label_source_from_taxonomy(label_id, label_type, value),
     )
+
+
+def _relationship(parent_id: str, relationship: str) -> VespaLabelLabelRelationship:
+    """Build a nested ``labels`` struct entry (a taxonomy relationship)."""
+    return {
+        "id": parent_id,
+        "type": "category",
+        "value": parent_id.split("::", 1)[-1],
+        "timestamp": None,
+        "relationship": relationship,
+    }
 
 
 def _feed_document(app: Vespa, document: Document) -> None:
@@ -449,6 +466,95 @@ def test_label_field_filter_type_not_contains_returns_matching_type_only(
     result_ids = {label.id for label in results}
     assert "category::Law" not in result_ids
     assert "geography::Romania" in result_ids
+
+
+def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa):
+    """``labels.type=subconcept_of AND labels.value.id=category::UN Submission``."""
+    subconcept = _taxonomy_vespa_label(
+        "category::Annex I",
+        "category",
+        "Annex I",
+        labels=[_relationship("category::UN Submission", "subconcept_of")],
+    )
+    # Right parent, wrong relationship -> excluded by sameElement.
+    wrong_relationship = _taxonomy_vespa_label(
+        "category::Related Doc",
+        "category",
+        "Related Doc",
+        labels=[_relationship("category::UN Submission", "related_to")],
+    )
+    # Right relationship, wrong parent -> excluded.
+    wrong_parent = _taxonomy_vespa_label(
+        "category::Other Sub",
+        "category",
+        "Other Sub",
+        labels=[_relationship("category::Other Parent", "subconcept_of")],
+    )
+    for label in (subconcept, wrong_relationship, wrong_parent):
+        _feed_label(vespa_app, label)
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        filters_json_string=Filter(
+            op="and",
+            filters=[
+                FieldFilter(field="labels.type", op="contains", value="subconcept_of"),
+                FieldFilter(
+                    field="labels.value.id",
+                    op="contains",
+                    value="category::UN Submission",
+                ),
+            ],
+        ).model_dump_json(),
+    ).results
+
+    result_ids = {label.id for label in results}
+    assert "category::Annex I" in result_ids
+    assert "category::Related Doc" not in result_ids
+    assert "category::Other Sub" not in result_ids
+
+
+def test_label_filter_same_element_excludes_split_relationships(vespa_app: Vespa):
+    """
+    ``sameElement`` requires one related label to satisfy both conditions.
+
+    A label with ``subconcept_of`` to one parent and ``related_to``
+    category::UN Submission must NOT match a combined subconcept_of + UN
+    Submission filter.
+    """
+    split = _taxonomy_vespa_label(
+        "category::Split",
+        "category",
+        "Split",
+        labels=[
+            _relationship("category::Other Parent", "subconcept_of"),
+            _relationship("category::UN Submission", "related_to"),
+        ],
+    )
+    _feed_label(vespa_app, split)
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        filters_json_string=Filter(
+            op="and",
+            filters=[
+                FieldFilter(field="labels.type", op="contains", value="subconcept_of"),
+                FieldFilter(
+                    field="labels.value.id",
+                    op="contains",
+                    value="category::UN Submission",
+                ),
+            ],
+        ).model_dump_json(),
+    ).results
+
+    assert "category::Split" not in {label.id for label in results}
 
 
 def test_label_search_returns_non_empty_label_source(vespa_app: Vespa):

@@ -1,13 +1,22 @@
 """Unit tests for corpus -> Vespa filter construction."""
 
 from search.corpora import CORPUS_PROVIDERS, build_corpus_filter
-from search.engines.dev_vespa import FieldFilter, _build_filter_yql
+from search.engines.dev_vespa import (
+    FieldFilter,
+    _build_filter_yql,
+    documents_filter_field_to_vespa_field_map,
+    documents_filter_struct_field_to_vespa_field_map,
+)
 
 
 def test_ccc_corpus_filter_targets_sabin_only() -> None:
     """The ccc corpus has a single provider, so the filter is a single clause."""
     filter_ = build_corpus_filter("ccc")
-    yql = _build_filter_yql(filter_)
+    yql = _build_filter_yql(
+        filter_,
+        field_map=documents_filter_field_to_vespa_field_map,
+        struct_map=documents_filter_struct_field_to_vespa_field_map,
+    )
     # `labels.value.id` is mapped to both `labels.id` and `concepts.id` by
     # the existing field map (see filter_field_to_vespa_field_map). The
     # concepts.id clause is harmless because concept IDs never start with
