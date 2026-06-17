@@ -1260,9 +1260,6 @@ class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
             "yql": yql,
             "query": query,
             "hits": pagination.page_size,
-            # This should be set at the Vespa app level, but is not working for some reason
-            # FIXME: Fix this 👆
-            "maxHits": 50000,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
