@@ -1260,10 +1260,10 @@ class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": "nativerank",
-            "rules.rulebase": "labels",
         }
         if query:
             request_body["query"] = query
+            request_body["rules.rulebase"] = "labels"
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
