@@ -2353,6 +2353,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pulumi-pulumiservice"
+version = "1.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parver" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/32/da/bf0b56e8436e4344f7e35fe7bb06a56502a386990d9d6b27f1efd0200fb5/pulumi_pulumiservice-1.2.1.tar.gz", hash = "sha256:8d8a1fccc7fe30f94117ca909a879dfae9db06533d2c1900a79a91b6ec116db4", size = 106754, upload-time = "2026-06-04T16:34:33.423Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/17/58/be4a1206692eb3b4817d6088b7306b0411f1ba048b2088d3611ebd3d555a/pulumi_pulumiservice-1.2.1-py3-none-any.whl", hash = "sha256:921f800163f0ee1f557841b9908cf8f3d33701d1abf26cccd80f59dc56a37c01", size = 227425, upload-time = "2026-06-04T16:34:32.172Z" },
+]
+
+[[package]]
 name = "py-key-value-aio"
 version = "0.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3239,6 +3253,7 @@ dev = [
     { name = "pulumi-aws" },
     { name = "pulumi-docker" },
     { name = "pulumi-docker-build" },
+    { name = "pulumi-pulumiservice" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -3289,6 +3304,7 @@ dev = [
     { name = "pulumi-aws", specifier = ">=7.32.0,<8.0.0" },
     { name = "pulumi-docker", specifier = ">=4.0.0,<5.0.0" },
     { name = "pulumi-docker-build", specifier = ">=0.0.15,<1.0.0" },
+    { name = "pulumi-pulumiservice", specifier = ">=0.6.0" },
     { name = "pytest", specifier = ">=9.1.0" },
     { name = "ruff", specifier = ">=0.15.17" },
 ]
