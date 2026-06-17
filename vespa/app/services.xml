@@ -152,6 +152,9 @@
             <client id="vespa-metrics-reader" permissions="read">
                 <certificate file="security/vespa-metrics-reader.pem"/>
             </client>
+            <client id="katy" permissions="read">
+                <certificate file="security/katy.pem"/>
+            </client>
         </clients>
         <document-api/>
 
