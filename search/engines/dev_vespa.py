@@ -1255,7 +1255,6 @@ class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
 
         request_body: dict[str, Any] = {
             "yql": yql,
-            "query": query,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
@@ -1263,6 +1262,8 @@ class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
             "ranking.profile": "nativerank",
             "rules.rulebase": "labels",
         }
+        if query:
+            request_body["query"] = query
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
