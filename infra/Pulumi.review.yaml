@@ -1,6 +1,5 @@
 config:
   aws:region: eu-west-1
-  aws:profile: production
   search:VESPA_PRIVATE_KEY_READ_ONLY:
     secure: AAABAMWwp0ndJHpWeLOd2H6P/8T8DwT4ij7/px9+Jzj6XXPxrKf0HMLxKxdbhIdpfAYvx5OLlxhf4D0QXDSgxCMCLwPQXZqq0kYJndrSiHhUxXbGnruEKIWblFY6nwNjSZ5VRTiuFazo9DWrAf6S13E+Rf7CilJNqjvL6h1iyPheUM+YnBrSy3SiX4dOcs52HdqncPRxQYyQv+DHT9+RuVlVa6qa3qYEFOXJ/V856eZ3LqvafrftTVKmFuQnb8ZnYCh133k8sLkcp8vPsyxKAUgfaR3RzVGOWQ/8ND1beIIqJ85Q+mPLeDEE5eqYEcJnl6xrDowWVJWNewO8YAyXc27R7iV7Z7Kxerzm2jdxbo1kr7ew5TDaz12Rdy+u6+uVw8cqRcxUslUPN7KitFFqtCmnfPO+VFguKUbihwtlNLOYyNr94EKDn6S6s/9mbq2O54zTA5JurlYRZqfunCjf766ZpnE=
   search:VESPA_PUBLIC_CERT_READ_ONLY:
