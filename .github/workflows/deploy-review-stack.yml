@@ -49,7 +49,7 @@ jobs:
           fi
 
           echo "action=$action" >> "$GITHUB_OUTPUT"
-          echo "stack_name=pr-search-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "stack_name=pr-search-api-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
 
       - name: Create stack (if needed)
         if: steps.decide.outputs.action == 'update'
