@@ -1262,6 +1262,7 @@ class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
             "model.language": "en",
             "ranking.profile": "nativerank",
             "rules.rulebase": "labels",
+            "query_profile": "default",
         }
 
         response = _execute_vespa_query(
