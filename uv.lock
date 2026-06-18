@@ -2339,6 +2339,34 @@ wheels = [
 ]
 
 [[package]]
+name = "pulumi-docker-build"
+version = "0.0.18"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parver" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ca/5e/d97e88ecaca3c469a3fe519d529c6e7b27d25d15e089ebb97c5bb3bd4012/pulumi_docker_build-0.0.18.tar.gz", hash = "sha256:3d4f7279813b1cf32e3582b54629d57055107282292c112a737b53ed6221a587", size = 38600, upload-time = "2026-05-27T17:05:05.13Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/47/ee3dd38d03fe0ed2a0940a35e1a0abb117021bfdaafaa5b6b8a53436273c/pulumi_docker_build-0.0.18-py3-none-any.whl", hash = "sha256:31ce133c3ae13dd58c69bba41bbf47e550b054e697390de35efc1add91ffbd1c", size = 43252, upload-time = "2026-05-27T17:05:02.955Z" },
+]
+
+[[package]]
+name = "pulumi-pulumiservice"
+version = "1.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parver" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/32/da/bf0b56e8436e4344f7e35fe7bb06a56502a386990d9d6b27f1efd0200fb5/pulumi_pulumiservice-1.2.1.tar.gz", hash = "sha256:8d8a1fccc7fe30f94117ca909a879dfae9db06533d2c1900a79a91b6ec116db4", size = 106754, upload-time = "2026-06-04T16:34:33.423Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/17/58/be4a1206692eb3b4817d6088b7306b0411f1ba048b2088d3611ebd3d555a/pulumi_pulumiservice-1.2.1-py3-none-any.whl", hash = "sha256:921f800163f0ee1f557841b9908cf8f3d33701d1abf26cccd80f59dc56a37c01", size = 227425, upload-time = "2026-06-04T16:34:32.172Z" },
+]
+
+[[package]]
 name = "py-key-value-aio"
 version = "0.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3224,6 +3252,8 @@ dev = [
     { name = "pulumi" },
     { name = "pulumi-aws" },
     { name = "pulumi-docker" },
+    { name = "pulumi-docker-build" },
+    { name = "pulumi-pulumiservice" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -3273,6 +3303,8 @@ dev = [
     { name = "pulumi", specifier = ">=3.246.0,<4.0.0" },
     { name = "pulumi-aws", specifier = ">=7.32.0,<8.0.0" },
     { name = "pulumi-docker", specifier = ">=4.0.0,<5.0.0" },
+    { name = "pulumi-docker-build", specifier = ">=0.0.15,<1.0.0" },
+    { name = "pulumi-pulumiservice", specifier = ">=0.6.0" },
     { name = "pytest", specifier = ">=9.1.0" },
     { name = "ruff", specifier = ">=0.15.17" },
 ]
