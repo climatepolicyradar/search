@@ -186,11 +186,13 @@
     -->
     <content id="search-production" version="1.0">
         <min-redundancy>2</min-redundancy>
-        <tuning>
-            <resource-limits>
-                <disk>0.85</disk>
-            </resource-limits>
-        </tuning>
+        <engine>
+            <proton>
+                <resource-limits>
+                    <disk>0.85</disk>
+                </resource-limits>
+            </proton>
+        </engine>
         <documents>
             <document type="documents" mode="index" global="true" />
             <document type="passages" mode="index" global="true" />
