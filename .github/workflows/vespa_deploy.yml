@@ -18,7 +18,7 @@ jobs:
     env:
       VESPA_CLI_API_KEY: ${{ secrets.VESPA_CLI_API_KEY }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install Vespa CLI
         env:
           VESPA_CLI_VERSION: 8.250.43
