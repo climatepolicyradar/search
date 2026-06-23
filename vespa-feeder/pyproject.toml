@@ -13,11 +13,11 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
 
 # No Python packages to bundle — this pyproject.toml exists only to declare
 # dependencies so the Dockerfile can run `pip install .` rather than listing
 # them inline.
-[tool.hatch.build.targets.wheel]
+[tool.setuptools]
 packages = []
