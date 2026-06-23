@@ -13,7 +13,7 @@ ENV PYTHONPATH=/opt/prefect/vespa-feeder
 COPY pyproject.toml .
 RUN pip install --no-cache-dir .
 
-COPY observability/src/ ./observability/
+COPY observability/ ./observability/
 
 COPY slack_notify.py .
 COPY service-manifest.json .
