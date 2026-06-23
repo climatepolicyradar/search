@@ -3,6 +3,7 @@ import textwrap
 
 from prefect.client.schemas.objects import FlowRun, State
 from prefect.flows import Flow
+from prefect.runtime import deployment
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackCredentials
 
@@ -21,7 +22,8 @@ class SlackNotify:
         cls, flow: Flow, flow_run: FlowRun, state: State, ui_url: str
     ) -> list:
         icon = "✅" if state.is_completed() else "❌"
-        header = f"{icon} Flow run *{flow.name}/{flow_run.name}* `{state.name}`"
+        deployment_name = deployment.name or flow_run.deployment_id or "unknown"
+        header = f"{icon} Flow run *{flow.name}/{deployment_name}/{flow_run.name}* `{state.name}`"
         blocks = [
             {
                 "type": "section",
@@ -80,8 +82,9 @@ class SlackNotify:
             base_url=PREFECT_UI_URL.value(), run_id=flow_run.id
         )
         icon = "✅" if state.is_completed() else "❌"
+        deployment_name = deployment.name or flow_run.deployment_id or "unknown"
         text = (
-            f"{icon} Flow run <{ui_url}|{flow.name}/{flow_run.name}> "
+            f"{icon} Flow run <{ui_url}|{flow.name}/{deployment_name}/{flow_run.name}> "
             f"state `{state.name}` at {state.timestamp}"
         )
         credentials = SlackCredentials.load(cls.SLACK_BLOCK)
