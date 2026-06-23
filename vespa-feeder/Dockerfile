@@ -7,6 +7,7 @@ RUN curl -fsSL "https://github.com/vespa-engine/vespa/releases/download/v${VESPA
     | tar -xzf - -C /usr/local/bin --strip-components=2 "vespa-cli_${VESPA_CLI_VERSION}_linux_amd64/bin/vespa"
 
 WORKDIR /opt/prefect/vespa-feeder
+ENV PYTHONPATH=/opt/prefect/vespa-feeder
 
 # Install Python deps first so this layer is cached independently of source changes.
 COPY pyproject.toml .
