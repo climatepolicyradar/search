@@ -27,6 +27,7 @@ jobs:
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
       run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
       run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
+      run-vespa-feeder-deploy: ${{ steps.filter.outputs.run-vespa-feeder-deploy }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -56,6 +57,8 @@ jobs:
               - 'online_metrics/**'
               - 'relevance_tests/**'
               - 'search/vespa/**'
+            run-vespa-feeder-deploy:
+              - 'vespa-feeder/**'
 
   lint:
     permissions:
@@ -163,6 +166,12 @@ jobs:
     secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-vespa-deploy == 'true'
+
+  vespa-feeder-deploy:
+    uses: ./.github/workflows/vespa_feeder_deploy.yml
+    secrets: inherit
+    needs: [changes, tests]
+    if: needs.changes.outputs.run-vespa-feeder-deploy == 'true'
 
   pulumi-up:
     uses: ./.github/workflows/pulumi_up.yml
