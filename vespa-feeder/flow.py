@@ -5,6 +5,7 @@ from pathlib import Path
 import boto3
 import orjson
 from prefect.artifacts import create_markdown_artifact
+from slack_notify import SlackNotify
 
 from prefect import flow, get_run_logger, task
 
@@ -95,7 +96,11 @@ def vespa_feed(feed_path: Path) -> None:
         raise
 
 
-@flow(log_prints=True)
+@flow(
+    log_prints=True,
+    on_completion=[SlackNotify.on_success],
+    on_failure=[SlackNotify.on_failure],
+)
 def vespa_feeder_flow(
     s3_bucket: str = "cpr-cache",
     s3_key: str = "search/vespa/labels_feed_materializer.jsonl",

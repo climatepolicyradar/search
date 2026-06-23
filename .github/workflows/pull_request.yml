@@ -17,7 +17,7 @@ jobs:
       run-check-scripts-structure: ${{ steps.filter.outputs.run-check-scripts-structure }}
       run-pulumi-preview: ${{ steps.filter.outputs.run-pulumi-preview }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
@@ -69,7 +69,7 @@ jobs:
     if: needs.changes.outputs.run-check-scripts-structure == 'true'
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Check there are no .py files in scripts/ root
         run: |
@@ -98,7 +98,7 @@ jobs:
           large-packages: false # removing these is slow and not needed here
 
       - name: Check out repository code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -135,7 +135,7 @@ jobs:
       fail-fast: false
     environment: ${{ matrix.environment }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions
