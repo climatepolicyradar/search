@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from observability.base_telemetry import BaseTelemetry
+from observability.metrics import MetricsService
 from observability.service_manifest import ServiceManifest
 from observability.telemetry_config import TelemetryConfig
 from opentelemetry import trace
@@ -14,12 +15,13 @@ from opentelemetry.trace import Tracer
 _MANIFEST_PATH = Path(__file__).parent / "service-manifest.json"
 
 _telemetry: BaseTelemetry | None = None
+_metrics: MetricsService | None = None
 _logger = logging.getLogger(__name__)
 
 
 def setup_telemetry() -> Tracer:
-    """Bootstrap OTel tracing and logging once per process. Returns the tracer."""
-    global _telemetry
+    """Bootstrap OTel tracing, logging, and metrics once per process. Returns the tracer."""
+    global _telemetry, _metrics
     if _telemetry is not None:
         return _telemetry.get_tracer() or trace.get_tracer("search-vespa-feeder")
 
@@ -41,5 +43,57 @@ def setup_telemetry() -> Tracer:
         )
 
     _telemetry = BaseTelemetry(config)
-    atexit.register(_telemetry.shutdown)
+    _metrics = MetricsService(config)
+    atexit.register(_shutdown)
     return _telemetry.get_tracer() or trace.get_tracer("search-vespa-feeder")
+
+
+def record_feed_stats(ok_count: int, total_errors: int, deployment_name: str) -> None:
+    """Record Vespa feed record counts as RED Rate/Error metrics."""
+    if _metrics is None:
+        return
+    counter = _metrics.create_counter(
+        "records.fed", unit="records", description="Records submitted to Vespa"
+    )
+    if counter is None:
+        return
+    counter.add(ok_count, {"deployment_name": deployment_name, "status": "ok"})
+    if total_errors:
+        counter.add(
+            total_errors, {"deployment_name": deployment_name, "status": "error"}
+        )
+
+
+def record_run_duration(duration_s: float, deployment_name: str) -> None:
+    """Record total flow run duration."""
+    if _metrics is None:
+        return
+    histogram = _metrics.create_histogram(
+        "run.duration", unit="s", description="Total flow run duration in seconds"
+    )
+    if histogram is None:
+        return
+    histogram.record(duration_s, {"deployment_name": deployment_name})
+
+
+def record_task_duration(
+    task_name: str, duration_s: float, deployment_name: str
+) -> None:
+    """Record per-task duration, allowing step-level breakdown."""
+    if _metrics is None:
+        return
+    histogram = _metrics.create_histogram(
+        "task.duration", unit="s", description="Task duration in seconds"
+    )
+    if histogram is None:
+        return
+    histogram.record(
+        duration_s, {"deployment_name": deployment_name, "task_name": task_name}
+    )
+
+
+def _shutdown() -> None:
+    if _metrics is not None:
+        _metrics.shutdown()
+    if _telemetry is not None:
+        _telemetry.shutdown()
