@@ -1,4 +1,4 @@
-registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region` + ".amazonaws.com"
+registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo $AWS_DEFAULT_REGION` + ".amazonaws.com"
 image := registry + "/search-vespa-feeder"
 
 build:
