@@ -1,0 +1,23 @@
+[project]
+name = "vespa-feeder"
+version = "0.1.0"
+requires-python = ">=3.13"
+
+dependencies = [
+  "boto3",
+  "orjson",
+  "prefect-slack",
+  "pydantic-settings",
+  "opentelemetry-sdk>=1.38.0,<2.0.0",
+  "opentelemetry-exporter-otlp-proto-http>=1.38.0,<2.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# No Python packages to bundle — this pyproject.toml exists only to declare
+# dependencies so the Dockerfile can run `pip install .` rather than listing
+# them inline.
+[tool.setuptools]
+packages = []

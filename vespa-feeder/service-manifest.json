@@ -1,0 +1,11 @@
+{
+  "service.name": "search-vespa-feeder",
+  "service.namespace": "data-ingestion",
+  "team": "application",
+  "inputs": [
+    { "type": "s3", "name": "cpr-cache" },
+    { "type": "service", "name": "vespa" }
+  ],
+  "outputs": ["vespa"],
+  "repos": ["https://github.com/climatepolicyradar/search"]
+}

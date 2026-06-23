@@ -6,6 +6,7 @@ from prefect.flows import Flow
 from prefect.runtime import deployment
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackCredentials
+from telemetry import get_feed_stats
 
 
 class SlackNotify:
@@ -16,6 +17,13 @@ class SlackNotify:
     @classmethod
     def _get_environment(cls) -> str:
         return os.getenv("AWS_ENV", "sandbox")
+
+    @staticmethod
+    def _format_feed_stats() -> str:
+        stats = get_feed_stats()
+        if not stats:
+            return "*Records fed*\n`—`"
+        return f"*Records fed*\n`in={stats['input']} ok={stats['ok']} err={stats['errors']}`"
 
     @classmethod
     def _build_blocks(
@@ -47,7 +55,10 @@ class SlackNotify:
                         "type": "mrkdwn",
                         "text": f"*Environment*\n`{cls._get_environment()}`",
                     },
-                    {"type": "mrkdwn", "text": f"*Run ID*\n`{flow_run.id}`"},
+                    {
+                        "type": "mrkdwn",
+                        "text": cls._format_feed_stats(),
+                    },
                     {
                         "type": "mrkdwn",
                         "text": f"*Version*\n`{flow_run.deployment_version}`",
