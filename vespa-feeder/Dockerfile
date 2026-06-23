@@ -10,4 +10,4 @@ RUN curl -fsSL "https://github.com/vespa-engine/vespa/releases/download/v${VESPA
 RUN pip install boto3 orjson prefect-slack slack-notify
 
 WORKDIR /opt/prefect/vespa-feeder
-COPY flow.py .
+COPY flow.py slack_notify.py ./
