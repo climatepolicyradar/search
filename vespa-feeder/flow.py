@@ -15,6 +15,7 @@ from telemetry import (
     record_feed_stats,
     record_run_duration,
     record_task_duration,
+    set_feed_stats,
     setup_telemetry,
 )
 
@@ -153,6 +154,12 @@ def vespa_feed(feed_path: Path) -> None:
             span.set_attribute("feed.error_count", error_count)
             span.set_attribute("feed.http_error_count", http_error_count)
             span.set_attribute("feed.exception_count", exception_count)
+
+            set_feed_stats(
+                input_count=input_record_count,
+                ok_count=ok_count,
+                total_errors=error_count + http_error_count + exception_count,
+            )
 
             run_logger.info(
                 "vespa feed stats: input=%d ok=%d errors=%d http_errors=%d exceptions=%d codes=%s",

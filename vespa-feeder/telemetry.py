@@ -18,6 +18,18 @@ _telemetry: BaseTelemetry | None = None
 _metrics: MetricsService | None = None
 _logger = logging.getLogger(__name__)
 
+_feed_stats: dict[str, int] = {}
+
+
+def set_feed_stats(input_count: int, ok_count: int, total_errors: int) -> None:
+    """Store feed stats so the Slack hook can include them in the notification."""
+    global _feed_stats
+    _feed_stats = {"input": input_count, "ok": ok_count, "errors": total_errors}
+
+
+def get_feed_stats() -> dict[str, int]:
+    return dict(_feed_stats)
+
 
 def setup_telemetry() -> Tracer:
     """Bootstrap OTel tracing, logging, and metrics once per process. Returns the tracer."""
