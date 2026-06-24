@@ -171,11 +171,7 @@ jobs:
     uses: ./.github/workflows/vespa_feeder_deploy.yml
     secrets: inherit
     needs: [changes, tests]
-    if: |
-      always() &&
-      needs.changes.result == 'success' &&
-      needs.changes.outputs.run-vespa-feeder-deploy == 'true' &&
-      (needs.changes.outputs.run-test == 'false' || needs.tests.result == 'success')
+    if: needs.changes.outputs.run-vespa-feeder-deploy == 'true'
 
   pulumi-up:
     uses: ./.github/workflows/pulumi_up.yml
