@@ -17,6 +17,7 @@ from telemetry import (
     record_task_duration,
     set_feed_stats,
     setup_telemetry,
+    shutdown,
 )
 
 from prefect import flow, get_run_logger, task
@@ -255,6 +256,7 @@ def vespa_feeder_flow(
             vespa_feed(feed_path=feed_path)
     finally:
         record_run_duration(time.perf_counter() - start_time, deployment_name)
+        shutdown()
 
     run_logger.info(
         "vespa_feeder_flow completed: deployment=%s flow_run_id=%s flow_run_name=%s "

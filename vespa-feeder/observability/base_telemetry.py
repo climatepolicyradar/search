@@ -300,6 +300,23 @@ class BaseTelemetry:
         previous_hook = sys.excepthook
         sys.excepthook = custom_excepthook or self._make_exception_hook(previous_hook)
 
+    def force_flush(self, timeout_millis: int = 10000) -> None:
+        """
+        Force flush pending log records.
+
+        :param timeout_millis: Maximum time to wait for flush in milliseconds.
+        :type timeout_millis: int
+        :return: The function does not return anything.
+        :rtype: None
+        """
+        if self._disabled:
+            return
+        try:
+            if self.logger_provider:
+                self.logger_provider.force_flush(timeout_millis)  # type: ignore[attr-defined]
+        except Exception as exc:
+            _LOGGER.debug("Failed to flush logger provider: %s", exc)
+
     def shutdown(self) -> None:
         """
         Shutdown telemetry providers to prevent export errors on exit.
