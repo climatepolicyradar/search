@@ -104,6 +104,14 @@ def record_task_duration(
     )
 
 
+def force_flush(timeout_millis: int = 10000) -> None:
+    """Flush all pending metrics and logs. Call before the flow process exits."""
+    if _metrics is not None:
+        _metrics.force_flush(timeout_millis)
+    if _telemetry is not None:
+        _telemetry.force_flush(timeout_millis)
+
+
 def _shutdown() -> None:
     if _metrics is not None:
         _metrics.shutdown()

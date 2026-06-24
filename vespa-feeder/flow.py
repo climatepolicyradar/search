@@ -12,6 +12,7 @@ from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import deployment, flow_run
 from slack_notify import SlackNotify
 from telemetry import (
+    force_flush,
     record_feed_stats,
     record_run_duration,
     record_task_duration,
@@ -255,6 +256,7 @@ def vespa_feeder_flow(
             vespa_feed(feed_path=feed_path)
     finally:
         record_run_duration(time.perf_counter() - start_time, deployment_name)
+        force_flush()
 
     run_logger.info(
         "vespa_feeder_flow completed: deployment=%s flow_run_id=%s flow_run_name=%s "
