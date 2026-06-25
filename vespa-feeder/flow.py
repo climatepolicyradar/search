@@ -46,7 +46,7 @@ def download_from_s3(bucket: str, key: str) -> list[Path]:
             span.set_attribute("s3.bucket", bucket)
             span.set_attribute("s3.key", key)
 
-            # This will become redundant, so this relatively basic consitional is OK
+            # This will become redundant, so this relatively basic conditional is OK
             # TODO: https://linear.app/climate-policy-radar/issue/APP-2236/feed-labels-from-snowflake-generated-json
             # TODO: https://linear.app/climate-policy-radar/issue/APP-2237/feed-passages-from-snowflake-generated-json
             if key.endswith(".jsonl"):
