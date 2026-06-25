@@ -7,6 +7,7 @@ from pathlib import Path
 
 import boto3
 import orjson
+from mypy_boto3_s3 import S3Client
 from opentelemetry.trace import StatusCode
 from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import deployment, flow_run
@@ -30,33 +31,72 @@ class VespaFeedError(Exception):
 
 
 @task
-def download_from_s3(bucket: str, key: str) -> Path:
+def download_from_s3(bucket: str, key: str) -> list[Path]:
+    # Keys ending in .jsonl are single files; anything else is treated as a folder prefix.
+    # All pipelines are being migrated to the folder pattern, so this check is temporary.
     run_logger = get_run_logger()
-    local_path = Path(tempfile.gettempdir()) / key.split("/")[-1]
     tracer = setup_telemetry()
+    s3: S3Client = boto3.client("s3")
 
     start_time = time.perf_counter()
+    paths: list[Path] = []
+
     try:
         with tracer.start_as_current_span("download_from_s3") as span:
             span.set_attribute("s3.bucket", bucket)
             span.set_attribute("s3.key", key)
-            run_logger.info("Downloading s3://%s/%s → %s", bucket, key, local_path)
-            try:
-                boto3.client("s3").download_file(bucket, key, str(local_path))
-            except Exception as exc:
-                run_logger.error(
-                    "Failed to download s3://%s/%s: %s", bucket, key, exc, exc_info=True
+
+            # This will become redundant, so this relatively basic consitional is OK
+            # TODO: https://linear.app/climate-policy-radar/issue/APP-2236/feed-labels-from-snowflake-generated-json
+            # TODO: https://linear.app/climate-policy-radar/issue/APP-2237/feed-passages-from-snowflake-generated-json
+            if key.endswith(".jsonl"):
+                local_path = Path(tempfile.gettempdir()) / key.split("/")[-1]
+                run_logger.info(f"Downloading s3://{bucket}/{key} → {local_path}")
+                try:
+                    s3.download_file(bucket, key, str(local_path))
+                except Exception as exc:
+                    run_logger.error(
+                        f"Failed to download s3://{bucket}/{key}: {exc}", exc_info=True
+                    )
+                    raise
+                run_logger.info(f"Downloaded s3://{bucket}/{key} → {local_path}")
+                paths = [local_path]
+            else:
+                prefix = key.rstrip("/") + "/"
+                paginator = s3.get_paginator("list_objects_v2")
+                objects = sorted(
+                    [
+                        obj
+                        for page in paginator.paginate(Bucket=bucket, Prefix=prefix)
+                        for obj in page.get("Contents", [])
+                    ],
+                    key=lambda obj: obj.get("Key", ""),
                 )
-                raise
-            size_bytes = local_path.stat().st_size
-            span.set_attribute("s3.downloaded_bytes", size_bytes)
-            run_logger.info(
-                "Downloaded s3://%s/%s (%d bytes) → %s",
-                bucket,
-                key,
-                size_bytes,
-                local_path,
-            )
+                if not objects:
+                    raise VespaFeedError(f"No objects found at s3://{bucket}/{key}")
+
+                run_logger.info(
+                    f"Found {len(objects)} objects at s3://{bucket}/{prefix}"
+                )
+                span.set_attribute("s3.object_count", len(objects))
+
+                for obj in objects:
+                    obj_key = obj.get("Key", "")
+                    obj_path = Path(tempfile.gettempdir()) / obj_key.split("/")[-1]
+                    run_logger.info(f"Downloading s3://{bucket}/{obj_key} → {obj_path}")
+                    try:
+                        s3.download_file(bucket, obj_key, str(obj_path))
+                    except Exception as exc:
+                        run_logger.error(
+                            f"Failed to download s3://{bucket}/{obj_key}: {exc}",
+                            exc_info=True,
+                        )
+                        raise
+                    paths.append(obj_path)
+
+                run_logger.info(
+                    f"Downloaded {len(paths)} objects from s3://{bucket}/{prefix}"
+                )
     finally:
         record_task_duration(
             "download_from_s3",
@@ -64,7 +104,7 @@ def download_from_s3(bucket: str, key: str) -> Path:
             deployment.name or "local",
         )
 
-    return local_path
+    return paths
 
 
 @task
@@ -113,6 +153,7 @@ def vespa_feed(feed_path: Path) -> None:
                     "--application",
                     application,
                 ],
+                check=False,
                 env={**os.environ, "VESPA_CLI_DATA_PLANE_TOKEN": write_token},
                 capture_output=True,
                 text=True,
@@ -223,8 +264,8 @@ def vespa_feed(feed_path: Path) -> None:
     on_failure=[SlackNotify.on_failure],
 )
 def vespa_feeder_flow(
-    s3_bucket: str = "cpr-cache",
-    s3_key: str = "search/vespa/labels_feed_materializer.jsonl",
+    s3_bucket: str,
+    s3_key: str,
 ) -> None:
     tracer = setup_telemetry()
     run_logger = get_run_logger()
@@ -252,8 +293,9 @@ def vespa_feeder_flow(
             span.set_attribute("flow.s3_bucket", s3_bucket)
             span.set_attribute("flow.s3_key", s3_key)
 
-            feed_path = download_from_s3(bucket=s3_bucket, key=s3_key)
-            vespa_feed(feed_path=feed_path)
+            feed_paths = download_from_s3(bucket=s3_bucket, key=s3_key)
+            for feed_path in feed_paths:
+                vespa_feed(feed_path=feed_path)
     finally:
         record_run_duration(time.perf_counter() - start_time, deployment_name)
         shutdown()
@@ -270,4 +312,6 @@ def vespa_feeder_flow(
 
 
 if __name__ == "__main__":
-    vespa_feeder_flow()
+    vespa_feeder_flow(
+        s3_bucket="cpr-cache", s3_key="search/vespa/labels_feed_materializer.jsonl"
+    )
