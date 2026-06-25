@@ -1,5 +1,6 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
+from http import HTTPStatus
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -42,9 +43,14 @@ def read_document(document_id: str):
     try:
         result = engine.get(document_id)
     except VespaError as exc:
-        raise HTTPException(status_code=503, detail="Search service unavailable") from exc
+        raise HTTPException(
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            detail="Search service unavailable",
+        ) from exc
     if result is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Document not found"
+        )
     return ItemResponse(data=result)
 
 
