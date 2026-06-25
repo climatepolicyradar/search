@@ -1,5 +1,6 @@
 """Tests for ``GET /search/documents/{document_id}``."""
 
+from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -29,7 +30,7 @@ def test_get_document_returns_200_when_found(document_client) -> None:
 
     response = client.get("/search/documents/doc-1")
 
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert response.json()["data"]["id"] == "doc-1"
     mock_engine.get.assert_called_once_with("doc-1")
 
@@ -40,7 +41,7 @@ def test_get_document_returns_404_when_not_found(document_client) -> None:
 
     response = client.get("/search/documents/missing-id")
 
-    assert response.status_code == 404
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_get_document_returns_503_on_vespa_error(document_client) -> None:
@@ -49,4 +50,4 @@ def test_get_document_returns_503_on_vespa_error(document_client) -> None:
 
     response = client.get("/search/documents/doc-1")
 
-    assert response.status_code == 503
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
