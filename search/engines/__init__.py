@@ -90,3 +90,7 @@ class SearchEngine(ABC, Generic[TModel]):
         """Canonical ID for search engine"""
 
         return generate_id(str(self))
+
+
+class VespaError(Exception):
+    """Raised when a Vespa request fails (non-404 HTTP error or network failure)."""

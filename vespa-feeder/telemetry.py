@@ -1,6 +1,5 @@
 """OTel bootstrap for the vespa-feeder Prefect flow."""
 
-import atexit
 import logging
 import os
 from pathlib import Path
@@ -56,7 +55,6 @@ def setup_telemetry() -> Tracer:
 
     _telemetry = BaseTelemetry(config)
     _metrics = MetricsService(config)
-    atexit.register(_shutdown)
     return _telemetry.get_tracer() or trace.get_tracer("search-vespa-feeder")
 
 
@@ -104,7 +102,16 @@ def record_task_duration(
     )
 
 
-def _shutdown() -> None:
+def force_flush(timeout_millis: int = 10000) -> None:
+    """Flush all pending metrics and logs. Call before the flow process exits."""
+    if _metrics is not None:
+        _metrics.force_flush(timeout_millis)
+    if _telemetry is not None:
+        _telemetry.force_flush(timeout_millis)
+
+
+def shutdown() -> None:
+    """Flush and shut down all telemetry. Safe to call multiple times."""
     if _metrics is not None:
         _metrics.shutdown()
     if _telemetry is not None:
