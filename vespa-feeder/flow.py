@@ -153,7 +153,6 @@ def vespa_feed(feed_path: Path) -> None:
                     "--application",
                     application,
                 ],
-                check=False,
                 env={**os.environ, "VESPA_CLI_DATA_PLANE_TOKEN": write_token},
                 capture_output=True,
                 text=True,
