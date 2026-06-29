@@ -46,7 +46,7 @@ lint:
 
 # run linters and code formatters on all files
 lint-all:
-    trunk check --all
+    trunk check --all --fix
 
 # serve the API on a local development server with hot reloading
 serve-api:
