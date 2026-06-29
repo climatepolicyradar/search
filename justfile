@@ -42,7 +42,7 @@ test-relevance +OPTS="":
 
 # run linters and code formatters on relevant files
 lint:
-    trunk check
+    trunk check --fix
 
 # run linters and code formatters on all files
 lint-all:
