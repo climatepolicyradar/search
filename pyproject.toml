@@ -5,13 +5,13 @@ description = "Tests for measuring the relevance of our search results"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-  "boto3>=1.43.25",
-  "duckdb>=1.5.3",
-  "fastapi[standard]>=0.136.3",
-  "posthog>=7.18.0",
-  "prefect>=3.7.4",
+  "boto3>=1.43.36",
+  "duckdb>=1.5.4",
+  "fastapi[standard]>=0.138.0",
+  "posthog>=7.20.2",
+  "prefect[slack]>=3.7.4",
   "pydantic>=2.13.4",
-  "pydantic-settings>=2.14.1",
+  "pydantic-settings>=2.14.2",
   "python-dotenv>=1.2.2",
   "pyvespa>=0.62.0",
   "requests>=2.34.2",
@@ -31,7 +31,7 @@ dependencies = [
   "opentelemetry-instrumentation-httpx>=0.59b0",
   "pyright>=1.1.410",
   "moto>=5.2.2",
-  "wandb>=0.27.2",
+  "wandb>=0.28.0",
   "pandas>=2.2.0",
   "scikit-learn>=1.9.0",
   "cpr-contracts",
@@ -40,14 +40,14 @@ dependencies = [
 [dependency-groups]
 research = ["snowflake-connector-python>=4.6.0"]
 dev = [
-  "pre-commit>=4.6.0",
-  "pulumi-aws>=7.32.0,<8.0.0",
+  "pulumi-aws>=7.34.0,<8.0.0",
   "pulumi-docker>=4.0.0,<5.0.0",
-  "pulumi>=3.245.0,<4.0.0",
-  "pytest>=9.0.3",
-  "ruff>=0.15.16",
-  "hypothesis>=6.155.2",
-  "boto3-stubs[s3,ssm]>=1.43.25",
+  "pulumi-docker-build>=0.0.19,<1.0.0",
+  "pulumi-pulumiservice>=0.6.0",
+  "pulumi>=3.247.0,<4.0.0",
+  "pytest>=9.1.1",
+  "hypothesis>=6.155.7",
+  "boto3-stubs[s3,ssm]>=1.43.29",
 ]
 
 [tool.uv.sources]

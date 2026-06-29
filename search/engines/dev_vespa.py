@@ -22,6 +22,7 @@ import json
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from http import HTTPStatus
 from typing import Any, Literal, NamedTuple
 
 import requests
@@ -31,7 +32,7 @@ from vespa.querybuilder import Grouping as G
 
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
-from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
+from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -645,9 +646,6 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             "query": query,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
-            # This should be set at the Vespa app level, but is not working for some reason
-            # FIXME: Fix this 👆
-            "maxHits": 50000,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": "nativerank",
@@ -786,6 +784,30 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
         return ListResponse(
             results=documents, total_size=total_size, next_page_token=None
         )
+
+    def get(self, document_id: str) -> Document | None:
+        """Fetch a single document by id, parsed from its stored document_source."""
+        endpoint = f"{self.settings.vespa_endpoint}/document/v1/documents/documents/docid/{document_id}"
+        logger.info("Vespa request started [documents.get]")
+        try:
+            response = requests.get(
+                endpoint,
+                timeout=API_TIMEOUT,
+                headers={"Authorization": f"Bearer {self.settings.vespa_read_token}"},
+            )
+        except Exception as exc:
+            raise VespaError("Vespa request failed") from exc
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            return None
+        if response.status_code != HTTPStatus.OK:
+            body_preview = (response.text or "")[:HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS]
+            raise VespaError(f"Vespa returned status {response.status_code}: {body_preview}")
+
+        document_source = response.json().get("fields", {}).get("document_source")
+        if not document_source:
+            return None
+
+        return Document.model_validate_json(document_source)
 
     @staticmethod
     def parse_label_type_id_value(s: str) -> tuple[str, str, str]:
@@ -1260,14 +1282,12 @@ class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
             "yql": yql,
             "query": query,
             "hits": pagination.page_size,
-            # This should be set at the Vespa app level, but is not working for some reason
-            # FIXME: Fix this 👆
-            "maxHits": 50000,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": "nativerank",
             "rules.rulebase": "labels",
+            "query_profile": "default",
         }
 
         response = _execute_vespa_query(

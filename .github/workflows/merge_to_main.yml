@@ -27,8 +27,9 @@ jobs:
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
       run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
       run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
+      run-vespa-feeder-deploy: ${{ steps.filter.outputs.run-vespa-feeder-deploy }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -56,6 +57,8 @@ jobs:
               - 'online_metrics/**'
               - 'relevance_tests/**'
               - 'search/vespa/**'
+            run-vespa-feeder-deploy:
+              - 'vespa-feeder/**'
 
   lint:
     permissions:
@@ -65,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
@@ -99,7 +102,7 @@ jobs:
           large-packages: false # removing these is slow and not needed here
 
       - name: Check out repository code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -163,6 +166,12 @@ jobs:
     secrets: inherit
     needs: [changes, tests]
     if: needs.changes.outputs.run-vespa-deploy == 'true'
+
+  vespa-feeder-deploy:
+    uses: ./.github/workflows/vespa_feeder_deploy.yml
+    secrets: inherit
+    needs: [changes, tests]
+    if: always() && needs.tests.result == 'success' && needs.changes.outputs.run-vespa-feeder-deploy == 'true'
 
   pulumi-up:
     uses: ./.github/workflows/pulumi_up.yml

@@ -23,7 +23,7 @@ install +OPTS="":
 
 # setup the project
 setup: install
-    uv run pre-commit install --install-hooks
+    trunk git-hooks sync
     uv run ipython kernel install --user
 
 # test the project
@@ -42,11 +42,11 @@ test-relevance +OPTS="":
 
 # run linters and code formatters on relevant files
 lint:
-    uv run pre-commit run --show-diff-on-failure
+    trunk check --fix
 
 # run linters and code formatters on all files
 lint-all:
-    uv run pre-commit run --all-files --show-diff-on-failure
+    trunk check --all --fix
 
 # serve the API on a local development server with hot reloading
 serve-api:

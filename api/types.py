@@ -31,6 +31,10 @@ class Facets(BaseModel):
     )
 
 
+class ItemResponse[T](BaseModel):
+    data: T
+
+
 class SearchResponse[T](BaseModel):
     """Response model for search results."""
 

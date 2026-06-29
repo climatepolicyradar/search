@@ -1,15 +1,16 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
+from http import HTTPStatus
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic_settings import SettingsConfigDict
 
-from api.types import Aggregations, Facets, SearchResponse
+from api.types import Aggregations, Facets, ItemResponse, SearchResponse
 from api.utils import documents_order_by, normalise_filters, order_by, pagination
 from search.data_in_models import Document
 from search.data_in_models import Label as DataInLabel
-from search.engines import OrderBy, Pagination
+from search.engines import OrderBy, Pagination, VespaError
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
@@ -34,6 +35,23 @@ router = APIRouter(prefix="/search")
 
 
 FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
+
+
+@router.get("/documents/{document_id}", response_model=ItemResponse[Document])
+def read_document(document_id: str):
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+    try:
+        result = engine.get(document_id)
+    except VespaError as exc:
+        raise HTTPException(
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            detail="Search service unavailable",
+        ) from exc
+    if result is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Document not found"
+        )
+    return ItemResponse(data=result)
 
 
 @router.get("/documents", response_model=SearchResponse[Document])

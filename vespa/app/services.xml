@@ -152,6 +152,9 @@
             <client id="vespa-metrics-reader" permissions="read">
                 <certificate file="security/vespa-metrics-reader.pem"/>
             </client>
+            <client id="katy" permissions="read">
+                <certificate file="security/katy.pem"/>
+            </client>
         </clients>
         <document-api/>
 
@@ -190,7 +193,7 @@
         </documents>
 
         <nodes deploy:instance="search-production" count="2">
-            <resources vcpu="2" memory="16Gb" disk="50Gb"/>
+            <resources vcpu="2" memory="16Gb" disk="118Gb"/>
         </nodes>
     </content>
 </services>
