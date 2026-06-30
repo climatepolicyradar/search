@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
   "boto3>=1.43.36",
   "duckdb>=1.5.4",
-  "fastapi[standard]>=0.138.0",
+  "fastapi[standard]>=0.138.2",
   "posthog>=7.21.1",
   "prefect[slack]>=3.7.4",
   "pydantic>=2.13.4",
