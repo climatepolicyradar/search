@@ -85,7 +85,15 @@ def download_from_s3(bucket: str, key: str) -> list[Path]:
                         f"Failed to download s3://{bucket}/{key}: {exc}", exc_info=True
                     )
                     raise
-                run_logger.info(f"Downloaded s3://{bucket}/{key} → {local_path}")
+                size_bytes = local_path.stat().st_size
+                span.set_attribute("s3.downloaded_bytes", size_bytes)
+                run_logger.info(
+                    "Downloaded s3://%s/%s (%d bytes) → %s",
+                    bucket,
+                    key,
+                    size_bytes,
+                    local_path,
+                )
                 paths = [local_path]
             else:
                 prefix = key.rstrip("/") + "/"
@@ -123,16 +131,6 @@ def download_from_s3(bucket: str, key: str) -> list[Path]:
                 run_logger.info(
                     f"Downloaded {len(paths)} objects from s3://{bucket}/{prefix}"
                 )
-                raise
-            size_bytes = local_path.stat().st_size
-            span.set_attribute("s3.downloaded_bytes", size_bytes)
-            run_logger.info(
-                "Downloaded s3://%s/%s (%d bytes) → %s",
-                bucket,
-                key,
-                size_bytes,
-                local_path,
-            )
     finally:
         feeder_metrics.record_task_duration(
             "download_from_s3",
@@ -255,6 +253,7 @@ def vespa_feed(feed_path: Path) -> None:
                 )
 
             feeder_metrics.record_feed_stats(
+                input_count=input_record_count,
                 ok_count=feeder_ok_count,
                 total_errors=feeder_error_count
                 + (feeder_operation_count - feeder_ok_count),
