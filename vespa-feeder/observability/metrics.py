@@ -76,7 +76,7 @@ class MetricsService:
         metrics.set_meter_provider(provider)
 
         self.meter_provider = provider
-        self.meter = provider.get_meter(self.config.service_name)
+        self.meter = metrics.get_meter(self.config.service_name)
 
         logger = logging.getLogger(__name__)
         logger.info("📊 Metrics service initialised.")
