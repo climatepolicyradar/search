@@ -10,6 +10,10 @@ tune +OPTS="":
 evaluate:
     uv run python evaluate_predictors.py
 
+# Generate an HTML vibe check comparing density vs tfidf-density-cf -> vibe_check.html
+vibe-check:
+    uv run python vibe_check.py
+
 # Run the whole pipeline: build dataset -> tune thresholds -> evaluate
 pipeline csv:
     just load {{ csv }}

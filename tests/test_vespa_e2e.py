@@ -21,10 +21,11 @@ import pytest
 import requests as req
 from cpr_contracts import Document, DocumentLabelRelationship
 from polyfactory.factories.pydantic_factory import ModelFactory
+from pydantic import AnyHttpUrl
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
-from search.engines import OrderBy, Pagination
+from search.engines import OrderBy, Pagination, VespaError
 from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
@@ -45,7 +46,9 @@ _TEST_SETTINGS = Settings(
 
 class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
     @classmethod
-    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> DocumentLabelRelationship:
+    def build(
+        cls, factory_use_construct: bool = False, **kwargs: Any
+    ) -> DocumentLabelRelationship:
         kwargs.setdefault("timestamp", None)
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
@@ -54,11 +57,14 @@ class DocumentFactory(ModelFactory[Document]):
     @classmethod
     def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> Document:
         if "labels" not in kwargs:
-            kwargs["labels"] = [DocumentLabelRelationshipFactory.build(factory_use_construct=factory_use_construct)]
+            kwargs["labels"] = [
+                DocumentLabelRelationshipFactory.build(
+                    factory_use_construct=factory_use_construct
+                )
+            ]
         if "documents" not in kwargs:
             kwargs["documents"] = []
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
-
 
 
 def _vespa_ready() -> bool:
@@ -380,9 +386,7 @@ def test_field_filter_attribute(
     non_match_in: bool,
 ):
     doc_matching = DocumentFactory.build(attributes=matching_attrs, labels=[])
-    doc_non_matching = DocumentFactory.build(
-        attributes=non_matching_attrs, labels=[]
-    )
+    doc_non_matching = DocumentFactory.build(attributes=non_matching_attrs, labels=[])
     _feed_document(vespa_app, doc_matching)
     _feed_document(vespa_app, doc_non_matching)
 
@@ -802,3 +806,34 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
 
 
 # endregion Document sorting
+
+
+# region single Document retrieval
+def test_get_returns_document_by_id(vespa_app: Vespa):
+    doc = DocumentFactory.build(title="Climate Policy", labels=[])
+    _feed_document(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    result = engine.get(doc.id)
+
+    assert result is not None
+    assert result.id == doc.id
+
+
+def test_get_returns_none_for_missing_id():
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    result = engine.get("does-not-exist")
+    assert result is None
+
+
+def test_get_raises_vespa_error_when_unreachable():
+    bad_settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:19999"),
+        vespa_read_token="",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=bad_settings)
+    with pytest.raises(VespaError):
+        engine.get("any-id")
+
+
+# endregion
