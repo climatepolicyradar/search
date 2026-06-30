@@ -89,89 +89,47 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    name: Test
     needs: [changes]
-    if: needs.changes.outputs.run-test == 'true'
     steps:
-      # The e2e tests run Vespa in a container; Vespa feed blocks (HTTP 507) once
-      # disk usage crosses ~75%. ubuntu-latest only ships ~14GB free.
-      # This reclaims space from preinstalled tooling before the tests run.
-      - uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: true
-          large-packages: false # removing these is slow and not needed here
+      # The conditional is on this composite action, so that the step always runs, and can be `needed` by subsequent jobs.
+      # If the job was conditional, it would be `skipped`, and thus subsequent steps, and any steps in its closure would be considered skipped top.
+      # @see: https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-jobs#:~:text=If%20a%20run%20contains%20a%20series%20of%20jobs%20that%20need%20each%20other%2C%20a%20failure%20or%20skip%20applies%20to%20all%20jobs%20in%20the%20dependency%20chain%20from%20the%20point%20of%20failure%20or%20skip%20onwards
+      # @see: https://github.com/climatepolicyradar/search/pull/356
+      # We use a composite action to avoid needing to run the conditional on each step in this job, which would be verbose and error-prone.
+      - uses: actions/checkout@v7
+      - if: needs.changes.outputs.run-test == 'true'
+        uses: ./.github/actions/test
 
-      - name: Check out repository code
-        uses: actions/checkout@v7
-        with:
-          lfs: true
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Install just
-        uses: extractions/setup-just@v4
-
-      - name: Install python or load from cache with dependencies
-        uses: actions/setup-python@v6
-        with:
-          python-version-file: pyproject.toml
-
-      - name: Install dependencies
-        run: just install
-
-      - name: Run tests
-        run: just test-functional
-        env:
-          VESPA_ENDPOINT: http://localhost:8080/
-          VESPA_READ_TOKEN: ""
-
-  # This is the job that is required in our branch protection rules.
-  # As `test` runs on a conditional it might not run, so we need to
-  # accumulate the results here.
-  tests:
-    if: always()
-    needs: [test]
-    runs-on: ubuntu-latest
-    steps:
-      # You can see the possible values here:
-      # @see: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#jobs-context
-      - run: |
-          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            exit 1
-          fi
   deploy-api-apprunner-deprecated:
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
-    needs: [changes, tests]
+    needs: [changes, test]
     if: needs.changes.outputs.run-deploy == 'true'
 
   # @see: https://github.com/marketplace/actions/amazon-ecs-deploy-express-service-action-for-github-actions#complete-example-with-all-options
   deploy-api:
     uses: ./.github/workflows/deploy_api.yml
     secrets: inherit
-    needs: [changes, tests]
+    needs: [changes, test]
     if: needs.changes.outputs.run-deploy == 'true'
 
   deploy-prefect:
     uses: ./.github/workflows/prefect_deploy.yml
-    needs: [changes, tests]
+    needs: [changes, test]
     if: ${{ needs.changes.outputs.run-prefect-deploy == 'true' }}
     secrets: inherit
 
   vespa-deploy:
     uses: ./.github/workflows/vespa_deploy.yml
     secrets: inherit
-    needs: [changes, tests]
+    needs: [changes, test]
     if: needs.changes.outputs.run-vespa-deploy == 'true'
 
   vespa-feeder-deploy:
     uses: ./.github/workflows/vespa_feeder_deploy.yml
     secrets: inherit
-    needs: [changes, tests]
-    if: always() && needs.tests.result == 'success' && needs.changes.outputs.run-vespa-feeder-deploy == 'true'
+    needs: [changes, test]
+    if: needs.changes.outputs.run-vespa-feeder-deploy == 'true'
 
   pulumi-up:
     uses: ./.github/workflows/pulumi_up.yml
