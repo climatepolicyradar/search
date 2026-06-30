@@ -360,10 +360,17 @@ def vespa_feeder_flow(
             feed_paths = download_from_s3(bucket=s3_bucket, key=s3_key)
             for feed_path in feed_paths:
                 vespa_feed(feed_path=feed_path)
+    except Exception:
+        _failed = True
+        raise
     finally:
         feeder_metrics.record_run_duration(
             time.perf_counter() - start_time, deployment_name
         )
+        if _failed:
+            feeder_metrics.record_run_failed(deployment_name, flow_run_name)
+        else:
+            feeder_metrics.record_run_completed(deployment_name, flow_run_name)
         shutdown()
 
     run_logger.info(
