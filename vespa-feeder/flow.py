@@ -1,8 +1,10 @@
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import boto3
@@ -26,8 +28,40 @@ from prefect import flow, get_run_logger, task
 logger = logging.getLogger(__name__)
 
 
-class VespaFeedError(Exception):
-    pass
+@dataclass
+class FailedDocument:
+    doc_id: str
+    error: str
+
+
+@dataclass
+class VespaHTTPError(Exception):
+    """Transport layer gave up — no HTTP response received for some records."""
+
+    feeder_error_count: int  # feeder.error.count
+    failed_documents: list[FailedDocument]
+
+
+@dataclass
+class VespaResponseError(Exception):
+    """HTTP responses received but records still lost after exhausting retries."""
+
+    ok_count: int  # feeder.ok.count
+    operation_count: int  # feeder.operation.count
+    http_error_count: int  # http.response.error.count
+    failed_documents: list[FailedDocument]
+
+
+VespaFeedError = VespaHTTPError | VespaResponseError
+
+_GIVING_UP_RE = re.compile(r"^feed: (.+) for put (\S+): giving up", re.MULTILINE)
+
+
+def _parse_failed_documents(stderr: str) -> list[FailedDocument]:
+    return [
+        FailedDocument(doc_id=giving_up_match.group(2), error=giving_up_match.group(1))
+        for giving_up_match in _GIVING_UP_RE.finditer(stderr)
+    ]
 
 
 @task
@@ -73,7 +107,7 @@ def download_from_s3(bucket: str, key: str) -> list[Path]:
                     key=lambda obj: obj.get("Key", ""),
                 )
                 if not objects:
-                    raise VespaFeedError(f"No objects found at s3://{bucket}/{key}")
+                    raise FileNotFoundError(f"No objects found at s3://{bucket}/{key}")
 
                 run_logger.info(
                     f"Found {len(objects)} objects at s3://{bucket}/{prefix}"
@@ -184,50 +218,85 @@ def vespa_feed(feed_path: Path) -> None:
                 response_data, option=orjson.OPT_INDENT_2
             ).decode()
 
-            ok_count = response_data.get("feeder.ok.count", 0)
-            error_count = response_data.get("feeder.error.count", 0)
-            http_error_count = response_data.get("http.response.error.count", 0)
-            exception_count = response_data.get("http.exception.count", 0)
-            codes = response_data.get("http.response.code.counts", {})
-            has_non_200 = any(code != "200" for code in codes)
+            feeder_operation_count = response_data.get("feeder.operation.count", 0)
+            feeder_ok_count = response_data.get("feeder.ok.count", 0)
+            feeder_error_count = response_data.get("feeder.error.count", 0)
+            http_response_error_count = response_data.get(
+                "http.response.error.count", 0
+            )
+            http_response_code_counts = response_data.get(
+                "http.response.code.counts", {}
+            )
+            too_many_requests_count = http_response_code_counts.get("429", 0)
 
-            span.set_attribute("feed.ok_count", ok_count)
-            span.set_attribute("feed.error_count", error_count)
-            span.set_attribute("feed.http_error_count", http_error_count)
-            span.set_attribute("feed.exception_count", exception_count)
+            span.set_attribute("feed.operation_count", feeder_operation_count)
+            span.set_attribute("feed.ok_count", feeder_ok_count)
+            span.set_attribute("feed.feeder_error_count", feeder_error_count)
+            span.set_attribute("feed.http_error_count", http_response_error_count)
 
             set_feed_stats(
                 input_count=input_record_count,
-                ok_count=ok_count,
-                total_errors=error_count + http_error_count + exception_count,
+                ok_count=feeder_ok_count,
+                total_errors=feeder_error_count
+                + (feeder_operation_count - feeder_ok_count),
             )
 
             run_logger.info(
-                "vespa feed stats: input=%d ok=%d errors=%d http_errors=%d exceptions=%d codes=%s",
-                input_record_count,
-                ok_count,
-                error_count,
-                http_error_count,
-                exception_count,
-                codes,
+                f"vespa feed stats: input={input_record_count} operation={feeder_operation_count} "
+                f"ok={feeder_ok_count} feeder_errors={feeder_error_count} http_errors={http_response_error_count} "
+                f"throttled={too_many_requests_count} codes={http_response_code_counts}"
             )
 
+            # We warn on throttled requests, as they have generally self-healed, but they could be an indicator of a larger issue.
+            if too_many_requests_count:
+                run_logger.warning(
+                    f"vespa_feed: {too_many_requests_count} requests throttled (429) but retried successfully"
+                )
+
             record_feed_stats(
-                ok_count=ok_count,
-                total_errors=error_count + http_error_count + exception_count,
+                ok_count=feeder_ok_count,
+                total_errors=feeder_error_count
+                + (feeder_operation_count - feeder_ok_count),
                 deployment_name=deployment.name or "local",
             )
 
-            has_error = (
-                has_non_200
-                or exception_count > 0
-                or http_error_count > 0
-                or error_count > 0
-            )
+            failed_documents = _parse_failed_documents(result.stderr)
+
+            errors: list[VespaFeedError] = []
+
+            # feeder.error.count is transport-layer failures (connection refused, TLS error,
+            # etc.) where the CLI gave up before receiving any HTTP response.
+            # We error as these documents would be considered missed.
+            if feeder_error_count > 0:
+                errors.append(
+                    VespaHTTPError(
+                        feeder_error_count=feeder_error_count,
+                        failed_documents=failed_documents,
+                    )
+                )
+
+            # ok.count < operation.count means records were submitted but not indexed -
+            # the CLI got HTTP responses but exhausted retries without a 2xx.
+            if feeder_ok_count < feeder_operation_count:
+                errors.append(
+                    VespaResponseError(
+                        ok_count=feeder_ok_count,
+                        operation_count=feeder_operation_count,
+                        http_error_count=http_response_error_count,
+                        failed_documents=failed_documents,
+                    )
+                )
+
+            has_errors = len(errors) > 0
+            has_warnings = too_many_requests_count > 0
 
             markdown = "### Vespa Feed Response\n\n"
-            if has_error:
-                markdown += "🚨 **WARNING: ERROR DETECTED IN FEED RESPONSE!** 🚨\n\n"
+            if has_errors:
+                markdown += "🚨 **Error: records were not indexed.**\n\n"
+            elif has_warnings:
+                markdown += "⚠️ **Warning: requests were throttled but retried successfully.**\n\n"
+            else:
+                markdown += "✅ **Success: all records indexed.**\n\n"
             markdown += f"```json\n{response_str}\n```"
 
             create_markdown_artifact(
@@ -236,21 +305,13 @@ def vespa_feed(feed_path: Path) -> None:
                 description="Vespa Feed Output Data",
             )
 
-            if has_error:
+            if errors:
                 span.set_status(StatusCode.ERROR, "Vespa feed response contains errors")
-                run_logger.error(
-                    "Vespa feed issue detected: ok=%d errors=%d http_errors=%d exceptions=%d "
-                    "feed_path=%s response=%s",
-                    ok_count,
-                    error_count,
-                    http_error_count,
-                    exception_count,
-                    feed_path,
-                    response_str,
-                )
-                raise VespaFeedError(
-                    f"Urgent: vespa feed issue detected in response:\n{response_str}"
-                )
+                for doc in failed_documents:
+                    run_logger.error(
+                        f"vespa_feed: failed document doc_id={doc.doc_id} error={doc.error}"
+                    )
+                raise ExceptionGroup("vespa_feed: failed", errors)
     finally:
         record_task_duration(
             "vespa_feed", time.perf_counter() - start_time, deployment.name or "local"
