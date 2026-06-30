@@ -18,5 +18,6 @@ COPY observability/ ./observability/
 
 COPY slack_notify.py .
 COPY service-manifest.json .
+COPY feeder_metrics.py .
 COPY telemetry.py .
 COPY flow.py .
