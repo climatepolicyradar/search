@@ -11,7 +11,14 @@ from opentelemetry.trace import StatusCode
 from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import deployment, flow_run
 from slack_notify import SlackNotify
-from telemetry import feeder_metrics, force_flush, set_feed_stats, shutdown, tracer
+from telemetry import (
+    record_feed_stats,
+    record_run_duration,
+    record_task_duration,
+    set_feed_stats,
+    setup_telemetry,
+    shutdown,
+)
 
 from prefect import flow, get_run_logger, task
 
@@ -26,6 +33,7 @@ class VespaFeedError(Exception):
 def download_from_s3(bucket: str, key: str) -> Path:
     run_logger = get_run_logger()
     local_path = Path(tempfile.gettempdir()) / key.split("/")[-1]
+    tracer = setup_telemetry()
 
     start_time = time.perf_counter()
     try:
@@ -50,7 +58,7 @@ def download_from_s3(bucket: str, key: str) -> Path:
                 local_path,
             )
     finally:
-        feeder_metrics.record_task_duration(
+        record_task_duration(
             "download_from_s3",
             time.perf_counter() - start_time,
             deployment.name or "local",
@@ -71,6 +79,7 @@ def get_ssm_parameter(name: str) -> str:
 @task
 def vespa_feed(feed_path: Path) -> None:
     run_logger = get_run_logger()
+    tracer = setup_telemetry()
 
     endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
     write_token = get_ssm_parameter(name="/search/vespa/write_token")
@@ -163,12 +172,10 @@ def vespa_feed(feed_path: Path) -> None:
                 codes,
             )
 
-            feeder_metrics.record_feed_stats(
-                input_count=input_record_count,
+            record_feed_stats(
                 ok_count=ok_count,
                 total_errors=error_count + http_error_count + exception_count,
                 deployment_name=deployment.name or "local",
-                run_name=flow_run.name or "unknown",
             )
 
             has_error = (
@@ -205,10 +212,8 @@ def vespa_feed(feed_path: Path) -> None:
                     f"Urgent: vespa feed issue detected in response:\n{response_str}"
                 )
     finally:
-        feeder_metrics.record_task_duration(
-            "vespa_feed",
-            time.perf_counter() - start_time,
-            deployment.name or "local",
+        record_task_duration(
+            "vespa_feed", time.perf_counter() - start_time, deployment.name or "local"
         )
 
 
@@ -221,6 +226,7 @@ def vespa_feeder_flow(
     s3_bucket: str = "cpr-cache",
     s3_key: str = "search/vespa/labels_feed_materializer.jsonl",
 ) -> None:
+    tracer = setup_telemetry()
     run_logger = get_run_logger()
 
     deployment_name = deployment.name or "local"
@@ -238,7 +244,6 @@ def vespa_feeder_flow(
     )
 
     start_time = time.perf_counter()
-    _failed = False
     try:
         with tracer.start_as_current_span("vespa_feeder_flow") as span:
             span.set_attribute("prefect.deployment_name", deployment_name)
@@ -249,18 +254,8 @@ def vespa_feeder_flow(
 
             feed_path = download_from_s3(bucket=s3_bucket, key=s3_key)
             vespa_feed(feed_path=feed_path)
-    except Exception:
-        _failed = True
-        raise
     finally:
-        feeder_metrics.record_run_duration(
-            time.perf_counter() - start_time, deployment_name
-        )
-        if _failed:
-            feeder_metrics.record_run_failed(deployment_name, flow_run_name)
-        else:
-            feeder_metrics.record_run_completed(deployment_name, flow_run_name)
-        force_flush()
+        record_run_duration(time.perf_counter() - start_time, deployment_name)
         shutdown()
 
     run_logger.info(
