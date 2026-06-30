@@ -1,5 +1,5 @@
 """
-Prefect integration for Navigator telemetry.
+Prefect integration for search telemetry.
 
 PrefectTelemetry specialises BaseTelemetry for Prefect workers/runs.
 It injects Prefect runtime context (flow_name, run_id, run_name, task_id, task_name)
