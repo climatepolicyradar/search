@@ -257,15 +257,15 @@ def _compute_label_relationships(
     concept_by_wid: dict[str, "WikibaseConcept"],
 ) -> dict[str, list[WikibaseLabelRelationship]]:
     """
-    Return the direct parent relationships for each concept.
+    Work out the direct parent for each concept.
 
-    ``wid_to_subconcept_ids`` maps each parent wikibase ID to the transitive
-    closure of its descendant IDs (from the P1+ SPARQL query).  We invert this
-    to find ancestors for each concept and then discard indirect ancestors,
-    keeping only the *direct* parent(s) — i.e. those that have no other
-    ancestor sitting between them and the child.
+    The SPARQL query gives us a flattened list of every descendant for each
+    concept (grandchildren included). We flip that around to get each concept's
+    ancestors, then drop anything that isn't a *direct* parent — i.e. if
+    another ancestor sits between a candidate and the child, the candidate is
+    too far up the tree to count.
     """
-    # Build child → {all ancestor wids}
+    # Flip parent -> descendants into child -> all ancestors
     child_to_ancestors: dict[str, set[str]] = {}
     for parent_wid, descendants in wid_to_subconcept_ids.items():
         for desc_wid in descendants:
@@ -279,8 +279,9 @@ def _compute_label_relationships(
     for child_wid, ancestors in child_to_ancestors.items():
         direct_parents: list[WikibaseLabelRelationship] = []
         for ancestor_wid in ancestors:
-            # P is a direct parent of C if no other ancestor M of C is itself a
-            # descendant of P (which would make P only a transitive ancestor).
+            # An ancestor is a direct parent only if none of the child's other
+            # ancestors are themselves descendants of it (which would mean
+            # something closer is in between).
             ancestor_desc = parent_descendants.get(ancestor_wid, set())
             is_direct = not any(
                 other in ancestor_desc for other in ancestors if other != ancestor_wid
