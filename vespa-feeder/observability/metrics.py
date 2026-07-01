@@ -117,8 +117,19 @@ class MetricsService:
         if self._disabled or self.meter is None:
             return None
 
+        full_name = self.full_metric_name(name)
+        prometheus_name = full_name.replace("-", "_").replace(".", "_")
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Registering counter OTel=%r unit=%r — Prometheus name will be %s_total (or %s_%s_total if unit is appended)",
+            full_name,
+            unit,
+            prometheus_name,
+            prometheus_name,
+            unit,
+        )
         return self.meter.create_counter(
-            name=self.full_metric_name(name),
+            name=full_name,
             description=description,
             unit=unit,
         )
@@ -128,7 +139,7 @@ class MetricsService:
         name: str,
         description: str = "",
         unit: str = "s",
-        _: Optional[Sequence[float]] = None,
+        explicit_bucket_boundaries: Optional[Sequence[float]] = None,  # noqa: ARG002
     ) -> Optional[Histogram]:
         """
         Create a histogram instrument.

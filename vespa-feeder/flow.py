@@ -14,14 +14,7 @@ from opentelemetry.trace import StatusCode
 from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import deployment, flow_run
 from slack_notify import SlackNotify
-from telemetry import (
-    record_feed_stats,
-    record_run_duration,
-    record_task_duration,
-    set_feed_stats,
-    setup_telemetry,
-    shutdown,
-)
+from telemetry import feeder_metrics, set_feed_stats, shutdown, tracer
 
 from prefect import flow, get_run_logger, task
 
@@ -69,7 +62,6 @@ def download_from_s3(bucket: str, key: str) -> list[Path]:
     # Keys ending in .jsonl are single files; anything else is treated as a folder prefix.
     # All pipelines are being migrated to the folder pattern, so this check is temporary.
     run_logger = get_run_logger()
-    tracer = setup_telemetry()
     s3: S3Client = boto3.client("s3")
 
     start_time = time.perf_counter()
@@ -93,7 +85,15 @@ def download_from_s3(bucket: str, key: str) -> list[Path]:
                         f"Failed to download s3://{bucket}/{key}: {exc}", exc_info=True
                     )
                     raise
-                run_logger.info(f"Downloaded s3://{bucket}/{key} → {local_path}")
+                size_bytes = local_path.stat().st_size
+                span.set_attribute("s3.downloaded_bytes", size_bytes)
+                run_logger.info(
+                    "Downloaded s3://%s/%s (%d bytes) → %s",
+                    bucket,
+                    key,
+                    size_bytes,
+                    local_path,
+                )
                 paths = [local_path]
             else:
                 prefix = key.rstrip("/") + "/"
@@ -132,7 +132,7 @@ def download_from_s3(bucket: str, key: str) -> list[Path]:
                     f"Downloaded {len(paths)} objects from s3://{bucket}/{prefix}"
                 )
     finally:
-        record_task_duration(
+        feeder_metrics.record_task_duration(
             "download_from_s3",
             time.perf_counter() - start_time,
             deployment.name or "local",
@@ -153,7 +153,6 @@ def get_ssm_parameter(name: str) -> str:
 @task
 def vespa_feed(feed_path: Path) -> None:
     run_logger = get_run_logger()
-    tracer = setup_telemetry()
 
     endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
     write_token = get_ssm_parameter(name="/search/vespa/write_token")
@@ -253,11 +252,13 @@ def vespa_feed(feed_path: Path) -> None:
                     f"vespa_feed: {too_many_requests_count} requests throttled (429) but retried successfully"
                 )
 
-            record_feed_stats(
+            feeder_metrics.record_feed_stats(
+                input_count=input_record_count,
                 ok_count=feeder_ok_count,
                 total_errors=feeder_error_count
                 + (feeder_operation_count - feeder_ok_count),
                 deployment_name=deployment.name or "local",
+                run_name=flow_run.name or "unknown",
             )
 
             failed_documents = _parse_failed_documents(result.stderr)
@@ -313,8 +314,10 @@ def vespa_feed(feed_path: Path) -> None:
                     )
                 raise ExceptionGroup("vespa_feed: failed", errors)
     finally:
-        record_task_duration(
-            "vespa_feed", time.perf_counter() - start_time, deployment.name or "local"
+        feeder_metrics.record_task_duration(
+            "vespa_feed",
+            time.perf_counter() - start_time,
+            deployment.name or "local",
         )
 
 
@@ -327,7 +330,6 @@ def vespa_feeder_flow(
     s3_bucket: str,
     s3_key: str,
 ) -> None:
-    tracer = setup_telemetry()
     run_logger = get_run_logger()
 
     deployment_name = deployment.name or "local"
@@ -345,6 +347,7 @@ def vespa_feeder_flow(
     )
 
     start_time = time.perf_counter()
+    _failed = False
     try:
         with tracer.start_as_current_span("vespa_feeder_flow") as span:
             span.set_attribute("prefect.deployment_name", deployment_name)
@@ -356,8 +359,17 @@ def vespa_feeder_flow(
             feed_paths = download_from_s3(bucket=s3_bucket, key=s3_key)
             for feed_path in feed_paths:
                 vespa_feed(feed_path=feed_path)
+    except Exception:
+        _failed = True
+        raise
     finally:
-        record_run_duration(time.perf_counter() - start_time, deployment_name)
+        feeder_metrics.record_run_duration(
+            time.perf_counter() - start_time, deployment_name
+        )
+        if _failed:
+            feeder_metrics.record_run_failed(deployment_name, flow_run_name)
+        else:
+            feeder_metrics.record_run_completed(deployment_name, flow_run_name)
         shutdown()
 
     run_logger.info(
