@@ -256,7 +256,8 @@ def _compute_label_relationships(
     wid_to_subconcept_ids: dict[str, list[str]],
     concept_by_wid: dict[str, "WikibaseConcept"],
 ) -> dict[str, list[WikibaseLabelRelationship]]:
-    """Return the direct parent relationships for each concept.
+    """
+    Return the direct parent relationships for each concept.
 
     ``wid_to_subconcept_ids`` maps each parent wikibase ID to the transitive
     closure of its descendant IDs (from the P1+ SPARQL query).  We invert this

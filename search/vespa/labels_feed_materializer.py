@@ -15,8 +15,8 @@ from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.inference_results import read as read_inference_results
 from search.vespa.sources.wikibase import (
     WikibaseConcept,
-    fetch_concepts_at_timestamps_sync,
     WikibaseLabelRelationship,
+    fetch_concepts_at_timestamps_sync,
 )
 
 # Paths
