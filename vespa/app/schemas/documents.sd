@@ -64,6 +64,8 @@ schema documents {
             field id type string {}
             field type type string {}
             field value type string {}
+            field timestamp type long {}
+            field relationship type string {}
             field count type int {}
             field passages_id type string {}
         }
@@ -77,6 +79,14 @@ schema documents {
                 attribute: fast-search
             }
             struct-field value {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field timestamp {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field relationship {
                 indexing: summary | attribute
                 attribute: fast-search
             }
