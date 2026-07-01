@@ -15,12 +15,6 @@ REQUEST_DELAY_SECONDS = 0.5
 BATCH_SIZE = 50
 
 
-class WikibaseLabelRelationship(TypedDict):
-    wikibase_id: str
-    preferred_label: str
-    relationship_type: str
-
-
 class WikibaseConcept(TypedDict):
     wikibase_id: str
     preferred_label: str
@@ -28,7 +22,6 @@ class WikibaseConcept(TypedDict):
     description: str | None
     negative_labels: list[str]
     subconcept_labels: list[str]
-    label_relationships: list[WikibaseLabelRelationship]
 
 
 def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
@@ -66,7 +59,6 @@ def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
         description=description,
         negative_labels=negative_labels,
         subconcept_labels=[],
-        label_relationships=[],
     )
 
 
@@ -252,54 +244,6 @@ def _extract_labels_from_entity(entity: dict) -> list[str]:
     return labels
 
 
-def _compute_label_relationships(
-    wid_to_subconcept_ids: dict[str, list[str]],
-    concept_by_wid: dict[str, "WikibaseConcept"],
-) -> dict[str, list[WikibaseLabelRelationship]]:
-    """Return the direct parent relationships for each concept.
-
-    ``wid_to_subconcept_ids`` maps each parent wikibase ID to the transitive
-    closure of its descendant IDs (from the P1+ SPARQL query).  We invert this
-    to find ancestors for each concept and then discard indirect ancestors,
-    keeping only the *direct* parent(s) — i.e. those that have no other
-    ancestor sitting between them and the child.
-    """
-    # Build child → {all ancestor wids}
-    child_to_ancestors: dict[str, set[str]] = {}
-    for parent_wid, descendants in wid_to_subconcept_ids.items():
-        for desc_wid in descendants:
-            child_to_ancestors.setdefault(desc_wid, set()).add(parent_wid)
-
-    parent_descendants: dict[str, set[str]] = {
-        wid: set(desc_wids) for wid, desc_wids in wid_to_subconcept_ids.items()
-    }
-
-    result: dict[str, list[WikibaseLabelRelationship]] = {}
-    for child_wid, ancestors in child_to_ancestors.items():
-        direct_parents: list[WikibaseLabelRelationship] = []
-        for ancestor_wid in ancestors:
-            # P is a direct parent of C if no other ancestor M of C is itself a
-            # descendant of P (which would make P only a transitive ancestor).
-            ancestor_desc = parent_descendants.get(ancestor_wid, set())
-            is_direct = not any(
-                other in ancestor_desc for other in ancestors if other != ancestor_wid
-            )
-            if is_direct:
-                parent_concept = concept_by_wid.get(ancestor_wid)
-                if parent_concept is not None:
-                    direct_parents.append(
-                        WikibaseLabelRelationship(
-                            wikibase_id=ancestor_wid,
-                            preferred_label=parent_concept["preferred_label"],
-                            relationship_type="subconcept_of",
-                        )
-                    )
-        if direct_parents:
-            result[child_wid] = direct_parents
-
-    return result
-
-
 async def fetch_concepts_at_timestamps(
     wikibase_id_to_timestamp: dict[str, str],
 ) -> list[WikibaseConcept]:
@@ -435,15 +379,6 @@ async def fetch_concepts_at_timestamps(
                 concept["negative_labels"] = [
                     nl for nl in concept["negative_labels"] if nl not in all_positive
                 ]
-
-        # Populate label_relationships on each concept from the hierarchy
-        label_relationships_by_wid = _compute_label_relationships(
-            wid_to_subconcept_ids, concept_by_wid
-        )
-        for concept in all_concepts:
-            concept["label_relationships"] = label_relationships_by_wid.get(
-                concept["wikibase_id"], []
-            )
 
         logger.info(
             "Fetched subconcept labels for %d concepts (%d unique subconcepts)",
