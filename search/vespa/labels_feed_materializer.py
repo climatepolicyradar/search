@@ -3,7 +3,12 @@ from typing import TypedDict
 
 import boto3
 import orjson
-from cpr_contracts import DocumentLabelRelationship, Label, LabelLabelRelationship
+from cpr_contracts import (
+    DocumentLabelRelationship,
+    Label,
+    LabelLabelRelationship,
+    LabelWithoutLabelRelationships,
+)
 
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
@@ -11,6 +16,7 @@ from search.vespa.sources.inference_results import read as read_inference_result
 from search.vespa.sources.wikibase import (
     WikibaseConcept,
     fetch_concepts_at_timestamps_sync,
+    WikibaseLabelRelationship,
 )
 
 # Paths
@@ -114,14 +120,33 @@ def _source_label_relationship_to_vespa_label(
     return vespa_label
 
 
+def _wikibase_label_relationship_to_label_label_relationship(
+    rel: WikibaseLabelRelationship,
+) -> LabelLabelRelationship:
+    """Convert a WikibaseLabelRelationship to a cpr_contracts LabelLabelRelationship."""
+    return LabelLabelRelationship(
+        type=rel["relationship_type"],
+        value=LabelWithoutLabelRelationships(
+            id=f"concept::{rel['wikibase_id']}",
+            type="concept",
+            value=rel["preferred_label"],
+        ),
+        timestamp=None,
+    )
+
+
 def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
     """Convert a Wikibase concept into a ``VespaLabel`` row."""
     identifier = f"concept::{concept['wikibase_id']}"
-    source_label= Label(
+    label_rels = [
+        _wikibase_label_relationship_to_label_label_relationship(rel)
+        for rel in concept["label_relationships"]
+    ]
+    source_label = Label(
         id=identifier,
         type="concept",
         value=concept["preferred_label"],
-        labels = []
+        labels=label_rels,
     )
     vespa_label: VespaLabel = {
         "id": identifier,
@@ -132,7 +157,9 @@ def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
         "description": concept["description"] or "",
         "negative_labels": concept["negative_labels"],
         "label_source": source_label.model_dump_json(),
-        "labels": [],
+        "labels": [
+            _label_relationship_to_vespa_label_relationship(lr) for lr in label_rels
+        ],
     }
     return vespa_label
 
