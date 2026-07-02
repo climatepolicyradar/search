@@ -13,6 +13,7 @@ from mypy_boto3_s3 import S3Client
 from opentelemetry.trace import StatusCode
 from prefect.artifacts import create_markdown_artifact
 from prefect.runtime import deployment, flow_run
+from pydantic import BaseModel, ConfigDict, Field
 from slack_notify import SlackNotify
 from telemetry import feeder_metrics, set_feed_stats, shutdown, tracer
 
@@ -47,6 +48,33 @@ class VespaResponseError(Exception):
 
 VespaFeedError = VespaHTTPError | VespaResponseError
 
+
+class VespaFeedResponse(BaseModel):
+    """Parses the JSON stats the `vespa feed` CLI prints to stdout."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    feeder_operation_count: int = Field(alias="feeder.operation.count", default=0)
+    feeder_ok_count: int = Field(alias="feeder.ok.count", default=0)
+    feeder_error_count: int = Field(alias="feeder.error.count", default=0)
+    http_response_error_count: int = Field(alias="http.response.error.count", default=0)
+    http_response_code_counts: dict[str, int] = Field(
+        alias="http.response.code.counts", default_factory=dict
+    )
+
+
+@dataclass
+class FeedResult:
+    feed_path: Path
+    input_count: int
+    operation_count: int
+    ok_count: int
+    feeder_error_count: int
+    http_error_count: int
+    throttled_count: int
+    errors: list[VespaFeedError]
+
+
 _GIVING_UP_RE = re.compile(r"^feed: (.+) for put (\S+): giving up", re.MULTILINE)
 
 
@@ -55,6 +83,55 @@ def _parse_failed_documents(stderr: str) -> list[FailedDocument]:
         FailedDocument(doc_id=giving_up_match.group(2), error=giving_up_match.group(1))
         for giving_up_match in _GIVING_UP_RE.finditer(stderr)
     ]
+
+
+def _build_run_summary_markdown(
+    results: list["FeedResult"], failed_results: list["FeedResult"]
+) -> str:
+    total_input = sum(r.input_count for r in results)
+    total_operation = sum(r.operation_count for r in results)
+    total_ok = sum(r.ok_count for r in results)
+    total_feeder_errors = sum(r.feeder_error_count for r in results)
+    total_http_errors = sum(r.http_error_count for r in results)
+    total_throttled = sum(r.throttled_count for r in results)
+
+    icon = "🚨" if failed_results else "✅"
+    status = (
+        f"**{len(failed_results)}/{len(results)} file(s) failed**"
+        if failed_results
+        else "**All files indexed successfully**"
+    )
+
+    markdown = (
+        f"### Vespa Feeder Run Summary\n\n{icon} {status}\n\n"
+        "| Metric | Value |\n|---|---|\n"
+        f"| Files processed | {len(results)} |\n"
+        f"| Failed files | {len(failed_results)} |\n"
+        f"| Input records | {total_input} |\n"
+        f"| Operations | {total_operation} |\n"
+        f"| OK | {total_ok} |\n"
+        f"| Feeder errors | {total_feeder_errors} |\n"
+        f"| HTTP errors | {total_http_errors} |\n"
+        f"| Throttled (429) | {total_throttled} |\n"
+    )
+
+    if failed_results:
+        markdown += (
+            "\n#### Failed files\n\n"
+            "| File | OK / Operation | Feeder errors | HTTP errors | Sample failed documents |\n"
+            "|---|---|---|---|---|\n"
+        )
+        for r in failed_results:
+            failed_docs = [doc for error in r.errors for doc in error.failed_documents]
+            sample = "; ".join(f"`{doc.doc_id}`: {doc.error}" for doc in failed_docs[:3])
+            if len(failed_docs) > 3:
+                sample += f" (+{len(failed_docs) - 3} more)"
+            markdown += (
+                f"| `{r.feed_path.name}` | {r.ok_count}/{r.operation_count} | "
+                f"{r.feeder_error_count} | {r.http_error_count} | {sample or '—'} |\n"
+            )
+
+    return markdown
 
 
 @task
@@ -151,7 +228,7 @@ def get_ssm_parameter(name: str) -> str:
 
 
 @task
-def vespa_feed(feed_path: Path) -> None:
+def vespa_feed(feed_path: Path) -> FeedResult:
     run_logger = get_run_logger()
 
     endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
@@ -213,50 +290,53 @@ def vespa_feed(feed_path: Path) -> None:
                 )
                 raise
 
-            response_str = orjson.dumps(
-                response_data, option=orjson.OPT_INDENT_2
-            ).decode()
-
-            feeder_operation_count = response_data.get("feeder.operation.count", 0)
-            feeder_ok_count = response_data.get("feeder.ok.count", 0)
-            feeder_error_count = response_data.get("feeder.error.count", 0)
-            http_response_error_count = response_data.get(
-                "http.response.error.count", 0
+            feed_response = VespaFeedResponse.model_validate(response_data)
+            too_many_requests_count = feed_response.http_response_code_counts.get(
+                "429", 0
             )
-            http_response_code_counts = response_data.get(
-                "http.response.code.counts", {}
-            )
-            too_many_requests_count = http_response_code_counts.get("429", 0)
 
-            span.set_attribute("feed.operation_count", feeder_operation_count)
-            span.set_attribute("feed.ok_count", feeder_ok_count)
-            span.set_attribute("feed.feeder_error_count", feeder_error_count)
-            span.set_attribute("feed.http_error_count", http_response_error_count)
+            span.set_attribute(
+                "feed.feeder_operation_count", feed_response.feeder_operation_count
+            )
+            span.set_attribute("feed.feeder_ok_count", feed_response.feeder_ok_count)
+            span.set_attribute(
+                "feed.feeder_error_count", feed_response.feeder_error_count
+            )
+            span.set_attribute(
+                "feed.http_response_error_count",
+                feed_response.http_response_error_count,
+            )
 
             set_feed_stats(
                 input_count=input_record_count,
-                ok_count=feeder_ok_count,
-                total_errors=feeder_error_count
-                + (feeder_operation_count - feeder_ok_count),
+                ok_count=feed_response.feeder_ok_count,
+                total_errors=feed_response.feeder_error_count
+                + (
+                    feed_response.feeder_operation_count - feed_response.feeder_ok_count
+                ),
             )
 
             run_logger.info(
-                f"vespa feed stats: input={input_record_count} operation={feeder_operation_count} "
-                f"ok={feeder_ok_count} feeder_errors={feeder_error_count} http_errors={http_response_error_count} "
-                f"throttled={too_many_requests_count} codes={http_response_code_counts}"
+                f"vespa feed stats: feed_path={feed_path} input={input_record_count} "
+                f"operation={feed_response.feeder_operation_count} ok={feed_response.feeder_ok_count} "
+                f"feeder_errors={feed_response.feeder_error_count} http_errors={feed_response.http_response_error_count} "
+                f"throttled={too_many_requests_count} codes={feed_response.http_response_code_counts}"
             )
 
             # We warn on throttled requests, as they have generally self-healed, but they could be an indicator of a larger issue.
             if too_many_requests_count:
                 run_logger.warning(
-                    f"vespa_feed: {too_many_requests_count} requests throttled (429) but retried successfully"
+                    f"vespa_feed: feed_path={feed_path} {too_many_requests_count} requests "
+                    "throttled (429) but retried successfully"
                 )
 
             feeder_metrics.record_feed_stats(
                 input_count=input_record_count,
-                ok_count=feeder_ok_count,
-                total_errors=feeder_error_count
-                + (feeder_operation_count - feeder_ok_count),
+                ok_count=feed_response.feeder_ok_count,
+                total_errors=feed_response.feeder_error_count
+                + (
+                    feed_response.feeder_operation_count - feed_response.feeder_ok_count
+                ),
                 deployment_name=deployment.name or "local",
                 run_name=flow_run.name or "unknown",
             )
@@ -268,51 +348,44 @@ def vespa_feed(feed_path: Path) -> None:
             # feeder.error.count is transport-layer failures (connection refused, TLS error,
             # etc.) where the CLI gave up before receiving any HTTP response.
             # We error as these documents would be considered missed.
-            if feeder_error_count > 0:
+            if feed_response.feeder_error_count > 0:
                 errors.append(
                     VespaHTTPError(
-                        feeder_error_count=feeder_error_count,
+                        feeder_error_count=feed_response.feeder_error_count,
                         failed_documents=failed_documents,
                     )
                 )
 
             # ok.count < operation.count means records were submitted but not indexed -
             # the CLI got HTTP responses but exhausted retries without a 2xx.
-            if feeder_ok_count < feeder_operation_count:
+            if feed_response.feeder_ok_count < feed_response.feeder_operation_count:
                 errors.append(
                     VespaResponseError(
-                        ok_count=feeder_ok_count,
-                        operation_count=feeder_operation_count,
-                        http_error_count=http_response_error_count,
+                        ok_count=feed_response.feeder_ok_count,
+                        operation_count=feed_response.feeder_operation_count,
+                        http_error_count=feed_response.http_response_error_count,
                         failed_documents=failed_documents,
                     )
                 )
-
-            has_errors = len(errors) > 0
-            has_warnings = too_many_requests_count > 0
-
-            markdown = "### Vespa Feed Response\n\n"
-            if has_errors:
-                markdown += "🚨 **Error: records were not indexed.**\n\n"
-            elif has_warnings:
-                markdown += "⚠️ **Warning: requests were throttled but retried successfully.**\n\n"
-            else:
-                markdown += "✅ **Success: all records indexed.**\n\n"
-            markdown += f"```json\n{response_str}\n```"
-
-            create_markdown_artifact(
-                key="vespa-feed-response",
-                markdown=markdown,
-                description="Vespa Feed Output Data",
-            )
 
             if errors:
                 span.set_status(StatusCode.ERROR, "Vespa feed response contains errors")
                 for doc in failed_documents:
                     run_logger.error(
-                        f"vespa_feed: failed document doc_id={doc.doc_id} error={doc.error}"
+                        f"vespa_feed: failed document feed_path={feed_path} "
+                        f"doc_id={doc.doc_id} error={doc.error}"
                     )
-                raise ExceptionGroup("vespa_feed: failed", errors)
+
+            return FeedResult(
+                feed_path=feed_path,
+                input_count=input_record_count,
+                operation_count=feed_response.feeder_operation_count,
+                ok_count=feed_response.feeder_ok_count,
+                feeder_error_count=feed_response.feeder_error_count,
+                http_error_count=feed_response.http_response_error_count,
+                throttled_count=too_many_requests_count,
+                errors=errors,
+            )
     finally:
         feeder_metrics.record_task_duration(
             "vespa_feed",
@@ -357,8 +430,55 @@ def vespa_feeder_flow(
             span.set_attribute("flow.s3_key", s3_key)
 
             feed_paths = download_from_s3(bucket=s3_bucket, key=s3_key)
-            for feed_path in feed_paths:
-                vespa_feed(feed_path=feed_path)
+            results = [vespa_feed(feed_path=feed_path) for feed_path in feed_paths]
+
+            total_input = sum(result.input_count for result in results)
+            total_operation = sum(result.operation_count for result in results)
+            total_ok = sum(result.ok_count for result in results)
+            total_feeder_errors = sum(result.feeder_error_count for result in results)
+            total_http_errors = sum(result.http_error_count for result in results)
+            total_throttled = sum(result.throttled_count for result in results)
+            failed_results = [result for result in results if result.errors]
+
+            span.set_attribute("feed.total_input_count", total_input)
+            span.set_attribute("feed.total_ok_count", total_ok)
+            span.set_attribute("feed.failed_file_count", len(failed_results))
+
+            # Overwrite the per-file stats set by the last vespa_feed call so the
+            # Slack notification reflects the whole run, not just the last file.
+            set_feed_stats(
+                input_count=total_input,
+                ok_count=total_ok,
+                total_errors=total_feeder_errors + (total_operation - total_ok),
+            )
+
+            run_logger.info(
+                f"vespa_feeder_flow aggregate stats: files={len(results)} "
+                f"input={total_input} operation={total_operation} ok={total_ok} "
+                f"feeder_errors={total_feeder_errors} http_errors={total_http_errors} "
+                f"throttled={total_throttled} failed_files={len(failed_results)}"
+            )
+
+            create_markdown_artifact(
+                key="vespa-feeder-run-summary",
+                markdown=_build_run_summary_markdown(results, failed_results),
+                description="Aggregate summary of the vespa-feeder run across all files",
+            )
+
+            if failed_results:
+                for r in failed_results:
+                    run_logger.error(
+                        f"vespa_feeder_flow: feed_path={r.feed_path} failed "
+                        f"(ok={r.ok_count}/{r.operation_count}, "
+                        f"feeder_errors={r.feeder_error_count}, "
+                        f"http_errors={r.http_error_count})"
+                    )
+                failed_paths = ", ".join(str(r.feed_path) for r in failed_results)
+                raise ExceptionGroup(
+                    f"vespa_feed: failed for {len(failed_results)}/{len(results)} "
+                    f"file(s): {failed_paths}",
+                    [error for r in failed_results for error in r.errors],
+                )
     except Exception:
         _failed = True
         raise
