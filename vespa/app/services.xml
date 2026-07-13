@@ -143,11 +143,29 @@
                 <certificate file="security/clients.pem"/>
             </client>
             <!-- Token based auth-->
-            <client id="search-production-read" permissions="read">
+            <client id="search-production-read" permissions="read" deploy:application="search">
                 <token id="search-production-read"/>
             </client>
-            <client id="search-production-write" permissions="read,write">
+            <client id="search-production-write" permissions="read,write" deploy:application="search">
                 <token id="search-production-write"/>
+            </client>
+            <!-- Shared write token for feeding personal dev instances (search-dev
+                 application only) from a headless Prefect worker - see
+                 vespa-dev/feed_from_production.py. Scoped to search-dev so this
+                 token can never be used to write to production. -->
+            <client
+                id="search-dev-write"
+                permissions="read,write"
+                deploy:application="search-dev"
+            >
+                <token id="search-dev-write"/>
+            </client>
+            <client
+                id="search-dev-read"
+                permissions="read"
+                deploy:application="search-dev"
+            >
+                <token id="search-dev-read"/>
             </client>
             <client id="vespa-metrics-reader" permissions="read">
                 <certificate file="security/vespa-metrics-reader.pem"/>
