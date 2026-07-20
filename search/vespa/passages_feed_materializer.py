@@ -194,6 +194,11 @@ class _ChunkWriter:
         self._f_gz.close()
         _upload_chunk(self._s3, self._output_file, self._output_file_gz)
         self.chunks_uploaded += 1
+        print(
+            f"Uploaded chunk {self._chunk_index} "
+            f"({self._output_file.name}, {self._chunk_total} passages) - "
+            f"{self.total} passages written so far."
+        )
         self._chunk_index += 1
         self._chunk_total = 0
         self._output_file, self._output_file_gz = _open_chunk(self._chunk_index)
@@ -221,6 +226,10 @@ class _ChunkWriter:
         if self._chunk_total > 0:
             _upload_chunk(self._s3, self._output_file, self._output_file_gz)
             self.chunks_uploaded += 1
+            print(
+                f"Uploaded final chunk {self._chunk_index} "
+                f"({self._output_file.name}, {self._chunk_total} passages)."
+            )
         else:
             # Last chunk ended up empty because the final flush landed exactly
             # on a chunk boundary - nothing new to upload, clean up the empty
