@@ -37,7 +37,7 @@ create instance:
         vespa deploy -a "$app" -t cloud -z {{zone}} ../vespa/app
     fi
     echo "Resolving data-plane endpoint for $app..."
-    endpoint=$(vespa status endpoint -a "$app" -t cloud -z {{zone}} --wait 300 --format json \
+    endpoint=$(vespa status endpoint -a "$app" -t cloud -z {{zone}} --wait 900 --format json \
         | jq -r 'select(.authMethod=="token") | .url')
     aws ssm put-parameter \
         --name "/search/vespa-dev/{{instance}}" \
@@ -54,8 +54,8 @@ deploy instance:
 #   just feed jamesgorrie          # default: 5% sample of the prod corpus
 #   just feed jamesgorrie 100      # full ~10GB corpus
 feed instance sample="5":
-    python feed_from_production.py \
-        --instance {{instance}} \
+    uv run python feed_from_production.py \
+        --target {{dev_app}}.{{instance}} \
         --sample-percent {{sample}}
  
 # Tear the instance down now, rather than waiting on the 14-day auto-expiry.
@@ -72,7 +72,7 @@ snapshot sample="100":
 prefect_deploy:
     uv run python prefect_deploy.py
 
-registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo $AWS_DEFAULT_REGION` + ".amazonaws.com"
+registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo "${AWS_DEFAULT_REGION:-}"` + ".amazonaws.com"
 image := registry + "/search-vespa-dev"
 
 docker-build:

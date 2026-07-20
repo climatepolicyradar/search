@@ -32,7 +32,7 @@ if __name__ == "__main__":
     # created/fed ad hoc (see justfile), so this deployment only exists to be
     # triggered manually with an explicit instance, e.g.:
     #   prefect deployment run 'feed-from-production/search-vespa-dev-feed-from-production' \
-    #       -p instance=<instance> \
+    #       -p target=climate-policy-radar.search-dev.<instance> \
     #       -p sample_percent=100
     feed_from_production.deploy(
         "search-vespa-dev-feed-from-production",
