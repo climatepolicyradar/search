@@ -1,3 +1,17 @@
+"""
+Materialize passages for the `search-vespa-feeder-passages` feed.
+
+Output is written in two tiers:
+- write buffer: an in-memory list of records, flushed to disk every
+    `BATCH_SIZE` records to reduce write syscalls. Purely an I/O
+    optimisation, invisible outside this module.
+- chunk: an on-disk/S3 output file, rotated (closed, uploaded, reopened
+    as the next one) every `CHUNK_SIZE` records. Chunk size decides how
+    long a single `vespa feed` subprocess runs for downstream in the
+    feeder, so a connection drop late in a feed only costs one chunk's
+    records, not the whole (multi-hour, single-file) run.
+"""
+
 import gzip
 from pathlib import Path
 from typing import NotRequired, TypedDict
@@ -37,11 +51,8 @@ class VespaPassageUpdate(TypedDict):
     heading_id: NotRequired[VespaAssign[str]]
 
 
-BATCH_SIZE = 10_000
-
-# Bounds each `vespa feed` subprocess to a single chunk so a connection drop late
-# in a run only costs that chunk's records, not a multi-hour single-file feed.
-CHUNK_SIZE = 200_000
+BATCH_SIZE = 10_000  # write-buffer flush size
+CHUNK_SIZE = 200_000  # output file rotation size, see module docstring
 
 
 def _is_principal(document: Document) -> bool:
@@ -137,7 +148,7 @@ def passages_feed_materializer():
     chunk_total = 0
     chunk_index = 0
     chunks_uploaded = 0
-    batch: list[bytes] = []
+    write_buffer: list[bytes] = []
 
     principal_id_lookup = _build_principal_id_lookup()
     print(f"Built principal_id lookup for {len(principal_id_lookup)} documents.")
@@ -147,13 +158,13 @@ def passages_feed_materializer():
     f = output_file.open("wb")
     f_gz = gzip.open(output_file_gz, "wb")
 
-    def flush_batch() -> None:
-        nonlocal batch, total, chunk_total
-        f.writelines(batch)
-        f_gz.writelines(batch)
-        total += len(batch)
-        chunk_total += len(batch)
-        batch = []
+    def flush_write_buffer() -> None:
+        nonlocal write_buffer, total, chunk_total
+        f.writelines(write_buffer)
+        f_gz.writelines(write_buffer)
+        total += len(write_buffer)
+        chunk_total += len(write_buffer)
+        write_buffer = []
 
     def rotate_chunk() -> None:
         nonlocal chunk_index, chunk_total, chunks_uploaded, output_file, output_file_gz, f, f_gz
@@ -179,15 +190,15 @@ def passages_feed_materializer():
                 vespa_update = _text_block_to_vespa_update(
                     block, document_id, principal_id=principal_id
                 )
-                batch.append(orjson.dumps(vespa_update) + b"\n")
+                write_buffer.append(orjson.dumps(vespa_update) + b"\n")
 
-                if len(batch) >= BATCH_SIZE:
-                    flush_batch()
+                if len(write_buffer) >= BATCH_SIZE:
+                    flush_write_buffer()
                     if chunk_total >= CHUNK_SIZE:
                         rotate_chunk()
 
-        if batch:
-            flush_batch()
+        if write_buffer:
+            flush_write_buffer()
     finally:
         f.close()
         f_gz.close()
