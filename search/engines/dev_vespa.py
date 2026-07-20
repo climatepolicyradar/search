@@ -1173,6 +1173,14 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            # TODO: always requesting debug-summary here (rather than only
+            # when self.debug) so `Passage.tokens` (text_tokens) is populated
+            # on every live request, not just debug/CLI usage. This uses
+            # `from-disk` field access instead of in-memory attributes, so it
+            # is slower per-query than the default summary - accepted as a
+            # simplicity-over-performance tradeoff for now. Push back to only
+            # when self.debug once once `tokens`' field shape/necessity is settled
+            # `tokens`' field shape/necessity is settled (see Passage.tokens).
             "presentation.summary": "debug-summary",
         }
         if self.debug:
