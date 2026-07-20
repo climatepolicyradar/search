@@ -127,6 +127,7 @@ def passage_data_strategy(draw) -> dict:
     """Generate input data for Passage model."""
     return {
         "text_block_id": draw(text_block_id_strategy),
+        "idx": draw(st.integers(min_value=0, max_value=10000)),
         "text": draw(text_strategy),
         "language": draw(st.sampled_from(["en", "fr", "es", "de", "pt"])),
         "type": draw(st.sampled_from(["Text", "Title", "Table", "Figure"])),
