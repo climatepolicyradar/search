@@ -1,0 +1,83 @@
+
+# Vespa Cloud relevance-experiment workflow
+#
+# Prereqs (once per machine):
+#   vespa auth login
+#   vespa auth cert -a <dev_app>          # data-plane cert for the dev application
+#   pip install prefect                   # or: uv add prefect / poetry add prefect
+#   jq, aws CLI configured                 # used by `create`/`destroy` to store/clear the instance's endpoint in SSM
+#
+# Adjust tenant/dev_app/zone below to your real Vespa Cloud names.
+
+tenant   := "climate-policy-radar"
+dev_app  := tenant + ".search-dev"           # tenant.application under which personal instances live
+zone     := "dev.aws-us-east-1c"
+ 
+# Create the instance if it doesn't already exist yet. No-op if it's already
+# there - use `just deploy` to push changes to an existing instance.
+# Vespa Cloud has no separate "provision an empty instance" step: creating and
+# deploying are the same API call, so this just guards `vespa deploy` behind
+# an existence check via `vespa status`.
+#
+# Also resolves the instance's data-plane endpoint and stores it in SSM under
+# /search/vespa-dev/<instance> - personal dev instances get a fresh,
+# unpredictable endpoint URL on every create, so feed_from_production.py's
+# feed_target task (running headless on the Prefect ECS worker, with no
+# control-plane credentials) reads it from there instead of resolving it
+# itself. Re-run unconditionally (even if the instance already existed) so
+# this stays in sync if it's ever missing or stale.
+create instance:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    app="{{dev_app}}.{{instance}}"
+    if vespa status -a "$app" -t cloud -z {{zone}} >/dev/null 2>&1; then
+        echo "Instance $app already exists - nothing to do. Use 'just deploy {{instance}}' to push changes."
+    else
+        echo "Creating $app in {{zone}}"
+        vespa deploy -a "$app" -t cloud -z {{zone}} ../vespa/app
+    fi
+    echo "Resolving data-plane endpoint for $app..."
+    endpoint=$(vespa status endpoint -a "$app" -t cloud -z {{zone}} --wait 900 --format json \
+        | jq -r 'select(.authMethod=="token") | .url')
+    aws ssm put-parameter \
+        --name "/search/vespa-dev/{{instance}}" \
+        --value "$endpoint" \
+        --type SecureString \
+        --overwrite >/dev/null
+    echo "Stored endpoint for {{instance}} at /search/vespa-dev/{{instance}}"
+ 
+# Deploy your local schema/services.xml changes to an existing instance.
+deploy instance:
+    vespa deploy -a {{dev_app}}.{{instance}} -t cloud -z {{zone}} ../vespa/app
+ 
+# Feed the instance from a sample (or full) snapshot of prod.
+#   just feed jamesgorrie          # default: 5% sample of the prod corpus
+#   just feed jamesgorrie 100      # full ~10GB corpus
+feed instance sample="5":
+    uv run python feed_from_production.py \
+        --target {{dev_app}}.{{instance}} \
+        --sample-percent {{sample}}
+ 
+# Tear the instance down now, rather than waiting on the 14-day auto-expiry.
+destroy instance:
+    vespa destroy -a {{dev_app}}.{{instance}} --force
+    aws ssm delete-parameter --name "/search/vespa-dev/{{instance}}" 2>/dev/null || true
+
+# Snapshot production to s3://cpr-cache/search/vespa/index/ as sharded JSONL.
+# Runs daily via the scheduled deployment (see prefect_deploy.py) - this is
+# for triggering an ad hoc run locally.
+snapshot sample="100":
+    python export_production_snapshot.py --sample-percent {{sample}}
+
+prefect_deploy:
+    uv run python prefect_deploy.py
+
+registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo "${AWS_DEFAULT_REGION:-}"` + ".amazonaws.com"
+image := registry + "/search-vespa-dev"
+
+docker-build:
+    docker build --platform=linux/amd64 -t {{ image }}:latest .
+
+docker-push:
+    aws ecr get-login-password | docker login --username AWS --password-stdin {{ registry }}
+    docker push {{ image }}:latest

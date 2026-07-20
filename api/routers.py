@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic_settings import SettingsConfigDict
 
-from api.types import Aggregations, Facets, ItemResponse, SearchResponse
+from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.utils import documents_order_by, normalise_filters, order_by, pagination
 from search.data_in_models import Document
 from search.data_in_models import Label as DataInLabel
@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 
 class EnvSettings(Settings):
-    model_config = SettingsConfigDict(env_file="api/.env")
+    model_config = SettingsConfigDict(env_file=".env")
 
 
 # @see: https://github.com/pydantic/pydantic-settings/issues/201

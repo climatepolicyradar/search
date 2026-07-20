@@ -1,5 +1,6 @@
 schema documents {
     document documents {
+        field version type string {}
         field id type string {}
         field title type string {
             indexing: index | summary

@@ -270,6 +270,26 @@ elif stack != "review":
         type=ssm.ParameterType.SECURE_STRING,
         value=config.get("vespa_read_token"),
     )
+
+    # Used by vespa-dev/feed_from_production.py's feed_target task, run on the
+    # Prefect ECS work pool (mvp-prod-ecs) - not provisioned by this stack, so its
+    # task role isn't granted read access here. See vespa/app/services.xml for the
+    # search-dev-scoped client this token authenticates against, and
+    # vespa-dev/justfile's `create`/`destroy` recipes for the per-instance
+    # endpoint (/search/vespa-dev/<instance>) this token is paired with.
+    vespa_dev_read_token = ssm.Parameter(
+        "vespa-dev-read-token",
+        name="/search/vespa-dev/read_token",
+        type=ssm.ParameterType.SECURE_STRING,
+        value=config.get("vespa_dev_read_token"),
+    )
+    vespa_dev_write_token = ssm.Parameter(
+        "vespa-dev-write-token",
+        name="/search/vespa-dev/write_token",
+        type=ssm.ParameterType.SECURE_STRING,
+        value=config.get("vespa_dev_write_token"),
+    )
+
     apprunner_ssm_parameter_policy = iam.RolePolicy(
         f"{application_name}-ssm-parameter-policy",
         name=f"{application_name}-ssm-parameter-policy",
@@ -277,6 +297,7 @@ elif stack != "review":
         policy=pulumi.Output.all(
             vespa_endpoint_arn=vespa_endpoint.arn,
             vespa_read_token_arn=vespa_read_token.arn,
+            vespa_dev_write_token_arn=vespa_dev_write_token.arn,
         ).apply(
             lambda args: json.dumps(
                 {
@@ -292,6 +313,7 @@ elif stack != "review":
                             "Resource": [
                                 args["vespa_endpoint_arn"],
                                 args["vespa_read_token_arn"],
+                                args["vespa_dev_write_token_arn"],
                             ],
                         }
                     ],

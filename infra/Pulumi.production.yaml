@@ -17,3 +17,7 @@ config:
     secure: AAABAJrB8xohmU2+XrdirAvjQb5ncF2EnSS+uwHvw37QM1fW2ZdYsBz5VgBl3dVuSxhp
   search:WIKIBASE_PASSWORD:
     secure: AAABALWz9R+J13C89TPkxNnWXDRBbqLuXSNPUOfcfKSW7j1S+WrdmHD+Az0ewI58pZxXFlEm0/O1ymVd/+sFKw==
+  search:vespa_dev_read_token:
+    secure: AAABAPB1HCdeACsUocIQ/4M3sH/jp+vxtLJLmcxkVzrpSonrOqwtMUaHH4JLI/tUG8NIozpCfe160F/D0Gh+Sj+JgKNku5rzJWkZVWloCDO/iwkHJsVe
+  search:vespa_dev_write_token:
+    secure: AAABAGB+Pd5RBizPGywHXYRjETOl47OfYXOHreJ9BcPOmAa0u/2U9UhdFS4Y5XOccYdMJQJ6w+Hlmup6tD+FPjnyN1ruGnvQJo5lhfmrGmIji71jbd/n
