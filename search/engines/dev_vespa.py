@@ -730,6 +730,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 passages.append(
                     Passage(
                         text_block_id=passage.get("text_block_id", ""),
+                        idx=passage.get("idx", 0),
                         text=bolded_text,
                         language=passage.get("language", ""),
                         type=passage.get("type", ""),
@@ -1172,10 +1173,18 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            # TODO: always requesting debug-summary here (rather than only
+            # when self.debug) so `Passage.tokens` (text_tokens) is populated
+            # on every live request, not just debug/CLI usage. This uses
+            # `from-disk` field access instead of in-memory attributes, so it
+            # is slower per-query than the default summary - accepted as a
+            # simplicity-over-performance tradeoff for now. Push back to only
+            # when self.debug once once `tokens`' field shape/necessity is settled
+            # `tokens`' field shape/necessity is settled (see Passage.tokens).
+            "presentation.summary": "debug-summary",
         }
         if self.debug:
             request_body["ranking.profile"] = "nativerank"
-            request_body["presentation.summary"] = "debug-summary"
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
@@ -1193,6 +1202,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
             passages.append(
                 Passage(
                     text_block_id=fields.get("id", ""),
+                    idx=fields.get("idx", 0),
                     text=fields.get("text", ""),
                     language=fields.get("language", ""),
                     type=fields.get("type", ""),
@@ -1200,6 +1210,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
                     page_number=fields.get("page_number", 0),
                     heading_id=fields.get("heading_id"),
                     document_id=fields.get("document_id", ""),
+                    tokens=fields.get("text_tokens") or [],
                 )
             )
             if self.debug:

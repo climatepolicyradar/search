@@ -5,13 +5,22 @@ class Passage(BaseModel):
     """Base class for a passage"""
 
     text_block_id: str = Field(default="")
+    idx: int = Field(default=0)
     text: str = Field(default="")
     language: str = Field(default="")
     type: str = Field(default="")
     type_confidence: float = Field(default=0.0)
     page_number: int = Field(default=0)
+    # TODO: add heading_text (resolved text of the heading_id passage) - useful
+    # for passage ranking.
     heading_id: str | None = Field(default=None)
     document_id: str = Field(default="")
+    # TODO: this is Vespa's own on-the-fly tokenization of `text` (via
+    # debug-summary), NOT the same as the Snowflake model's `tokens` column
+    # (Python-side tokenization fed INTO Vespa). Will likely remove this field
+    # in the future - just here for now to expose for discovery for the UI
+    # project.
+    tokens: list[str] = Field(default_factory=list)
 
     @computed_field
     @property
