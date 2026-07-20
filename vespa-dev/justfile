@@ -30,14 +30,14 @@ create instance:
     #!/usr/bin/env bash
     set -euo pipefail
     app="{{dev_app}}.{{instance}}"
-    if vespa status -a "$app" -t cloud -z {{zone}} >/dev/null 2>&1; then
+    if uv run vespa status -a "$app" -t cloud -z {{zone}} >/dev/null 2>&1; then
         echo "Instance $app already exists - nothing to do. Use 'just deploy {{instance}}' to push changes."
     else
         echo "Creating $app in {{zone}}"
-        vespa deploy -a "$app" -t cloud -z {{zone}} ../vespa/app
+        uv run vespa deploy -a "$app" -t cloud -z {{zone}} ../vespa/app
     fi
     echo "Resolving data-plane endpoint for $app..."
-    endpoint=$(vespa status endpoint -a "$app" -t cloud -z {{zone}} --wait 900 --format json \
+    endpoint=$(uv run vespa status endpoint -a "$app" -t cloud -z {{zone}} --wait 900 --format json \
         | jq -r 'select(.authMethod=="token") | .url')
     aws ssm put-parameter \
         --name "/search/vespa-dev/{{instance}}" \
@@ -48,7 +48,7 @@ create instance:
  
 # Deploy your local schema/services.xml changes to an existing instance.
 deploy instance:
-    vespa deploy -a {{dev_app}}.{{instance}} -t cloud -z {{zone}} ../vespa/app
+    uv run vespa deploy -a {{dev_app}}.{{instance}} -t cloud -z {{zone}} ../vespa/app
  
 # Feed the instance from a sample (or full) snapshot of prod.
 #   just feed jamesgorrie          # default: 5% sample of the prod corpus
@@ -60,7 +60,7 @@ feed instance sample="5":
  
 # Tear the instance down now, rather than waiting on the 14-day auto-expiry.
 destroy instance:
-    vespa destroy -a {{dev_app}}.{{instance}} --force
+    uv run vespa destroy -a {{dev_app}}.{{instance}} --force
     aws ssm delete-parameter --name "/search/vespa-dev/{{instance}}" 2>/dev/null || true
 
 # Snapshot production to s3://cpr-cache/search/vespa/index/ as sharded JSONL.
