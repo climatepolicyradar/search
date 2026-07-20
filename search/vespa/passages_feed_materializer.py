@@ -1,3 +1,17 @@
+"""
+Materialize passages for the `search-vespa-feeder-passages` feed.
+
+Output is written in two tiers:
+- write buffer: an in-memory list of records, flushed to disk every
+    `BATCH_SIZE` records to reduce write syscalls. Purely an I/O
+    optimisation, invisible outside this module.
+- chunk: an on-disk/S3 output file, rotated (closed, uploaded, reopened
+    as the next one) every `CHUNK_SIZE` records. Chunk size decides how
+    long a single `vespa feed` subprocess runs for downstream in the
+    feeder, so a connection drop late in a feed only costs one chunk's
+    records, not the whole (multi-hour, single-file) run.
+"""
+
 import gzip
 from pathlib import Path
 from typing import NotRequired, TypedDict
@@ -5,6 +19,7 @@ from typing import NotRequired, TypedDict
 import boto3
 import orjson
 from cpr_contracts import Document
+from mypy_boto3_s3 import S3Client
 
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
@@ -36,7 +51,8 @@ class VespaPassageUpdate(TypedDict):
     heading_id: NotRequired[VespaAssign[str]]
 
 
-BATCH_SIZE = 10_000
+BATCH_SIZE = 10_000  # write-buffer flush size
+CHUNK_SIZE = 200_000  # output file rotation size, see module docstring
 
 
 def _is_principal(document: Document) -> bool:
@@ -105,16 +121,120 @@ def _text_block_to_vespa_update(
     }
 
 
-def passages_feed_materializer():
-    total = 0
-    batch: list[bytes] = []
+def _open_chunk(chunk_index: int) -> tuple[Path, Path]:
+    """Return the local (plain, gzip) file paths for the given chunk index."""
+    output_file = OUTPUT_CACHE_DIR / f"passages_feed_materializer_{chunk_index}.jsonl"
+    output_file_gz = OUTPUT_CACHE_DIR / f"passages_feed_materializer_{chunk_index}.jsonl.gz"
+    return output_file, output_file_gz
 
+
+def _upload_chunk(s3: S3Client, output_file: Path, output_file_gz: Path) -> None:
+    """
+    Upload one chunk's plain and gzip files to S3.
+
+    Kept in separate prefixes: the vespa-feeder reads every object under
+    search/vespa/passages_feed_materializer/ as a JSONL feed file, so the
+    gzip backups must live elsewhere to avoid being fed to Vespa.
+    """
+    s3.upload_file(
+        str(output_file),
+        "cpr-cache",
+        f"search/vespa/passages_feed_materializer/{output_file.name}",
+    )
+    s3.upload_file(
+        str(output_file_gz),
+        "cpr-cache",
+        f"search/vespa/passages_feed_materializer_gz/{output_file_gz.name}",
+    )
+
+
+class _ChunkWriter:
+    """
+    Buffers passage lines to disk, rotating to a new S3-uploaded chunk.
+
+    Rotates every `CHUNK_SIZE` records. See the module docstring for why
+    chunking matters to the downstream feeder.
+    """
+
+    def __init__(self, s3: S3Client) -> None:
+        """Open the first chunk's plain and gzip files, ready for `append`."""
+        self._s3 = s3
+        self.total = 0
+        self.chunks_uploaded = 0
+        self._chunk_index = 0
+        self._chunk_total = 0
+        self._write_buffer: list[bytes] = []
+        self._output_file, self._output_file_gz = _open_chunk(self._chunk_index)
+        self._f = self._output_file.open("wb")
+        self._f_gz = gzip.open(self._output_file_gz, "wb")
+
+    def append(self, line: bytes) -> None:
+        """
+        Buffer one JSONL line, flushing and rotating chunks as thresholds are hit.
+
+        Line must already include its trailing newline.
+        """
+        self._write_buffer.append(line)
+        if len(self._write_buffer) >= BATCH_SIZE:
+            self._flush()
+            if self._chunk_total >= CHUNK_SIZE:
+                self._rotate()
+
+    def _flush(self) -> None:
+        """Write the buffered lines to the current chunk's files and clear it."""
+        self._f.writelines(self._write_buffer)
+        self._f_gz.writelines(self._write_buffer)
+        self.total += len(self._write_buffer)
+        self._chunk_total += len(self._write_buffer)
+        self._write_buffer = []
+
+    def _rotate(self) -> None:
+        """Close and upload the current chunk, then open the next one."""
+        self._f.close()
+        self._f_gz.close()
+        _upload_chunk(self._s3, self._output_file, self._output_file_gz)
+        self.chunks_uploaded += 1
+        self._chunk_index += 1
+        self._chunk_total = 0
+        self._output_file, self._output_file_gz = _open_chunk(self._chunk_index)
+        self._f = self._output_file.open("wb")
+        self._f_gz = gzip.open(self._output_file_gz, "wb")
+
+    def abort(self) -> None:
+        """
+        Close file handles without uploading, for the exception path.
+
+        Matches the other materializers in this module (e.g.
+        `documents_feed_materializer`): on error, nothing partial gets
+        uploaded to S3 for the feeder to pick up.
+        """
+        self._f.close()
+        self._f_gz.close()
+
+    def close(self) -> None:
+        """Flush any remainder, close file handles, and upload the final chunk."""
+        if self._write_buffer:
+            self._flush()
+        self._f.close()
+        self._f_gz.close()
+
+        if self._chunk_total > 0:
+            _upload_chunk(self._s3, self._output_file, self._output_file_gz)
+            self.chunks_uploaded += 1
+        else:
+            # Last chunk ended up empty because the final flush landed exactly
+            # on a chunk boundary - nothing new to upload, clean up the empty
+            # files.
+            self._output_file.unlink(missing_ok=True)
+            self._output_file_gz.unlink(missing_ok=True)
+
+
+def passages_feed_materializer():
     principal_id_lookup = _build_principal_id_lookup()
     print(f"Built principal_id lookup for {len(principal_id_lookup)} documents.")
 
-    output_file = OUTPUT_CACHE_DIR / "passages_feed_materializer.jsonl"
-    output_file_gz = OUTPUT_CACHE_DIR / "passages_feed_materializer.jsonl.gz"
-    with output_file.open("wb") as f, gzip.open(output_file_gz, "wb") as f_gz:
+    writer = _ChunkWriter(s3=boto3.client("s3"))
+    try:
         for document_id, inference_result in read_embeddings_input_v2():
             pdf_data = inference_result.get("pdf_data")
             text_blocks = pdf_data.get("text_blocks") if pdf_data is not None else None
@@ -126,31 +246,17 @@ def passages_feed_materializer():
                 vespa_update = _text_block_to_vespa_update(
                     block, document_id, principal_id=principal_id
                 )
-                batch.append(orjson.dumps(vespa_update) + b"\n")
+                writer.append(orjson.dumps(vespa_update) + b"\n")
+    except Exception:
+        writer.abort()
+        raise
 
-                if len(batch) >= BATCH_SIZE:
-                    f.writelines(batch)
-                    f_gz.writelines(batch)
-                    total += len(batch)
-                    batch = []
+    writer.close()
 
-        if batch:
-            f.writelines(batch)
-            f_gz.writelines(batch)
-            total += len(batch)
-
-    s3 = boto3.client("s3")
-    s3.upload_file(
-        str(output_file),
-        "cpr-cache",
-        "search/vespa/passages_feed_materializer.jsonl",
+    print(
+        f"Uploaded {writer.total} passages to S3 across "
+        f"{writer.chunks_uploaded} chunk(s)."
     )
-    s3.upload_file(
-        str(output_file_gz),
-        "cpr-cache",
-        "search/vespa/passages_feed_materializer.jsonl.gz",
-    )
-    print(f"Uploaded {total} passages to S3.")
 
 
 if __name__ == "__main__":
