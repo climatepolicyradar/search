@@ -138,3 +138,91 @@ def test_passages_feed_materializer_no_passages_uploads_nothing() -> None:
         materializer.passages_feed_materializer()
 
         assert mock_s3.upload_file.call_args_list == []
+
+
+def test_passages_feed_materializer_aborts_without_uploading_on_exception() -> None:
+    """
+    An exception mid-run must not upload the in-progress final chunk.
+
+    Matches `documents_feed_materializer`'s behaviour, where the upload only
+    happens after the write loop completes without error.
+    """
+
+    def _raising_embeddings() -> Iterator[tuple[str, dict]]:
+        yield from _fake_embeddings(document_count=1, blocks_per_document=1)
+        raise RuntimeError("boom")
+
+    with (
+        patch.object(materializer, "CHUNK_SIZE", 10),
+        patch.object(materializer, "BATCH_SIZE", 1),
+        patch.object(
+            materializer, "_build_principal_id_lookup", return_value={}
+        ),
+        patch.object(
+            materializer,
+            "read_embeddings_input_v2",
+            return_value=_raising_embeddings(),
+        ),
+        patch.object(materializer.boto3, "client") as mock_boto_client,
+    ):
+        mock_s3 = MagicMock()
+        mock_boto_client.return_value = mock_s3
+
+        try:
+            materializer.passages_feed_materializer()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("expected RuntimeError to propagate")
+
+        assert mock_s3.upload_file.call_args_list == []
+
+
+class TestChunkWriter:
+    """Unit tests for `_ChunkWriter` in isolation, no embeddings/S3 mocking needed."""
+
+    def test_rotates_and_uploads_at_chunk_boundary(self) -> None:
+        with (
+            patch.object(materializer, "CHUNK_SIZE", 4),
+            patch.object(materializer, "BATCH_SIZE", 2),
+        ):
+            mock_s3 = MagicMock()
+            writer = materializer._ChunkWriter(s3=mock_s3)
+
+            for i in range(6):
+                writer.append(f"line-{i}\n".encode())
+
+            writer.close()
+
+            assert writer.total == 6
+            assert writer.chunks_uploaded == 2  # one rotation at 4, one final at close()
+            assert mock_s3.upload_file.call_count == 4  # 2 chunks x (plain + gz)
+
+    def test_close_is_a_noop_upload_when_buffer_lands_on_boundary(self) -> None:
+        with (
+            patch.object(materializer, "CHUNK_SIZE", 4),
+            patch.object(materializer, "BATCH_SIZE", 2),
+        ):
+            mock_s3 = MagicMock()
+            writer = materializer._ChunkWriter(s3=mock_s3)
+
+            for i in range(4):
+                writer.append(f"line-{i}\n".encode())
+            writer.close()
+
+            assert writer.total == 4
+            assert writer.chunks_uploaded == 1  # only the mid-run rotation
+            assert mock_s3.upload_file.call_count == 2  # 1 chunk x (plain + gz)
+
+    def test_abort_does_not_upload(self) -> None:
+        with (
+            patch.object(materializer, "CHUNK_SIZE", 100),
+            patch.object(materializer, "BATCH_SIZE", 1),
+        ):
+            mock_s3 = MagicMock()
+            writer = materializer._ChunkWriter(s3=mock_s3)
+
+            writer.append(b"line-0\n")
+            writer.abort()
+
+            assert mock_s3.upload_file.call_args_list == []

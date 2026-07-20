@@ -122,15 +122,20 @@ def _text_block_to_vespa_update(
 
 
 def _open_chunk(chunk_index: int) -> tuple[Path, Path]:
+    """Return the local (plain, gzip) file paths for the given chunk index."""
     output_file = OUTPUT_CACHE_DIR / f"passages_feed_materializer_{chunk_index}.jsonl"
     output_file_gz = OUTPUT_CACHE_DIR / f"passages_feed_materializer_{chunk_index}.jsonl.gz"
     return output_file, output_file_gz
 
 
 def _upload_chunk(s3: S3Client, output_file: Path, output_file_gz: Path) -> None:
-    # Kept in separate prefixes: the vespa-feeder reads every object under
-    # search/vespa/passages_feed_materializer/ as a JSONL feed file, so the
-    # gzip backups must live elsewhere to avoid being fed to Vespa.
+    """
+    Upload one chunk's plain and gzip files to S3.
+
+    Kept in separate prefixes: the vespa-feeder reads every object under
+    search/vespa/passages_feed_materializer/ as a JSONL feed file, so the
+    gzip backups must live elsewhere to avoid being fed to Vespa.
+    """
     s3.upload_file(
         str(output_file),
         "cpr-cache",
@@ -143,41 +148,92 @@ def _upload_chunk(s3: S3Client, output_file: Path, output_file_gz: Path) -> None
     )
 
 
-def passages_feed_materializer():
-    total = 0
-    chunk_total = 0
-    chunk_index = 0
-    chunks_uploaded = 0
-    write_buffer: list[bytes] = []
+class _ChunkWriter:
+    """
+    Buffers passage lines to disk, rotating to a new S3-uploaded chunk.
 
+    Rotates every `CHUNK_SIZE` records. See the module docstring for why
+    chunking matters to the downstream feeder.
+    """
+
+    def __init__(self, s3: S3Client) -> None:
+        """Open the first chunk's plain and gzip files, ready for `append`."""
+        self._s3 = s3
+        self.total = 0
+        self.chunks_uploaded = 0
+        self._chunk_index = 0
+        self._chunk_total = 0
+        self._write_buffer: list[bytes] = []
+        self._output_file, self._output_file_gz = _open_chunk(self._chunk_index)
+        self._f = self._output_file.open("wb")
+        self._f_gz = gzip.open(self._output_file_gz, "wb")
+
+    def append(self, line: bytes) -> None:
+        """
+        Buffer one JSONL line, flushing and rotating chunks as thresholds are hit.
+
+        Line must already include its trailing newline.
+        """
+        self._write_buffer.append(line)
+        if len(self._write_buffer) >= BATCH_SIZE:
+            self._flush()
+            if self._chunk_total >= CHUNK_SIZE:
+                self._rotate()
+
+    def _flush(self) -> None:
+        """Write the buffered lines to the current chunk's files and clear it."""
+        self._f.writelines(self._write_buffer)
+        self._f_gz.writelines(self._write_buffer)
+        self.total += len(self._write_buffer)
+        self._chunk_total += len(self._write_buffer)
+        self._write_buffer = []
+
+    def _rotate(self) -> None:
+        """Close and upload the current chunk, then open the next one."""
+        self._f.close()
+        self._f_gz.close()
+        _upload_chunk(self._s3, self._output_file, self._output_file_gz)
+        self.chunks_uploaded += 1
+        self._chunk_index += 1
+        self._chunk_total = 0
+        self._output_file, self._output_file_gz = _open_chunk(self._chunk_index)
+        self._f = self._output_file.open("wb")
+        self._f_gz = gzip.open(self._output_file_gz, "wb")
+
+    def abort(self) -> None:
+        """
+        Close file handles without uploading, for the exception path.
+
+        Matches the other materializers in this module (e.g.
+        `documents_feed_materializer`): on error, nothing partial gets
+        uploaded to S3 for the feeder to pick up.
+        """
+        self._f.close()
+        self._f_gz.close()
+
+    def close(self) -> None:
+        """Flush any remainder, close file handles, and upload the final chunk."""
+        if self._write_buffer:
+            self._flush()
+        self._f.close()
+        self._f_gz.close()
+
+        if self._chunk_total > 0:
+            _upload_chunk(self._s3, self._output_file, self._output_file_gz)
+            self.chunks_uploaded += 1
+        else:
+            # Last chunk ended up empty because the final flush landed exactly
+            # on a chunk boundary - nothing new to upload, clean up the empty
+            # files.
+            self._output_file.unlink(missing_ok=True)
+            self._output_file_gz.unlink(missing_ok=True)
+
+
+def passages_feed_materializer():
     principal_id_lookup = _build_principal_id_lookup()
     print(f"Built principal_id lookup for {len(principal_id_lookup)} documents.")
 
-    s3 = boto3.client("s3")
-    output_file, output_file_gz = _open_chunk(chunk_index)
-    f = output_file.open("wb")
-    f_gz = gzip.open(output_file_gz, "wb")
-
-    def flush_write_buffer() -> None:
-        nonlocal write_buffer, total, chunk_total
-        f.writelines(write_buffer)
-        f_gz.writelines(write_buffer)
-        total += len(write_buffer)
-        chunk_total += len(write_buffer)
-        write_buffer = []
-
-    def rotate_chunk() -> None:
-        nonlocal chunk_index, chunk_total, chunks_uploaded, output_file, output_file_gz, f, f_gz
-        f.close()
-        f_gz.close()
-        _upload_chunk(s3, output_file, output_file_gz)
-        chunks_uploaded += 1
-        chunk_index += 1
-        chunk_total = 0
-        output_file, output_file_gz = _open_chunk(chunk_index)
-        f = output_file.open("wb")
-        f_gz = gzip.open(output_file_gz, "wb")
-
+    writer = _ChunkWriter(s3=boto3.client("s3"))
     try:
         for document_id, inference_result in read_embeddings_input_v2():
             pdf_data = inference_result.get("pdf_data")
@@ -190,29 +246,17 @@ def passages_feed_materializer():
                 vespa_update = _text_block_to_vespa_update(
                     block, document_id, principal_id=principal_id
                 )
-                write_buffer.append(orjson.dumps(vespa_update) + b"\n")
+                writer.append(orjson.dumps(vespa_update) + b"\n")
+    except Exception:
+        writer.abort()
+        raise
 
-                if len(write_buffer) >= BATCH_SIZE:
-                    flush_write_buffer()
-                    if chunk_total >= CHUNK_SIZE:
-                        rotate_chunk()
+    writer.close()
 
-        if write_buffer:
-            flush_write_buffer()
-    finally:
-        f.close()
-        f_gz.close()
-
-    if chunk_total > 0:
-        _upload_chunk(s3, output_file, output_file_gz)
-        chunks_uploaded += 1
-    else:
-        # Last chunk ended up empty because the final flush landed exactly on
-        # a chunk boundary - nothing new to upload, clean up the empty files.
-        output_file.unlink(missing_ok=True)
-        output_file_gz.unlink(missing_ok=True)
-
-    print(f"Uploaded {total} passages to S3 across {chunks_uploaded} chunk(s).")
+    print(
+        f"Uploaded {writer.total} passages to S3 across "
+        f"{writer.chunks_uploaded} chunk(s)."
+    )
 
 
 if __name__ == "__main__":
