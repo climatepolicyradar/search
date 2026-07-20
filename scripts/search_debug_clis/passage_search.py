@@ -70,6 +70,8 @@ def search(
             table.add_row("heading_id", passage.heading_id)
         text_display = truncate(passage.text, max_len)
         table.add_row("text", highlight(text_display, words))
+        if passage.tokens:
+            table.add_row("tokens", str(passage.tokens))
         if relevance is not None:
             table.add_row("relevance", str(relevance))
         if text_tokens:
