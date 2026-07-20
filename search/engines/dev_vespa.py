@@ -1173,10 +1173,10 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            "presentation.summary": "debug-summary",
         }
         if self.debug:
             request_body["ranking.profile"] = "nativerank"
-            request_body["presentation.summary"] = "debug-summary"
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
@@ -1202,6 +1202,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
                     page_number=fields.get("page_number", 0),
                     heading_id=fields.get("heading_id"),
                     document_id=fields.get("document_id", ""),
+                    tokens=fields.get("text_tokens") or [],
                 )
             )
             if self.debug:

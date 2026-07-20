@@ -13,6 +13,7 @@ class Passage(BaseModel):
     page_number: int = Field(default=0)
     heading_id: str | None = Field(default=None)
     document_id: str = Field(default="")
+    tokens: list[str] = Field(default_factory=list)
 
     @computed_field
     @property
