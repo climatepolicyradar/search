@@ -1193,6 +1193,7 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
             passages.append(
                 Passage(
                     text_block_id=fields.get("id", ""),
+                    idx=fields.get("idx", 0),
                     text=fields.get("text", ""),
                     language=fields.get("language", ""),
                     type=fields.get("type", ""),
