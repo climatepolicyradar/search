@@ -730,6 +730,7 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
                 passages.append(
                     Passage(
                         text_block_id=passage.get("text_block_id", ""),
+                        idx=passage.get("idx", 0),
                         text=bolded_text,
                         language=passage.get("language", ""),
                         type=passage.get("type", ""),
