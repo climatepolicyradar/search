@@ -42,7 +42,7 @@ _FEEDS = [
     {
         "name": "search-vespa-feeder-passages",
         "s3_bucket": "cpr-cache",
-        "s3_key": "search/vespa/passages_feed_materializer.jsonl",
+        "s3_key": "search/vespa/passages_feed_materializer",
         "description": "Feed passages JSONL from S3 into Vespa",
     },
 ]

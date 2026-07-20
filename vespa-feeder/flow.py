@@ -262,6 +262,7 @@ def vespa_feed(feed_path: Path) -> FeedResult:
                     endpoint,
                     "--application",
                     application,
+                    "--verbose",
                 ],
                 env={**os.environ, "VESPA_CLI_DATA_PLANE_TOKEN": write_token},
                 capture_output=True,
@@ -269,7 +270,6 @@ def vespa_feed(feed_path: Path) -> FeedResult:
             )
 
             if result.stderr:
-                run_logger.warning("vespa feed stderr: %s", result.stderr)
                 span.set_attribute("feed.stderr", result.stderr[:4096])
 
             if result.returncode != 0:
