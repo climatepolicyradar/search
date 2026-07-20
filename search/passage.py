@@ -5,6 +5,7 @@ class Passage(BaseModel):
     """Base class for a passage"""
 
     text_block_id: str = Field(default="")
+    idx: int = Field(default=0)
     text: str = Field(default="")
     language: str = Field(default="")
     type: str = Field(default="")
