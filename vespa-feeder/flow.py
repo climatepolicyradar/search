@@ -42,7 +42,7 @@ _live_processes: set[subprocess.Popen] = set()
 _live_processes_lock = threading.Lock()
 
 
-def _terminate_live_processes(signum, frame) -> None:
+def _terminate_live_processes(signum, _) -> None:
     with _live_processes_lock:
         processes = list(_live_processes)
     logger.warning(
