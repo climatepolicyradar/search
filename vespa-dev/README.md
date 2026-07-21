@@ -12,6 +12,12 @@
 - If you want a sample, update the `sample_percent`
 - Wait 🥱…
 
+## Changing the feed flow
+
+```bash
+just release        # docker-build + docker-push + prefect_deploy
+```
+
 ## Usage in `./api`
 
 ```bash

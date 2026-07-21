@@ -73,6 +73,8 @@ prefect_deploy:
     uv run python prefect_deploy.py
 
 registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo "${AWS_DEFAULT_REGION:-}"` + ".amazonaws.com"
+# Rebuild + push the image, then re-register the deployments.
+release: docker-build docker-push prefect_deploy
 image := registry + "/search-vespa-dev"
 
 docker-build:
