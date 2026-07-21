@@ -58,6 +58,7 @@ import zlib
 from pathlib import Path
 
 import boto3
+from botocore.exceptions import ClientError
 
 from prefect import flow, get_run_logger, task
 
@@ -72,7 +73,17 @@ _DOC_ID_RE = re.compile(r'"id:documents:documents::([^"]+)"')
 @task
 def get_ssm_parameter(name: str) -> str:
     """Read an SSM parameter - used to resolve the dev instance's endpoint/write token."""
-    response = boto3.client("ssm").get_parameter(Name=name, WithDecryption=True)
+    client = boto3.client("ssm")
+    try:
+        response = client.get_parameter(Name=name, WithDecryption=True)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ParameterNotFound":
+            raise RuntimeError(
+                f"SSM parameter {name} not found in region {client.meta.region_name}. "
+                "For a per-instance endpoint (/search/vespa-dev/<instance>), run "
+                "`just create <instance>` first (in the production account, eu-west-1)."
+            ) from exc
+        raise
     value = response["Parameter"].get("Value")
     if value is None:
         raise ValueError(f"SSM parameter {name} has no value")
