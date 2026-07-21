@@ -102,6 +102,7 @@ schema passages {
         summary language {}
         summary text {}
         summary document_id {}
+        summary principal_id {}
         summary type {}
         summary type_confidence {}
         summary page_number {}

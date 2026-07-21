@@ -15,6 +15,7 @@ class Passage(BaseModel):
     # for passage ranking.
     heading_id: str | None = Field(default=None)
     document_id: str = Field(default="")
+    principal_id: str | None = Field(default=None)
     # TODO: this is Vespa's own on-the-fly tokenization of `text` (via
     # debug-summary), NOT the same as the Snowflake model's `tokens` column
     # (Python-side tokenization fed INTO Vespa). Will likely remove this field
