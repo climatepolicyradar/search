@@ -13,6 +13,7 @@ tenant   := "climate-policy-radar"
 dev_app  := tenant + ".search-dev"           # tenant.application under which personal instances live
 zone     := "dev.aws-us-east-1c"
 aws_region := "eu-west-1"
+feed_deployment := "feed-from-production/search-vespa-dev-feed-from-production"  # see prefect_deploy.py
  
 # Create the instance if it doesn't already exist yet. No-op if it's already
 # there - use `just deploy` to push changes to an existing instance.
@@ -65,10 +66,14 @@ deploy instance:
     uv run vespa deploy -a {{dev_app}}.{{instance}} -t cloud -z {{zone}} ../vespa/app
  
 # Feed the instance from a sample (or full) snapshot of prod.
-#   just feed jamesgorrie          # default: 5% sample of the prod corpus
-#   just feed jamesgorrie 100      # full ~10GB corpus
-feed instance sample="5":
-    uv run python feed_from_production.py \
+feed instance sample="20":
+    uv run prefect deployment run '{{feed_deployment}}' \
+        -p target={{dev_app}}.{{instance}} \
+        -p sample_percent={{sample}}
+
+# Run the flow locally against your working copy
+feed-local instance sample="5":
+    AWS_DEFAULT_REGION={{aws_region}} uv run python feed_from_production.py \
         --target {{dev_app}}.{{instance}} \
         --sample-percent {{sample}}
  
