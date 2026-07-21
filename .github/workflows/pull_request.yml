@@ -51,7 +51,7 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v4
       - name: Install python or load from cache with dependencies
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version-file: pyproject.toml
 
