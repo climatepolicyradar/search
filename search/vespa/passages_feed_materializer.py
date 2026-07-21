@@ -13,6 +13,7 @@ Output is written in two tiers:
 """
 
 import gzip
+from collections import Counter
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
@@ -25,6 +26,7 @@ from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.embeddings_input_v2 import TextBlock
 from search.vespa.sources.embeddings_input_v2 import read as read_embeddings_input_v2
+from search.vespa.sources.inference_results import read as read_inference_results
 
 # Paths
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -40,6 +42,13 @@ class VespaPassage(TypedDict):
     document_id: str
 
 
+class VespaConceptField(TypedDict):
+    id: str
+    type: str
+    value: str
+    count: int
+
+
 class VespaPassageUpdate(TypedDict):
     id: VespaAssign[str]
     idx: VespaAssign[int]
@@ -49,6 +58,7 @@ class VespaPassageUpdate(TypedDict):
     document_ref: VespaAssign[str]
     principal_document_ref: NotRequired[VespaAssign[str]]
     heading_id: NotRequired[VespaAssign[str]]
+    concepts: NotRequired[VespaAssign[list[VespaConceptField]]]
 
 
 BATCH_SIZE = 10_000  # write-buffer flush size
@@ -82,10 +92,42 @@ def _build_principal_id_lookup() -> dict[str, str]:
     return lookup
 
 
+def _build_passage_concepts_lookup() -> dict[str, list[VespaConceptField]]:
+    """
+    Build a `{passage_id → [concept, ...]}` map from the inference results.
+
+    Concepts are aggregated per passage: repeated hits of the same concept in a
+    passage collapse to a single entry whose `count` is the number of hits.
+    Mirrors the aggregation in `documents_concepts_feed_materializer`, but at
+    passage grain (no cross-passage accumulation).
+    """
+    lookup: dict[str, list[VespaConceptField]] = {}
+    for _document_id, inference_result_input in read_inference_results():
+        for passage_id, inference_results in inference_result_input.items():
+            concept_counts: Counter[str] = Counter()
+            concept_names: dict[str, str] = {}
+            for inference_result in inference_results:
+                concept_id = inference_result["id"]
+                concept_counts[concept_id] += 1
+                concept_names[concept_id] = inference_result["name"]
+
+            lookup[passage_id] = [
+                {
+                    "id": f"concept::{concept_id}",
+                    "type": "concept",
+                    "value": concept_names[concept_id],
+                    "count": count,
+                }
+                for concept_id, count in concept_counts.items()
+            ]
+    return lookup
+
+
 def _text_block_to_vespa_update(
     block: TextBlock,
     document_id: str,
     principal_id: str | None = None,
+    concepts: list[VespaConceptField] | None = None,
 ) -> VespaUpdate[VespaPassageUpdate]:
     """
     Build the Vespa update for a single passage/text block.
@@ -94,7 +136,7 @@ def _text_block_to_vespa_update(
     so imported doc-level fields (principal_id, geographies, ...) resolve at
     query time. `principal_document_ref` is set when the parent document has
     a derivable Principal, so Principal-scoped imports (principal_title, ...)
-    resolve too.
+    resolve too. `concepts` are the concepts detected within this passage.
     """
     fields: VespaPassageUpdate = {
         "id": {"assign": block["id"]},
@@ -113,6 +155,9 @@ def _text_block_to_vespa_update(
     heading_id = block.get("heading_id")
     if heading_id is not None:
         fields["heading_id"] = {"assign": heading_id}
+
+    if concepts:
+        fields["concepts"] = {"assign": concepts}
 
     return {
         "update": f"id:passages:passages::{block['id']}",
@@ -233,6 +278,9 @@ def passages_feed_materializer():
     principal_id_lookup = _build_principal_id_lookup()
     print(f"Built principal_id lookup for {len(principal_id_lookup)} documents.")
 
+    passage_concepts_lookup = _build_passage_concepts_lookup()
+    print(f"Built passage concepts lookup for {len(passage_concepts_lookup)} passages.")
+
     writer = _ChunkWriter(s3=boto3.client("s3"))
     try:
         for document_id, inference_result in read_embeddings_input_v2():
@@ -244,7 +292,10 @@ def passages_feed_materializer():
             principal_id = principal_id_lookup.get(document_id)
             for block in text_blocks:
                 vespa_update = _text_block_to_vespa_update(
-                    block, document_id, principal_id=principal_id
+                    block,
+                    document_id,
+                    principal_id=principal_id,
+                    concepts=passage_concepts_lookup.get(block["id"]),
                 )
                 writer.append(orjson.dumps(vespa_update) + b"\n")
     except Exception:
