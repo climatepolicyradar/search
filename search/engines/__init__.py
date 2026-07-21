@@ -78,12 +78,18 @@ class SearchEngine(ABC, Generic[TModel]):
 
     def __repr__(self) -> str:
         """Return a string representation of the search engine"""
-        return f"{self.name} ({self.model_class.__name__})"
+        base = f"{self.name} ({self.model_class.__name__})"
+        return f"{base} [{self.instance_name}]" if self.instance_name else base
 
     @property
     def name(self) -> str:
         """Return the name of the search engine"""
         return self.__class__.__name__
+
+    @property
+    def instance_name(self) -> str | None:
+        """Name of the specific instance of the search engine"""
+        return None
 
     @property
     def id(self) -> Identifier:

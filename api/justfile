@@ -11,6 +11,9 @@ gen-env instance="":
     touch ./.env
     echo "VESPA_READ_TOKEN=$vespa_read_token" > ./.env
     echo "VESPA_ENDPOINT=$vespa_endpoint" >> ./.env
+    if [ -n "{{ instance }}" ]; then
+        echo "VESPA_INSTANCE_NAME={{ instance }}" >> ./.env
+    fi
 
 dev:
     uv run fastapi dev ./main.py --port 8000
