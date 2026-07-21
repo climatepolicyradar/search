@@ -14,13 +14,14 @@ import orjson
 from mypy_boto3_s3 import S3Client
 from opentelemetry.trace import StatusCode
 from prefect.artifacts import create_markdown_artifact
+from prefect.client.schemas.objects import State
 from prefect.runtime import deployment, flow_run
+from prefect.states import Failed
 from pydantic import BaseModel, ConfigDict, Field
 from slack_notify import SlackNotify
 from telemetry import feeder_metrics, set_feed_stats, shutdown, tracer
 
 from prefect import flow, get_run_logger, task
-from prefect.states import Failed, State
 
 logger = logging.getLogger(__name__)
 
@@ -594,9 +595,12 @@ def vespa_feeder_flow(
                         "artifact and per-file error logs above for details."
                     )
                 )
-    except Exception:
+    except Exception as exc:
         _failed = True
-        raise
+        run_logger.error(
+            "vespa_feeder_flow failed with an unexpected error", exc_info=True
+        )
+        return Failed(message=str(exc))
     finally:
         feeder_metrics.record_run_duration(
             time.perf_counter() - start_time, deployment_name
