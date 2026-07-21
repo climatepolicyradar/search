@@ -1,0 +1,23 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[[package]]
+name = "vespa-local"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "vespacli" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "vespacli", specifier = "==8.719.5" }]
+
+[[package]]
+name = "vespacli"
+version = "8.719.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/a5/ba471d5d90b68a0530c43afa250ef44f7bcd981d2dd27dcac2e8a0f7f1fd/vespacli-8.719.5.tar.gz", hash = "sha256:57add5d186dab85946fa3c2505285edb959275727e9e9479334799052ebc5440", size = 48900746, upload-time = "2026-07-07T02:40:09.109Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/52/b1915f6225f72687febbff315f48675b35a9b20127a4875a9e531d935e10/vespacli-8.719.5-py3-none-any.whl", hash = "sha256:38789d1faed15effb0d22b62112a0eb98f96a39ce803e6c6c38f94c3ddac4f82", size = 49157668, upload-time = "2026-07-07T02:40:05.677Z" },
+]

@@ -3,39 +3,39 @@ extract-documents:
     aws s3 cp s3://cpr-cache/search/vespa/documents_feed_materializer.jsonl ../.data_cache/vespa/documents_feed_materializer.jsonl
 
 feed-documents:
-    vespa feed ../.data_cache/vespa/documents_feed_materializer.jsonl --target http://localhost:8080 --progress 30
+    uv run vespa feed ../.data_cache/vespa/documents_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 extract-documents-concepts:
     aws s3 cp s3://cpr-cache/search/vespa/documents_concepts_feed_materializer.jsonl ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl
 
 feed-documents-concepts:
-    vespa feed ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl --target http://localhost:8080 --progress 30
+    uv run vespa feed ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 extract-documents-principal-concepts:
     aws s3 cp s3://cpr-cache/search/vespa/documents_principal_concepts_feed_materializer.jsonl ../.data_cache/vespa/documents_principal_concepts_feed_materializer.jsonl
 
 feed-documents-principal-concepts:
-    vespa feed ../.data_cache/vespa/documents_principal_concepts_feed_materializer.jsonl --target http://localhost:8080 --progress 30
+    uv run vespa feed ../.data_cache/vespa/documents_principal_concepts_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 extract-documents-passages:
     aws s3 cp s3://cpr-cache/search/vespa/documents_passages_feed_materializer.jsonl.gz ../.data_cache/vespa/documents_passages_feed_materializer.jsonl.gz
     gunzip -f ../.data_cache/vespa/documents_passages_feed_materializer.jsonl.gz
 
 feed-documents-passages:
-    vespa feed ../.data_cache/vespa/documents_passages_feed_materializer.jsonl --target http://localhost:8080 --progress 30
+    uv run vespa feed ../.data_cache/vespa/documents_passages_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 extract-labels:
     aws s3 cp s3://cpr-cache/search/vespa/labels_feed_materializer.jsonl ../.data_cache/vespa/labels_feed_materializer.jsonl
 
 feed-labels:
-    vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target http://localhost:8080 --progress 30
+    uv run vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 extract-passages:
     aws s3 cp s3://cpr-cache/search/vespa/passages_feed_materializer.jsonl.gz ../.data_cache/vespa/passages_feed_materializer.jsonl.gz
     gunzip -f ../.data_cache/vespa/passages_feed_materializer.jsonl.gz
 
 feed-passages:
-    vespa feed ../.data_cache/vespa/passages_feed_materializer.jsonl --target http://localhost:8080 --progress 30
+    uv run vespa feed ../.data_cache/vespa/passages_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
 # Run vespa dev
 up:
@@ -60,7 +60,7 @@ get query="congo":
      --data-urlencode 'hits=10'
 
 get-document id="CCLW.collection.1755.0":
-    vespa document get "id:documents:documents::{{ id }}"
+    uv run vespa document get "id:documents:documents::{{ id }}"
 
 # Remove the application. To remove data as well, use `reset` below.
 destroy:
@@ -77,49 +77,49 @@ remote-deploy:
     # read this parameter from aws smm and store it in a variable it's a secret
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     vespa_application=$(aws ssm get-parameter --name "/search/vespa/application" --query "Parameter.Value" --output text --with-decryption)
-    vespa prod deploy ./app --target cloud --application $vespa_application --zone prod.aws-eu-west-1a
+    uv run vespa prod deploy ./app --target cloud --application $vespa_application --zone prod.aws-eu-west-1a
 
 remote-feed-documents:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/vespa/documents_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    uv run vespa feed ../.data_cache/vespa/documents_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-feed-documents-concepts:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    uv run vespa feed ../.data_cache/vespa/documents_concepts_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-feed-documents-passages:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/vespa/documents_passages_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    uv run vespa feed ../.data_cache/vespa/documents_passages_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-feed-documents-principal-concepts:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/vespa/documents_principal_concepts_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    uv run vespa feed ../.data_cache/vespa/documents_principal_concepts_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-feed-labels:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    uv run vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-feed-passages:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa feed ../.data_cache/vespa/passages_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+    uv run vespa feed ../.data_cache/vespa/passages_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
 
 remote-visit:
     #!/usr/bin/env bash
@@ -127,7 +127,7 @@ remote-visit:
     vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     mkdir -p ../.data_cache/vespa
-    vespa visit --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token" > "../.data_cache/vespa/documents-cloud.jsonl"
+    uv run vespa visit --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token" > "../.data_cache/vespa/documents-cloud.jsonl"
     echo "Exported to ../.data_cache/vespa/documents-cloud.jsonl"
 
 remote-get-document id="CCLW.collection.1755.0":
@@ -135,14 +135,14 @@ remote-get-document id="CCLW.collection.1755.0":
     set -e
     vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa document get "id:documents:documents::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
+    uv run vespa document get "id:documents:documents::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
 
 remote-delete-document id:
     #!/usr/bin/env bash
     set -e
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa document remove "id:documents:documents::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
+    uv run vespa document remove "id:documents:documents::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token"
 
 remote-get-labels hits="10":
     #!/usr/bin/env bash
@@ -159,6 +159,6 @@ remote-get-label id="un_convention::CBD":
     set -e
     vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa document get "id:labels:labels::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
+    uv run vespa document get "id:labels:labels::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
 
 
