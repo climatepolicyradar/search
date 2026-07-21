@@ -75,7 +75,7 @@ feed instance sample="5":
 # Tear the instance down now, rather than waiting on the 14-day auto-expiry.
 destroy instance:
     uv run vespa destroy -a {{dev_app}}.{{instance}} --force
-    aws ssm delete-parameter --name "/search/vespa-dev/{{instance}}" 2>/dev/null || true
+    aws ssm delete-parameter --region {{aws_region}} --name "/search/vespa-dev/{{instance}}" 2>/dev/null || true
 
 # Snapshot production to s3://cpr-cache/search/vespa/index/ as sharded JSONL.
 # Runs daily via the scheduled deployment (see prefect_deploy.py) - this is
@@ -84,11 +84,12 @@ snapshot sample="100":
     python export_production_snapshot.py --sample-percent {{sample}}
 
 prefect_deploy:
-    uv run python prefect_deploy.py
+    AWS_REGION={{aws_region}} uv run python prefect_deploy.py
 
-registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo "${AWS_DEFAULT_REGION:-}"` + ".amazonaws.com"
 # Rebuild + push the image, then re-register the deployments.
 release: docker-build docker-push prefect_deploy
+
+registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + aws_region + ".amazonaws.com"
 image := registry + "/search-vespa-dev"
 
 docker-build:
