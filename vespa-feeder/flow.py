@@ -84,7 +84,8 @@ class VespaResponseError(Exception):
 
     ok_count: int  # feeder.ok.count
     operation_count: int  # feeder.operation.count
-    http_error_count: int  # http.response.error.count
+    throttled_count: int  # requests that got a 429 at some point
+    other_http_error_count: int  # non-2xx responses other than 429, e.g. 5xx
     failed_documents: list[FailedDocument]
 
 
@@ -111,9 +112,9 @@ class FeedResult:
     input_count: int
     operation_count: int
     ok_count: int
-    feeder_error_count: int
-    http_error_count: int
-    throttled_count: int
+    feeder_error_count: int  # transport-layer failures, no HTTP response received
+    throttled_count: int  # requests that got a 429 at some point (may have retried ok)
+    other_http_error_count: int  # non-2xx responses other than 429, e.g. 5xx
     errors: list[VespaFeedError]
 
 
@@ -133,9 +134,10 @@ def _build_run_summary_markdown(
     total_input = sum(r.input_count for r in results)
     total_operation = sum(r.operation_count for r in results)
     total_ok = sum(r.ok_count for r in results)
+    total_missing = total_operation - total_ok
     total_feeder_errors = sum(r.feeder_error_count for r in results)
-    total_http_errors = sum(r.http_error_count for r in results)
     total_throttled = sum(r.throttled_count for r in results)
+    total_other_http_errors = sum(r.other_http_error_count for r in results)
     throttle_rate = total_throttled / total_operation if total_operation else 0.0
 
     icon = "🚨" if failed_results else "✅"
@@ -153,17 +155,20 @@ def _build_run_summary_markdown(
         f"| Input records | {total_input} |\n"
         f"| Operations | {total_operation} |\n"
         f"| OK | {total_ok} |\n"
-        f"| Feeder errors | {total_feeder_errors} |\n"
-        f"| HTTP errors | {total_http_errors} |\n"
+        f"| **Missing (not recovered after retries)** | **{total_missing}** |\n"
+        f"| — | — |\n"
+        f"| _Transient, self-resolved (no data lost):_ | |\n"
+        f"| Transport retries (feeder errors) | {total_feeder_errors} |\n"
         f"| Throttled (429) | {total_throttled} |\n"
+        f"| Other non-2xx responses | {total_other_http_errors} |\n"
         f"| Throttle rate | {throttle_rate:.2%} |\n"
     )
 
     if failed_results:
         markdown += (
             "\n#### Failed files\n\n"
-            "| File | OK / Operation | Feeder errors | HTTP errors | Sample failed documents |\n"
-            "|---|---|---|---|---|\n"
+            "| File | OK / Operation | Missing | Sample failed documents |\n"
+            "|---|---|---|---|\n"
         )
         for r in failed_results:
             failed_docs = [doc for error in r.errors for doc in error.failed_documents]
@@ -172,7 +177,7 @@ def _build_run_summary_markdown(
                 sample += f" (+{len(failed_docs) - 3} more)"
             markdown += (
                 f"| `{r.feed_path.name}` | {r.ok_count}/{r.operation_count} | "
-                f"{r.feeder_error_count} | {r.http_error_count} | {sample or '—'} |\n"
+                f"{r.operation_count - r.ok_count} | {sample or '—'} |\n"
             )
 
     return markdown
@@ -348,52 +353,80 @@ def vespa_feed(
                 raise
 
             feed_response = VespaFeedResponse.model_validate(response_data)
-            too_many_requests_count = feed_response.http_response_code_counts.get(
-                "429", 0
+
+            # http_response_error_count from the CLI counts ALL non-2xx responses,
+            # which already includes 429s - it is not a distinct quantity on top
+            # of throttled_count. We split it here into two counters that are
+            # genuinely additive: throttled_count (429s) and other_http_error_count
+            # (everything else non-2xx, e.g. 5xx), so summing fields never double
+            # counts the same requests.
+            throttled_count = feed_response.http_response_code_counts.get("429", 0)
+            other_http_error_count = (
+                feed_response.http_response_error_count - throttled_count
+            )
+            missing_count = (
+                feed_response.feeder_operation_count - feed_response.feeder_ok_count
             )
 
             span.set_attribute(
                 "feed.feeder_operation_count", feed_response.feeder_operation_count
             )
             span.set_attribute("feed.feeder_ok_count", feed_response.feeder_ok_count)
+            span.set_attribute("feed.missing_count", missing_count)
             span.set_attribute(
                 "feed.feeder_error_count", feed_response.feeder_error_count
             )
-            span.set_attribute(
-                "feed.http_response_error_count",
-                feed_response.http_response_error_count,
-            )
+            span.set_attribute("feed.throttled_count", throttled_count)
+            span.set_attribute("feed.other_http_error_count", other_http_error_count)
 
             set_feed_stats(
                 input_count=input_record_count,
                 ok_count=feed_response.feeder_ok_count,
-                total_errors=feed_response.feeder_error_count
-                + (
-                    feed_response.feeder_operation_count - feed_response.feeder_ok_count
-                ),
+                total_errors=missing_count,
             )
 
+            # feeder_errors, throttled and other_http_errors are retry *attempts* -
+            # most succeed once the CLI retries them, so they don't by themselves
+            # mean any record was lost. missing (operation - ok) is the only
+            # number that reflects a real, permanent outcome. The three retry
+            # counters are disjoint (transport failure vs. 429 vs. other non-2xx),
+            # so they can be safely summed without double counting.
             run_logger.info(
                 f"vespa feed stats: feed_path={feed_path} input={input_record_count} "
                 f"operation={feed_response.feeder_operation_count} ok={feed_response.feeder_ok_count} "
-                f"feeder_errors={feed_response.feeder_error_count} http_errors={feed_response.http_response_error_count} "
-                f"throttled={too_many_requests_count} codes={feed_response.http_response_code_counts}"
+                f"missing={missing_count} feeder_errors={feed_response.feeder_error_count} "
+                f"throttled={throttled_count} other_http_errors={other_http_error_count} "
+                f"codes={feed_response.http_response_code_counts}"
             )
 
-            # We warn on throttled requests, as they have generally self-healed, but they could be an indicator of a larger issue.
-            if too_many_requests_count:
-                run_logger.warning(
-                    f"vespa_feed: feed_path={feed_path} {too_many_requests_count} requests "
-                    "throttled (429) but retried successfully"
+            retry_attempt_count = (
+                feed_response.feeder_error_count + throttled_count + other_http_error_count
+            )
+
+            if missing_count > 0:
+                run_logger.error(
+                    f"vespa_feed OUTCOME: feed_path={feed_path} "
+                    f"{feed_response.feeder_ok_count}/{feed_response.feeder_operation_count} records fed successfully "
+                    f"- {missing_count} MISSING (not recovered after retries)"
+                )
+            else:
+                run_logger.info(
+                    f"vespa_feed OUTCOME: feed_path={feed_path} "
+                    f"all {feed_response.feeder_ok_count}/{feed_response.feeder_operation_count} records fed successfully"
+                )
+
+            if retry_attempt_count > 0:
+                run_logger.info(
+                    f"vespa_feed OUTCOME: feed_path={feed_path} "
+                    f"{retry_attempt_count} requests needed a retry (mostly throttling, HTTP 429) "
+                    f"and {retry_attempt_count - missing_count} of those succeeded on retry "
+                    "- see the MISSING count above for the only figure that reflects real record loss"
                 )
 
             feeder_metrics.record_feed_stats(
                 input_count=input_record_count,
                 ok_count=feed_response.feeder_ok_count,
-                total_errors=feed_response.feeder_error_count
-                + (
-                    feed_response.feeder_operation_count - feed_response.feeder_ok_count
-                ),
+                total_errors=missing_count,
                 deployment_name=deployment.name or "local",
                 run_name=flow_run.name or "unknown",
             )
@@ -402,25 +435,26 @@ def vespa_feed(
 
             errors: list[VespaFeedError] = []
 
-            # feeder.error.count is transport-layer failures (connection refused, TLS error,
-            # etc.) where the CLI gave up before receiving any HTTP response.
-            # We error as these documents would be considered missed.
-            if feed_response.feeder_error_count > 0:
-                errors.append(
-                    VespaHTTPError(
-                        feeder_error_count=feed_response.feeder_error_count,
-                        failed_documents=failed_documents,
+            # missing_count (ok < operation) is the only signal that means records
+            # were actually lost, so it's the only thing that fails the file.
+            # feeder_error_count and http response errors are retry attempts that
+            # mostly self-heal (see the OUTCOME log lines above) - a file with
+            # feeder_error_count > 0 but missing_count == 0 had every one of those
+            # attempts eventually succeed, so it must not be marked as failed.
+            if missing_count > 0:
+                if feed_response.feeder_error_count > 0:
+                    errors.append(
+                        VespaHTTPError(
+                            feeder_error_count=feed_response.feeder_error_count,
+                            failed_documents=failed_documents,
+                        )
                     )
-                )
-
-            # ok.count < operation.count means records were submitted but not indexed -
-            # the CLI got HTTP responses but exhausted retries without a 2xx.
-            if feed_response.feeder_ok_count < feed_response.feeder_operation_count:
                 errors.append(
                     VespaResponseError(
                         ok_count=feed_response.feeder_ok_count,
                         operation_count=feed_response.feeder_operation_count,
-                        http_error_count=feed_response.http_response_error_count,
+                        throttled_count=throttled_count,
+                        other_http_error_count=other_http_error_count,
                         failed_documents=failed_documents,
                     )
                 )
@@ -439,8 +473,8 @@ def vespa_feed(
                 operation_count=feed_response.feeder_operation_count,
                 ok_count=feed_response.feeder_ok_count,
                 feeder_error_count=feed_response.feeder_error_count,
-                http_error_count=feed_response.http_response_error_count,
-                throttled_count=too_many_requests_count,
+                throttled_count=throttled_count,
+                other_http_error_count=other_http_error_count,
                 errors=errors,
             )
     finally:
@@ -506,13 +540,17 @@ def vespa_feeder_flow(
             total_input = sum(result.input_count for result in results)
             total_operation = sum(result.operation_count for result in results)
             total_ok = sum(result.ok_count for result in results)
+            total_missing = total_operation - total_ok
             total_feeder_errors = sum(result.feeder_error_count for result in results)
-            total_http_errors = sum(result.http_error_count for result in results)
             total_throttled = sum(result.throttled_count for result in results)
+            total_other_http_errors = sum(
+                result.other_http_error_count for result in results
+            )
             failed_results = [result for result in results if result.errors]
 
             span.set_attribute("feed.total_input_count", total_input)
             span.set_attribute("feed.total_ok_count", total_ok)
+            span.set_attribute("feed.total_missing_count", total_missing)
             span.set_attribute("feed.failed_file_count", len(failed_results))
 
             # Overwrite the per-file stats set by the last vespa_feed call so the
@@ -520,14 +558,15 @@ def vespa_feeder_flow(
             set_feed_stats(
                 input_count=total_input,
                 ok_count=total_ok,
-                total_errors=total_feeder_errors + (total_operation - total_ok),
+                total_errors=total_missing,
             )
 
             run_logger.info(
                 f"vespa_feeder_flow aggregate stats: files={len(results)} "
                 f"input={total_input} operation={total_operation} ok={total_ok} "
-                f"feeder_errors={total_feeder_errors} http_errors={total_http_errors} "
-                f"throttled={total_throttled} failed_files={len(failed_results)}"
+                f"missing={total_missing} feeder_errors={total_feeder_errors} "
+                f"throttled={total_throttled} other_http_errors={total_other_http_errors} "
+                f"failed_files={len(failed_results)}"
             )
 
             create_markdown_artifact(
@@ -541,8 +580,7 @@ def vespa_feeder_flow(
                     run_logger.error(
                         f"vespa_feeder_flow: feed_path={r.feed_path} failed "
                         f"(ok={r.ok_count}/{r.operation_count}, "
-                        f"feeder_errors={r.feeder_error_count}, "
-                        f"http_errors={r.http_error_count})"
+                        f"missing={r.operation_count - r.ok_count})"
                     )
                 failed_paths = ", ".join(str(r.feed_path) for r in failed_results)
                 raise RuntimeError(
