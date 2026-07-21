@@ -44,9 +44,8 @@ _FEEDS = [
         "s3_bucket": "cpr-cache",
         "s3_key": "search/vespa/passages_feed_materializer",
         "description": "Feed passages JSONL from S3 into Vespa",
-        # Feeds up to _MAX_CONCURRENT_FEEDS files concurrently, and passages
-        # files run up to 200k records each - the default 256 CPU / 512MB task
-        # size was OOMKilled (SIGKILL) under that load.
+        # See _MAX_CONCURRENT_FEEDS in flow.py - the default container size
+        # OOMKilled under concurrent feeding of these (up to 200k records each).
         "job_variables": {"cpu": 1024, "memory": 2048},
     },
 ]

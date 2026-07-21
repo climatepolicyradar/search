@@ -279,9 +279,7 @@ def get_ssm_parameter(name: str) -> str:
 
 
 @task
-def vespa_feed(
-    feed_path: Path, endpoint: str, write_token: str, application: str
-) -> FeedResult:
+def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
     run_logger = get_run_logger()
 
     start_time = time.perf_counter()
@@ -316,7 +314,11 @@ def vespa_feed(
                         "1",
                         "--verbose",
                     ],
-                    env={**os.environ, "VESPA_CLI_DATA_PLANE_TOKEN": write_token},
+                    # VESPA_CLI_DATA_PLANE_TOKEN is set on this process's own
+                    # environment by vespa_feeder_flow, not passed as a task
+                    # parameter - Prefect displays task parameters in the UI,
+                    # and this value is a secret.
+                    env=os.environ,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
@@ -421,8 +423,8 @@ def vespa_feed(
                 run_logger.info(
                     f"vespa_feed OUTCOME: feed_path={feed_path} "
                     f"{retry_attempt_count} requests needed a retry (mostly throttling, HTTP 429) "
-                    f"and {retry_attempt_count - missing_count} of those succeeded on retry "
-                    "- see the MISSING count above for the only figure that reflects real record loss"
+                    "- this counts retry events, not records, and does not by itself mean any "
+                    "record was lost; see the MISSING count above for the only figure that does"
                 )
 
             feeder_metrics.record_feed_stats(
@@ -526,15 +528,19 @@ def vespa_feeder_flow(
             span.set_attribute("flow.s3_key", s3_key)
 
             endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
-            write_token = get_ssm_parameter(name="/search/vespa/write_token")
             application = get_ssm_parameter(name="/search/vespa/application")
+            # Set once on this process's environment rather than passed as a
+            # task parameter to vespa_feed - Prefect displays task parameters
+            # in the UI/API, and this value is a secret.
+            os.environ["VESPA_CLI_DATA_PLANE_TOKEN"] = get_ssm_parameter(
+                name="/search/vespa/write_token"
+            )
 
             feed_paths = download_from_s3(bucket=s3_bucket, key=s3_key)
             futures = [
                 vespa_feed.submit(
                     feed_path=feed_path,
                     endpoint=endpoint,
-                    write_token=write_token,
                     application=application,
                 )
                 for feed_path in feed_paths
