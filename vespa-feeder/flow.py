@@ -20,6 +20,7 @@ from slack_notify import SlackNotify
 from telemetry import feeder_metrics, set_feed_stats, shutdown, tracer
 
 from prefect import flow, get_run_logger, task
+from prefect.states import Failed, State
 
 logger = logging.getLogger(__name__)
 
@@ -495,7 +496,7 @@ def vespa_feed(
 def vespa_feeder_flow(
     s3_bucket: str,
     s3_key: str,
-) -> None:
+) -> State | None:
     run_logger = get_run_logger()
     _register_sigterm_handler()
 
@@ -585,10 +586,13 @@ def vespa_feeder_flow(
                         f"missing={r.operation_count - r.ok_count})"
                     )
                 failed_paths = ", ".join(str(r.feed_path) for r in failed_results)
-                raise RuntimeError(
-                    f"vespa_feed: failed for {len(failed_results)}/{len(results)} "
-                    f"file(s): {failed_paths}. See the vespa-feeder-run-summary "
-                    "artifact and per-file error logs above for details."
+                _failed = True
+                return Failed(
+                    message=(
+                        f"vespa_feed: failed for {len(failed_results)}/{len(results)} "
+                        f"file(s): {failed_paths}. See the vespa-feeder-run-summary "
+                        "artifact and per-file error logs above for details."
+                    )
                 )
     except Exception:
         _failed = True
