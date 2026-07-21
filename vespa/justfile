@@ -41,9 +41,19 @@ feed-passages:
 up:
     docker compose up -d
 
-# Deploy Vespa application
+# Deploy Vespa application to Docker
+# Copies Vespa app files to a temp build_dir and then strips Vespa Cloud-only 
+# deploy:* attributes (e.g. deploy:application), which the docker Vespa app
+# rejects during XML validation. See FUS-74.
 deploy:
-    vespa deploy ./app --target http://localhost:19071/ --wait 300
+    #!/usr/bin/env bash
+    set -euo pipefail
+    build_dir=$(mktemp -d)
+    trap 'rm -rf "$build_dir"' EXIT
+    cp -R ./app/. "$build_dir"
+    sed -E -i.bak 's/[[:space:]]+deploy:[a-zA-Z]+="[^"]*"//g' "$build_dir/services.xml"
+    rm -f "$build_dir/services.xml.bak"
+    uv run vespa deploy "$build_dir" --target http://localhost:19071/ --wait 300
 
 # Dev
 dev:
