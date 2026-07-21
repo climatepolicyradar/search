@@ -13,7 +13,7 @@ from search.passage import Passage
 def _dev_engine(instance_name):
     return DevVespaPassageSearchEngine(
         settings=Settings(
-            vespa_endpoint="http://localhost:8080",
+            vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
             vespa_read_token="token",
             vespa_instance_name=instance_name,
         )
@@ -28,8 +28,8 @@ def test_engine_id_and_repr_factor_in_instance_name(instance_name):
 
     assert dev.instance_name == instance_name
     assert instance_name in repr(dev)
-    assert dev.id != full.id                      # differs from the no-instance id
-    assert dev.id != _dev_engine("other").id      # differs per instance name
+    assert dev.id != full.id  # differs from the no-instance id
+    assert dev.id != _dev_engine("other").id  # differs per instance name
 
 
 def test_engine_with_no_instance_matches_pre_feature_behaviour():
@@ -45,7 +45,9 @@ def test_log_test_results_logs_instance_in_wandb_config(
     monkeypatch, simple_test_result, instance_name
 ):
     """instance name the engine carries lands in the W&B config"""
-    monkeypatch.setattr(wb_mod.config, "DISABLE_WANDB", True)  # skip SSM auth in __init__
+    monkeypatch.setattr(
+        wb_mod.config, "DISABLE_WANDB", True
+    )  # skip SSM auth in __init__
     monkeypatch.setattr(wb_mod.wandb, "Table", MagicMock())
 
     captured = {}
