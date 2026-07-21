@@ -1,0 +1,15 @@
+[project]
+name = "vespa-local"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+dependencies = ["vespacli==8.719.5"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+# No Python packages to bundle — this pyproject.toml exists only to pin the Vespa
+# CLI so local recipes run it via `uv run vespa`.
+[tool.setuptools]
+packages = []
