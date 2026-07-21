@@ -12,6 +12,7 @@
 tenant   := "climate-policy-radar"
 dev_app  := tenant + ".search-dev"           # tenant.application under which personal instances live
 zone     := "dev.aws-us-east-1c"
+aws_region := "eu-west-1"
  
 # Create the instance if it doesn't already exist yet. No-op if it's already
 # there - use `just deploy` to push changes to an existing instance.
@@ -30,21 +31,34 @@ create instance:
     #!/usr/bin/env bash
     set -euo pipefail
     app="{{dev_app}}.{{instance}}"
-    if uv run vespa status -a "$app" -t cloud -z {{zone}} >/dev/null 2>&1; then
-        echo "Instance $app already exists - nothing to do. Use 'just deploy {{instance}}' to push changes."
+    # `vespa status` exits 0 even for instances that don't exist (it prints the
+    # 404 to stderr but returns success), so it can't tell us whether the
+    # instance is deployed
+    endpoint=$(uv run vespa status endpoint -a "$app" -t cloud -z {{zone}} --format json 2>/dev/null \
+        | jq -r 'select(.authMethod=="token") | .url' || true)
+    if [[ -z "$endpoint" ]]; then
+        echo "No endpoint for $app yet - deploying to {{zone}}"
+        # Ignore a non-zero exit: --wait's post-deploy health check hits the
+        # container over mTLS and fails with "tls: unknown certificate" when the
+        # CLI's data-plane cert isn't trusted, even though the deploy succeeded.
+        # We only need the token endpoint (feeding uses token auth, not mTLS),
+        # so success is judged by whether that endpoint resolves below.
+        uv run vespa deploy --wait 1800 -a "$app" -t cloud -z {{zone}} ../vespa/app || true
+        endpoint=$(uv run vespa status endpoint -a "$app" -t cloud -z {{zone}} --format json 2>/dev/null \
+            | jq -r 'select(.authMethod=="token") | .url' || true)
     else
-        echo "Creating $app in {{zone}}"
-        uv run vespa deploy -a "$app" -t cloud -z {{zone}} ../vespa/app
+        echo "Instance $app already deployed - reusing existing endpoint. Use 'just deploy {{instance}}' to push changes."
     fi
-    echo "Resolving data-plane endpoint for $app..."
-    endpoint=$(uv run vespa status endpoint -a "$app" -t cloud -z {{zone}} --wait 900 --format json \
-        | jq -r 'select(.authMethod=="token") | .url')
-    aws ssm put-parameter \
+    if [[ -z "$endpoint" ]]; then
+        echo "ERROR: could not resolve a token endpoint for $app - deployment may have failed" >&2
+        exit 1
+    fi
+    aws ssm put-parameter --region {{aws_region}} \
         --name "/search/vespa-dev/{{instance}}" \
         --value "$endpoint" \
         --type SecureString \
         --overwrite >/dev/null
-    echo "Stored endpoint for {{instance}} at /search/vespa-dev/{{instance}}"
+    echo "Stored endpoint for {{instance}} at /search/vespa-dev/{{instance}} ({{aws_region}})"
  
 # Deploy your local schema/services.xml changes to an existing instance.
 deploy instance:
