@@ -489,6 +489,8 @@ def vespa_feed(
     log_prints=True,
     on_completion=[SlackNotify.on_success],
     on_failure=[SlackNotify.on_failure],
+    on_crashed=[SlackNotify.on_crashed],
+    on_cancellation=[SlackNotify.on_cancellation],
 )
 def vespa_feeder_flow(
     s3_bucket: str,
