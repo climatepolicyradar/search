@@ -4,6 +4,8 @@ Prefect deployment for the vespa-feeder flows.
 Run with: uv run python vespa-feeder/deployments.py
 """
 
+import os
+
 import boto3
 from export_production_snapshot import export_production_snapshot
 from feed_from_production import feed_from_production
@@ -18,7 +20,13 @@ _DEFAULT_JOB_VARIABLES_NAME = "ecs-default-job-variables-prefect-mvp-prod"
 if __name__ == "__main__":
     sts = boto3.client("sts")
     account_id = sts.get_caller_identity()["Account"]
-    region = boto3.session.Session().region_name
+    region = boto3.session.Session().region_name or os.environ.get("AWS_REGION")
+    if not region:
+        raise RuntimeError(
+            "No AWS region configured - set AWS_REGION/AWS_DEFAULT_REGION or a profile "
+            "region. Without it the ECR image URI becomes '...ecr.None.amazonaws.com' "
+            "and ECS can't pull the image."
+        )
     image_name = f"{account_id}.dkr.ecr.{region}.amazonaws.com/search-vespa-dev"
 
     default_job_variables = Variable.get(_DEFAULT_JOB_VARIABLES_NAME)
