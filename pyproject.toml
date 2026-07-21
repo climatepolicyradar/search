@@ -47,7 +47,7 @@ dev = [
   "pulumi>=3.253.0,<4.0.0",
   "pytest>=9.1.1",
   "hypothesis>=6.157.1",
-  "boto3-stubs[s3,ssm]>=1.43.46",
+  "boto3-stubs[s3,ssm]>=1.43.51",
 ]
 
 [tool.uv.sources]
