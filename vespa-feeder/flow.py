@@ -1,8 +1,10 @@
 import logging
 import os
 import re
+import signal
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +22,46 @@ from telemetry import feeder_metrics, set_feed_stats, shutdown, tracer
 from prefect import flow, get_run_logger, task
 
 logger = logging.getLogger(__name__)
+
+# Vespa's own guidance warns against many worker processes each opening their
+# own full connection pool (default 8 connections per `vespa feed` process) -
+# that's a TLS-handshake storm with no shared backpressure state. We cap how
+# many `vespa feed` subprocesses run at once and pin each to a single
+# connection so overall concurrency stays in a sane, tunable range.
+# 8-way concurrency OOMKilled the passages feed (200k-record files) even at
+# 1024 CPU / 2048MB, so this is capped lower for that container size.
+_MAX_CONCURRENT_FEEDS = 4
+_feed_semaphore = threading.Semaphore(_MAX_CONCURRENT_FEEDS)
+
+# On SIGTERM (e.g. a graceful ECS stop or Prefect cancellation) we terminate
+# any `vespa feed` subprocesses still running rather than leaving them as
+# orphans the flow run can no longer track. Each `vespa feed` invocation is
+# idempotent per-document, so killing one mid-feed just means its file gets
+# fully retried on the next run.
+_live_processes: set[subprocess.Popen] = set()
+_live_processes_lock = threading.Lock()
+
+
+def _terminate_live_processes(signum, frame) -> None:
+    with _live_processes_lock:
+        processes = list(_live_processes)
+    logger.warning(
+        "Received signal %d, terminating %d in-flight vespa feed process(es)",
+        signum,
+        len(processes),
+    )
+    for process in processes:
+        process.terminate()
+
+
+def _register_sigterm_handler() -> None:
+    # Prefect's runner can re-import this module from a worker thread (e.g. to
+    # resolve on_crashed hooks after the flow run's own process has already
+    # died), and signal.signal() raises ValueError outside the main thread. It
+    # only needs to be registered once, in the process actually running the
+    # flow, so we call this from vespa_feeder_flow rather than at import time.
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(signal.SIGTERM, _terminate_live_processes)
 
 
 @dataclass
@@ -94,6 +136,7 @@ def _build_run_summary_markdown(
     total_feeder_errors = sum(r.feeder_error_count for r in results)
     total_http_errors = sum(r.http_error_count for r in results)
     total_throttled = sum(r.throttled_count for r in results)
+    throttle_rate = total_throttled / total_operation if total_operation else 0.0
 
     icon = "🚨" if failed_results else "✅"
     status = (
@@ -113,6 +156,7 @@ def _build_run_summary_markdown(
         f"| Feeder errors | {total_feeder_errors} |\n"
         f"| HTTP errors | {total_http_errors} |\n"
         f"| Throttled (429) | {total_throttled} |\n"
+        f"| Throttle rate | {throttle_rate:.2%} |\n"
     )
 
     if failed_results:
@@ -228,12 +272,10 @@ def get_ssm_parameter(name: str) -> str:
 
 
 @task
-def vespa_feed(feed_path: Path) -> FeedResult:
+def vespa_feed(
+    feed_path: Path, endpoint: str, write_token: str, application: str
+) -> FeedResult:
     run_logger = get_run_logger()
-
-    endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
-    write_token = get_ssm_parameter(name="/search/vespa/write_token")
-    application = get_ssm_parameter(name="/search/vespa/application")
 
     start_time = time.perf_counter()
     try:
@@ -253,21 +295,36 @@ def vespa_feed(feed_path: Path) -> FeedResult:
                 input_record_count,
             )
 
-            result = subprocess.run(
-                [
-                    "vespa",
-                    "feed",
-                    str(feed_path),
-                    "--target",
-                    endpoint,
-                    "--application",
-                    application,
-                    "--verbose",
-                ],
-                env={**os.environ, "VESPA_CLI_DATA_PLANE_TOKEN": write_token},
-                capture_output=True,
-                text=True,
-            )
+            with _feed_semaphore:
+                process = subprocess.Popen(
+                    [
+                        "vespa",
+                        "feed",
+                        str(feed_path),
+                        "--target",
+                        endpoint,
+                        "--application",
+                        application,
+                        "--connections",
+                        "1",
+                        "--verbose",
+                    ],
+                    env={**os.environ, "VESPA_CLI_DATA_PLANE_TOKEN": write_token},
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                with _live_processes_lock:
+                    _live_processes.add(process)
+                try:
+                    stdout, stderr = process.communicate()
+                finally:
+                    with _live_processes_lock:
+                        _live_processes.discard(process)
+
+                result = subprocess.CompletedProcess(
+                    process.args, process.returncode, stdout, stderr
+                )
 
             if result.stderr:
                 span.set_attribute("feed.stderr", result.stderr[:4096])
@@ -404,6 +461,7 @@ def vespa_feeder_flow(
     s3_key: str,
 ) -> None:
     run_logger = get_run_logger()
+    _register_sigterm_handler()
 
     deployment_name = deployment.name or "local"
     flow_run_id = flow_run.id or "unknown"
@@ -429,8 +487,21 @@ def vespa_feeder_flow(
             span.set_attribute("flow.s3_bucket", s3_bucket)
             span.set_attribute("flow.s3_key", s3_key)
 
+            endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
+            write_token = get_ssm_parameter(name="/search/vespa/write_token")
+            application = get_ssm_parameter(name="/search/vespa/application")
+
             feed_paths = download_from_s3(bucket=s3_bucket, key=s3_key)
-            results = [vespa_feed(feed_path=feed_path) for feed_path in feed_paths]
+            futures = [
+                vespa_feed.submit(
+                    feed_path=feed_path,
+                    endpoint=endpoint,
+                    write_token=write_token,
+                    application=application,
+                )
+                for feed_path in feed_paths
+            ]
+            results = [future.result() for future in futures]
 
             total_input = sum(result.input_count for result in results)
             total_operation = sum(result.operation_count for result in results)
@@ -474,10 +545,10 @@ def vespa_feeder_flow(
                         f"http_errors={r.http_error_count})"
                     )
                 failed_paths = ", ".join(str(r.feed_path) for r in failed_results)
-                raise ExceptionGroup(
+                raise RuntimeError(
                     f"vespa_feed: failed for {len(failed_results)}/{len(results)} "
-                    f"file(s): {failed_paths}",
-                    [error for r in failed_results for error in r.errors],
+                    f"file(s): {failed_paths}. See the vespa-feeder-run-summary "
+                    "artifact and per-file error logs above for details."
                 )
     except Exception:
         _failed = True

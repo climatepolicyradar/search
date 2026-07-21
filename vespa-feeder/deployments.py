@@ -44,6 +44,10 @@ _FEEDS = [
         "s3_bucket": "cpr-cache",
         "s3_key": "search/vespa/passages_feed_materializer",
         "description": "Feed passages JSONL from S3 into Vespa",
+        # Feeds up to _MAX_CONCURRENT_FEEDS files concurrently, and passages
+        # files run up to 200k records each - the default 256 CPU / 512MB task
+        # size was OOMKilled (SIGKILL) under that load.
+        "job_variables": {"cpu": 1024, "memory": 2048},
     },
 ]
 
@@ -65,6 +69,7 @@ if __name__ == "__main__":
         # These are and should be run after the other upstream pipeline deployments in ../deployments.py
         # at 3am
         # TODO: actual data flows based on events
+        job_variables = {**default_job_variables, **feed.get("job_variables", {})}
         vespa_feeder_flow.deploy(
             feed["name"],
             work_pool_name=_WORK_POOL,
@@ -72,7 +77,7 @@ if __name__ == "__main__":
                 name=image_name,
                 tag="latest",
             ),
-            job_variables=default_job_variables,
+            job_variables=job_variables,
             parameters={
                 "s3_bucket": feed["s3_bucket"],
                 "s3_key": feed["s3_key"],
