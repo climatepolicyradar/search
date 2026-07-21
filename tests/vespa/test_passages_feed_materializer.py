@@ -189,6 +189,28 @@ def test_passages_feed_materializer_aborts_without_uploading_on_exception() -> N
 
         assert mock_s3.upload_file.call_args_list == []
 
+def test_heading_text_resolved_from_heading_id() -> None:
+    """heading_text is resolved to the text of the block that heading_id points at."""
+    heading = _text_block(0)
+    heading["id"] = "heading-1"
+    heading["text"] = "Chapter 1: Introduction"
+
+    passage = _text_block(1)
+    passage["id"] = "passage-1"
+    passage["heading_id"] = "heading-1"
+
+    block_text_by_id = {
+        heading["id"]: heading["text"],
+        passage["id"]: passage["text"],
+    }
+
+    update = materializer._text_block_to_vespa_update(
+        passage, "doc-0", block_text_by_id=block_text_by_id
+    )
+    fields = update["fields"]
+
+    assert fields.get("heading_id") == {"assign": "heading-1"}
+    assert fields.get("heading_text") == {"assign": "Chapter 1: Introduction"}
 
 def _inference_result(concept_id: str, name: str) -> dict:
     return {

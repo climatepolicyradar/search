@@ -1225,6 +1225,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
                     type_confidence=fields.get("type_confidence", 0.0),
                     page_number=fields.get("page_number", 0),
                     heading_id=fields.get("heading_id"),
+                    heading_text=fields.get("heading_text"),
                     document_id=fields.get("document_id", ""),
                     tokens=fields.get("text_tokens") or [],
                 )

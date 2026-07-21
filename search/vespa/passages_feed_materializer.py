@@ -58,8 +58,8 @@ class VespaPassageUpdate(TypedDict):
     document_ref: VespaAssign[str]
     principal_document_ref: NotRequired[VespaAssign[str]]
     heading_id: NotRequired[VespaAssign[str]]
+    heading_text: NotRequired[VespaAssign[str]]
     concepts: NotRequired[VespaAssign[list[VespaConceptField]]]
-
 
 BATCH_SIZE = 10_000  # write-buffer flush size
 CHUNK_SIZE = 200_000  # output file rotation size, see module docstring
@@ -128,6 +128,7 @@ def _text_block_to_vespa_update(
     document_id: str,
     principal_id: str | None = None,
     concepts: list[VespaConceptField] | None = None,
+    block_text_by_id: dict[str, str] | None = None,
 ) -> VespaUpdate[VespaPassageUpdate]:
     """
     Build the Vespa update for a single passage/text block.
@@ -155,6 +156,9 @@ def _text_block_to_vespa_update(
     heading_id = block.get("heading_id")
     if heading_id is not None:
         fields["heading_id"] = {"assign": heading_id}
+        heading_text = (block_text_by_id or {}).get(heading_id)
+        if heading_text is not None:
+            fields["heading_text"] = {"assign": heading_text}
 
     if concepts:
         fields["concepts"] = {"assign": concepts}
@@ -288,7 +292,8 @@ def passages_feed_materializer():
             text_blocks = pdf_data.get("text_blocks") if pdf_data is not None else None
             if text_blocks is None:
                 continue
-
+            
+            block_text_by_id = {b["id"]: b["text"] for b in text_blocks}
             principal_id = principal_id_lookup.get(document_id)
             for block in text_blocks:
                 vespa_update = _text_block_to_vespa_update(
@@ -296,6 +301,7 @@ def passages_feed_materializer():
                     document_id,
                     principal_id=principal_id,
                     concepts=passage_concepts_lookup.get(block["id"]),
+                    block_text_by_id=block_text_by_id,
                 )
                 writer.append(orjson.dumps(vespa_update) + b"\n")
     except Exception:
