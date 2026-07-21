@@ -14,7 +14,7 @@ def _dev_engine(instance_name):
     return DevVespaPassageSearchEngine(
         settings=Settings(
             vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
-            vespa_read_token="token",
+            vespa_read_token="token",  # nosec B106
             vespa_instance_name=instance_name,
         )
     )
