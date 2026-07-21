@@ -113,6 +113,7 @@ class WandbSession:
                 "search_engine_id": search_engine.id,
                 "search_engine": str(search_engine),
                 "search_engine_name": search_engine.name,
+                "search_engine_dev_instance_name": search_engine.instance_name,  # None => full/prod instance
             },
         )
 

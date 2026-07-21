@@ -50,6 +50,9 @@ MISSING_PLACEHOLDER = "MISSING"
 class Settings(BaseSettings):
     vespa_endpoint: AnyHttpUrl
     vespa_read_token: str
+    vespa_dev_instance_name: str | None = (
+        None  # personal dev instance; None == full/prod
+    )
 
 
 # endregion
@@ -566,7 +569,18 @@ documents_filter_field_to_vespa_field_map = {
 documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
 
 
-class DevVespaDocumentSearchEngine(SearchEngine[Document]):
+class DevVespaInstanceAddIn:
+    """Surfaces the personal dev instance name (from settings) onto the engine id/config."""
+
+    settings: "Settings"
+
+    @property
+    def instance_name(self) -> str | None:
+        """Name of the specific instance of the search engine"""
+        return self.settings.vespa_dev_instance_name
+
+
+class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]):
     """
     Search engine for dev Vespa
 
@@ -802,7 +816,9 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             return None
         if response.status_code != HTTPStatus.OK:
             body_preview = (response.text or "")[:HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS]
-            raise VespaError(f"Vespa returned status {response.status_code}: {body_preview}")
+            raise VespaError(
+                f"Vespa returned status {response.status_code}: {body_preview}"
+            )
 
         document_source = response.json().get("fields", {}).get("document_source")
         if not document_source:
@@ -1142,7 +1158,7 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
         )
 
 
-class DevVespaPassageSearchEngine(SearchEngine[Passage]):
+class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     """Search engine for passages in dev Vespa."""
 
     model_class = Passage
@@ -1246,7 +1262,7 @@ labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
 }
 
 
-class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
+class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]):
     """Search engine for labels in dev Vespa."""
 
     model_class = DataInLabel
