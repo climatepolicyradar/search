@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from search import weights_and_biases as wb_mod
+from search import weights_and_biases
 from search.engines.dev_vespa import DevVespaPassageSearchEngine, Settings
 from search.identifiers import generate_id
 from search.passage import Passage
@@ -15,7 +15,7 @@ def _dev_engine(instance_name):
         settings=Settings(
             vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
             vespa_read_token="token",  # nosec B106
-            vespa_instance_name=instance_name,
+            vespa_dev_instance_name=instance_name,
         )
     )
 
@@ -46,9 +46,9 @@ def test_log_test_results_logs_instance_in_wandb_config(
 ):
     """Instance name the engine carries lands in the W&B config"""
     monkeypatch.setattr(
-        wb_mod.config, "DISABLE_WANDB", True
+        weights_and_biases.config, "DISABLE_WANDB", True
     )  # skip SSM auth in __init__
-    monkeypatch.setattr(wb_mod.wandb, "Table", MagicMock())
+    monkeypatch.setattr(weights_and_biases.wandb, "Table", MagicMock())
 
     captured = {}
 
@@ -56,14 +56,14 @@ def test_log_test_results_logs_instance_in_wandb_config(
         captured["config"] = config
         return MagicMock()
 
-    monkeypatch.setattr(wb_mod.WandbSession, "new_run", fake_new_run)
+    monkeypatch.setattr(weights_and_biases.WandbSession, "new_run", fake_new_run)
 
     engine = _dev_engine(instance_name)
-    wb_mod.WandbSession().log_test_results(
+    weights_and_biases.WandbSession().log_test_results(
         test_results=[simple_test_result],
         primitive=Passage,
         search_engine=engine,
     )
 
-    assert captured["config"]["instance"] == instance_name
+    assert captured["config"]["search_engine_dev_instance_name"] == instance_name
     assert captured["config"]["search_engine_id"] == engine.id

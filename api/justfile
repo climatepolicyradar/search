@@ -12,7 +12,7 @@ gen-env instance="":
     echo "VESPA_READ_TOKEN=$vespa_read_token" > ./.env
     echo "VESPA_ENDPOINT=$vespa_endpoint" >> ./.env
     if [ -n "{{ instance }}" ]; then
-        echo "VESPA_INSTANCE_NAME={{ instance }}" >> ./.env
+        echo "VESPA_DEV_INSTANCE_NAME={{ instance }}" >> ./.env
     fi
 
 dev:

@@ -50,7 +50,9 @@ MISSING_PLACEHOLDER = "MISSING"
 class Settings(BaseSettings):
     vespa_endpoint: AnyHttpUrl
     vespa_read_token: str
-    vespa_instance_name: str | None = None  # personal dev instance; None == full/prod
+    vespa_dev_instance_name: str | None = (
+        None  # personal dev instance; None == full/prod
+    )
 
 
 # endregion
@@ -567,17 +569,18 @@ documents_filter_field_to_vespa_field_map = {
 documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
 
 
-class _DevVespaInstanceAddIn:
+class DevVespaInstanceAddIn:
     """Surfaces the personal dev instance name (from settings) onto the engine id/config."""
 
     settings: "Settings"
 
     @property
     def instance_name(self) -> str | None:
-        return self.settings.vespa_instance_name
+        """Name of the specific instance of the search engine"""
+        return self.settings.vespa_dev_instance_name
 
 
-class DevVespaDocumentSearchEngine(_DevVespaInstanceAddIn, SearchEngine[Document]):
+class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]):
     """
     Search engine for dev Vespa
 
@@ -1155,7 +1158,7 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
         )
 
 
-class DevVespaPassageSearchEngine(_DevVespaInstanceAddIn, SearchEngine[Passage]):
+class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     """Search engine for passages in dev Vespa."""
 
     model_class = Passage
@@ -1259,7 +1262,7 @@ labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
 }
 
 
-class DevVespaLabelSearchEngine(_DevVespaInstanceAddIn, SearchEngine[DataInLabel]):
+class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]):
     """Search engine for labels in dev Vespa."""
 
     model_class = DataInLabel
