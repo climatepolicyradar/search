@@ -287,15 +287,15 @@ def vespa_feed(
             input_record_count = sum(1 for line in feed_path.open() if line.strip())
             span.set_attribute("feed.input_record_count", input_record_count)
 
-            run_logger.info(
-                "Feeding %s to %s (application: %s, records: %d)",
-                feed_path,
-                endpoint,
-                application,
-                input_record_count,
-            )
-
             with _feed_semaphore:
+                run_logger.info(
+                    "Feeding %s to %s (application: %s, records: %d)",
+                    feed_path,
+                    endpoint,
+                    application,
+                    input_record_count,
+                )
+
                 process = subprocess.Popen(
                     [
                         "vespa",
