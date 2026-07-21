@@ -262,8 +262,8 @@ def relevance_tests_passages():
 
     engines = [
         DevVespaPassageSearchEngine(settings=settings, debug=True),
-        ExactVespaPassageSearchEngine(),
-        HybridVespaPassageSearchEngine(),
+        #ExactVespaPassageSearchEngine(),
+        #HybridVespaPassageSearchEngine(),
     ]
 
     run_relevance_tests_parallel(

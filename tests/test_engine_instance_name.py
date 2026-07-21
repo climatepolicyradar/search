@@ -22,7 +22,7 @@ def _dev_engine(instance_name):
 
 @pytest.mark.parametrize("instance_name", ["dev-instance", "alice", "sample-42"])
 def test_engine_id_and_repr_factor_in_instance_name(instance_name):
-    """any instance name is surfaced on the engine and changes id"""
+    """Any instance name is surfaced on the engine and changes id"""
     dev = _dev_engine(instance_name)
     full = _dev_engine(None)
 
@@ -44,7 +44,7 @@ def test_engine_with_no_instance_matches_pre_feature_behaviour():
 def test_log_test_results_logs_instance_in_wandb_config(
     monkeypatch, simple_test_result, instance_name
 ):
-    """instance name the engine carries lands in the W&B config"""
+    """Instance name the engine carries lands in the W&B config"""
     monkeypatch.setattr(
         wb_mod.config, "DISABLE_WANDB", True
     )  # skip SSM auth in __init__
