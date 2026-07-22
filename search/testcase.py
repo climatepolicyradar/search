@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, computed_field, field_validator, model_va
 from search.corpora import Corpus, build_corpus_filter
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination, SearchEngine
+from search.engines.dev_vespa import Condition, FieldFilter, Filter
 from search.identifiers import Identifier, generate_id
 from search.label import Label
 from search.passage import Passage
@@ -23,6 +24,9 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
     search_terms: str
     description: str
     corpus: Corpus | None = None
+    # Passage-only filters: restrict results to a single document / principal.
+    document_id: str | None = None
+    principal_id: str | None = None
 
     @field_validator("category", mode="before")
     @classmethod
@@ -33,10 +37,23 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
         return value.strip().lower().replace("-", "_").replace(" ", "_")
 
     def filters_json_string(self) -> str | None:
-        """Vespa filter JSON for this test case's corpus, or None."""
-        if self.corpus is None:
+        """Vespa filter JSON for this test case's corpus/document/principal, or None."""
+        conditions: list[Condition | Filter] = []
+        if self.corpus is not None:
+            conditions.append(build_corpus_filter(self.corpus))
+        if self.document_id is not None:
+            conditions.append(
+                FieldFilter(field="document_id", op="contains", value=self.document_id)
+            )
+        if self.principal_id is not None:
+            conditions.append(
+                FieldFilter(
+                    field="principal_id", op="contains", value=self.principal_id
+                )
+            )
+        if not conditions:
             return None
-        return build_corpus_filter(self.corpus).model_dump_json()
+        return Filter(op="and", filters=conditions).model_dump_json()
 
     @property
     def name(self) -> str:
@@ -355,6 +372,8 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             self.all_or_any,
             self.k,
             self.corpus,
+            self.document_id,
+            self.principal_id,
         )
 
 
@@ -466,6 +485,8 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             self.strict_order,
             self.k,
             self.corpus,
+            self.document_id,
+            self.principal_id,
         )
 
 

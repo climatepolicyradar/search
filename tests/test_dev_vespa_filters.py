@@ -16,12 +16,48 @@ from search.engines.dev_vespa import (
     documents_filter_struct_field_to_vespa_field_map,
     labels_filter_field_to_vespa_field_map,
     labels_filter_struct_field_to_vespa_field_map,
+    passages_filter_field_to_vespa_field_map,
+    passages_filter_struct_field_to_vespa_field_map,
 )
 
 
 def _documents_condition_yql(condition: Condition) -> str:
     """Build a single document condition's YQL with the document field map."""
     return _build_condition_yql(condition, documents_filter_field_to_vespa_field_map)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected"),
+    [
+        ("document_id", "CCLW.doc.1.2", 'document_id contains "CCLW.doc.1.2"'),
+        ("principal_id", "principal-1", 'principal_id contains "principal-1"'),
+    ],
+)
+def test_passages_field_filter_builds_expected_yql(
+    field: str, value: str, expected: str
+) -> None:
+    """Passage document/principal filters map to the native/imported attributes."""
+    condition = FieldFilter(field=field, op="contains", value=value)
+    assert (
+        _build_condition_yql(condition, passages_filter_field_to_vespa_field_map)
+        == expected
+    )
+
+
+def test_passages_filter_group_ands_document_and_principal() -> None: # trunk-ignore(typos)
+    """A combined document+principal filter ANDs both conditions."""
+    filter_group = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="document_id", op="contains", value="doc-1"),
+            FieldFilter(field="principal_id", op="contains", value="principal-1"),
+        ],
+    )
+    assert _build_filter_yql(
+        filter_group,
+        passages_filter_field_to_vespa_field_map,
+        passages_filter_struct_field_to_vespa_field_map,
+    ) == ('(document_id contains "doc-1" and principal_id contains "principal-1")')
 
 
 def test_published_date_filter_targets_scalar_vespa_field() -> None:

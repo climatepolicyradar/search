@@ -1158,6 +1158,13 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
         )
 
 
+passages_filter_field_to_vespa_field_map: dict[str, list[str]] = {
+    "document_id": ["document_id"],
+    "principal_id": ["principal_id"],
+}
+passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
+
+
 class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     """Search engine for passages in dev Vespa."""
 
@@ -1173,10 +1180,20 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         query: str | None,
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None = None,  # noqa: ARG002
+        filters_json_string: str | None = None,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
-        yql = "select * from sources passages where true"
+        where = "true"
+
+        if filters_json_string:
+            filters = Filter.model_validate_json(filters_json_string)
+            where += _build_filter_query(
+                filters,
+                field_map=passages_filter_field_to_vespa_field_map,
+                struct_map=passages_filter_struct_field_to_vespa_field_map,
+            )
+
+        yql = f"select * from sources passages where {where}"
         if query:
             yql += " and userQuery()"
 
@@ -1227,6 +1244,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
                     heading_id=fields.get("heading_id"),
                     heading_text=fields.get("heading_text"),
                     document_id=fields.get("document_id", ""),
+                    principal_id=fields.get("principal_id"),
                     tokens=fields.get("text_tokens") or [],
                 )
             )
