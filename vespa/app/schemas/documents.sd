@@ -124,6 +124,7 @@ schema documents {
             field type type string {}
             field type_confidence type float {}
             field page_number type int {}
+            field pages type array<int> {}
             field text type string {}
             field heading_id type string {}
         }
