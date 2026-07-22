@@ -22,7 +22,7 @@ test_cases = [
         category="acronym",
         search_terms="nz",
         characteristics_test=lambda passage: ("new zealand" in passage.text.lower())
-        or ("net zero" in passage.text.lower()),  # type: ignore
+        or all_words_in_string(["net", "zero"], passage.text),  # type: ignore
         all_or_any="all",
         description="search for nz should return either new zealand or net zero in the passage text",
         assert_results=True,
