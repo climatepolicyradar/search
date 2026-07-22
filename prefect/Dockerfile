@@ -11,6 +11,12 @@ RUN apt-get update && apt-get install -y build-essential curl git && rm -rf /var
 
 # Install uv and dependencies
 RUN pip install uv awscli
+
+# The AWS CLI defaults to 10 concurrent requests for `s3 sync`, which is too
+# slow for the embeddings_input_v2 prefix (one small JSON file per document,
+# tens of thousands of objects).
+RUN aws configure set s3.max_concurrent_requests 50
+
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --locked
 
