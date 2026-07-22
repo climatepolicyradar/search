@@ -34,9 +34,7 @@ def test_documents_passages_feed_materializer_populates_pages_and_page_number() 
         patch.object(
             materializer,
             "read_embeddings_input_v2",
-            return_value=iter(
-                [("doc-0", {"pdf_data": {"text_blocks": [block]}})]
-            ),
+            return_value=iter([("doc-0", {"pdf_data": {"text_blocks": [block]}})]),
         ),
         patch.object(materializer.boto3, "client") as mock_boto_client,
     ):
@@ -49,7 +47,8 @@ def test_documents_passages_feed_materializer_populates_pages_and_page_number() 
         plain_file = next(
             call.args[0]
             for call in upload_calls
-            if call.args[2].endswith(".jsonl") and not call.args[2].endswith(".jsonl.gz")
+            if call.args[2].endswith(".jsonl")
+            and not call.args[2].endswith(".jsonl.gz")
         )
 
         with open(plain_file, "rb") as f:
@@ -68,9 +67,7 @@ def test_documents_passages_feed_materializer_defaults_when_no_pages() -> None:
         patch.object(
             materializer,
             "read_embeddings_input_v2",
-            return_value=iter(
-                [("doc-0", {"pdf_data": {"text_blocks": [block]}})]
-            ),
+            return_value=iter([("doc-0", {"pdf_data": {"text_blocks": [block]}})]),
         ),
         patch.object(materializer.boto3, "client") as mock_boto_client,
     ):
@@ -83,7 +80,8 @@ def test_documents_passages_feed_materializer_defaults_when_no_pages() -> None:
         plain_file = next(
             call.args[0]
             for call in upload_calls
-            if call.args[2].endswith(".jsonl") and not call.args[2].endswith(".jsonl.gz")
+            if call.args[2].endswith(".jsonl")
+            and not call.args[2].endswith(".jsonl.gz")
         )
 
         with open(plain_file, "rb") as f:
