@@ -29,7 +29,8 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
-from search.engines.dev_vespa import Settings
+from search.engines import Pagination
+from search.engines.dev_vespa import DevVespaPassageSearchEngine, Settings
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.passages_feed_materializer import _text_block_to_vespa_update
 from search.vespa.sources.embeddings_input_v2 import TextBlock
@@ -202,6 +203,38 @@ def test_passage_imported_principal_id_resolves_to_parent(vespa_app: Vespa):
     assert "tb-1" in passage_ids, (
         f"Expected passage tb-1 to match principal_id filter, got: {passage_ids}"
     )
+
+
+def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
+    """Searching a currency amount matches that amount but not a different one."""
+    principal = DocumentFactory.build(id="principal-cur", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-100", "The grant of $100 was approved."),
+        document_id="principal-cur",
+    )
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-1000", "The grant of $1000 was approved."),
+        document_id="principal-cur",
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query="$100",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
+    ids = [p.text_block_id for p in results.results]
+
+    assert "tb-100" in ids, f"expected the $100 passage to match '$100', got: {ids}"
+    assert "tb-1000" not in ids, (
+        f"the $1000 passage must not match '$100', got: {ids}"
+    )
+    # The stored/displayed text keeps the original symbol, not the mapped token.
+    matched = next(p for p in results.results if p.text_block_id == "tb-100")
+    assert "$100" in matched.text
 
 
 def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: Vespa):
