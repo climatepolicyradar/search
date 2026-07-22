@@ -11,6 +11,9 @@ schema passages {
         }
         field text type string {
             indexing: index | summary
+            linguistics {
+                profile: passage_analysis
+            }
         }
         field document_id type string {
             indexing: attribute | summary
