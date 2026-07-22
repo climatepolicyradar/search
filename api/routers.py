@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 
 class EnvSettings(Settings):
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="allow")
 
 
 # @see: https://github.com/pydantic/pydantic-settings/issues/201
