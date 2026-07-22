@@ -68,6 +68,8 @@ def search(
             table.add_row("page_number", str(passage.page_number))
         if passage.heading_id:
             table.add_row("heading_id", passage.heading_id)
+        if passage.heading_text:
+            table.add_row("heading_text", passage.heading_text)
         text_display = truncate(passage.text, max_len)
         table.add_row("text", highlight(text_display, words))
         if passage.tokens:

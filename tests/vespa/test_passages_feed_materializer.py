@@ -52,6 +52,9 @@ def test_passages_feed_materializer_splits_output_into_chunks() -> None:
             materializer, "_build_principal_id_lookup", return_value={}
         ),
         patch.object(
+            materializer, "_build_passage_concepts_lookup", return_value={}
+        ),
+        patch.object(
             materializer,
             "read_embeddings_input_v2",
             return_value=_fake_embeddings(document_count=9, blocks_per_document=3),
@@ -102,6 +105,9 @@ def test_passages_feed_materializer_exact_multiple_of_chunk_size() -> None:
             materializer, "_build_principal_id_lookup", return_value={}
         ),
         patch.object(
+            materializer, "_build_passage_concepts_lookup", return_value={}
+        ),
+        patch.object(
             materializer,
             "read_embeddings_input_v2",
             return_value=_fake_embeddings(document_count=10, blocks_per_document=2),
@@ -124,6 +130,9 @@ def test_passages_feed_materializer_no_passages_uploads_nothing() -> None:
         patch.object(materializer, "BATCH_SIZE", 4),
         patch.object(
             materializer, "_build_principal_id_lookup", return_value={}
+        ),
+        patch.object(
+            materializer, "_build_passage_concepts_lookup", return_value={}
         ),
         patch.object(
             materializer,
@@ -159,6 +168,9 @@ def test_passages_feed_materializer_aborts_without_uploading_on_exception() -> N
             materializer, "_build_principal_id_lookup", return_value={}
         ),
         patch.object(
+            materializer, "_build_passage_concepts_lookup", return_value={}
+        ),
+        patch.object(
             materializer,
             "read_embeddings_input_v2",
             return_value=_raising_embeddings(),
@@ -176,6 +188,84 @@ def test_passages_feed_materializer_aborts_without_uploading_on_exception() -> N
             raise AssertionError("expected RuntimeError to propagate")
 
         assert mock_s3.upload_file.call_args_list == []
+
+def test_heading_text_resolved_from_heading_id() -> None:
+    """heading_text is resolved to the text of the block that heading_id points at."""
+    heading = _text_block(0)
+    heading["id"] = "heading-1"
+    heading["text"] = "Chapter 1: Introduction"
+
+    passage = _text_block(1)
+    passage["id"] = "passage-1"
+    passage["heading_id"] = "heading-1"
+
+    block_text_by_id = {
+        heading["id"]: heading["text"],
+        passage["id"]: passage["text"],
+    }
+
+    update = materializer._text_block_to_vespa_update(
+        passage, "doc-0", block_text_by_id=block_text_by_id
+    )
+    fields = update["fields"]
+
+    assert fields.get("heading_id") == {"assign": "heading-1"}
+    assert fields.get("heading_text") == {"assign": "Chapter 1: Introduction"}
+
+def _inference_result(concept_id: str, name: str) -> dict:
+    return {
+        "id": concept_id,
+        "name": name,
+        "parent_concepts": [],
+        "parent_concept_ids_flat": "",
+        "model": "test-model",
+        "start": 0,
+        "end": 1,
+        "timestamp": "2024-01-01T00:00:00Z",
+    }
+
+
+def test_build_passage_concepts_lookup_aggregates_per_passage() -> None:
+    """Repeated hits of a concept in a passage collapse to one entry with a count."""
+    inference = [
+        (
+            "doc-0",
+            {
+                "block-0": [
+                    _inference_result("Q1", "flooding"),
+                    _inference_result("Q1", "flooding"),
+                    _inference_result("Q2", "drought"),
+                ],
+                "block-1": [_inference_result("Q2", "drought")],
+            },
+        )
+    ]
+    with patch.object(
+        materializer, "read_inference_results", return_value=iter(inference)
+    ):
+        lookup = materializer._build_passage_concepts_lookup()
+
+    assert lookup["block-0"] == [
+        {"id": "concept::Q1", "type": "concept", "value": "flooding", "count": 2},
+        {"id": "concept::Q2", "type": "concept", "value": "drought", "count": 1},
+    ]
+    assert lookup["block-1"] == [
+        {"id": "concept::Q2", "type": "concept", "value": "drought", "count": 1},
+    ]
+
+
+def test_text_block_to_vespa_update_includes_and_omits_concepts() -> None:
+    """Concepts are assigned when present, and the key is absent when there are none."""
+    concepts: list[materializer.VespaConceptField] = [
+        {"id": "concept::Q1", "type": "concept", "value": "flooding", "count": 2}
+    ]
+    with_concepts = materializer._text_block_to_vespa_update(
+        _text_block(0), "doc-0", concepts=concepts
+    )
+    assert with_concepts["fields"].get("concepts") == {"assign": concepts}
+
+    without_concepts = materializer._text_block_to_vespa_update(_text_block(0), "doc-0")
+    assert "concepts" not in without_concepts["fields"]
 
 
 class TestChunkWriter:

@@ -4,10 +4,11 @@ from api.routers import settings
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
-from search.engines.vespa import (
-    ExactVespaPassageSearchEngine,
-    HybridVespaPassageSearchEngine,
-)
+
+#from search.engines.vespa import (
+#    ExactVespaPassageSearchEngine,
+#    HybridVespaPassageSearchEngine,
+#)
 from search.passage import Passage
 from search.testcase import (
     FieldCharacteristicsTestCase,
@@ -262,8 +263,8 @@ def relevance_tests_passages():
 
     engines = [
         DevVespaPassageSearchEngine(settings=settings, debug=True),
-        ExactVespaPassageSearchEngine(),
-        HybridVespaPassageSearchEngine(),
+        #ExactVespaPassageSearchEngine(),
+        #HybridVespaPassageSearchEngine(),
     ]
 
     run_relevance_tests_parallel(

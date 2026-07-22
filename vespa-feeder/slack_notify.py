@@ -113,3 +113,13 @@ class SlackNotify:
     async def on_failure(cls, flow: Flow, flow_run: FlowRun, state: State) -> None:
         """Logic for updating Slack on Prefect flow failure"""
         await cls._send(flow, flow_run, state)
+
+    @classmethod
+    async def on_crashed(cls, flow: Flow, flow_run: FlowRun, state: State) -> None:
+        """Logic for updating Slack on Prefect flow crash (e.g. OOM/SIGKILL)"""
+        await cls._send(flow, flow_run, state)
+
+    @classmethod
+    async def on_cancellation(cls, flow: Flow, flow_run: FlowRun, state: State) -> None:
+        """Logic for updating Slack on Prefect flow cancellation"""
+        await cls._send(flow, flow_run, state)

@@ -33,6 +33,33 @@ schema passages {
         field heading_id type string {
             indexing: attribute | summary
         }
+        struct concept {
+            field id type string {}
+            field type type string {}
+            field value type string {}
+            field count type int {}
+        }
+        field concepts type array<concept> {
+            struct-field id {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field type {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field value {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+            struct-field count {
+                indexing: summary | attribute
+                attribute: fast-search
+            }
+        }
+        field heading_text type string {
+            indexing: index | summary
+        }
     }
 
     # Fields imported from the parent document via document_ref. These let us
@@ -48,6 +75,14 @@ schema passages {
     # Lets passages filter / group / return Principal-scoped metadata in one
     # hop without denormalising per-passage.
     import field principal_document_ref.title_attribute as principal_title {}
+
+    field concepts_value type array<string> {
+        indexing: input concepts | for_each { get_field value } | index | summary
+        stemming: none
+        linguistics {
+            profile: document_label_analysis
+        }
+    }
 
     fieldset default {
         fields: text
@@ -70,10 +105,14 @@ schema passages {
         summary language {}
         summary text {}
         summary document_id {}
+        summary principal_id {}
         summary type {}
         summary type_confidence {}
         summary page_number {}
         summary heading_id {}
+        summary concepts {}
+        summary concepts_value {}
+        summary heading_text {}
         summary text_tokens {
             source: text
             tokens

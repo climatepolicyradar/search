@@ -50,6 +50,9 @@ MISSING_PLACEHOLDER = "MISSING"
 class Settings(BaseSettings):
     vespa_endpoint: AnyHttpUrl
     vespa_read_token: str
+    vespa_dev_instance_name: str | None = (
+        None  # personal dev instance; None == full/prod
+    )
 
 
 # endregion
@@ -566,7 +569,18 @@ documents_filter_field_to_vespa_field_map = {
 documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
 
 
-class DevVespaDocumentSearchEngine(SearchEngine[Document]):
+class DevVespaInstanceAddIn:
+    """Surfaces the personal dev instance name (from settings) onto the engine id/config."""
+
+    settings: "Settings"
+
+    @property
+    def instance_name(self) -> str | None:
+        """Name of the specific instance of the search engine"""
+        return self.settings.vespa_dev_instance_name
+
+
+class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]):
     """
     Search engine for dev Vespa
 
@@ -802,7 +816,9 @@ class DevVespaDocumentSearchEngine(SearchEngine[Document]):
             return None
         if response.status_code != HTTPStatus.OK:
             body_preview = (response.text or "")[:HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS]
-            raise VespaError(f"Vespa returned status {response.status_code}: {body_preview}")
+            raise VespaError(
+                f"Vespa returned status {response.status_code}: {body_preview}"
+            )
 
         document_source = response.json().get("fields", {}).get("document_source")
         if not document_source:
@@ -1142,7 +1158,14 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
         )
 
 
-class DevVespaPassageSearchEngine(SearchEngine[Passage]):
+passages_filter_field_to_vespa_field_map: dict[str, list[str]] = {
+    "document_id": ["document_id"],
+    "principal_id": ["principal_id"],
+}
+passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
+
+
+class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     """Search engine for passages in dev Vespa."""
 
     model_class = Passage
@@ -1157,10 +1180,20 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
         query: str | None,
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None = None,  # noqa: ARG002
+        filters_json_string: str | None = None,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
-        yql = "select * from sources passages where true"
+        where = "true"
+
+        if filters_json_string:
+            filters = Filter.model_validate_json(filters_json_string)
+            where += _build_filter_query(
+                filters,
+                field_map=passages_filter_field_to_vespa_field_map,
+                struct_map=passages_filter_struct_field_to_vespa_field_map,
+            )
+
+        yql = f"select * from sources passages where {where}"
         if query:
             yql += " and userQuery()"
 
@@ -1209,7 +1242,9 @@ class DevVespaPassageSearchEngine(SearchEngine[Passage]):
                     type_confidence=fields.get("type_confidence", 0.0),
                     page_number=fields.get("page_number", 0),
                     heading_id=fields.get("heading_id"),
+                    heading_text=fields.get("heading_text"),
                     document_id=fields.get("document_id", ""),
+                    principal_id=fields.get("principal_id"),
                     tokens=fields.get("text_tokens") or [],
                 )
             )
@@ -1246,7 +1281,7 @@ labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
 }
 
 
-class DevVespaLabelSearchEngine(SearchEngine[DataInLabel]):
+class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]):
     """Search engine for labels in dev Vespa."""
 
     model_class = DataInLabel

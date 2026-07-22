@@ -2,7 +2,8 @@
 
 ## Prerequisites
 
-- Logged into AWS where `AWS_PROFILE=production` `AWS_REGION=eu-west-1`
+- Logged into AWS: `aws sso login --profile production`, then
+  `export AWS_PROFILE=production AWS_DEFAULT_REGION=eu-west-1`
 
 ## Usage
 
@@ -11,6 +12,18 @@
 - "Run" the flow with the `<instance>` value from above
 - If you want a sample, update the `sample_percent`
 - Wait 🥱…
+
+## Changing the feed flow
+
+```bash
+just release        # docker-build + docker-push + prefect_deploy
+```
+
+For a quick local run against your working copy (bypasses the image):
+
+```bash
+just feed-local <instance>
+```
 
 ## Usage in `./api`
 

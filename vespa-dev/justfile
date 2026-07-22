@@ -12,6 +12,8 @@
 tenant   := "climate-policy-radar"
 dev_app  := tenant + ".search-dev"           # tenant.application under which personal instances live
 zone     := "dev.aws-us-east-1c"
+aws_region := "eu-west-1"
+feed_deployment := "feed-from-production/search-vespa-dev-feed-from-production"  # see prefect_deploy.py
  
 # Create the instance if it doesn't already exist yet. No-op if it's already
 # there - use `just deploy` to push changes to an existing instance.
@@ -30,38 +32,55 @@ create instance:
     #!/usr/bin/env bash
     set -euo pipefail
     app="{{dev_app}}.{{instance}}"
-    if uv run vespa status -a "$app" -t cloud -z {{zone}} >/dev/null 2>&1; then
-        echo "Instance $app already exists - nothing to do. Use 'just deploy {{instance}}' to push changes."
+    # `vespa status` exits 0 even for instances that don't exist (it prints the
+    # 404 to stderr but returns success), so it can't tell us whether the
+    # instance is deployed
+    endpoint=$(uv run vespa status endpoint -a "$app" -t cloud -z {{zone}} --format json 2>/dev/null \
+        | jq -r 'select(.authMethod=="token") | .url' || true)
+    if [[ -z "$endpoint" ]]; then
+        echo "No endpoint for $app yet - deploying to {{zone}}"
+        # Ignore a non-zero exit: --wait's post-deploy health check hits the
+        # container over mTLS and fails with "tls: unknown certificate" when the
+        # CLI's data-plane cert isn't trusted, even though the deploy succeeded.
+        # We only need the token endpoint (feeding uses token auth, not mTLS),
+        # so success is judged by whether that endpoint resolves below.
+        uv run vespa deploy --wait 1800 -a "$app" -t cloud -z {{zone}} ../vespa/app || true
+        endpoint=$(uv run vespa status endpoint -a "$app" -t cloud -z {{zone}} --format json 2>/dev/null \
+            | jq -r 'select(.authMethod=="token") | .url' || true)
     else
-        echo "Creating $app in {{zone}}"
-        uv run vespa deploy -a "$app" -t cloud -z {{zone}} ../vespa/app
+        echo "Instance $app already deployed - reusing existing endpoint. Use 'just deploy {{instance}}' to push changes."
     fi
-    echo "Resolving data-plane endpoint for $app..."
-    endpoint=$(uv run vespa status endpoint -a "$app" -t cloud -z {{zone}} --wait 900 --format json \
-        | jq -r 'select(.authMethod=="token") | .url')
-    aws ssm put-parameter \
+    if [[ -z "$endpoint" ]]; then
+        echo "ERROR: could not resolve a token endpoint for $app - deployment may have failed" >&2
+        exit 1
+    fi
+    aws ssm put-parameter --region {{aws_region}} \
         --name "/search/vespa-dev/{{instance}}" \
         --value "$endpoint" \
         --type SecureString \
         --overwrite >/dev/null
-    echo "Stored endpoint for {{instance}} at /search/vespa-dev/{{instance}}"
+    echo "Stored endpoint for {{instance}} at /search/vespa-dev/{{instance}} ({{aws_region}})"
  
 # Deploy your local schema/services.xml changes to an existing instance.
 deploy instance:
     uv run vespa deploy -a {{dev_app}}.{{instance}} -t cloud -z {{zone}} ../vespa/app
  
 # Feed the instance from a sample (or full) snapshot of prod.
-#   just feed jamesgorrie          # default: 5% sample of the prod corpus
-#   just feed jamesgorrie 100      # full ~10GB corpus
-feed instance sample="5":
-    uv run python feed_from_production.py \
+feed instance sample="20":
+    uv run prefect deployment run '{{feed_deployment}}' \
+        -p target={{dev_app}}.{{instance}} \
+        -p sample_percent={{sample}}
+
+# Run the flow locally against your working copy
+feed-local instance sample="5":
+    AWS_DEFAULT_REGION={{aws_region}} uv run python feed_from_production.py \
         --target {{dev_app}}.{{instance}} \
         --sample-percent {{sample}}
  
 # Tear the instance down now, rather than waiting on the 14-day auto-expiry.
 destroy instance:
     uv run vespa destroy -a {{dev_app}}.{{instance}} --force
-    aws ssm delete-parameter --name "/search/vespa-dev/{{instance}}" 2>/dev/null || true
+    aws ssm delete-parameter --region {{aws_region}} --name "/search/vespa-dev/{{instance}}" 2>/dev/null || true
 
 # Snapshot production to s3://cpr-cache/search/vespa/index/ as sharded JSONL.
 # Runs daily via the scheduled deployment (see prefect_deploy.py) - this is
@@ -70,9 +89,12 @@ snapshot sample="100":
     python export_production_snapshot.py --sample-percent {{sample}}
 
 prefect_deploy:
-    uv run python prefect_deploy.py
+    AWS_REGION={{aws_region}} uv run python prefect_deploy.py
 
-registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo "${AWS_DEFAULT_REGION:-}"` + ".amazonaws.com"
+# Rebuild + push the image, then re-register the deployments.
+release: docker-build docker-push prefect_deploy
+
+registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + aws_region + ".amazonaws.com"
 image := registry + "/search-vespa-dev"
 
 docker-build:
