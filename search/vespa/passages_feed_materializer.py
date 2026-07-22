@@ -60,6 +60,7 @@ class VespaPassageUpdate(TypedDict):
     heading_id: NotRequired[VespaAssign[str]]
     heading_text: NotRequired[VespaAssign[str]]
     concepts: NotRequired[VespaAssign[list[VespaConceptField]]]
+    pages: NotRequired[VespaAssign[list[int]]]
 
 BATCH_SIZE = 10_000  # write-buffer flush size
 CHUNK_SIZE = 200_000  # output file rotation size, see module docstring
@@ -162,6 +163,10 @@ def _text_block_to_vespa_update(
 
     if concepts:
         fields["concepts"] = {"assign": concepts}
+
+    pages = [page["number"] for page in block.get("pages", [])]
+    if pages:
+        fields["pages"] = {"assign": pages}
 
     return {
         "update": f"id:passages:passages::{block['id']}",
