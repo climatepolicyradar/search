@@ -12,6 +12,7 @@ from typing import Optional, Sequence
 from opentelemetry import metrics
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.metrics import Counter, Histogram, Meter
+from opentelemetry.metrics import _Gauge as Gauge
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 
@@ -163,6 +164,37 @@ class MetricsService:
         # Note: bucket boundaries are configured via Views in OpenTelemetry Python SDK
         # For now, we use the default boundaries
         return self.meter.create_histogram(
+            name=self.full_metric_name(name),
+            description=description,
+            unit=unit,
+        )
+
+    def create_gauge(
+        self,
+        name: str,
+        description: str = "",
+        unit: str = "1",
+    ) -> Optional[Gauge]:
+        """
+        Create a gauge instrument.
+
+        Gauges hold the last-set value per label set — use for point-in-time
+        values like "duration of the most recent run", where the value should
+        be replaced (not accumulated) on every observation.
+
+        :param name: The metric name.
+        :type name: str
+        :param description: Human-readable description of the metric.
+        :type description: str
+        :param unit: The unit of measurement (default "1").
+        :type unit: str
+        :return: The created gauge, or None if metrics are disabled.
+        :rtype: Gauge | None
+        """
+        if self._disabled or self.meter is None:
+            return None
+
+        return self.meter.create_gauge(
             name=self.full_metric_name(name),
             description=description,
             unit=unit,
