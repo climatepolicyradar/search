@@ -30,6 +30,11 @@ schema passages {
         field page_number type int {
             indexing: attribute | summary
         }
+        field pages type array<int> {
+            indexing: attribute | summary
+            attribute: fast-search
+            rank: filter
+        }
         field heading_id type string {
             indexing: attribute | summary
         }
@@ -109,6 +114,7 @@ schema passages {
         summary type {}
         summary type_confidence {}
         summary page_number {}
+        summary pages {}
         summary heading_id {}
         summary concepts {}
         summary concepts_value {}
