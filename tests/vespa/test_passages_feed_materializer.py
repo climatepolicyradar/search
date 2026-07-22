@@ -268,6 +268,26 @@ def test_text_block_to_vespa_update_includes_and_omits_concepts() -> None:
     assert "concepts" not in without_concepts["fields"]
 
 
+def test_text_block_to_vespa_update_includes_pages_from_multi_page_block() -> None:
+    """Pages is assigned as the full list of page numbers, not just the first."""
+    block = _text_block(0)
+    block["pages"] = [
+        {"number": 3, "bounding_boxes": []},
+        {"number": 4, "bounding_boxes": []},
+    ]
+
+    update = materializer._text_block_to_vespa_update(block, "doc-0")
+
+    assert update["fields"].get("pages") == {"assign": [3, 4]}
+
+
+def test_text_block_to_vespa_update_omits_pages_when_block_has_none() -> None:
+    """Pages is absent from the update when the source block has no pages."""
+    update = materializer._text_block_to_vespa_update(_text_block(0), "doc-0")
+
+    assert "pages" not in update["fields"]
+
+
 class TestChunkWriter:
     """Unit tests for `_ChunkWriter` in isolation, no embeddings/S3 mocking needed."""
 

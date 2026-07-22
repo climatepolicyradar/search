@@ -229,6 +229,7 @@ class VespaDocumentPassage(TypedDict):
     type: str
     type_confidence: float
     page_number: int
+    pages: list[int]
     text: str
     heading_id: NotRequired[str | None]
 
@@ -377,6 +378,7 @@ def documents_passages_feed_materializer():
                     "page_number": block["pages"][0]["number"]
                     if block.get("pages")
                     else 0,
+                    "pages": [page["number"] for page in block.get("pages", [])],
                     "text": block["text"],
                     "heading_id": block.get("heading_id"),
                 }

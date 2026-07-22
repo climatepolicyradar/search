@@ -60,6 +60,7 @@ class VespaPassageUpdate(TypedDict):
     heading_id: NotRequired[VespaAssign[str]]
     heading_text: NotRequired[VespaAssign[str]]
     concepts: NotRequired[VespaAssign[list[VespaConceptField]]]
+    pages: NotRequired[VespaAssign[list[int]]]
 
 BATCH_SIZE = 10_000  # write-buffer flush size
 CHUNK_SIZE = 200_000  # output file rotation size, see module docstring
@@ -163,6 +164,10 @@ def _text_block_to_vespa_update(
     if concepts:
         fields["concepts"] = {"assign": concepts}
 
+    pages = [page["number"] for page in block.get("pages", [])]
+    if pages:
+        fields["pages"] = {"assign": pages}
+
     return {
         "update": f"id:passages:passages::{block['id']}",
         "create": True,
@@ -243,6 +248,11 @@ class _ChunkWriter:
         self._f_gz.close()
         _upload_chunk(self._s3, self._output_file, self._output_file_gz)
         self.chunks_uploaded += 1
+        print(
+            f"Uploaded chunk {self._chunk_index} "
+            f"({self._output_file.name}, {self._chunk_total} passages) - "
+            f"{self.total} passages written so far."
+        )
         self._chunk_index += 1
         self._chunk_total = 0
         self._output_file, self._output_file_gz = _open_chunk(self._chunk_index)
@@ -270,6 +280,10 @@ class _ChunkWriter:
         if self._chunk_total > 0:
             _upload_chunk(self._s3, self._output_file, self._output_file_gz)
             self.chunks_uploaded += 1
+            print(
+                f"Uploaded final chunk {self._chunk_index} "
+                f"({self._output_file.name}, {self._chunk_total} passages)."
+            )
         else:
             # Last chunk ended up empty because the final flush landed exactly
             # on a chunk boundary - nothing new to upload, clean up the empty

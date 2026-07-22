@@ -11,6 +11,7 @@ class Passage(BaseModel):
     type: str = Field(default="")
     type_confidence: float = Field(default=0.0)
     page_number: int = Field(default=0)
+    pages: list[int] = Field(default_factory=list)
     heading_id: str | None = Field(default=None)
     heading_text: str | None = Field(default=None)
     document_id: str = Field(default="")
