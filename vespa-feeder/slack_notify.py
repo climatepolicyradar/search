@@ -96,7 +96,7 @@ class SlackNotify:
             f"{icon} Flow run <{ui_url}|{flow.name}/{deployment.name}/{flow_run.name}> "
             f"state `{state.name}` at {state.timestamp}"
         )
-        credentials = await SlackCredentials.load(cls.SLACK_BLOCK)
+        credentials = await SlackCredentials.aload(cls.SLACK_BLOCK)
         client = credentials.get_client()
         await client.chat_postMessage(
             channel=cls.CHANNEL,
