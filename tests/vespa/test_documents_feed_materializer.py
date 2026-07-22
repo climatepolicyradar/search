@@ -5,10 +5,10 @@ from unittest.mock import MagicMock, patch
 import orjson
 
 from search.vespa import documents_feed_materializer as materializer
-from search.vespa.sources.embeddings_input_v2 import TextBlock
+from search.vespa.sources.embeddings_input_v2 import PageRef, TextBlock
 
 
-def _text_block(idx: int, pages: list[dict] | None = None) -> TextBlock:
+def _text_block(idx: int, pages: list[PageRef] | None = None) -> TextBlock:
     return {
         "language": "en",
         "type": "Text",
@@ -21,7 +21,7 @@ def _text_block(idx: int, pages: list[dict] | None = None) -> TextBlock:
 
 
 def test_documents_passages_feed_materializer_populates_pages_and_page_number() -> None:
-    """pages carries every page number; page_number keeps its first-page value."""
+    """Pages carries every page number; page_number keeps its first-page value."""
     block = _text_block(
         0,
         pages=[

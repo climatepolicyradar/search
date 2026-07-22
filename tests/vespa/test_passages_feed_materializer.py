@@ -269,7 +269,7 @@ def test_text_block_to_vespa_update_includes_and_omits_concepts() -> None:
 
 
 def test_text_block_to_vespa_update_includes_pages_from_multi_page_block() -> None:
-    """pages is assigned as the full list of page numbers, not just the first."""
+    """Pages is assigned as the full list of page numbers, not just the first."""
     block = _text_block(0)
     block["pages"] = [
         {"number": 3, "bounding_boxes": []},
@@ -282,7 +282,7 @@ def test_text_block_to_vespa_update_includes_pages_from_multi_page_block() -> No
 
 
 def test_text_block_to_vespa_update_omits_pages_when_block_has_none() -> None:
-    """pages is absent from the update when the source block has no pages."""
+    """Pages is absent from the update when the source block has no pages."""
     update = materializer._text_block_to_vespa_update(_text_block(0), "doc-0")
 
     assert "pages" not in update["fields"]
