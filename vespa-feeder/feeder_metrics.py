@@ -9,6 +9,7 @@ from typing import Optional
 
 from observability.metrics import MetricsService
 from opentelemetry.metrics import Counter, Histogram
+from opentelemetry.metrics import _Gauge as Gauge
 
 
 class FeederMetrics:
@@ -22,6 +23,7 @@ class FeederMetrics:
         self._records_ok: Optional[Counter] = None
         self._records_error: Optional[Counter] = None
         self._run_duration: Optional[Histogram] = None
+        self._last_run_duration: Optional[Gauge] = None
         self._task_duration: Optional[Histogram] = None
         self._runs_completed: Optional[Counter] = None
         self._runs_failed: Optional[Counter] = None
@@ -48,6 +50,11 @@ class FeederMetrics:
         self._run_duration = self._metrics_service.create_histogram(
             name="run.duration",
             description="Total flow run duration in seconds",
+            unit="s",
+        )
+        self._last_run_duration = self._metrics_service.create_gauge(
+            name="last_run.duration",
+            description="Duration of the most recently completed flow run in seconds",
             unit="s",
         )
         self._task_duration = self._metrics_service.create_histogram(
@@ -87,9 +94,13 @@ class FeederMetrics:
 
     def record_run_duration(self, duration_s: float, deployment_name: str) -> None:
         """Record the total duration of a flow run in seconds."""
-        if self._disabled or self._run_duration is None:
+        if self._disabled:
             return
-        self._run_duration.record(duration_s, {"deployment_name": deployment_name})
+        attrs = {"deployment_name": deployment_name}
+        if self._run_duration is not None:
+            self._run_duration.record(duration_s, attrs)
+        if self._last_run_duration is not None:
+            self._last_run_duration.set(duration_s, attrs)
 
     def record_run_completed(self, deployment_name: str, run_name: str) -> None:
         """Increment the completed runs counter for a deployment run."""
