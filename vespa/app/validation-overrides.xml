@@ -1,5 +1,5 @@
 <validation-overrides>
     <allow until="2026-06-04">certificate-removal</allow>
-    <allow until="2026-06-04">indexing-change</allow>
+    <allow until="2026-08-20">indexing-change</allow>
     <allow until="2026-06-04">content-cluster-removal</allow>
 </validation-overrides>
