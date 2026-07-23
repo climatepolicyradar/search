@@ -246,6 +246,7 @@ def test_passage_search_engine_reads_concepts_from_top_level_passages_schema() -
     passage = result.results[0]
     assert len(passage.concepts) == 2
     assert passage.concepts[0].id == "concept::Q1"
+    assert passage.concepts[0].type == "concept"
     assert passage.concepts[0].value == "flooding"
     assert passage.concepts[0].count == 3
     assert passage.concepts[1].value == "drought"
