@@ -49,7 +49,13 @@ _FEEDS = [
         "description": "Feed passages JSONL from S3 into Vespa",
         # See _MAX_CONCURRENT_FEEDS in flow.py - the default container size
         # OOMKilled under concurrent feeding of these (up to 200k records each).
-        "job_variables": {"cpu": 2048, "memory": 8192},
+        # ephemeralStorage bumped from the ECS default (20GiB) - downloading
+        # this prefix's files upfront was filling the default disk.
+        "job_variables": {
+            "cpu": 2048,
+            "memory": 8192,
+            "ephemeralStorage": {"sizeInGiB": 100},
+        },
     },
 ]
 
