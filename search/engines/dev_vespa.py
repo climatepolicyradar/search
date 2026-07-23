@@ -532,6 +532,10 @@ def _ranking_overrides_for_passage_order_by(
             f"invalid order direction {primary.direction!r}; use asc or desc"
         )
     if primary.field == "relevance":
+        if primary.direction == "asc":
+            logger.warning(
+                "relevance ascending is not supported; using relevance (desc) ordering"
+            )
         return {}
 
     # ``PASSAGE_SORT_API_FIELDS`` is ``relevance`` plus map keys, so this
