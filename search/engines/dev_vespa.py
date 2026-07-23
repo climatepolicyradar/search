@@ -1297,9 +1297,9 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             # `tokens`' field shape/necessity is settled (see Passage.tokens).
             "presentation.summary": "debug-summary",
         }
-        request_body.update(sort_overrides)
         if self.debug:
             request_body["ranking.profile"] = "nativerank"
+        request_body.update(sort_overrides)
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
