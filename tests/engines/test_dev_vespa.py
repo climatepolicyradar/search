@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import AnyHttpUrl
 
-from search.engines import Pagination, dev_vespa
+from search.engines import OrderBy, Pagination, dev_vespa
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     DevVespaPassageSearchEngine,
