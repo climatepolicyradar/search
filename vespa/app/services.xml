@@ -35,11 +35,39 @@
                             </item>
                         </tokenFilters>
                     </item>
-                    <!-- passage_analysis: stop words + stemming for long-form text -->
+                    <!-- passage_analysis: stop words + stemming for long-form text.
+                         charFilters map currency symbols to words so the
+                             standard tokenizer preserves them, e.g. "$100" ->
+                             "dollar100". Replacement values must not
+                             contain whitespace - Vespa silently ignores a
+                             charFilter whose replacement has a space. -->
                     <item key="profile=passage_analysis;language=en">
                         <tokenizer>
                             <name>standard</name>
                         </tokenizer>
+                        <charFilters>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[$]</item>
+                                    <item key="replacement">dollar</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[€]</item>
+                                    <item key="replacement">euro</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[£]</item>
+                                    <item key="replacement">pound</item>
+                                </conf>
+                            </item>
+                        </charFilters>
                         <tokenFilters>
                             <item>
                                 <name>lowercase</name>

@@ -65,22 +65,6 @@ test_cases = [
         assert_results=True,
     ),
     FieldCharacteristicsTestCase[Passage](
-        category="BROKEN exact match",
-        search_terms="adaptation options",
-        # FIXME: this tests exact match search, which we don't currently consider using these tests
-        # exact_match=True,
-        characteristics_test=(
-            lambda passage: not (
-                "adaptation option" in passage.text.lower()
-                and "adaptation options" not in passage.text.lower()
-            )
-        ),
-        description="Exact match search should not perform stemming.",
-        k=100,
-        all_or_any="all",
-        assert_results=True,
-    ),
-    FieldCharacteristicsTestCase[Passage](
         category="dissimilar passages excluded",
         search_terms="mango",
         characteristics_test=(lambda passage: "mango" in passage.text.lower()),
