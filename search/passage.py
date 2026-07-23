@@ -1,6 +1,26 @@
 from pydantic import BaseModel, Field, computed_field
 
 
+class CoordinateModel(BaseModel):
+    """A single x/y point in a bounding-box polygon."""
+
+    x: float = Field(default=0.0)
+    y: float = Field(default=0.0)
+
+
+class BoundingBoxModel(BaseModel):
+    """A polygon (list of coordinate points) bounding part of a passage on a page."""
+
+    coordinates: list[CoordinateModel] = Field(default_factory=list)
+
+
+class PageWithBoundingBoxes(BaseModel):
+    """A page number paired with the bounding boxes locating a passage on it."""
+
+    number: int = Field(default=0)
+    bounding_boxes: list[BoundingBoxModel] = Field(default_factory=list)
+
+
 class Passage(BaseModel):
     """Base class for a passage"""
 
@@ -12,6 +32,7 @@ class Passage(BaseModel):
     type_confidence: float = Field(default=0.0)
     page_number: int = Field(default=0)
     pages: list[int] = Field(default_factory=list)
+    pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
     heading_id: str | None = Field(default=None)
     heading_text: str | None = Field(default=None)
     document_id: str = Field(default="")
