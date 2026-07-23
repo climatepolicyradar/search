@@ -218,15 +218,20 @@ def read_labels(
 @router.get("/passages", response_model=SearchResponse[Passage])
 def read_passages(
     query: str | None = Query(None, description="What are you looking for?"),
+    filters_json_string: str | None = Query(None, alias="filters"),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(order_by),
 ):
     logger.info(
-        "Searching passages (query=%r, page_token=%s, page_size=%s)",
+        "Searching passages (query=%r, page_token=%s, page_size=%s, "
+        "filters_present=%s)",
         query,
         pagination.page_token,
         pagination.page_size,
+        bool(filters_json_string),
     )
+
+    normalised_filters = normalise_filters(filters_json_string)
 
     engine = DevVespaPassageSearchEngine(settings=settings)
     try:
@@ -234,6 +239,7 @@ def read_passages(
             query=query,
             pagination=pagination,
             order_by=order_by,
+            filters_json_string=normalised_filters,
         )
     except Exception:
         logger.exception(
