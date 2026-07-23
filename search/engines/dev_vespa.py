@@ -221,6 +221,9 @@ DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
     {"relevance", *sort_field_to_vespa_field_map.keys()}
 )
 
+# Public API field names for ``order_by`` on ``/passages``.
+PASSAGE_SORT_API_FIELDS: frozenset[str] = frozenset({"relevance", "idx"})
+
 
 def _build_condition_yql(
     condition: Condition,
@@ -493,6 +496,83 @@ def _ranking_overrides_for_document_order_by(
 
 
 # endregion Document sort
+
+# region Passage sort (Vespa ranking.sorting)
+
+passage_sort_field_to_vespa_field_map: dict[str, list[str]] = {
+    "idx": ["idx"],
+}
+
+
+def _passage_sort_ranking_string(vespa_attr: str, direction: str) -> str:
+    """
+    Build Vespa ``ranking.sorting`` for a passage sort attribute.
+
+    Always pushes ``missing`` values to the end of the list.
+    https://docs.vespa.ai/en/reference/querying/sorting-language.html#missing
+
+    :param vespa_attr: First mapped field name from
+        :data:`passage_sort_field_to_vespa_field_map`
+    :type vespa_attr: str
+    :param direction: ``asc`` or ``desc``
+    :type direction: str
+    :return: Vespa sorting expression fragment
+    :rtype: str
+    :raises AssertionError: if ``vespa_attr`` is not handled
+    """
+    sign = "+" if direction == "asc" else "-"
+    if vespa_attr == "idx":
+        return f"{sign}missing(idx,last)"
+    raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")
+
+
+def _ranking_overrides_for_passage_order_by(
+    order_by: list[OrderBy],
+) -> dict[str, Any]:
+    """
+    Translate ``order_by`` clauses into Vespa ranking request fields.
+
+    Only the first clause is applied (multilevel sorts can be added later).
+    ``relevance`` keeps default ``nativerank`` ordering (no ``ranking.sorting``).
+
+    :param order_by: Parsed ``<field> <direction>`` clauses (``idx``
+        plus ``relevance``)
+    :type order_by: list[OrderBy]
+    :return: Key/value fragments to merge into the Vespa JSON body
+    :rtype: dict[str, Any]
+    :raises ValueError: if the field is not supported for passages
+    """
+    if not order_by:
+        return {}
+    primary = order_by[0]
+    if primary.field not in PASSAGE_SORT_API_FIELDS:
+        raise ValueError(
+            f"order_by field {primary.field!r} is not supported for passages; "
+            f"expected one of: {sorted(PASSAGE_SORT_API_FIELDS)}"
+        )
+    if primary.direction not in ("asc", "desc"):
+        raise ValueError(
+            f"invalid order direction {primary.direction!r}; use asc or desc"
+        )
+    if primary.field == "relevance":
+        if primary.direction == "asc":
+            logger.warning(
+                "relevance ascending is not supported; using relevance (desc) ordering"
+            )
+        return {}
+
+    # ``PASSAGE_SORT_API_FIELDS`` is ``relevance`` plus map keys, so this
+    # lookup is always valid here.
+    vespa_attr = passage_sort_field_to_vespa_field_map[primary.field][0]
+    sorting = _passage_sort_ranking_string(vespa_attr, primary.direction)
+    return {
+        "ranking.profile": "unranked",
+        "ranking.sorting": sorting,
+        "sorting.degrading": False,
+    }
+
+
+# endregion Passage sort
 
 # region Aggregations
 
@@ -1186,7 +1266,9 @@ passages_filter_field_to_vespa_field_map: dict[str, list[str]] = {
     "document_id": ["document_id"],
     "principal_id": ["principal_id"],
 }
-passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
+passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
+    "concepts.value.id": ArrayStructField("concepts", "id"),
+}
 
 
 class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
@@ -1203,7 +1285,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         self,
         query: str | None,
         pagination: Pagination,
-        order_by: list[OrderBy],  # noqa: ARG002
+        order_by: list[OrderBy],
         filters_json_string: str | None = None,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
@@ -1222,6 +1304,8 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             yql += " and userQuery()"
 
         logger.info("🔎 Passage search query built (query=%r, yql=%s)", query, yql)
+
+        sort_overrides = _ranking_overrides_for_passage_order_by(order_by)
 
         request_body: dict[str, Any] = {
             "yql": yql,
@@ -1242,6 +1326,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         }
         if self.debug:
             request_body["ranking.profile"] = "nativerank"
+        request_body.update(sort_overrides)
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
