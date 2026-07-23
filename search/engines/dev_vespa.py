@@ -1258,7 +1258,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         self,
         query: str | None,
         pagination: Pagination,
-        order_by: list[OrderBy],  # noqa: ARG002
+        order_by: list[OrderBy],
         filters_json_string: str | None = None,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
@@ -1278,6 +1278,8 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
 
         logger.info("🔎 Passage search query built (query=%r, yql=%s)", query, yql)
 
+        sort_overrides = _ranking_overrides_for_passage_order_by(order_by)
+
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
@@ -1295,6 +1297,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             # `tokens`' field shape/necessity is settled (see Passage.tokens).
             "presentation.summary": "debug-summary",
         }
+        request_body.update(sort_overrides)
         if self.debug:
             request_body["ranking.profile"] = "nativerank"
 

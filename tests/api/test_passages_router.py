@@ -90,3 +90,48 @@ def test_read_passages_with_malformed_filters_returns_400(passages_client) -> No
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     mock_engine.search.assert_not_called()
+
+
+def test_read_passages_default_order_by_is_page_number_asc(passages_client) -> None:
+    """Omitting ``order_by`` defaults to ascending page-number order."""
+    client, mock_engine = passages_client
+    mock_engine.search.return_value = ListResponse(
+        results=[], total_size=0, next_page_token=None
+    )
+
+    response = client.get("/search/passages", params={"query": "toxic"})
+
+    assert response.status_code == HTTPStatus.OK
+    _, kwargs = mock_engine.search.call_args
+    order_by = kwargs["order_by"]
+    assert len(order_by) == 1
+    assert order_by[0].field == "page_number"
+    assert order_by[0].direction == "asc"
+
+
+def test_read_passages_order_by_relevance(passages_client) -> None:
+    """``order_by=relevance desc`` is parsed and forwarded to the engine."""
+    client, mock_engine = passages_client
+    mock_engine.search.return_value = ListResponse(
+        results=[], total_size=0, next_page_token=None
+    )
+
+    response = client.get(
+        "/search/passages", params={"query": "toxic", "order_by": "relevance desc"}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    _, kwargs = mock_engine.search.call_args
+    assert kwargs["order_by"][0].field == "relevance"
+
+
+def test_read_passages_order_by_unsupported_field_returns_400(passages_client) -> None:
+    """An unsupported ``order_by`` field is rejected with HTTP 400."""
+    client, mock_engine = passages_client
+
+    response = client.get(
+        "/search/passages", params={"query": "toxic", "order_by": "title asc"}
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    mock_engine.search.assert_not_called()
