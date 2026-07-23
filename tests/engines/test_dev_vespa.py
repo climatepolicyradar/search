@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from pydantic import AnyHttpUrl
 
-from search.engines import Pagination, dev_vespa
+from search.engines import OrderBy, Pagination, dev_vespa
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     DevVespaPassageSearchEngine,
@@ -134,6 +134,60 @@ def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> N
         )
 
     assert result.results[0].pages == [5, 6]
+
+
+def test_passage_search_engine_applies_order_by_to_request_body() -> None:
+    """A non-empty ``order_by`` produces ``ranking.sorting`` on the Vespa request."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    fake_response = {"root": {"children": []}}
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value=fake_response
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="idx", direction="desc")],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["ranking.profile"] == "unranked"
+    assert request_body["ranking.sorting"] == "-missing(idx,last)"
+    assert request_body["sorting.degrading"] is False
+
+
+def test_passage_search_engine_order_by_wins_over_debug_mode_ranking_profile() -> None:
+    """
+    An explicit order_by sort overrides debug mode's ``nativerank`` profile.
+
+    Matches ``DevVespaDocumentSearchEngine.search``, where sort overrides are
+    always applied after any default/debug ``ranking.profile`` is set.
+    """
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings, debug=True)
+
+    fake_response = {"root": {"children": []}}
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value=fake_response
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="idx", direction="asc")],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["ranking.profile"] == "unranked"
+    assert request_body["ranking.sorting"] == "+missing(idx,last)"
 
 
 def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages_schema() -> (
