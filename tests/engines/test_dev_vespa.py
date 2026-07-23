@@ -193,3 +193,60 @@ def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages
     )
     assert passage.pages_with_bounding_boxes[1].number == 6
     assert passage.pages_with_bounding_boxes[1].bounding_boxes == []
+
+
+def test_passage_search_engine_reads_concepts_from_top_level_passages_schema() -> None:
+    """The top-level passages schema's concepts field lands on Passage.concepts."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    fake_response = {
+        "root": {
+            "children": [
+                {
+                    "fields": {
+                        "id": "block-0",
+                        "idx": 0,
+                        "text": "some text",
+                        "language": "en",
+                        "type": "Text",
+                        "type_confidence": 1.0,
+                        "page_number": 0,
+                        "concepts": [
+                            {
+                                "id": "concept::Q1",
+                                "type": "concept",
+                                "value": "flooding",
+                                "count": 3,
+                            },
+                            {
+                                "id": "concept::Q2",
+                                "type": "concept",
+                                "value": "drought",
+                                "count": 1,
+                            },
+                        ],
+                        "document_id": "doc-0",
+                    }
+                }
+            ]
+        }
+    }
+
+    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+        result = engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    passage = result.results[0]
+    assert len(passage.concepts) == 2
+    assert passage.concepts[0].id == "concept::Q1"
+    assert passage.concepts[0].value == "flooding"
+    assert passage.concepts[0].count == 3
+    assert passage.concepts[1].value == "drought"
+    assert passage.concepts[1].count == 1

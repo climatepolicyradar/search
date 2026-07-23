@@ -1244,6 +1244,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
                     page_number=fields.get("page_number", 0),
                     pages=fields.get("pages", []),
                     pages_with_bounding_boxes=fields.get("page_bounding_boxes", []),
+                    concepts=fields.get("concepts", []),
                     heading_id=fields.get("heading_id"),
                     heading_text=fields.get("heading_text"),
                     document_id=fields.get("document_id", ""),
