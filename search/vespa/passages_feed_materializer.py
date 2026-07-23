@@ -26,7 +26,9 @@ from mypy_boto3_s3 import S3Client
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import DATA_CACHE_FILE as DOCUMENTS_CACHE
 from search.vespa.sources.data_in_api import read as read_documents
-from search.vespa.sources.embeddings_input_v2 import DATA_CACHE_DIR as EMBEDDINGS_CACHE_DIR
+from search.vespa.sources.embeddings_input_v2 import (
+    DATA_CACHE_DIR as EMBEDDINGS_CACHE_DIR,
+)
 from search.vespa.sources.embeddings_input_v2 import TextBlock
 from search.vespa.sources.embeddings_input_v2 import read as read_embeddings_input_v2
 from search.vespa.sources.inference_results import (
