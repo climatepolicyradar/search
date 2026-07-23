@@ -222,7 +222,7 @@ DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
 )
 
 # Public API field names for ``order_by`` on ``/passages``.
-PASSAGE_SORT_API_FIELDS: frozenset[str] = frozenset({"relevance", "page_number"})
+PASSAGE_SORT_API_FIELDS: frozenset[str] = frozenset({"relevance", "idx"})
 
 
 def _build_condition_yql(
@@ -500,7 +500,7 @@ def _ranking_overrides_for_document_order_by(
 # region Passage sort (Vespa ranking.sorting)
 
 passage_sort_field_to_vespa_field_map: dict[str, list[str]] = {
-    "page_number": ["page_number"],
+    "idx": ["idx"],
 }
 
 
@@ -521,8 +521,8 @@ def _passage_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     :raises AssertionError: if ``vespa_attr`` is not handled
     """
     sign = "+" if direction == "asc" else "-"
-    if vespa_attr == "page_number":
-        return f"{sign}missing(page_number,last)"
+    if vespa_attr == "idx":
+        return f"{sign}missing(idx,last)"
     raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")
 
 
@@ -535,7 +535,7 @@ def _ranking_overrides_for_passage_order_by(
     Only the first clause is applied (multilevel sorts can be added later).
     ``relevance`` keeps default ``nativerank`` ordering (no ``ranking.sorting``).
 
-    :param order_by: Parsed ``<field> <direction>`` clauses (``page_number``
+    :param order_by: Parsed ``<field> <direction>`` clauses (``idx``
         plus ``relevance``)
     :type order_by: list[OrderBy]
     :return: Key/value fragments to merge into the Vespa JSON body

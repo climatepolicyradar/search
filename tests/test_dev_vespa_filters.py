@@ -508,24 +508,24 @@ def test_prune_filter_collapses_to_none_when_everything_drops() -> None:
 # endregion
 
 
-def test_passage_order_by_page_number_asc_sorts_missing_last() -> None:
-    """Ascending page_number sort pushes missing values to the end."""
+def test_passage_order_by_idx_asc_sorts_missing_last() -> None:
+    """Ascending idx sort pushes missing values to the end."""
     overrides = _ranking_overrides_for_passage_order_by(
-        [OrderBy(field="page_number", direction="asc")]
+        [OrderBy(field="idx", direction="asc")]
     )
     assert overrides == {
         "ranking.profile": "unranked",
-        "ranking.sorting": "+missing(page_number,last)",
+        "ranking.sorting": "+missing(idx,last)",
         "sorting.degrading": False,
     }
 
 
-def test_passage_order_by_page_number_desc_sorts_missing_last() -> None:
-    """Descending page_number sort also pushes missing values to the end."""
+def test_passage_order_by_idx_desc_sorts_missing_last() -> None:
+    """Descending idx sort also pushes missing values to the end."""
     overrides = _ranking_overrides_for_passage_order_by(
-        [OrderBy(field="page_number", direction="desc")]
+        [OrderBy(field="idx", direction="desc")]
     )
-    assert overrides["ranking.sorting"] == "-missing(page_number,last)"
+    assert overrides["ranking.sorting"] == "-missing(idx,last)"
 
 
 def test_passage_order_by_relevance_is_a_no_op() -> None:

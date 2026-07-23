@@ -92,8 +92,8 @@ def test_read_passages_with_malformed_filters_returns_400(passages_client) -> No
     mock_engine.search.assert_not_called()
 
 
-def test_read_passages_default_order_by_is_page_number_asc(passages_client) -> None:
-    """Omitting ``order_by`` defaults to ascending page-number order."""
+def test_read_passages_default_order_by_is_idx_asc(passages_client) -> None:
+    """Omitting ``order_by`` defaults to ascending idx order."""
     client, mock_engine = passages_client
     mock_engine.search.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
@@ -105,7 +105,7 @@ def test_read_passages_default_order_by_is_page_number_asc(passages_client) -> N
     _, kwargs = mock_engine.search.call_args
     order_by = kwargs["order_by"]
     assert len(order_by) == 1
-    assert order_by[0].field == "page_number"
+    assert order_by[0].field == "idx"
     assert order_by[0].direction == "asc"
 
 

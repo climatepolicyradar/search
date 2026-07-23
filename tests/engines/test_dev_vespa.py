@@ -152,12 +152,12 @@ def test_passage_search_engine_applies_order_by_to_request_body() -> None:
         engine.search(
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
-            order_by=[OrderBy(field="page_number", direction="desc")],
+            order_by=[OrderBy(field="idx", direction="desc")],
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
     assert request_body["ranking.profile"] == "unranked"
-    assert request_body["ranking.sorting"] == "-missing(page_number,last)"
+    assert request_body["ranking.sorting"] == "-missing(idx,last)"
     assert request_body["sorting.degrading"] is False
 
 
@@ -182,12 +182,12 @@ def test_passage_search_engine_order_by_wins_over_debug_mode_ranking_profile() -
         engine.search(
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
-            order_by=[OrderBy(field="page_number", direction="asc")],
+            order_by=[OrderBy(field="idx", direction="asc")],
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
     assert request_body["ranking.profile"] == "unranked"
-    assert request_body["ranking.sorting"] == "+missing(page_number,last)"
+    assert request_body["ranking.sorting"] == "+missing(idx,last)"
 
 
 def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages_schema() -> (

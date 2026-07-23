@@ -24,10 +24,10 @@ DOCUMENTS_ORDER_BY_DESCRIPTION = (
 
 PASSAGES_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
-    "Supported fields: `relevance`, `page_number`. "
+    "Supported fields: `relevance`, `idx`. "
     "Directions: `asc`, `desc`. "
-    "Defaults to `page_number asc` when omitted. "
-    "Examples: `page_number asc` (default; reading order), `relevance desc` "
+    "Defaults to `idx asc` when omitted. "
+    "Examples: `idx asc` (default; reading order), `relevance desc` "
     "(best matches first)."
 )
 
@@ -151,9 +151,9 @@ def passages_order_by(
         Query(
             alias="order_by",
             description=PASSAGES_ORDER_BY_DESCRIPTION,
-            examples=["page_number asc"],
+            examples=["idx asc"],
         ),
-    ] = "page_number asc",
+    ] = "idx asc",
 ) -> list[OrderBy]:
     """
     Parse ``order_by`` and restrict fields to those supported on ``/passages``.
