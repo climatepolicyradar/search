@@ -52,8 +52,7 @@ _FEEDS = [
         # ephemeralStorage bumped from the ECS default (20GiB) - downloading
         # this prefix's files upfront was filling the default disk.
         "job_variables": {
-            "cpu": 2048,
-            "memory": 8192,
+            "cpu":  1024, "memory": 2048,
             "ephemeralStorage": {"sizeInGiB": 100},
         },
     },
