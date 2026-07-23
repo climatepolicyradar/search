@@ -185,88 +185,76 @@ def _build_run_summary_markdown(
     return markdown
 
 
+def _download_one(bucket: str, obj_key: str, run_logger) -> Path:
+    s3: S3Client = boto3.client("s3")
+    obj_path = Path(tempfile.gettempdir()) / obj_key.split("/")[-1]
+    run_logger.info(f"Downloading s3://{bucket}/{obj_key} → {obj_path}")
+    try:
+        s3.download_file(bucket, obj_key, str(obj_path))
+    except Exception as exc:
+        run_logger.error(f"Failed to download s3://{bucket}/{obj_key}: {exc}", exc_info=True)
+        raise
+    return obj_path
+
+
 @task
-def download_from_s3(bucket: str, key: str) -> list[Path]:
+def list_s3_keys(bucket: str, key: str) -> list[str]:
     # Keys ending in .jsonl are single files; anything else is treated as a folder prefix.
     # All pipelines are being migrated to the folder pattern, so this check is temporary.
     run_logger = get_run_logger()
+
+    # This will become redundant, so this relatively basic conditional is OK
+    # TODO: https://linear.app/climate-policy-radar/issue/APP-2236/feed-labels-from-snowflake-generated-json
+    # TODO: https://linear.app/climate-policy-radar/issue/APP-2237/feed-passages-from-snowflake-generated-json
+    if key.endswith(".jsonl"):
+        return [key]
+
     s3: S3Client = boto3.client("s3")
+    prefix = key.rstrip("/") + "/"
+    paginator = s3.get_paginator("list_objects_v2")
+    objects = sorted(
+        [
+            obj
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix)
+            for obj in page.get("Contents", [])
+        ],
+        key=lambda obj: obj.get("Key", ""),
+    )
+    if not objects:
+        raise FileNotFoundError(f"No objects found at s3://{bucket}/{key}")
 
-    start_time = time.perf_counter()
-    paths: list[Path] = []
+    keys = [obj.get("Key", "") for obj in objects]
+    run_logger.info(f"Found {len(keys)} objects at s3://{bucket}/{prefix}")
+    return keys
 
-    try:
-        with tracer.start_as_current_span("download_from_s3") as span:
-            span.set_attribute("s3.bucket", bucket)
-            span.set_attribute("s3.key", key)
 
-            # This will become redundant, so this relatively basic conditional is OK
-            # TODO: https://linear.app/climate-policy-radar/issue/APP-2236/feed-labels-from-snowflake-generated-json
-            # TODO: https://linear.app/climate-policy-radar/issue/APP-2237/feed-passages-from-snowflake-generated-json
-            if key.endswith(".jsonl"):
-                local_path = Path(tempfile.gettempdir()) / key.split("/")[-1]
-                run_logger.info(f"Downloading s3://{bucket}/{key} → {local_path}")
-                try:
-                    s3.download_file(bucket, key, str(local_path))
-                except Exception as exc:
-                    run_logger.error(
-                        f"Failed to download s3://{bucket}/{key}: {exc}", exc_info=True
-                    )
-                    raise
-                size_bytes = local_path.stat().st_size
-                span.set_attribute("s3.downloaded_bytes", size_bytes)
-                run_logger.info(
-                    "Downloaded s3://%s/%s (%d bytes) → %s",
-                    bucket,
-                    key,
-                    size_bytes,
-                    local_path,
-                )
-                paths = [local_path]
-            else:
-                prefix = key.rstrip("/") + "/"
-                paginator = s3.get_paginator("list_objects_v2")
-                objects = sorted(
-                    [
-                        obj
-                        for page in paginator.paginate(Bucket=bucket, Prefix=prefix)
-                        for obj in page.get("Contents", [])
-                    ],
-                    key=lambda obj: obj.get("Key", ""),
-                )
-                if not objects:
-                    raise FileNotFoundError(f"No objects found at s3://{bucket}/{key}")
+@task
+def download_and_feed(
+    bucket: str, obj_key: str, endpoint: str, application: str
+) -> FeedResult:
+    # Downloads a single file immediately before feeding it, rather than
+    # downloading every file upfront - with multiple passages files, downloading
+    # them all before feeding any of them filled the ECS task's disk
+    # (No space left on device) long before feeding even started.
+    # _feed_semaphore is held for the download too (not just the feed), so at
+    # most _MAX_CONCURRENT_FEEDS files are ever resident on disk at once.
+    run_logger = get_run_logger()
+    with _feed_semaphore:
+        start_time = time.perf_counter()
+        try:
+            with tracer.start_as_current_span("download_from_s3") as span:
+                span.set_attribute("s3.bucket", bucket)
+                span.set_attribute("s3.key", obj_key)
+                feed_path = _download_one(bucket, obj_key, run_logger)
+                span.set_attribute("s3.downloaded_bytes", feed_path.stat().st_size)
+        finally:
+            feeder_metrics.record_task_duration(
+                "download_from_s3",
+                time.perf_counter() - start_time,
+                deployment.name or "local",
+            )
 
-                run_logger.info(
-                    f"Found {len(objects)} objects at s3://{bucket}/{prefix}"
-                )
-                span.set_attribute("s3.object_count", len(objects))
-
-                for obj in objects:
-                    obj_key = obj.get("Key", "")
-                    obj_path = Path(tempfile.gettempdir()) / obj_key.split("/")[-1]
-                    run_logger.info(f"Downloading s3://{bucket}/{obj_key} → {obj_path}")
-                    try:
-                        s3.download_file(bucket, obj_key, str(obj_path))
-                    except Exception as exc:
-                        run_logger.error(
-                            f"Failed to download s3://{bucket}/{obj_key}: {exc}",
-                            exc_info=True,
-                        )
-                        raise
-                    paths.append(obj_path)
-
-                run_logger.info(
-                    f"Downloaded {len(paths)} objects from s3://{bucket}/{prefix}"
-                )
-    finally:
-        feeder_metrics.record_task_duration(
-            "download_from_s3",
-            time.perf_counter() - start_time,
-            deployment.name or "local",
-        )
-
-    return paths
+        return vespa_feed.fn(feed_path=feed_path, endpoint=endpoint, application=application)
 
 
 @task
@@ -292,48 +280,51 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             input_record_count = sum(1 for line in feed_path.open() if line.strip())
             span.set_attribute("feed.input_record_count", input_record_count)
 
-            with _feed_semaphore:
-                run_logger.info(
-                    "Feeding %s to %s (application: %s, records: %d)",
-                    feed_path,
+            # _feed_semaphore (bounding concurrent `vespa feed` subprocesses) is
+            # acquired by the caller, download_and_feed, spanning both the
+            # download and the feed - not re-acquired here since
+            # threading.Semaphore isn't reentrant.
+            run_logger.info(
+                "Feeding %s to %s (application: %s, records: %d)",
+                feed_path,
+                endpoint,
+                application,
+                input_record_count,
+            )
+
+            process = subprocess.Popen(
+                [
+                    "vespa",
+                    "feed",
+                    str(feed_path),
+                    "--target",
                     endpoint,
+                    "--application",
                     application,
-                    input_record_count,
-                )
-
-                process = subprocess.Popen(
-                    [
-                        "vespa",
-                        "feed",
-                        str(feed_path),
-                        "--target",
-                        endpoint,
-                        "--application",
-                        application,
-                        "--connections",
-                        "1",
-                        "--verbose",
-                    ],
-                    # VESPA_CLI_DATA_PLANE_TOKEN is set on this process's own
-                    # environment by vespa_feeder_flow, not passed as a task
-                    # parameter - Prefect displays task parameters in the UI,
-                    # and this value is a secret.
-                    env=os.environ,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
+                    "--connections",
+                    "1",
+                    "--verbose",
+                ],
+                # VESPA_CLI_DATA_PLANE_TOKEN is set on this process's own
+                # environment by vespa_feeder_flow, not passed as a task
+                # parameter - Prefect displays task parameters in the UI,
+                # and this value is a secret.
+                env=os.environ,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            with _live_processes_lock:
+                _live_processes.add(process)
+            try:
+                stdout, stderr = process.communicate()
+            finally:
                 with _live_processes_lock:
-                    _live_processes.add(process)
-                try:
-                    stdout, stderr = process.communicate()
-                finally:
-                    with _live_processes_lock:
-                        _live_processes.discard(process)
+                    _live_processes.discard(process)
 
-                result = subprocess.CompletedProcess(
-                    process.args, process.returncode, stdout, stderr
-                )
+            result = subprocess.CompletedProcess(
+                process.args, process.returncode, stdout, stderr
+            )
 
             if result.stderr:
                 span.set_attribute("feed.stderr", result.stderr[:4096])
@@ -541,14 +532,15 @@ def vespa_feeder_flow(
                 name="/search/vespa/write_token"
             )
 
-            feed_paths = download_from_s3(bucket=s3_bucket, key=s3_key)
+            obj_keys = list_s3_keys(bucket=s3_bucket, key=s3_key)
             futures = [
-                vespa_feed.submit(
-                    feed_path=feed_path,
+                download_and_feed.submit(
+                    bucket=s3_bucket,
+                    obj_key=obj_key,
                     endpoint=endpoint,
                     application=application,
                 )
-                for feed_path in feed_paths
+                for obj_key in obj_keys
             ]
             results = [future.result() for future in futures]
 
