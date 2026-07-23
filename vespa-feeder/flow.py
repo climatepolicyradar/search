@@ -487,6 +487,11 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             time.perf_counter() - start_time,
             deployment.name or "local",
         )
+        # Downloaded feed files are never cleaned up otherwise, and
+        # download_from_s3 fetches all of them upfront - without this, disk
+        # usage on the ECS task grows with every file across the whole run
+        # instead of staying bounded to _MAX_CONCURRENT_FEEDS in-flight files.
+        feed_path.unlink(missing_ok=True)
 
 
 @flow(
