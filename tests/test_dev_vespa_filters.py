@@ -94,7 +94,7 @@ def test_passages_concept_struct_filter_or_uses_separate_same_elements() -> None
     )
 
 
-def test_passages_filter_group_ands_document_id_and_concept() -> None:
+def test_passages_filter_group_and_document_id_and_concept() -> None:
     """A document_id filter combines with a concept/topic filter via AND."""
     filter_group = Filter(
         op="and",
