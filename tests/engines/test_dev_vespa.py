@@ -134,3 +134,62 @@ def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> N
         )
 
     assert result.results[0].pages == [5, 6]
+
+
+def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages_schema() -> (
+    None
+):
+    """The top-level passages schema's page_bounding_boxes field lands on Passage.pages_with_bounding_boxes."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    fake_response = {
+        "root": {
+            "children": [
+                {
+                    "fields": {
+                        "id": "block-0",
+                        "idx": 0,
+                        "text": "some text",
+                        "language": "en",
+                        "type": "Text",
+                        "type_confidence": 1.0,
+                        "page_number": 0,
+                        "pages": [5, 6],
+                        "page_bounding_boxes": [
+                            {
+                                "number": 5,
+                                "bounding_boxes": [
+                                    {"coordinates": [{"x": 0.1, "y": 0.2}]}
+                                ],
+                            },
+                            {
+                                "number": 6,
+                                "bounding_boxes": [],
+                            },
+                        ],
+                        "document_id": "doc-0",
+                    }
+                }
+            ]
+        }
+    }
+
+    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+        result = engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    passage = result.results[0]
+    assert len(passage.pages_with_bounding_boxes) == 2
+    assert passage.pages_with_bounding_boxes[0].number == 5
+    assert (
+        passage.pages_with_bounding_boxes[0].bounding_boxes[0].coordinates[0].x == 0.1
+    )
+    assert passage.pages_with_bounding_boxes[1].number == 6
+    assert passage.pages_with_bounding_boxes[1].bounding_boxes == []

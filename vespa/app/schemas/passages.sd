@@ -38,6 +38,20 @@ schema passages {
             attribute: fast-search
             rank: filter
         }
+        struct coordinate {
+            field x type float {}
+            field y type float {}
+        }
+        struct bounding_box {
+            field coordinates type array<coordinate> {}
+        }
+        struct page_boxes {
+            field number type int {}
+            field bounding_boxes type array<bounding_box> {}
+        }
+        field page_bounding_boxes type array<page_boxes> {
+            indexing: summary
+        }
         field heading_id type string {
             indexing: attribute | summary
         }
@@ -118,6 +132,7 @@ schema passages {
         summary type_confidence {}
         summary page_number {}
         summary pages {}
+        summary page_bounding_boxes {}
         summary heading_id {}
         summary concepts {}
         summary concepts_value {}

@@ -288,6 +288,71 @@ def test_text_block_to_vespa_update_omits_pages_when_block_has_none() -> None:
     assert "pages" not in update["fields"]
 
 
+def test_text_block_to_vespa_update_includes_page_bounding_boxes() -> None:
+    """page_bounding_boxes carries every page's boxes and coordinates."""
+    block = _text_block(0)
+    block["pages"] = [
+        {
+            "number": 3,
+            "bounding_boxes": [
+                {"coordinates": [{"x": 0.1, "y": 0.2}, {"x": 0.3, "y": 0.4}]},
+            ],
+        },
+        {
+            "number": 4,
+            "bounding_boxes": [
+                {"coordinates": [{"x": 0.5, "y": 0.6}]},
+                {"coordinates": [{"x": 0.7, "y": 0.8}]},
+            ],
+        },
+    ]
+
+    update = materializer._text_block_to_vespa_update(block, "doc-0")
+
+    assert update["fields"].get("page_bounding_boxes") == {
+        "assign": [
+            {
+                "number": 3,
+                "bounding_boxes": [
+                    {"coordinates": [{"x": 0.1, "y": 0.2}, {"x": 0.3, "y": 0.4}]},
+                ],
+            },
+            {
+                "number": 4,
+                "bounding_boxes": [
+                    {"coordinates": [{"x": 0.5, "y": 0.6}]},
+                    {"coordinates": [{"x": 0.7, "y": 0.8}]},
+                ],
+            },
+        ]
+    }
+
+
+def test_text_block_to_vespa_update_omits_page_bounding_boxes_when_block_has_none() -> None:
+    """page_bounding_boxes is absent from the update when the block has no pages."""
+    update = materializer._text_block_to_vespa_update(_text_block(0), "doc-0")
+
+    assert "page_bounding_boxes" not in update["fields"]
+
+
+def test_text_block_to_vespa_update_page_bounding_boxes_handles_empty_boxes_and_coordinates() -> None:
+    """A page with no boxes, and a box with no coordinates, degrade to empty lists rather than being omitted or erroring."""
+    block = _text_block(0)
+    block["pages"] = [
+        {"number": 3, "bounding_boxes": []},
+        {"number": 4, "bounding_boxes": [{"coordinates": []}]},
+    ]
+
+    update = materializer._text_block_to_vespa_update(block, "doc-0")
+
+    assert update["fields"].get("page_bounding_boxes") == {
+        "assign": [
+            {"number": 3, "bounding_boxes": []},
+            {"number": 4, "bounding_boxes": [{"coordinates": []}]},
+        ]
+    }
+
+
 class TestChunkWriter:
     """Unit tests for `_ChunkWriter` in isolation, no embeddings/S3 mocking needed."""
 
