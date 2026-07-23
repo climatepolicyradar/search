@@ -1230,6 +1230,8 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            "rules.rulebase": "passages",
+            "query_profile": "default",
             # TODO: always requesting debug-summary here (rather than only
             # when self.debug) so `Passage.tokens` (text_tokens) is populated
             # on every live request, not just debug/CLI usage. This uses

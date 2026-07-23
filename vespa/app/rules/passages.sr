@@ -1,0 +1,21 @@
+# Passage search query rewrites. Selected via rules.rulebase=passages in
+# DevVespaPassageSearchEngine. Includes the default documents rulebase so
+# passages keep title acronyms, then adds passage-specific expansions.
+# See https://docs.vespa.ai/en/linguistics/query-rewriting.html
+
+@language(en)
+
+# nz -> net zero (override documents.sr's additive `nz +> ?net ?zero`).
+# The nz test is all_or_any="all", so every returned passage must contain the
+# strict expansion (not separate terms i.e. net, zero).
+
+nz -> "net zero";
+
+# Acronyms exercised by relevance_tests/test_passages.py (category="acronym")
+# Direction rule: a semantic rule only fires when its LEFT-hand side matches the
+# terms actually typed. So each rule's LHS must be whatever the corresponding
+# relevance test searches for. May want to consider using AND OR (+ ?).
+
+nationally determined contribution -> ndc;
+nature based solution -> nbs;
+gga -> global goal on adaptation;
