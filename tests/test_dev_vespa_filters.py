@@ -2,6 +2,7 @@
 
 import pytest
 
+from search.engines import OrderBy
 from search.engines.dev_vespa import (
     AttributesCondition,
     Condition,
@@ -12,6 +13,7 @@ from search.engines.dev_vespa import (
     _facet_filter_label_type,
     _get_label_types_from_filters,
     _prune_filter,
+    _ranking_overrides_for_passage_order_by,
     documents_filter_field_to_vespa_field_map,
     documents_filter_struct_field_to_vespa_field_map,
     labels_filter_field_to_vespa_field_map,
@@ -504,3 +506,36 @@ def test_prune_filter_collapses_to_none_when_everything_drops() -> None:
 
 
 # endregion
+
+
+def test_passage_order_by_page_number_asc_sorts_missing_last() -> None:
+    """Ascending page_number sort pushes missing values to the end."""
+    overrides = _ranking_overrides_for_passage_order_by(
+        [OrderBy(field="page_number", direction="asc")]
+    )
+    assert overrides == {
+        "ranking.profile": "unranked",
+        "ranking.sorting": "+missing(page_number,last)",
+        "sorting.degrading": False,
+    }
+
+
+def test_passage_order_by_page_number_desc_sorts_missing_last() -> None:
+    """Descending page_number sort also pushes missing values to the end."""
+    overrides = _ranking_overrides_for_passage_order_by(
+        [OrderBy(field="page_number", direction="desc")]
+    )
+    assert overrides["ranking.sorting"] == "-missing(page_number,last)"
+
+
+def test_passage_order_by_relevance_is_a_no_op() -> None:
+    """Relevance sort applies no ranking overrides (default nativerank order)."""
+    overrides = _ranking_overrides_for_passage_order_by(
+        [OrderBy(field="relevance", direction="desc")]
+    )
+    assert overrides == {}
+
+
+def test_passage_order_by_empty_list_is_a_no_op() -> None:
+    """No order_by clauses means no ranking overrides."""
+    assert _ranking_overrides_for_passage_order_by([]) == {}
