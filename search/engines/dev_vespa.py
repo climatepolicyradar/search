@@ -474,6 +474,79 @@ def _ranking_overrides_for_document_order_by(
 
 # endregion Document sort
 
+# region Passage sort (Vespa ranking.sorting)
+
+passage_sort_field_to_vespa_field_map: dict[str, list[str]] = {
+    "page_number": ["page_number"],
+}
+
+
+def _passage_sort_ranking_string(vespa_attr: str, direction: str) -> str:
+    """
+    Build Vespa ``ranking.sorting`` for a passage sort attribute.
+
+    Always pushes ``missing`` values to the end of the list.
+    https://docs.vespa.ai/en/reference/querying/sorting-language.html#missing
+
+    :param vespa_attr: First mapped field name from
+        :data:`passage_sort_field_to_vespa_field_map`
+    :type vespa_attr: str
+    :param direction: ``asc`` or ``desc``
+    :type direction: str
+    :return: Vespa sorting expression fragment
+    :rtype: str
+    :raises AssertionError: if ``vespa_attr`` is not handled
+    """
+    sign = "+" if direction == "asc" else "-"
+    if vespa_attr == "page_number":
+        return f"{sign}missing(page_number,last)"
+    raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")
+
+
+def _ranking_overrides_for_passage_order_by(
+    order_by: list[OrderBy],
+) -> dict[str, Any]:
+    """
+    Translate ``order_by`` clauses into Vespa ranking request fields.
+
+    Only the first clause is applied (multilevel sorts can be added later).
+    ``relevance`` keeps default ``nativerank`` ordering (no ``ranking.sorting``).
+
+    :param order_by: Parsed ``<field> <direction>`` clauses (``page_number``
+        plus ``relevance``)
+    :type order_by: list[OrderBy]
+    :return: Key/value fragments to merge into the Vespa JSON body
+    :rtype: dict[str, Any]
+    :raises ValueError: if the field is not supported for passages
+    """
+    if not order_by:
+        return {}
+    primary = order_by[0]
+    if primary.field not in PASSAGE_SORT_API_FIELDS:
+        raise ValueError(
+            f"order_by field {primary.field!r} is not supported for passages; "
+            f"expected one of: {sorted(PASSAGE_SORT_API_FIELDS)}"
+        )
+    if primary.direction not in ("asc", "desc"):
+        raise ValueError(
+            f"invalid order direction {primary.direction!r}; use asc or desc"
+        )
+    if primary.field == "relevance":
+        return {}
+
+    # ``PASSAGE_SORT_API_FIELDS`` is ``relevance`` plus map keys, so this
+    # lookup is always valid here.
+    vespa_attr = passage_sort_field_to_vespa_field_map[primary.field][0]
+    sorting = _passage_sort_ranking_string(vespa_attr, primary.direction)
+    return {
+        "ranking.profile": "unranked",
+        "ranking.sorting": sorting,
+        "sorting.degrading": False,
+    }
+
+
+# endregion Passage sort
+
 # region Aggregations
 
 
