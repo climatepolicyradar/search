@@ -49,6 +49,20 @@ class VespaConceptField(TypedDict):
     count: int
 
 
+class VespaCoordinate(TypedDict):
+    x: float
+    y: float
+
+
+class VespaBoundingBox(TypedDict):
+    coordinates: list[VespaCoordinate]
+
+
+class VespaPageBoxes(TypedDict):
+    number: int
+    bounding_boxes: list[VespaBoundingBox]
+
+
 class VespaPassageUpdate(TypedDict):
     id: VespaAssign[str]
     idx: VespaAssign[int]
@@ -61,6 +75,7 @@ class VespaPassageUpdate(TypedDict):
     heading_text: NotRequired[VespaAssign[str]]
     concepts: NotRequired[VespaAssign[list[VespaConceptField]]]
     pages: NotRequired[VespaAssign[list[int]]]
+    page_bounding_boxes: NotRequired[VespaAssign[list[VespaPageBoxes]]]
 
 BATCH_SIZE = 10_000  # write-buffer flush size
 CHUNK_SIZE = 200_000  # output file rotation size, see module docstring
@@ -167,6 +182,24 @@ def _text_block_to_vespa_update(
     pages = [page["number"] for page in block.get("pages", [])]
     if pages:
         fields["pages"] = {"assign": pages}
+
+    page_bounding_boxes: list[VespaPageBoxes] = [
+        {
+            "number": page["number"],
+            "bounding_boxes": [
+                {
+                    "coordinates": [
+                        {"x": coord["x"], "y": coord["y"]}
+                        for coord in box["coordinates"]
+                    ]
+                }
+                for box in page["bounding_boxes"]
+            ],
+        }
+        for page in block.get("pages", [])
+    ]
+    if page_bounding_boxes:
+        fields["page_bounding_boxes"] = {"assign": page_bounding_boxes}
 
     return {
         "update": f"id:passages:passages::{block['id']}",
