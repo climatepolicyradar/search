@@ -198,6 +198,9 @@ DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
     {"relevance", *sort_field_to_vespa_field_map.keys()}
 )
 
+# Public API field names for ``order_by`` on ``/passages``.
+PASSAGE_SORT_API_FIELDS: frozenset[str] = frozenset({"relevance", "page_number"})
+
 
 def _build_condition_yql(
     condition: Condition,
