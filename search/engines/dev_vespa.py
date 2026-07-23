@@ -45,6 +45,29 @@ HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS = 512
 # We make this very obvious as it is used for values that should exist
 MISSING_PLACEHOLDER = "MISSING"
 
+CURRENCY_SYMBOL_REPLACEMENTS = {
+    "$": "dollar",
+    "€": "euro",
+    "£": "pound",
+}
+
+
+def _normalize_currency_symbols(query: str) -> str:
+    """
+    Map currency symbols to words so queries match the indexed (charFiltered) form.
+    
+    This is needed as Vespa's query parser strips punctuation (incl. currency symbols) 
+    *before* linguistics runs, so the `passage_analysis` charFilter in
+    vespa/app/services.xml - which maps these symbols to words at index time
+    (e.g. "$100" -> "dollar100") - never sees them on the query side. We apply the
+    same mapping to the query string here so query terms match the indexed form.
+    
+    This MUST be kept in sync with the `charFilters` block in services.xml. See FUS-79.
+    """
+    for symbol, word in CURRENCY_SYMBOL_REPLACEMENTS.items():
+        query = query.replace(symbol, word)
+    return query
+
 
 # region Settings
 class Settings(BaseSettings):
@@ -737,7 +760,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
         request_body: dict[str, Any] = {
             "yql": yql,
-            "query": query,
+            "query": _normalize_currency_symbols(query) if query else query,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
@@ -1286,7 +1309,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
 
         request_body: dict[str, Any] = {
             "yql": yql,
-            "query": query,
+            "query": _normalize_currency_symbols(query) if query else query,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",

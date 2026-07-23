@@ -13,6 +13,7 @@ Output is written in two tiers:
 """
 
 import gzip
+import shutil
 from collections import Counter
 from pathlib import Path
 from typing import NotRequired, TypedDict
@@ -23,9 +24,16 @@ from cpr_contracts import Document
 from mypy_boto3_s3 import S3Client
 
 from search.vespa.models import VespaAssign, VespaUpdate
+from search.vespa.sources.data_in_api import DATA_CACHE_FILE as DOCUMENTS_CACHE
 from search.vespa.sources.data_in_api import read as read_documents
+from search.vespa.sources.embeddings_input_v2 import (
+    DATA_CACHE_DIR as EMBEDDINGS_CACHE_DIR,
+)
 from search.vespa.sources.embeddings_input_v2 import TextBlock
 from search.vespa.sources.embeddings_input_v2 import read as read_embeddings_input_v2
+from search.vespa.sources.inference_results import (
+    DATA_CACHE_DIR as INFERENCE_RESULTS_CACHE_DIR,
+)
 from search.vespa.sources.inference_results import read as read_inference_results
 
 # Paths
@@ -79,6 +87,21 @@ class VespaPassageUpdate(TypedDict):
 
 BATCH_SIZE = 10_000  # write-buffer flush size
 CHUNK_SIZE = 200_000  # output file rotation size, see module docstring
+
+
+def _cleanup_source_cache(path: Path) -> None:
+    """
+    Remove a source's local cache once this flow is done reading it.
+
+    Source caches are only ever consumed by one flow per process, so on the
+    ECS runner (a fresh filesystem per run) leaving them in place just burns
+    disk for the rest of the run. Safe to call even if `path` is already
+    gone.
+    """
+    if path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        path.unlink(missing_ok=True)
 
 
 def _is_principal(document: Document) -> bool:
@@ -276,10 +299,12 @@ class _ChunkWriter:
         self._write_buffer = []
 
     def _rotate(self) -> None:
-        """Close and upload the current chunk, then open the next one."""
+        """Close, upload, and delete the current chunk, then open the next one."""
         self._f.close()
         self._f_gz.close()
         _upload_chunk(self._s3, self._output_file, self._output_file_gz)
+        self._output_file.unlink()
+        self._output_file_gz.unlink()
         self.chunks_uploaded += 1
         print(
             f"Uploaded chunk {self._chunk_index} "
@@ -302,6 +327,8 @@ class _ChunkWriter:
         """
         self._f.close()
         self._f_gz.close()
+        self._output_file.unlink(missing_ok=True)
+        self._output_file_gz.unlink(missing_ok=True)
 
     def close(self) -> None:
         """Flush any remainder, close file handles, and upload the final chunk."""
@@ -312,6 +339,8 @@ class _ChunkWriter:
 
         if self._chunk_total > 0:
             _upload_chunk(self._s3, self._output_file, self._output_file_gz)
+            self._output_file.unlink()
+            self._output_file_gz.unlink()
             self.chunks_uploaded += 1
             print(
                 f"Uploaded final chunk {self._chunk_index} "
@@ -328,9 +357,11 @@ class _ChunkWriter:
 def passages_feed_materializer():
     principal_id_lookup = _build_principal_id_lookup()
     print(f"Built principal_id lookup for {len(principal_id_lookup)} documents.")
+    _cleanup_source_cache(DOCUMENTS_CACHE)
 
     passage_concepts_lookup = _build_passage_concepts_lookup()
     print(f"Built passage concepts lookup for {len(passage_concepts_lookup)} passages.")
+    _cleanup_source_cache(INFERENCE_RESULTS_CACHE_DIR)
 
     writer = _ChunkWriter(s3=boto3.client("s3"))
     try:
@@ -356,6 +387,7 @@ def passages_feed_materializer():
         raise
 
     writer.close()
+    _cleanup_source_cache(EMBEDDINGS_CACHE_DIR)
 
     print(
         f"Uploaded {writer.total} passages to S3 across "
