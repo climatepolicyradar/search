@@ -64,6 +64,17 @@ def test_passages_feed_materializer_splits_output_into_chunks() -> None:
         mock_s3 = MagicMock()
         mock_boto_client.return_value = mock_s3
 
+        # Chunk files are deleted right after upload (to avoid leaking disk on
+        # long runs), so line counts must be captured as each upload happens,
+        # not read back afterwards.
+        line_counts_by_key: dict[str, int] = {}
+
+        def _count_lines_before_upload(local_path, bucket, key) -> None:  # noqa: ARG001
+            with open(local_path, "rb") as f:
+                line_counts_by_key[key] = sum(1 for _ in f)
+
+        mock_s3.upload_file.side_effect = _count_lines_before_upload
+
         materializer.passages_feed_materializer()
 
         upload_calls = mock_s3.upload_file.call_args_list
@@ -84,14 +95,7 @@ def test_passages_feed_materializer_splits_output_into_chunks() -> None:
             for key in gz_keys
         )
 
-        plain_files = sorted(
-            (call.args[0] for call in upload_calls if call.args[2].endswith(".jsonl"))
-        )
-        line_counts = []
-        for output_file in plain_files:
-            with open(output_file, "rb") as f:
-                line_counts.append(sum(1 for _ in f))
-
+        line_counts = [line_counts_by_key[key] for key in plain_keys]
         assert sorted(line_counts) == [3, 12, 12]
         assert sum(line_counts) == 27
 
@@ -188,6 +192,31 @@ def test_passages_feed_materializer_aborts_without_uploading_on_exception() -> N
             raise AssertionError("expected RuntimeError to propagate")
 
         assert mock_s3.upload_file.call_args_list == []
+
+def test_cleanup_source_cache_removes_file(tmp_path) -> None:
+    cache_file = tmp_path / "documents-latest.jsonl"
+    cache_file.write_text("{}")
+
+    materializer._cleanup_source_cache(cache_file)
+
+    assert not cache_file.exists()
+
+
+def test_cleanup_source_cache_removes_directory(tmp_path) -> None:
+    cache_dir = tmp_path / "embeddings_input_v2"
+    cache_dir.mkdir()
+    (cache_dir / "doc-0.json").write_text("{}")
+
+    materializer._cleanup_source_cache(cache_dir)
+
+    assert not cache_dir.exists()
+
+
+def test_cleanup_source_cache_is_a_noop_when_path_missing(tmp_path) -> None:
+    missing = tmp_path / "does-not-exist"
+
+    materializer._cleanup_source_cache(missing)  # must not raise
+
 
 def test_heading_text_resolved_from_heading_id() -> None:
     """heading_text is resolved to the text of the block that heading_id points at."""
@@ -308,6 +337,24 @@ class TestChunkWriter:
             assert writer.chunks_uploaded == 2  # one rotation at 4, one final at close()
             assert mock_s3.upload_file.call_count == 4  # 2 chunks x (plain + gz)
 
+    def test_deletes_local_chunk_files_after_upload(self) -> None:
+        """Uploaded chunks must not linger on disk - they otherwise accumulate for the whole run."""
+        with (
+            patch.object(materializer, "CHUNK_SIZE", 4),
+            patch.object(materializer, "BATCH_SIZE", 2),
+        ):
+            mock_s3 = MagicMock()
+            writer = materializer._ChunkWriter(s3=mock_s3)
+
+            for i in range(6):
+                writer.append(f"line-{i}\n".encode())
+            writer.close()
+
+            for chunk_index in range(writer._chunk_index + 1):
+                output_file, output_file_gz = materializer._open_chunk(chunk_index)
+                assert not output_file.exists()
+                assert not output_file_gz.exists()
+
     def test_close_is_a_noop_upload_when_buffer_lands_on_boundary(self) -> None:
         with (
             patch.object(materializer, "CHUNK_SIZE", 4),
@@ -336,3 +383,18 @@ class TestChunkWriter:
             writer.abort()
 
             assert mock_s3.upload_file.call_args_list == []
+
+    def test_abort_deletes_local_chunk_file(self) -> None:
+        with (
+            patch.object(materializer, "CHUNK_SIZE", 100),
+            patch.object(materializer, "BATCH_SIZE", 1),
+        ):
+            mock_s3 = MagicMock()
+            writer = materializer._ChunkWriter(s3=mock_s3)
+            output_file, output_file_gz = materializer._open_chunk(0)
+
+            writer.append(b"line-0\n")
+            writer.abort()
+
+            assert not output_file.exists()
+            assert not output_file_gz.exists()
