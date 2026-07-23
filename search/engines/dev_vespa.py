@@ -1163,7 +1163,9 @@ passages_filter_field_to_vespa_field_map: dict[str, list[str]] = {
     "document_id": ["document_id"],
     "principal_id": ["principal_id"],
 }
-passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
+passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
+    "concepts.value.id": ArrayStructField("concepts", "id"),
+}
 
 
 class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):

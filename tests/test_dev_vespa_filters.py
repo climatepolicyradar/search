@@ -60,6 +60,59 @@ def test_passages_filter_group_ands_document_and_principal() -> None: # trunk-ig
     ) == ('(document_id contains "doc-1" and principal_id contains "principal-1")')
 
 
+def test_passages_concept_struct_filter_builds_same_element() -> None:
+    """A single concept/topic filter renders a `concepts` sameElement clause."""
+    filter_group = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
+        ],
+    )
+    assert _build_filter_yql(
+        filter_group,
+        passages_filter_field_to_vespa_field_map,
+        passages_filter_struct_field_to_vespa_field_map,
+    ) == 'concepts contains sameElement(id contains "concept_123")'
+
+
+def test_passages_concept_struct_filter_or_uses_separate_same_elements() -> None:
+    """Multiple OR'd topics render one `sameElement` per concept id."""
+    filter_group = Filter(
+        op="or",
+        filters=[
+            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
+            FieldFilter(field="concepts.value.id", op="contains", value="concept_456"),
+        ],
+    )
+    assert _build_filter_yql(
+        filter_group,
+        passages_filter_field_to_vespa_field_map,
+        passages_filter_struct_field_to_vespa_field_map,
+    ) == (
+        '(concepts contains sameElement(id contains "concept_123") '
+        'or concepts contains sameElement(id contains "concept_456"))'
+    )
+
+
+def test_passages_filter_group_ands_document_id_and_concept() -> None:
+    """A document_id filter combines with a concept/topic filter via AND."""
+    filter_group = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="document_id", op="contains", value="doc-1"),
+            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
+        ],
+    )
+    assert _build_filter_yql(
+        filter_group,
+        passages_filter_field_to_vespa_field_map,
+        passages_filter_struct_field_to_vespa_field_map,
+    ) == (
+        '(document_id contains "doc-1" and '
+        'concepts contains sameElement(id contains "concept_123"))'
+    )
+
+
 def test_published_date_filter_targets_scalar_vespa_field() -> None:
     """
     Ensure published-date comparisons use ``attributes_published_date``.
