@@ -478,14 +478,11 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             time.perf_counter() - start_time,
             deployment.name or "local",
         )
-<<<<<<< Updated upstream
-=======
         # Downloaded feed files are never cleaned up otherwise, and each is
         # downloaded just before this call (see download_and_feed) - without
         # this, disk usage would grow with every file across the whole run
         # instead of staying bounded to _MAX_CONCURRENT_FEEDS in-flight files.
         feed_path.unlink(missing_ok=True)
->>>>>>> Stashed changes
 
 
 @flow(
