@@ -744,7 +744,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.139.2"
+version = "0.140.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -753,9 +753,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/95/d3f0ae10836324a2eab98a52b61210ac609f08200bf4bb0dc8132d32f78a/fastapi-0.139.2.tar.gz", hash = "sha256:333145a6891e9b5b3cfceb69baf817e8240cde4d4588ae5a10bf56ffacb6255e", size = 423428, upload-time = "2026-07-16T15:06:17.912Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/d5/d4590616c444770ff573db077bfa798dd3816e164256dbf99891444187c8/fastapi-0.140.6.tar.gz", hash = "sha256:ca7bc6d8233210d26409424209cf5202533fd5ca24c16b2d43ac67c64e5fb3f3", size = 421733, upload-time = "2026-07-27T16:31:49.803Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/c7/cb03251d9dfb177246a9809a76f189d21df32dbd4a845951881d11323b7f/fastapi-0.139.2-py3-none-any.whl", hash = "sha256:b9ad015a835173d59865e2f5d8296fbc2b317bf56a2ba1a5bfbdd03de2fd4b1c", size = 130234, upload-time = "2026-07-16T15:06:19.557Z" },
+    { url = "https://files.pythonhosted.org/packages/d2/85/fe220e93709420f15f4a2f018d66de04391943a0de45cc8c640709837359/fastapi-0.140.6-py3-none-any.whl", hash = "sha256:5f141f4341f82cfd916bb3860c576275966936060e3a6de04b2b7055da165893", size = 131122, upload-time = "2026-07-27T16:31:48.35Z" },
 ]
 
 [package.optional-dependencies]
@@ -3258,7 +3258,7 @@ requires-dist = [
     { name = "components", git = "https://github.com/climatepolicyradar/infra?subdirectory=components&tag=v1.0.5" },
     { name = "cpr-contracts", git = "https://github.com/climatepolicyradar/contracts?tag=v0.1.3" },
     { name = "duckdb", specifier = ">=1.5.5" },
-    { name = "fastapi", extras = ["standard"], specifier = ">=0.139.2" },
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.140.6" },
     { name = "moto", specifier = ">=5.2.2" },
     { name = "opentelemetry-api", specifier = ">=1.44.0,<2.0.0" },
     { name = "opentelemetry-distro", specifier = ">=0.59b0" },
