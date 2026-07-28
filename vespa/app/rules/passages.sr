@@ -1,21 +1,29 @@
 # Passage search query rewrites. Selected via rules.rulebase=passages in
-# DevVespaPassageSearchEngine. Includes the default documents rulebase so
-# passages keep title acronyms, then adds passage-specific expansions.
+# DevVespaPassageSearchEngine. 
 # See https://docs.vespa.ai/en/linguistics/query-rewriting.html
 
+# Includes the default documents rulebase
+
 @language(en)
+@include(documents)
 
-# nz -> net zero (override documents.sr's additive `nz +> ?net ?zero`).
-# The nz test is all_or_any="all", so every returned passage must contain the
-# strict expansion (not separate terms i.e. net, zero).
+# TO-DO: These are the acronyms exercised by 
+# relevance_tests/test_passages.py (category="acronym"), list will need
+# to be expanded beyond the tests.
 
-nz -> "net zero";
+# LHS +> ?"RHS" means LHS or RHS (RHS is tokenised ignoring punctuation
+# but tokens have to be adjacent in result)
+# e.g. 'ndc' or 'nationally determined contribution' (including 
+# nationally-determined-contribution, for example)
+# NOT 'nationally' or 'determined' or 'contribution' 
 
-# Acronyms exercised by relevance_tests/test_passages.py (category="acronym")
-# Direction rule: a semantic rule only fires when its LEFT-hand side matches the
-# terms actually typed. So each rule's LHS must be whatever the corresponding
-# relevance test searches for. May want to consider using AND OR (+ ?).
+# nature based solution has a different rule logic because the LHS can't 
+# be set as an exact phrase with ""; nature based solution +> ?"nbs" was
+# resulting in nature based solution being re-written as 
+# nature or based or solution or nbs, where as 
+# nature based solution -> ?"nature based solution" ?"nbs" means that the
+# query will be re-written as 'nature based solution' or 'nbs'.
 
-nationally determined contribution -> ndc;
-nature based solution -> nbs;
-gga -> global goal on adaptation;
+ndc +> ?"nationally determined contribution";
+nature based solution -> ?"nature based solution" ?"nbs";
+gga +> ?"global goal on adaptation";
