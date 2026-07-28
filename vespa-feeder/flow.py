@@ -25,16 +25,6 @@ from prefect import flow, get_run_logger, task
 
 logger = logging.getLogger(__name__)
 
-# Vespa's own guidance warns against many worker processes each opening their
-# own full connection pool (default 8 connections per `vespa feed` process) -
-# that's a TLS-handshake storm with no shared backpressure state. We cap how
-# many `vespa feed` subprocesses run at once and pin each to a single
-# connection so overall concurrency stays in a sane, tunable range.
-# 8-way concurrency OOMKilled the passages feed (200k-record files) even at
-# 1024 CPU / 2048MB, so this is capped lower for that container size.
-_MAX_CONCURRENT_FEEDS = 4
-_feed_semaphore = threading.Semaphore(_MAX_CONCURRENT_FEEDS)
-
 # On SIGTERM (e.g. a graceful ECS stop or Prefect cancellation) we terminate
 # any `vespa feed` subprocesses still running rather than leaving them as
 # orphans the flow run can no longer track. Each `vespa feed` invocation is
@@ -292,48 +282,56 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             input_record_count = sum(1 for line in feed_path.open() if line.strip())
             span.set_attribute("feed.input_record_count", input_record_count)
 
-            with _feed_semaphore:
-                run_logger.info(
-                    "Feeding %s to %s (application: %s, records: %d)",
-                    feed_path,
+            run_logger.info(
+                "Feeding %s to %s (application: %s, records: %d)",
+                feed_path,
+                endpoint,
+                application,
+                input_record_count,
+            )
+
+            # --connections/--inflight are passed explicitly even though they
+            # match the vespa CLI's own defaults, so it's documented here
+            # rather than relying on defaults that could silently change.
+            # Letting vespa feed manage its own connection pool and inflight
+            # backpressure replaced an earlier approach of pinning each
+            # subprocess to a single connection and gating concurrency with
+            # an external semaphore.
+            process = subprocess.Popen(
+                [
+                    "vespa",
+                    "feed",
+                    str(feed_path),
+                    "--target",
                     endpoint,
+                    "--application",
                     application,
-                    input_record_count,
-                )
-
-                process = subprocess.Popen(
-                    [
-                        "vespa",
-                        "feed",
-                        str(feed_path),
-                        "--target",
-                        endpoint,
-                        "--application",
-                        application,
-                        "--connections",
-                        "1",
-                        "--verbose",
-                    ],
-                    # VESPA_CLI_DATA_PLANE_TOKEN is set on this process's own
-                    # environment by vespa_feeder_flow, not passed as a task
-                    # parameter - Prefect displays task parameters in the UI,
-                    # and this value is a secret.
-                    env=os.environ,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                )
+                    "--connections",
+                    "8",
+                    "--inflight",
+                    "0",
+                    "--verbose",
+                ],
+                # VESPA_CLI_DATA_PLANE_TOKEN is set on this process's own
+                # environment by vespa_feeder_flow, not passed as a task
+                # parameter - Prefect displays task parameters in the UI,
+                # and this value is a secret.
+                env=os.environ,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            with _live_processes_lock:
+                _live_processes.add(process)
+            try:
+                stdout, stderr = process.communicate()
+            finally:
                 with _live_processes_lock:
-                    _live_processes.add(process)
-                try:
-                    stdout, stderr = process.communicate()
-                finally:
-                    with _live_processes_lock:
-                        _live_processes.discard(process)
+                    _live_processes.discard(process)
 
-                result = subprocess.CompletedProcess(
-                    process.args, process.returncode, stdout, stderr
-                )
+            result = subprocess.CompletedProcess(
+                process.args, process.returncode, stdout, stderr
+            )
 
             if result.stderr:
                 span.set_attribute("feed.stderr", result.stderr[:4096])
@@ -489,8 +487,7 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
         )
         # Downloaded feed files are never cleaned up otherwise, and
         # download_from_s3 fetches all of them upfront - without this, disk
-        # usage on the ECS task grows with every file across the whole run
-        # instead of staying bounded to _MAX_CONCURRENT_FEEDS in-flight files.
+        # usage on the ECS task grows with every file across the whole run.
         feed_path.unlink(missing_ok=True)
 
 
