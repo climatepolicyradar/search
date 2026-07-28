@@ -2,6 +2,7 @@
 
 import pytest
 
+from search.engines import OrderBy
 from search.engines.dev_vespa import (
     AttributesCondition,
     Condition,
@@ -12,6 +13,7 @@ from search.engines.dev_vespa import (
     _facet_filter_label_type,
     _get_label_types_from_filters,
     _prune_filter,
+    _ranking_overrides_for_passage_order_by,
     documents_filter_field_to_vespa_field_map,
     documents_filter_struct_field_to_vespa_field_map,
     labels_filter_field_to_vespa_field_map,
@@ -58,6 +60,59 @@ def test_passages_filter_group_ands_document_and_principal() -> None: # trunk-ig
         passages_filter_field_to_vespa_field_map,
         passages_filter_struct_field_to_vespa_field_map,
     ) == ('(document_id contains "doc-1" and principal_id contains "principal-1")')
+
+
+def test_passages_concept_struct_filter_builds_same_element() -> None:
+    """A single concept/topic filter renders a `concepts` sameElement clause."""
+    filter_group = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
+        ],
+    )
+    assert _build_filter_yql(
+        filter_group,
+        passages_filter_field_to_vespa_field_map,
+        passages_filter_struct_field_to_vespa_field_map,
+    ) == 'concepts contains sameElement(id contains "concept_123")'
+
+
+def test_passages_concept_struct_filter_or_uses_separate_same_elements() -> None:
+    """Multiple OR'd topics render one `sameElement` per concept id."""
+    filter_group = Filter(
+        op="or",
+        filters=[
+            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
+            FieldFilter(field="concepts.value.id", op="contains", value="concept_456"),
+        ],
+    )
+    assert _build_filter_yql(
+        filter_group,
+        passages_filter_field_to_vespa_field_map,
+        passages_filter_struct_field_to_vespa_field_map,
+    ) == (
+        '(concepts contains sameElement(id contains "concept_123") '
+        'or concepts contains sameElement(id contains "concept_456"))'
+    )
+
+
+def test_passages_filter_group_and_document_id_and_concept() -> None:
+    """A document_id filter combines with a concept/topic filter via AND."""
+    filter_group = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="document_id", op="contains", value="doc-1"),
+            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
+        ],
+    )
+    assert _build_filter_yql(
+        filter_group,
+        passages_filter_field_to_vespa_field_map,
+        passages_filter_struct_field_to_vespa_field_map,
+    ) == (
+        '(document_id contains "doc-1" and '
+        'concepts contains sameElement(id contains "concept_123"))'
+    )
 
 
 def test_published_date_filter_targets_scalar_vespa_field() -> None:
@@ -451,3 +506,36 @@ def test_prune_filter_collapses_to_none_when_everything_drops() -> None:
 
 
 # endregion
+
+
+def test_passage_order_by_idx_asc_sorts_missing_last() -> None:
+    """Ascending idx sort pushes missing values to the end."""
+    overrides = _ranking_overrides_for_passage_order_by(
+        [OrderBy(field="idx", direction="asc")]
+    )
+    assert overrides == {
+        "ranking.profile": "unranked",
+        "ranking.sorting": "+missing(idx,last)",
+        "sorting.degrading": False,
+    }
+
+
+def test_passage_order_by_idx_desc_sorts_missing_last() -> None:
+    """Descending idx sort also pushes missing values to the end."""
+    overrides = _ranking_overrides_for_passage_order_by(
+        [OrderBy(field="idx", direction="desc")]
+    )
+    assert overrides["ranking.sorting"] == "-missing(idx,last)"
+
+
+def test_passage_order_by_relevance_is_a_no_op() -> None:
+    """Relevance sort applies no ranking overrides (default nativerank order)."""
+    overrides = _ranking_overrides_for_passage_order_by(
+        [OrderBy(field="relevance", direction="desc")]
+    )
+    assert overrides == {}
+
+
+def test_passage_order_by_empty_list_is_a_no_op() -> None:
+    """No order_by clauses means no ranking overrides."""
+    assert _ranking_overrides_for_passage_order_by([]) == {}

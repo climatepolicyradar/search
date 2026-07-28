@@ -6,6 +6,7 @@ from fastapi import HTTPException, Query, status
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DOCUMENT_SORT_API_FIELDS,
+    PASSAGE_SORT_API_FIELDS,
     AttributesCondition,
     Filter,
 )
@@ -19,6 +20,15 @@ DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Examples: `relevance desc`, `attributes.published_date desc` (most recent), "
     "`attributes.published_date asc` (oldest; undated documents last), "
     "`title asc` (A-Z), `title desc` (Z-A)."
+)
+
+PASSAGES_ORDER_BY_DESCRIPTION = (
+    "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
+    "Supported fields: `relevance`, `idx`. "
+    "Directions: `asc`, `desc`. "
+    "Defaults to `idx asc` when omitted. "
+    "Examples: `idx asc` (default; reading order), `relevance desc` "
+    "(best matches first)."
 )
 
 
@@ -130,6 +140,38 @@ def documents_order_by(
                 detail=(
                     f"order_by field {clause.field!r} is not supported for "
                     f"/documents; allowed: {sorted(DOCUMENT_SORT_API_FIELDS)}"
+                ),
+            )
+    return clauses
+
+
+def passages_order_by(
+    order_by_raw: Annotated[
+        str,
+        Query(
+            alias="order_by",
+            description=PASSAGES_ORDER_BY_DESCRIPTION,
+            examples=["idx asc"],
+        ),
+    ] = "idx asc",
+) -> list[OrderBy]:
+    """
+    Parse ``order_by`` and restrict fields to those supported on ``/passages``.
+
+    :param order_by_raw: Raw ``order_by`` query string
+    :type order_by_raw: str
+    :return: Parsed clauses whose fields are public JSON paths
+    :rtype: list[OrderBy]
+    :raises HTTPException: if parsing fails or a field is not supported
+    """
+    clauses = _parse_order_by_http(order_by_raw)
+    for clause in clauses:
+        if clause.field not in PASSAGE_SORT_API_FIELDS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"order_by field {clause.field!r} is not supported for "
+                    f"/passages; allowed: {sorted(PASSAGE_SORT_API_FIELDS)}"
                 ),
             )
     return clauses

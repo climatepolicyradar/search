@@ -7,7 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic_settings import SettingsConfigDict
 
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
-from api.utils import documents_order_by, normalise_filters, order_by, pagination
+from api.utils import (
+    documents_order_by,
+    normalise_filters,
+    order_by,
+    pagination,
+    passages_order_by,
+)
 from search.data_in_models import Document
 from search.data_in_models import Label as DataInLabel
 from search.engines import OrderBy, Pagination, VespaError
@@ -218,15 +224,20 @@ def read_labels(
 @router.get("/passages", response_model=SearchResponse[Passage])
 def read_passages(
     query: str | None = Query(None, description="What are you looking for?"),
+    filters_json_string: str | None = Query(None, alias="filters"),
     pagination: Pagination = Depends(pagination),
-    order_by: list[OrderBy] = Depends(order_by),
+    order_by: list[OrderBy] = Depends(passages_order_by),
 ):
     logger.info(
-        "Searching passages (query=%r, page_token=%s, page_size=%s)",
+        "Searching passages (query=%r, page_token=%s, page_size=%s, "
+        "filters_present=%s)",
         query,
         pagination.page_token,
         pagination.page_size,
+        bool(filters_json_string),
     )
+
+    normalised_filters = normalise_filters(filters_json_string)
 
     engine = DevVespaPassageSearchEngine(settings=settings)
     try:
@@ -234,6 +245,7 @@ def read_passages(
             query=query,
             pagination=pagination,
             order_by=order_by,
+            filters_json_string=normalised_filters,
         )
     except Exception:
         logger.exception(

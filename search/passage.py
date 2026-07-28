@@ -21,6 +21,15 @@ class PageWithBoundingBoxes(BaseModel):
     bounding_boxes: list[BoundingBox] = Field(default_factory=list)
 
 
+class Concept(BaseModel):
+    """A concept/topic mentioned within a passage, with its mention count."""
+
+    id: str = Field(default="")
+    type: str = Field(default="")
+    value: str = Field(default="")
+    count: int = Field(default=0)
+
+
 class Passage(BaseModel):
     """Base class for a passage"""
 
@@ -33,6 +42,7 @@ class Passage(BaseModel):
     page_number: int = Field(default=0)
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
+    concepts: list[Concept] = Field(default_factory=list)
     heading_id: str | None = Field(default=None)
     heading_text: str | None = Field(default=None)
     document_id: str = Field(default="")
