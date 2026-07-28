@@ -13,44 +13,44 @@ _WORK_POOL = "mvp-prod-ecs"
 
 _FEEDS = [
     # Labels
-    {
-        "name": "search-vespa-feeder-labels",
-        "s3_bucket": "cpr-cache",
-        "s3_key": "search/vespa/labels_feed_materializer.jsonl",
-        "description": "Feed labels JSONL from S3 into Vespa",
-    },
+    # {
+    #     "name": "search-vespa-feeder-labels",
+    #     "s3_bucket": "cpr-cache",
+    #     "s3_key": "search/vespa/labels_feed_materializer.jsonl",
+    #     "description": "Feed labels JSONL from S3 into Vespa",
+    # },
     # Documents
     {
-        "name": "search-vespa-feeder-documents",
+        "name": "search-vespa-feeder-documents-v2",
         "s3_bucket": "cpr-prod-snowflake-data-export",
         "s3_key": "production/published/pipeline_data_in_vespa_documents_updates_v1/latest",
         "description": "Feed documents JSONL from S3 into Vespa",
-        # See _MAX_CONCURRENT_FEEDS in flow.py - the default container size
-        # OOMKilled under concurrent feeding of these (up to 200k records each).
+        # 8-way vespa feed concurrency OOMKilled these files (up to 200k
+        # records each) at the default container size.
         "job_variables": {"cpu": 1024, "memory": 2048},
     },
-    {
-        "name": "search-vespa-feeder-documents-concepts",
-        "s3_bucket": "cpr-cache",
-        "s3_key": "search/vespa/documents_concepts_feed_materializer.jsonl",
-        "description": "Feed documents concepts JSONL from S3 into Vespa",
-    },
-    {
-        "name": "search-vespa-feeder-documents-principal-concepts",
-        "s3_bucket": "cpr-cache",
-        "s3_key": "search/vespa/documents_principal_concepts_feed_materializer.jsonl",
-        "description": "Feed documents principal concepts JSONL from S3 into Vespa",
-    },
+    # {
+    #     "name": "search-vespa-feeder-documents-concepts",
+    #     "s3_bucket": "cpr-cache",
+    #     "s3_key": "search/vespa/documents_concepts_feed_materializer.jsonl",
+    #     "description": "Feed documents concepts JSONL from S3 into Vespa",
+    # },
+    # {
+    #     "name": "search-vespa-feeder-documents-principal-concepts",
+    #     "s3_bucket": "cpr-cache",
+    #     "s3_key": "search/vespa/documents_principal_concepts_feed_materializer.jsonl",
+    #     "description": "Feed documents principal concepts JSONL from S3 into Vespa",
+    # },
     # Passages
-    {
-        "name": "search-vespa-feeder-passages",
-        "s3_bucket": "cpr-cache",
-        "s3_key": "search/vespa/passages_feed_materializer",
-        "description": "Feed passages JSONL from S3 into Vespa",
-        # See _MAX_CONCURRENT_FEEDS in flow.py - the default container size
-        # OOMKilled under concurrent feeding of these (up to 200k records each).
-        "job_variables": {"cpu": 1024, "memory": 2048},
-    },
+    # {
+    #     "name": "search-vespa-feeder-passages",
+    #     "s3_bucket": "cpr-cache",
+    #     "s3_key": "search/vespa/passages_feed_materializer",
+    #     "description": "Feed passages JSONL from S3 into Vespa",
+    #     # 8-way vespa feed concurrency OOMKilled these files (up to 200k
+    #     # records each) at the default container size.
+    #     "job_variables": {"cpu": 1024, "memory": 2048},
+    # },
 ]
 
 _DEFAULT_JOB_VARIABLES_NAME = "ecs-default-job-variables-prefect-mvp-prod"
