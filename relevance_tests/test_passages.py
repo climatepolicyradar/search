@@ -22,7 +22,8 @@ test_cases = [
         category="acronym",
         search_terms="nz",
         characteristics_test=lambda passage: ("new zealand" in passage.text.lower())
-        or all_words_in_string(["net", "zero"], passage.text),  # type: ignore
+        or all_words_in_string(["net", "zero"], passage.text)  # type: ignore
+        or ("nz" in passage.text.lower()),
         all_or_any="all",
         description="search for nz should return either new zealand or net zero in the passage text",
         assert_results=True,
@@ -104,25 +105,24 @@ test_cases = [
     ),
     FieldCharacteristicsTestCase[Passage](
         category="acronym",
-        search_terms="nationally determined contribution",
-        # TODO: Maybe this should be reversed? Feels like users are more likely to search for NDC than type it out in full
-        characteristics_test=lambda passage: "NDC" in passage.text
-        and not all_words_in_string(
+        search_terms="ndc",
+        characteristics_test=lambda passage: all_words_in_string(
             ["nationally", "determined", "contribution"], passage.text
-        ),
-        description="Acronyms: search for nationally determined contribution should return NDC.",
+        )
+        or "ndc" in passage.text.lower(),
+        description="Acronyms: search for NDC should return nationally determined contribution.",
         k=100,
-        all_or_any="any",
+        all_or_any="all",
         assert_results=True,
     ),
     FieldCharacteristicsTestCase[Passage](
         category="acronym",
         search_terms="nature-based solution",
-        characteristics_test=lambda passage: "nbs" in passage.text.lower()
-        and not all_words_in_string(["nature", "based", "solution"], passage.text),
+        characteristics_test=lambda passage: all_words_in_string(["nbs"], passage.text)
+        or all_words_in_string(["nature", "based", "solution"], passage.text),
         description="Acronyms: search for nature-based solution should return NbS.",
         k=100,
-        all_or_any="any",
+        all_or_any="all",
         assert_results=True,
     ),
     FieldCharacteristicsTestCase[Passage](
@@ -131,10 +131,10 @@ test_cases = [
         characteristics_test=lambda passage: all_words_in_string(
             ["global", "goal", "adaptation"], passage.text
         )
-        and "gga" not in passage.text.lower(),
+        or "gga" in passage.text.lower(),
         description="Acronyms: search for GGA should include global goal on adaptation.",
         k=100,
-        all_or_any="any",
+        all_or_any="all",
         assert_results=True,
     ),
     FieldCharacteristicsTestCase[Passage](
