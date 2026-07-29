@@ -107,10 +107,21 @@ test_cases = [
         category="acronym",
         search_terms="ndc",
         characteristics_test=lambda passage: all_words_in_string(
+        ["nationally", "determined", "contribution"], passage.text
+        ),
+        description="Acronyms: search for NDC should return nationally determined contribution (check rule fires).",
+        k=100,
+        all_or_any="any",
+        assert_results=True,
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="acronym",
+        search_terms="ndc",
+        characteristics_test=lambda passage: all_words_in_string(
             ["nationally", "determined", "contribution"], passage.text
         )
         or "ndc" in passage.text.lower(),
-        description="Acronyms: search for NDC should return nationally determined contribution.",
+        description="Acronyms: search for NDC should return nationally determined contribution or NDC.",
         k=100,
         all_or_any="all",
         assert_results=True,
