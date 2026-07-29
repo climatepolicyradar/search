@@ -19,21 +19,21 @@
                 <configDir>lucene-linguistics</configDir>
                 <analysis>
                     <!-- default_analysis: stem using snowballPorter -->
-                    <item key="en">
-                    <tokenizer>
-                        <name>standard</name>
-                    </tokenizer>
-                    <tokenFilters>
-                        <item>
-                            <name>lowercase</name>
-                        </item>
-                        <item>
-                            <name>snowballPorter</name>
-                            <conf>
-                                <item key="language">English</item>
-                            </conf>
-                        </item>
-                    </tokenFilters>
+                    <item key="profile=passage_analysis_search;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
                     </item>
                     <!-- title_analysis: stem but keep all tokens (no stop words) -->
                     <item key="profile=title_analysis;language=en">

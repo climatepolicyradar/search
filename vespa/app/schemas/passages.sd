@@ -13,7 +13,10 @@ schema passages {
             indexing: index | summary
             stemming: multiple
             linguistics {
-                profile: passage_analysis
+                profile {
+                    index: passage_analysis
+                    search: passage_analysis_search
+                }
             }
         }
         field document_id type string {

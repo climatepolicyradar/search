@@ -7,10 +7,6 @@
 @language(en)
 @include(documents)
 
-# TO-DO: These are the acronyms exercised by 
-# relevance_tests/test_passages.py (category="acronym"), list will need
-# to be expanded beyond the tests.
-
 # LHS +> ?"RHS" means LHS or RHS (RHS is tokenised ignoring punctuation
 # but tokens have to be adjacent in result)
 # e.g. 'ndc' or 'nationally determined contribution' (including 
