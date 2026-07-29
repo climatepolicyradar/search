@@ -15,6 +15,7 @@ from search.passage import Passage
 from search.testcase import (
     FieldCharacteristicsTestCase,
     RecallTestCase,
+    RelativeOrderTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
     any_words_in_string,
@@ -564,6 +565,18 @@ test_cases = [
         k=10,
         description=(
             "Discussion of reactive disaster adaptation should reach the top 10"
+        ),
+    ),
+    RelativeOrderTestCase[Passage](
+        category="substantive_mention",
+        search_terms="carbon market",
+        # National Carbon Emission Trading Market Power Construction Plan (2017), China
+        document_id="CCLW.executive.10677.5836",
+        higher_result_id="019cdce0-67ff-7030-bd7b-e971b0c20526",
+        lower_result_id="019cdce0-63f6-75a2-94dc-b2d98f64a8ce",
+        k=10,
+        description=(
+            "A passage talking about carbon markets directly should rank above one which only describes enabling conditions for carbon markets."
         ),
     ),
     FieldCharacteristicsTestCase[Passage](
