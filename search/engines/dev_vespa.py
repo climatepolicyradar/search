@@ -588,6 +588,27 @@ class CountAggregation[T](BaseModel):
 def _get_total_count(response: dict[str, Any]) -> int | None:
     return response.get("root", {}).get("fields", {}).get("totalCount")
 
+def _flatten_tokens(token_field: Any) -> list[str]:
+    """
+    Flatten Vespa token summary output into a list of strings.
+
+    Lucene linguistics with ``stemming: multiple`` returns each token as either a plain string or a list of stems (e.g. ``["run", "running"]``). This helper normalises both shapes into a flat list.
+    """
+
+    if isinstance(token_field, dict):
+        items = token_field.get("values", [])
+    elif isinstance(token_field, list):
+        items = token_field
+    else:
+        return []
+    flat: list[str] = []
+    for item in items:
+        if isinstance(item, list):
+            flat.extend(item)
+        else:
+            flat.append(item)
+    return flat
+
 
 def _execute_vespa_query(
     *,
@@ -1314,6 +1335,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
+            "rules.rulebase": "passages",
             # TODO: always requesting debug-summary here (rather than only
             # when self.debug) so `Passage.tokens` (text_tokens) is populated
             # on every live request, not just debug/CLI usage. This uses
@@ -1357,7 +1379,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
                     heading_text=fields.get("heading_text"),
                     document_id=fields.get("document_id", ""),
                     principal_id=fields.get("principal_id"),
-                    tokens=fields.get("text_tokens") or [],
+                    tokens=_flatten_tokens(fields.get("text_tokens")),
                 )
             )
             if self.debug:
