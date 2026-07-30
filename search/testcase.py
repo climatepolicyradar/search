@@ -226,7 +226,9 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         if found:
             lines.append("  Found:")
             for eid, rank in found:
-                lines.append(f"    '{eid}' at rank {rank}")
+                # Ranks beyond k are returned for context but don't count as recalled.
+                outside = " (outside top k)" if rank > self.k else ""
+                lines.append(f"    '{eid}' at rank {rank}{outside}")
         if missing:
             lines.append("  Missing:")
             for eid in missing:
@@ -241,7 +243,8 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             if forbidden_present:
                 lines.append("  Forbidden IDs present:")
                 for fid, rank in forbidden_present:
-                    lines.append(f"    '{fid}' at rank {rank}")
+                    outside = " (outside top k)" if rank > self.k else ""
+                    lines.append(f"    '{fid}' at rank {rank}{outside}")
 
         return "\n".join(lines)
 
@@ -254,7 +257,9 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=self.filters_json_string(),
         )
-        result_ids = [result.id for result in search_results.results]
+        # page_size has a floor of 10, so the response can be longer than k. Truncate
+        # to k before checking, otherwise a k below 10 is silently treated as 10.
+        result_ids = [result.id for result in search_results.results[: self.k]]
 
         expected_ids_not_in_response = set(self.expected_result_ids).difference(
             set(result_ids)
