@@ -99,6 +99,14 @@ schema passages {
     # hop without denormalising per-passage.
     import field principal_document_ref.title_attribute as principal_title {}
 
+    field text_not_stemmed type string {
+        indexing: input text | index
+        stemming: none
+        linguistics {
+            profile: exact_analysis
+        }
+    }
+
     field concepts_value type array<string> {
         indexing: input concepts | for_each { get_field value } | index | summary
         stemming: none
@@ -112,14 +120,15 @@ schema passages {
     }
 
     rank-profile nativerank {
+        # text_not_stemmed is only queried by "quoted" searches. Those never put terms on `text`.
         function text_score() {
-            expression: nativeRank(text) + nativeProximity(text)
+            expression: nativeRank(text) + nativeProximity(text) + nativeRank(text_not_stemmed) + nativeProximity(text_not_stemmed)
         }
 
         first-phase {
             expression: text_score()
         }
-        summary-features: text_score() nativeRank(text) nativeProximity(text)
+        summary-features: text_score() nativeRank(text) nativeProximity(text) nativeRank(text_not_stemmed) nativeProximity(text_not_stemmed)
     }
 
     document-summary debug-summary {
@@ -140,6 +149,10 @@ schema passages {
         summary heading_text {}
         summary text_tokens {
             source: text
+            tokens
+        }
+        summary text_not_stemmed_tokens {
+            source: text_not_stemmed
             tokens
         }
         from-disk

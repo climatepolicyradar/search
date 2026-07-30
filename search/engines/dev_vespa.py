@@ -19,6 +19,7 @@ For now we just use `requests` which yields the same results.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -55,18 +56,93 @@ CURRENCY_SYMBOL_REPLACEMENTS = {
 def _normalize_currency_symbols(query: str) -> str:
     """
     Map currency symbols to words so queries match the indexed (charFiltered) form.
-    
-    This is needed as Vespa's query parser strips punctuation (incl. currency symbols) 
+
+    This is needed as Vespa's query parser strips punctuation (incl. currency symbols)
     *before* linguistics runs, so the `passage_analysis` charFilter in
     vespa/app/services.xml - which maps these symbols to words at index time
     (e.g. "$100" -> "dollar100") - never sees them on the query side. We apply the
     same mapping to the query string here so query terms match the indexed form.
-    
+
     This MUST be kept in sync with the `charFilters` block in services.xml. See FUS-79.
+
+    Only needed on the `userQuery()` path. Quoted queries go through
+    `grammar.tokenization: linguistics` (see `_quoted_phrase`), which hands the
+    string to the linguistics component whole, so the charFilters do run and this
+    mapping is redundant there.
     """
     for symbol, word in CURRENCY_SYMBOL_REPLACEMENTS.items():
         query = query.replace(symbol, word)
     return query
+
+
+# A query that is nothing but one double-quoted phrase, e.g.
+# '"national strategy for climate change 2050"'. Partially-quoted queries
+# ('brazil "net zero"') are deliberately not handled and keep going through
+# userQuery() - see FUS-136.
+_FULLY_QUOTED_QUERY = re.compile(r'^\s*"([^"]+)"\s*$')
+
+# Literal ("quoted") search. Two separate Vespa mechanisms are at work here;
+# both are needed and neither is the default.
+#
+# 1. `text(...)` tokenizes the whole string with the *field's own analyzer* -
+#    `exact_analysis` for text_not_stemmed - instead of with Vespa's query
+#    parser. It behaves as the `linguistics` query type in the model.type table
+#    (composite=weakAnd, tokenization=linguistics, syntax=none), where
+#    tokenization=linguistics is "Pass the full query string as-is to the
+#    linguistics component for tokenization, exactly as on the indexing side".
+#    That symmetry is the whole point - see the note on `_quoted_phrase` for
+#    what goes wrong without it.
+#    https://docs.vespa.ai/en/reference/querying/yql.html#text
+#    https://docs.vespa.ai/en/reference/api/query.html#model.type.tokenization
+#
+# 2. `text()` joins the resulting tokens with **weakAnd** by default, which
+#    would match any passage containing most of the words in any order.
+#    `grammar.composite: 'phrase'` overrides just that step: "Create a
+#    PhraseItem which matches if all the terms are present in the given order
+#    with no gaps." The `grammar.*` annotations are how the individual
+#    model.type settings are set per-operator.
+#    https://docs.vespa.ai/en/reference/api/query.html#model.type.composite
+#    https://docs.vespa.ai/en/reference/querying/yql.html#grammar
+#
+# (the internal path never sees the "$" at all - Vespa's query parser strips
+# punctuation before linguistics runs, which is the same asymmetry that
+# `_normalize_currency_symbols` works around on the userQuery() path).
+_EXACT_PHRASE_YQL = (
+    " and text_not_stemmed contains "
+    "({grammar.composite:'phrase'}text(@exact_phrase))"
+)
+
+
+def _quoted_phrase(query: str) -> str | None:
+    """
+    Return the phrase inside a fully-quoted query, or None if not one.
+
+    Quotes have to be pulled out here rather than left to Vespa, for two reasons.
+
+    First, letting `userQuery()` parse them does not work. Vespa's query side
+    does not run the linguistics tokenizer - only normalisation and stemming -
+    so a phrase parsed out of quotes keeps the stop words that `passage_analysis`
+    stripped at index time. `"national strategy for climate change 2050"` becomes
+    `phrase(nation, strategi, "for", climat, chang, 2050)` and matches *nothing*,
+    because "for" was never indexed. Confirmed upstream, and phrase behaviour is
+    explicitly out of scope for the fix:
+    https://github.com/vespa-engine/vespa/issues/33540
+
+    Second, the mechanism that does work cannot be reached from `userQuery()`
+    anyway: `tokenization: linguistics` "is only supported in conjunction with
+    the none syntax option", and it is the `simple` syntax that parses quotes in
+    the first place. So the phrase must be extracted here and passed as its own
+    parameter - see `_EXACT_PHRASE_YQL`.
+
+    Returns None for a quoted string with no alphanumerics (e.g. '"---"'): the
+    analyzer would yield no tokens and Vespa rejects the query with "No query"
+    (`allowEmpty: true` does not help), so those fall back to userQuery().
+    """
+    match = _FULLY_QUOTED_QUERY.match(query)
+    if match is None:
+        return None
+    phrase = match.group(1)
+    return phrase if re.search(r"[^\W_]", phrase) else None
 
 
 # region Settings
@@ -1320,17 +1396,25 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
                 struct_map=passages_filter_struct_field_to_vespa_field_map,
             )
 
+        exact_phrase = _quoted_phrase(query) if query else None
+
         yql = f"select * from sources passages where {where}"
-        if query:
+        if exact_phrase is not None:
+            yql += _EXACT_PHRASE_YQL
+        elif query:
             yql += " and userQuery()"
 
-        logger.info("🔎 Passage search query built (query=%r, yql=%s)", query, yql)
+        logger.info(
+            "🔎 Passage search query built (query=%r, exact_phrase=%r, yql=%s)",
+            query,
+            exact_phrase,
+            yql,
+        )
 
         sort_overrides = _ranking_overrides_for_passage_order_by(order_by)
 
         request_body: dict[str, Any] = {
             "yql": yql,
-            "query": _normalize_currency_symbols(query) if query else query,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
@@ -1346,6 +1430,12 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             # `tokens`' field shape/necessity is settled (see Passage.tokens).
             "presentation.summary": "debug-summary",
         }
+        if exact_phrase is not None:
+            # Passed raw: the field's analyzer applies the charFilters itself, so
+            # _normalize_currency_symbols would be redundant here.
+            request_body["exact_phrase"] = exact_phrase
+        elif query:
+            request_body["query"] = _normalize_currency_symbols(query)
         if self.debug:
             request_body["ranking.profile"] = "nativerank"
         request_body.update(sort_overrides)

@@ -87,6 +87,44 @@
                             </item>
                         </tokenFilters>
                     </item>
+                    <!-- exact_analysis: passage_analysis minus stop words and
+                         stemming, for literal phrase ("quoted") matching. Keeps
+                         the same charFilters so currency amounts tokenize
+                         identically on both passage fields - otherwise "$100"
+                         would be `dollar100` in `text` but `100` here. -->
+                    <item key="profile=exact_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <charFilters>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[$]</item>
+                                    <item key="replacement">dollar</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[€]</item>
+                                    <item key="replacement">euro</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[£]</item>
+                                    <item key="replacement">pound</item>
+                                </conf>
+                            </item>
+                        </charFilters>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
                     <!-- document_label_analysis: lowercase only, no stemming -->
                     <item key="profile=document_label_analysis;language=en">
                         <tokenizer>

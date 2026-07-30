@@ -237,6 +237,227 @@ def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
     assert "$100" in matched.text
 
 
+def test_quoted_passage_search_is_literal_phrase_match(vespa_app: Vespa):
+    """A double-quoted query matches only the literal phrase."""
+    principal = DocumentFactory.build(id="principal-exact", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    passages = {
+        "tb-exact": "The National Strategy for Climate Change 2050 sets the target.",
+        # Differs only by a stop word that passage_analysis removes.
+        "tb-stopword": "The National Strategy on Climate Change 2050 sets the target.",
+        # Differs only by inflections that snowballPorter strips.
+        "tb-stemmed": "The National Strategies for Climate Changes 2050 set the targets.",
+    }
+    for block_id, text in passages.items():
+        _feed_passage(
+            vespa_app,
+            _text_block(block_id, text),
+            document_id="principal-exact",
+        )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query='"national strategy for climate change 2050"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
+    ids = [p.text_block_id for p in results.results]
+
+    assert ids == ["tb-exact"], (
+        "a quoted query must return only the literal phrase; "
+        f"got: {ids} (stop-word/stemmed near-misses must be excluded)"
+    )
+
+
+def test_quoted_passage_search_preserves_currency_symbols(vespa_app: Vespa):
+    """
+    A quoted currency amount matches that amount and not a longer one.
+
+    `exact_analysis` keeps the currency charFilters, so "$100" analyzes to
+    `dollar100` on both the index and query side of the quoted path. This is the
+    stage that makes the linguistics tokenizer non-negotiable in
+    `_EXACT_PHRASE_YQL`: Vespa's internal query tokenizer strips the "$" before
+    any analyzer runs, so it would search for `100` and match nothing.
+    """
+    principal = DocumentFactory.build(id="principal-qcur", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    passages = {
+        "tb-q100": "The grant of $100 was approved.",
+        # `dollar1000` is a different token from `dollar100`.
+        "tb-q1000": "The grant of $1000 was approved.",
+        # Indexes as two tokens (`dollar`, `100`), so the single-token phrase
+        # term cannot match it.
+        "tb-qspaced": "The grant of $ 100 was approved.",
+        # The charFilter maps the symbol to `dollar` glued to the amount, so the
+        # spelled-out form is a distinct token sequence.
+        "tb-qwords": "The grant of 100 dollars was approved.",
+    }
+    for block_id, text in passages.items():
+        _feed_passage(
+            vespa_app, _text_block(block_id, text), document_id="principal-qcur"
+        )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    for query in ('"$100"', '"grant of $100"'):
+        results = engine.search(
+            query=query,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+        ids = [p.text_block_id for p in results.results]
+        assert ids == ["tb-q100"], (
+            f"quoted {query} must match only the literal $100 passage, got: {ids}"
+        )
+
+
+def test_quoted_passage_search_punctuation_limits(vespa_app: Vespa):
+    """
+    Quoting cannot distinguish punctuation the tokenizer discards.
+
+    Only `$`, `€` and `£` survive analysis, because `exact_analysis` has explicit
+    charFilters for them. Everything else is dropped by the standard tokenizer,
+    so a quoted phrase is literal in its *words* but not in its punctuation:
+    "nature-based" and "nature based" both index as `[nature, based]`, and "40%"
+    indexes as `[40]`.
+
+    Asserted rather than left implicit so the boundary of "exact match" is
+    written down - if a product decision needs `%` or hyphens to be
+    distinguishable, that is a new charFilter in `exact_analysis`, not a query
+    change. Inflection is still distinguished (see the singular case), which is
+    what `stemming: none` buys.
+    """
+    principal = DocumentFactory.build(id="principal-punct", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    passages = {
+        "tb-hyphen": "We fund nature-based solutions widely.",
+        "tb-space": "We fund nature based solutions widely.",
+        "tb-singular": "We fund nature-based solution widely.",
+        "tb-pct": "Emissions fell 40% last year.",
+        "tb-pct-words": "Emissions fell 40 percent last year.",
+    }
+    for block_id, text in passages.items():
+        _feed_passage(
+            vespa_app, _text_block(block_id, text), document_id="principal-punct"
+        )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+
+    def search(query: str) -> list[str]:
+        results = engine.search(
+            query=query,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+        return sorted(p.text_block_id for p in results.results)
+
+    # The hyphen is not a distinguishing feature: both spellings match either way.
+    assert search('"nature-based solutions"') == ["tb-hyphen", "tb-space"]
+    assert search('"nature based solutions"') == ["tb-hyphen", "tb-space"]
+    # ...but the plural still is, because nothing stems this field.
+    assert search('"nature-based solution"') == ["tb-singular"]
+    # `%` is discarded, so it cannot separate "40%" from "40 percent".
+    assert search('"fell 40%"') == ["tb-pct", "tb-pct-words"]
+
+
+def test_quoted_passage_search_requires_adjacency_and_order(vespa_app: Vespa):
+    """A quoted query is a phrase, not a bag of words: order and adjacency matter."""
+    principal = DocumentFactory.build(id="principal-order", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    passages = {
+        "tb-phrase": "A just transition for coal regions is required.",
+        "tb-reordered": "A transition just for coal regions is required.",
+        "tb-split": "A just and equitable transition for coal regions is required.",
+    }
+    for block_id, text in passages.items():
+        _feed_passage(
+            vespa_app,
+            _text_block(block_id, text),
+            document_id="principal-order",
+        )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query='"just transition"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
+    ids = [p.text_block_id for p in results.results]
+
+    assert ids == ["tb-phrase"], (
+        f"expected only the adjacent, in-order phrase to match, got: {ids}"
+    )
+
+
+def test_unquoted_passage_search_is_unaffected_by_exact_field(vespa_app: Vespa):
+    """An unquoted query still goes through userQuery() against `text`."""
+    principal = DocumentFactory.build(id="principal-plain", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-plain", "The National Strategy for Climate Change 2050."),
+        document_id="principal-plain",
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query="national strategies",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
+    ids = [p.text_block_id for p in results.results]
+
+    assert ids == ["tb-plain"], (
+        f"unquoted queries must still stem: expected tb-plain, got: {ids}"
+    )
+
+
+def test_passage_fields_tokenize_differently(vespa_app: Vespa):
+    """
+    `text` is stemmed and stop-word-filtered; `text_not_stemmed` is neither.
+
+    This is the invariant the quoted-search path depends on. Asserting it
+    directly means a linguistics regression points at the analyzer config rather
+    than surfacing as a puzzling search result.
+    """
+    principal = DocumentFactory.build(id="principal-tokens", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-tokens", "National Strategy for Climate Change 2050"),
+        document_id="principal-tokens",
+    )
+
+    r = req.post(
+        f"{vespa_app.end_point}/search/",
+        json={
+            "yql": 'select * from sources passages where id contains "tb-tokens"',
+            "hits": 1,
+            "presentation.summary": "debug-summary",
+        },
+        timeout=5,
+    )
+    r.raise_for_status()
+    fields = r.json()["root"]["children"][0]["fields"]
+
+    def _flatten(tokens: list[Any]) -> list[str]:
+        """stemming: multiple yields a list of alternatives per position."""
+        return [t if isinstance(t, str) else t[0] for t in tokens]
+
+    stemmed = _flatten(fields["text_tokens"])
+    literal = _flatten(fields["text_not_stemmed_tokens"])
+
+    assert "for" not in stemmed, f"expected the stop word dropped from text: {stemmed}"
+    assert "strategi" in stemmed, f"expected text stemmed: {stemmed}"
+    assert literal == [
+        "national",
+        "strategy",
+        "for",
+        "climate",
+        "change",
+        "2050",
+    ], f"text_not_stemmed must be lowercased only: {literal}"
+
+
 def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: Vespa):
     """
     A passage's principal_title resolves via principal_document_ref.
