@@ -35,11 +35,13 @@ def search(
     page_size: int = 10,
     debug: bool = True,
     max_len: int | None = 600,
+    filters: str | None = None,
 ):
     """Search for passages."""
     engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
     results = engine.search(
         query=query,
+        filters_json_string=filters,
         pagination=Pagination(page_token=page, page_size=page_size),
         order_by=[OrderBy(field="relevance", direction="desc")],
     )
