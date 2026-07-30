@@ -407,7 +407,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
     )
     assert_results: bool = Field(
         description="Whether to assert that results should be returned for a search. Checks that more than 0 results are returned.",
-        default=False,
+        default=True,
     )
 
     def diagnose(self, search_results: list[TModel]) -> str:
