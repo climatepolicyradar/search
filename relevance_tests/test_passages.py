@@ -26,11 +26,13 @@ def looks_like_reference_list(text: str) -> bool:
     """
     True if the passage is a bibliography, endnote or numbered footnote block.
 
-    Note that 'et al.' and 'doi:' on their own are NOT usable signals - per 100
-    words, 'et al.' is more frequent in the IPCC-style prose we want to keep
-    (3.6) than in the reference lists we want to drop (1.7).
-    
-    WARNING: Claude figured out the below ruleset based on seeing a sample of the data. 
+    Note that 'et al.' on its own is NOT a usable signal - it appears in running
+    text, and per 100 words it's more frequent in the IPCC-style prose we want to
+    keep (3.6) than in the reference lists we want to drop (1.7). 'doi:' is a much
+    better signal, as it's rarely used outside reference lists, so it is scored
+    below alongside the other locators.
+
+    WARNING: Claude figured out the below ruleset based on seeing a sample of the data.
     It should be flexible enough for use here, but should NOT be used in production
     search.
     """
@@ -61,8 +63,11 @@ def looks_like_reference_list(text: str) -> bool:
 def looks_like_table_of_contents(text: str) -> bool:
     """
     Returns true if text looks like a TOC.
-    
+
     4 or more lines, at least 80% of which are short and do not terminate as sentences.
+
+    TODO: we may be able to rely on passage types once they're in the index 
+    (specifically looking for list/table). See FUS-158.
     """
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     if len(lines) < 4:
@@ -74,12 +79,22 @@ def looks_like_table_of_contents(text: str) -> bool:
     )
     return fragmentary / len(lines) >= 0.8
 
-def num_words(text: str) -> int:
-    """Estimate number of words in the text using a cheap tokenizer"""
+def looks_like_short_heading(text: str) -> bool:
+    """
+    True if the passage is a short ALLCAPS figure title or section heading.
 
-    words = re.findall(r"[A-Za-z]", text)
+    Fewer than 12 words, and at least 90% of the cased characters are upper case.
+    The parser's `sectionHeading` type would be a better signal - see the note in
+    `looks_like_table_of_contents` for when we can switch to it.
     
-    return len(words)
+    TODO: this should be replaced with using the passage type once it's in the index
+    """
+    words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
+    if not words or len(words) >= 12:
+        return False
+    letters = [char for char in text if char.isalpha()]
+
+    return sum(char.isupper() for char in letters) / len(letters) >= 0.9
 
 test_cases = [
     FieldCharacteristicsTestCase[Passage](
@@ -318,7 +333,7 @@ test_cases = [
         category="short_headings",
         search_terms="carbon",
         document_id="ICCN.document.i00000036.n0000",
-        characteristics_test=lambda passage: not (passage.type == "sectionHeading" and num_words(passage.text) < 60),
+        characteristics_test=lambda passage: not looks_like_short_heading(passage.text),
         all_or_any="all",
         k=3,
         assert_results=True,
@@ -447,7 +462,7 @@ test_cases = [
         search_terms="nature-based solutions",
         document_id="Sabin.document.12109.75104",
         characteristics_test=lambda passage: all_words_in_string(
-            ["nature", "based", "solutions"], passage.text.replace("-", " ")
+            ["nature", "based", "solutions"], passage.text
         ),
         all_or_any="all",
         k=3,
@@ -466,10 +481,11 @@ test_cases = [
         )
         and all_words_in_string(["hard"], passage.text),
         all_or_any="all",
-        k=3,
+        k=2,
         assert_results=True,
         description=(
-            "'hard to abate' must not degrade to 'abatement' alone in the top 3."
+            # There are only 2 occurrences of 'hard to abate' in the search tests
+            "'hard to abate' must not degrade to 'abatement' alone in the top 2."
         ),
     ),
     RecallTestCase[Passage](
