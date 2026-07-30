@@ -286,6 +286,104 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         )
 
 
+class RelativeOrderTestCase(TestCase[TModel], Generic[TModel]):
+    """
+    Dictates that one result should rank above another for a given search.
+
+    Useful for expressing a relative preference between two known results without
+    committing to their absolute ranks. The higher result must appear in the top k
+    results; the lower result may be absent, which counts as ranking below.
+    """
+
+    higher_result_id: str = Field(
+        description="The ID which should rank above lower_result_id."
+    )
+    lower_result_id: str = Field(
+        description="The ID which should rank below higher_result_id."
+    )
+    k: int = Field(
+        description="The number of results to check the relative order within.",
+        default=20,
+        gt=0,
+    )
+
+    @model_validator(mode="after")
+    def check_result_ids_differ(self):
+        """Check that the two result IDs are different."""
+        if self.higher_result_id == self.lower_result_id:
+            raise ValueError("higher_result_id and lower_result_id must be different")
+        return self
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a relative order test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing where each of the two IDs actually ranked.
+        """
+        result_ids = [result.id for result in search_results]
+        id_to_rank = {rid: i + 1 for i, rid in enumerate(result_ids)}
+        higher_rank = id_to_rank.get(self.higher_result_id)
+        lower_rank = id_to_rank.get(self.lower_result_id)
+
+        lines = [
+            f"Relative order check in top {self.k} results "
+            f"({len(result_ids)} returned):",
+            f"  '{self.higher_result_id}' (expected higher): "
+            + (f"rank {higher_rank}" if higher_rank is not None else "not found"),
+            f"  '{self.lower_result_id}' (expected lower): "
+            + (f"rank {lower_rank}" if lower_rank is not None else "not found"),
+        ]
+        if higher_rank is None:
+            lines.append(
+                "  The expected-higher result must appear in the top k results to pass."
+            )
+
+        return "\n".join(lines)
+
+    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+        """Run the test case against the given engine."""
+
+        search_results = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=max(10, self.k)),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters_json_string=self.filters_json_string(),
+        )
+        results = search_results.results[: self.k]
+        result_ids = [result.id for result in results]
+
+        if self.higher_result_id not in result_ids:
+            # Can't demonstrate the ordering if the higher result isn't there.
+            passed = False
+        elif self.lower_result_id not in result_ids:
+            # The higher result is present and the lower one ranks below the cutoff.
+            passed = True
+        else:
+            passed = result_ids.index(self.higher_result_id) < result_ids.index(
+                self.lower_result_id
+            )
+
+        return passed, results
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.higher_result_id,
+            self.lower_result_id,
+            self.k,
+            self.corpus,
+            self.document_id,
+            self.principal_id,
+        )
+
+
 class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
     """Dictates characteristics that any or all of the top k results should have for a given search."""
 

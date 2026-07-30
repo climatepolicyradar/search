@@ -1,3 +1,5 @@
+import re
+
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -12,10 +14,72 @@ from search.engines.dev_vespa import DevVespaPassageSearchEngine
 from search.passage import Passage
 from search.testcase import (
     FieldCharacteristicsTestCase,
+    RecallTestCase,
+    RelativeOrderTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
     any_words_in_string,
 )
+
+
+def looks_like_reference_list(text: str) -> bool:
+    """
+    True if the passage is a bibliography, endnote or numbered footnote block.
+
+    Note that 'et al.' and 'doi:' on their own are NOT usable signals - per 100
+    words, 'et al.' is more frequent in the IPCC-style prose we want to keep
+    (3.6) than in the reference lists we want to drop (1.7).
+    
+    WARNING: Claude figured out the below ruleset based on seeing a sample of the data. 
+    It should be flexible enough for use here, but should NOT be used in production
+    search.
+    """
+    words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
+    if len(words) < 20:
+        return False
+    n = len(words)
+    periods = text.count(".") / n * 100
+    initials = len(re.findall(r"\b[A-Z]\.", text)) / n * 100
+    bare_year = (
+        len(re.findall(r"\(\s*(?:n\.d\.|\d{4}[a-z]?)\s*\)\s*[.,]|,\s*\d{4}[a-z]?:", text))
+        / n
+        * 100
+    )
+    locators = (
+        len(re.findall(r"doi:|doi\.org|https?://|Retrieved from|Available online", text))
+        / n
+        * 100
+    )
+    parenthetical_cites = (
+        len(re.findall(r"\([A-Z][A-Za-z.\-]+[^)]{0,60}?\d{4}[a-z]?\)", text)) / n * 100
+    )
+    return (
+        periods / 10 + initials + 2 * bare_year + 2 * locators - 3 * parenthetical_cites
+    ) >= 10
+
+
+def looks_like_table_of_contents(text: str) -> bool:
+    """
+    Returns true if text looks like a TOC.
+    
+    4 or more lines, at least 80% of which are short and do not terminate as sentences.
+    """
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    if len(lines) < 4:
+        return False
+    fragmentary = sum(
+        1
+        for line in lines
+        if len(line.split()) <= 12 and not line.rstrip().endswith((".", "?", ";"))
+    )
+    return fragmentary / len(lines) >= 0.8
+
+def num_words(text: str) -> int:
+    """Estimate number of words in the text using a cheap tokenizer"""
+
+    words = re.findall(r"[A-Za-z]", text)
+    
+    return len(words)
 
 test_cases = [
     FieldCharacteristicsTestCase[Passage](
@@ -245,6 +309,307 @@ test_cases = [
         k=200,  # This is a hard one so makes sense to increase this
         all_or_any="any",
         assert_results=True,
+    ),
+    # Examples
+    #    "CARBON FOOTPRINT 3.5.2 AND FOSSIL ENERGY BILL 3.5.2.1 - CARBON FOOTPRINT"
+    #    "CARBON BUDGET FOR GRUDE EMISSIONS"
+    #    "CARBON FOOTPRINT 2.4 AND INTERNATIONAL TRADE"
+    FieldCharacteristicsTestCase[Passage](
+        category="short_headings",
+        search_terms="carbon",
+        document_id="ICCN.document.i00000036.n0000",
+        characteristics_test=lambda passage: not (passage.type == "sectionHeading" and num_words(passage.text) < 60),
+        all_or_any="all",
+        k=3,
+        assert_results=True,
+        description=(
+            "ALLCAPS figure titles ('CARBON BUDGET FOR GRUDE EMISSIONS') must not "
+            "occupy the top 3."
+        ),
+    ),
+    # Examples:
+    #   "Gillingham, K. and K. Palmer, 2017: Bridging the Energy Efficiency
+    #    Gap: Policy Insights from Economic Theory and Empirical Evidence.
+    #    Review of Environmental Economics and Policy, 8(1), 18-38, doi:
+    #    10.1093/reep/ret021. Gillingham, ..."
+    #   "Green, J. and P. Newman, 2017b: Disruptive innovation, stranded
+    #    assets and forecasting: the rise and rise of renewable energy.
+    #    Journal of Sustainable Finance & Investment, 7(2), 169-187, ..."
+    FieldCharacteristicsTestCase[Passage](
+        category="reference_lists",
+        search_terms="energy efficiency",
+        document_id="UNFCCC.non-party.1196.0",
+        characteristics_test=lambda passage: not looks_like_reference_list(passage.text),
+        all_or_any="all",
+        k=10,
+        assert_results=True,
+        description=(
+            "Bibliography blocks must not be returned in the top 10 results"
+        ),
+    ),
+    # Examples:
+    #    "Campioli, M. et al., 2015: Biomass production effciency controlled
+    #     by management in temperate and boreal ecosystems. Nat. Geosci., 8,
+    #     843-846, doi: 10.1038/ngeo2553. Campra, P., M. Garcia, ..."
+    #    "Zomer, R.J. et al., 2016: Global tree cover and biomass carbon on
+    #     agricultural land: The contribution of agroforestry to global and
+    #     national carbon budgets. Sci. Rep., 6, 29987. ..."
+    FieldCharacteristicsTestCase[Passage](
+        category="reference_lists",
+        search_terms="biomass",
+        document_id="UNFCCC.non-party.1184.0",
+        characteristics_test=lambda passage: not looks_like_reference_list(passage.text),
+        all_or_any="all",
+        k=10,
+        assert_results=True,
+        description=(
+            "Bibliography blocks must not be returned in the top 10 results"
+        ),
+    ),
+    #
+    # Examples:
+    #    "United Nations Office for Disaster Risk Reduction (UNISDR). (2015).
+    #     Sendai Framework for Disaster Risk Reduction 2015-2030. Retrieved
+    #     from http://www2.ohchr.org/... United Nations (UN) ..."
+    #    "209 National Coordinator for Disaster Reduction (CONRED). (2010b).
+    #     Standard for disaster reduction number one (NRD-1). Guatemala.
+    #     National Coordinator for Disaster Reduction (CONRED). (2011). ..."
+    FieldCharacteristicsTestCase[Passage](
+        category="reference_lists",
+        search_terms="disaster",
+        document_id="ICCN.document.i00000042.n0000",
+        characteristics_test=lambda passage: not looks_like_reference_list(passage.text),
+        all_or_any="all",
+        k=10,
+        assert_results=True,
+        description=(
+            "Bibliography blocks must not be returned in the top 10 results"
+        ),
+    ),
+    #
+    # Examples:
+    #    "While a thorough history of how 1.5C-2.0C became the politically
+    #     accepted target for policy makers and States is beyond the scope of
+    #     this intervention, it is available to the Court.111 Change Biology
+    #     5679, 5679 (2020), https://onl..."
+    #    "B 1 (2022), https://doi.org/10.1098/rspb.2022.0375; Wilson Thau Lym
+    #     Yong, et al., Seaweed: A Potential Climate Change Solution, 159
+    #     Renewable & Sustainable Energy Rev. 112222 (2022), ..."
+    FieldCharacteristicsTestCase[Passage](
+        category="reference_lists",
+        search_terms="nature-based solutions",
+        document_id="Sabin.document.12109.75104",
+        characteristics_test=lambda passage: not looks_like_reference_list(passage.text),
+        all_or_any="all",
+        k=10,
+        assert_results=True,
+        description=(
+            "Bibliography blocks must not be returned in the top 10 results"
+        ),
+    ),
+    #
+    # Example:
+    #    "Category of / Details / Indicative activities/ Modality / Targeting
+    #     resilience/ adaptation option / Homestead farming - support
+    #     vulnerable / Support to household - vegetable gardens / Provide
+    #     training in IPM and GAPS, via experienced service ..."
+    FieldCharacteristicsTestCase[Passage](
+        category="tables_of_contents",
+        search_terms="resilience",
+        document_id="AF.document.AF00000210.n0000",
+        characteristics_test=lambda passage: not looks_like_table_of_contents(passage.text),
+        all_or_any="all",
+        k=5,
+        assert_results=True,
+        description=(
+            "Table-of-contents blocks must not reach the top 5. "
+        ),
+    ),
+    # Example:
+    #    "System / Mitigation Option / Evidence / Agreement / Ec / Tec / Inst /
+    #     Soc / Env / Geo / Context / Industrial System Transitions / Energy
+    #     efficiency / Robust / High / Potential and adoption depend on
+    #     existing efficiency, energy prices and interest rates, as wel..."
+    FieldCharacteristicsTestCase[Passage](
+        category="tables_of_contents",
+        search_terms="energy efficiency",
+        document_id="UNFCCC.non-party.1196.0",
+        characteristics_test=lambda passage: not looks_like_table_of_contents(passage.text),
+        all_or_any="all",
+        k=5,
+        assert_results=True,
+        description=(
+            "Table-of-contents blocks must not reach the top 5. "
+        ),
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="phrase_integrity",
+        search_terms="nature-based solutions",
+        document_id="Sabin.document.12109.75104",
+        characteristics_test=lambda passage: all_words_in_string(
+            ["nature", "based", "solutions"], passage.text.replace("-", " ")
+        ),
+        all_or_any="all",
+        k=3,
+        assert_results=True,
+        description=(
+            "Multi-word queries must not match on a subset of terms in the top 3. "
+            "Passages about 'land-based climate solutions' can be false-positives."
+        ),
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="phrase_integrity",
+        search_terms="hard to abate",
+        document_id="CCLW.document.i00002502.n0000",
+        characteristics_test=lambda passage: any_words_in_string(
+            ["abate", "abatement"], passage.text
+        )
+        and all_words_in_string(["hard"], passage.text),
+        all_or_any="all",
+        k=3,
+        assert_results=True,
+        description=(
+            "'hard to abate' must not degrade to 'abatement' alone in the top 3."
+        ),
+    ),
+    RecallTestCase[Passage](
+        category="low_ranking_positives",
+        search_terms="carbon",
+        # 2025 Annual Report – "Reinvigorating climate action in the face of worsening impacts and weakened leadership"
+        document_id="ICCN.document.i00000036.n0000",
+        expected_result_ids=[
+            # rank 13 - "The carbon sink decreases during El Nino events, due to
+            #            megafires (Canada, Siberia, Amazon), and extreme droughts.
+            #            Since 2015, CO2 absorption north of the 20th parallel has
+            #            halved, and 2024 marks a record level of tropical forest..."
+            "019d89e9-0ddd-7593-bfb3-4549d0a4deea",
+            # rank 15 - "Due to carbon losses from cultivated and artificialized
+            #            soils, the second carbon budget for the land use, land-use
+            #            change and forestry (LULUCF) sector has not been met. With
+            #            an average carbon sink of -36 Mt CO2 eq per year..."
+            "019d89e9-0dd7-7e01-9292-94219530df5d",
+            # rank 20 - "The LULUCF carbon sink deteriorated significantly between
+            #            2013 and 2017, falling from -50.2 to -28.1 Mt CO2e, a
+            #            decrease of 45%. The maintenance of this carbon sink at an
+            #            average level of -36 Mt CO2 eq since 2018..."
+            "019d89e9-0dd8-70e0-9985-4cfea5689d83",
+        ],
+        k=5,
+        description=(
+            "The three passages quantifying France's LULUCF carbon budget should "
+            "reach the top 5. They currently sit at 13, 15 and 20 behind ALLCAPS headings."
+        ),
+    ),
+    RecallTestCase[Passage](
+        category="low_ranking_positives",
+        search_terms="health",
+        document_id="CCLW.document.i00007151.n0000",
+        expected_result_ids=[
+            # Passages talk about "public health" and "human health". A case for query-
+            # rewriting?
+            
+            # rank 14 - "Environmental quality standards / Maximum permissible
+            #            emission and discharge standards of pollutants / Norms for
+            #            the use of fertilizers, chemical poisons, other chemical
+            #            substances and maximum permissible levels of radiation..."
+            "019d43a6-4293-77a1-a9bb-44e462255f55",
+            # rank 17 - "8. Verification of the correctness of registration of an
+            #            environmental monitoring object shall be carried out by the
+            #            authorized state body. 9. Relevant ministries and
+            #            departments, other bodies, nature users who..."
+            "019d43a6-434a-7661-9051-dc617659598c",
+        ],
+        k=10,
+        description=(
+            "Public-health provisions of the Tajik Ecological Code should reach the "
+            "top 10."
+        ),
+    ),
+    # TODO: checking this one with Anne
+    RecallTestCase[Passage](
+        category="low_ranking_positives",
+        search_terms="biomass",
+        document_id="UNFCCC.non-party.1184.0",
+        expected_result_ids=[
+            # rank 12 - "However, forests may become less resilient to heat stress in
+            #            future due to the long recovery period required to replace
+            #            lost biomass and the projected increased frequency of heat
+            #            and drought events (Frank et al. 2015a; McDowell and Allen..."
+            #            NB: this is the citation-dense PROSE that a naive 'et al.'
+            #            or doi-based reference filter would wrongly discard.
+            "019d437a-5ba0-7f20-a5ad-3e5f3ffe685f",
+            # rank 18 - "Furthermore, fire emissions during 1997-2016 were dominated
+            #            by savanna (65.3%), followed by tropical forest (15.1%),
+            #            boreal forest (7.4%), temperate forest (2.3%), peatland
+            #            (3.7%) and agricultural waste burning (6.3%)..."
+            "019d437a-5bb2-7e20-8d1b-80761a664711",
+        ],
+        k=10,
+        description=(
+            "Substantive biomass prose should outrank the chapter bibliography. "
+        ),
+    ),
+    RecallTestCase[Passage](
+        category="low_ranking_positives",
+        search_terms="disaster",
+        # Climate Change Report Guatemala
+        document_id="ICCN.document.i00000042.n0000",
+        expected_result_ids=[
+            # rank 16 - "119 In extreme cases, adaptation measures to climate-related
+            #            disasters tend to be reactive and short-sighted, rather than
+            #            proactive. This is the case for families who, due to a lack
+            #            of economic resources, have decided to withdraw their
+            #            children from school..."
+            "019d89e9-01d5-7be2-b1b1-460afdbf3f40",
+        ],
+        k=10,
+        description=(
+            "Discussion of reactive disaster adaptation should reach the top 10"
+        ),
+    ),
+    RelativeOrderTestCase[Passage](
+        category="substantive_mention",
+        search_terms="carbon market",
+        # National Carbon Emission Trading Market Power Construction Plan (2017), China
+        document_id="CCLW.executive.10677.5836",
+        higher_result_id="019cdce0-67ff-7030-bd7b-e971b0c20526",
+        lower_result_id="019cdce0-63f6-75a2-94dc-b2d98f64a8ce",
+        k=10,
+        description=(
+            "A passage talking about carbon markets directly should rank above one which only describes enabling conditions for carbon markets."
+        ),
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="related_phrases",
+        search_terms="clean cooking",
+        document_id="UNFCCC.document.i00006733.n0000",
+        characteristics_test=lambda passage: any_words_in_string(
+            ["stove", "stoves", "cookstove", "cookstoves"], passage.text
+        )
+        and not all_words_in_string(["clean", "cooking"], passage.text),
+        all_or_any="any",
+        k=10,
+        assert_results=True,
+        description=(
+            "'clean cooking' should match passages about efficient cook stoves "
+            "without the literal phrase."
+        ),
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="related_phrases",
+        search_terms="higher education",
+        document_id="CIF.document.XACTID013A.n0000",
+        characteristics_test=lambda passage: any_words_in_string(
+            ["universities", "university", "vocational"], passage.text
+        )
+        and not all_words_in_string(["higher", "education"], passage.text),
+        all_or_any="any",
+        k=10,
+        assert_results=True,
+        description=(
+            "'higher education' should match passages naming universities or "
+            "vocational institutions without the literal phrase. One ranks 2nd."
+        ),
     ),
 ]
 
