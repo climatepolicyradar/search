@@ -504,10 +504,11 @@ test_cases = [
         )
         and all_words_in_string(["hard"], passage.text),
         all_or_any="all",
-        k=3,
+        k=2,
         assert_results=True,
         description=(
-            "'hard to abate' must not degrade to 'abatement' alone in the top 3."
+            # There are only 2 occurrences of 'hard to abate' in the search tests
+            "'hard to abate' must not degrade to 'abatement' alone in the top 2."
         ),
     ),
     RecallTestCase[Passage](
