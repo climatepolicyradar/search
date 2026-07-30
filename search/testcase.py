@@ -569,7 +569,11 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             # Count IDs that appear in both lists regardless of position
             overlap_count = len(set(result_ids_1).intersection(set(result_ids_2)))
 
-        overlap_proportion = overlap_count / self.k if self.k > 0 else 0
+        # Divide by the number of results actually comparable rather than by k: if
+        # either query returns fewer than k results, overlap_count can never reach k
+        # and a minimum_overlap of 1.0 would be unreachable however well search does.
+        comparable = min(len(result_ids_1), len(result_ids_2))
+        overlap_proportion = overlap_count / comparable if comparable > 0 else 0
         passed = overlap_proportion >= self.minimum_overlap
 
         return passed, search_results_1.results
