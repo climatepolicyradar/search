@@ -31,11 +31,6 @@ def looks_like_reference_list(text: str) -> bool:
     better signal, as it's rarely used outside reference lists, so it is scored
     below alongside the other locators.
 
-    A reference *list* is also line-structured: each entry starts on its own line,
-    usually with an optional marker followed by 'Surname, Initial'. We score that
-    too (`entry_lines`), which is what separates a bibliography from the
-    citation-dense prose that shares its vocabulary.
-
     WARNING: Claude figured out the below ruleset based on seeing a sample of the data.
     It should be flexible enough for use here, but should NOT be used in production
     search.
@@ -59,27 +54,8 @@ def looks_like_reference_list(text: str) -> bool:
     parenthetical_cites = (
         len(re.findall(r"\([A-Z][A-Za-z.\-]+[^)]{0,60}?\d{4}[a-z]?\)", text)) / n * 100
     )
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    entry_lines = (
-        sum(
-            1
-            for line in lines
-            # An optional entry marker ('[12] ', '3. ') then 'Surname, Initial'.
-            # Requiring the comma + following capital keeps ordinary sentences
-            # ('However, forests may become...') and the numbered paragraphs of
-            # legal codes ('8. Verification of...') out.
-            if re.match(r"(?:\[\d+\]\s*|\d+[.)]\s*)?[A-Z][A-Za-z'-]+,\s+[A-Z]", line)
-        )
-        / n
-        * 100
-    )
     return (
-        periods / 10
-        + initials
-        + 2 * bare_year
-        + 2 * locators
-        + 2 * entry_lines
-        - 3 * parenthetical_cites
+        periods / 10 + initials + 2 * bare_year + 2 * locators - 3 * parenthetical_cites
     ) >= 10
 
 
