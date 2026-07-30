@@ -11,6 +11,7 @@ schema passages {
         }
         field text type string {
             indexing: index | summary
+            stemming: multiple
             linguistics {
                 profile: passage_analysis
             }
