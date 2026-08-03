@@ -609,3 +609,16 @@ def any_words_in_string(include_words: list[str], string: str) -> bool:
     words = re.findall(r"\b\w+\b", string.lower())
 
     return any(word.lower() in words for word in include_words)
+
+def phrase_in_string(phrase: str, string: str) -> bool:
+    """Case-insensitive check for if a phrase appears in order, ignoring punctuation."""
+    phrase_words = re.findall(r"\b\w+\b", phrase.lower())
+    words = re.findall(r"\b\w+\b", string.lower())
+
+    if not phrase_words:
+        return False
+
+    return any(
+        words[i : i + len(phrase_words)] == phrase_words
+        for i in range(len(words) - len(phrase_words) + 1)
+    )

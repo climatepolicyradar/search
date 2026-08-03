@@ -19,6 +19,7 @@ from search.testcase import (
     SearchComparisonTestCase,
     all_words_in_string,
     any_words_in_string,
+    phrase_in_string,
 )
 
 
@@ -459,17 +460,16 @@ test_cases = [
     ),
     FieldCharacteristicsTestCase[Passage](
         category="phrase_integrity",
-        search_terms="nature-based solutions",
-        document_id="Sabin.document.12109.75104",
-        characteristics_test=lambda passage: all_words_in_string(
-            ["nature", "based", "solutions"], passage.text
+        search_terms="national security",
+        document_id="CPR.document.i00006724.n0000",
+        characteristics_test=lambda passage: phrase_in_string(
+            "national security", passage.text
         ),
         all_or_any="all",
-        k=3,
+        k=2,
         assert_results=True,
         description=(
-            "Multi-word queries must not match on a subset of terms in the top 3. "
-            "Passages about 'land-based climate solutions' can be false-positives."
+            "Multi-word queries must not match on a subset or reordering of terms in the top 2."
         ),
     ),
     FieldCharacteristicsTestCase[Passage](
