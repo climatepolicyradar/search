@@ -459,17 +459,16 @@ test_cases = [
     ),
     FieldCharacteristicsTestCase[Passage](
         category="phrase_integrity",
-        search_terms="nature-based solutions",
-        document_id="Sabin.document.12109.75104",
+        search_terms="energy efficiency",
+        document_id="CCLW.document.i00003420.n0000",
         characteristics_test=lambda passage: all_words_in_string(
-            ["nature", "based", "solutions"], passage.text
+            ["energy", "efficiency"], passage.text
         ),
         all_or_any="all",
         k=3,
         assert_results=True,
         description=(
-            "Multi-word queries must not match on a subset of terms in the top 3. "
-            "Passages about 'land-based climate solutions' can be false-positives."
+            "Multi-word queries must not match on a subset of terms in the top 3."
         ),
     ),
     FieldCharacteristicsTestCase[Passage](
