@@ -226,7 +226,9 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         if found:
             lines.append("  Found:")
             for eid, rank in found:
-                lines.append(f"    '{eid}' at rank {rank}")
+                # Ranks beyond k are returned for context but don't count as recalled.
+                outside = " (outside top k)" if rank > self.k else ""
+                lines.append(f"    '{eid}' at rank {rank}{outside}")
         if missing:
             lines.append("  Missing:")
             for eid in missing:
@@ -241,7 +243,8 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             if forbidden_present:
                 lines.append("  Forbidden IDs present:")
                 for fid, rank in forbidden_present:
-                    lines.append(f"    '{fid}' at rank {rank}")
+                    outside = " (outside top k)" if rank > self.k else ""
+                    lines.append(f"    '{fid}' at rank {rank}{outside}")
 
         return "\n".join(lines)
 
@@ -254,7 +257,9 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=self.filters_json_string(),
         )
-        result_ids = [result.id for result in search_results.results]
+        # page_size has a floor of 10, so the response can be longer than k. Truncate
+        # to k before checking, otherwise a k below 10 is silently treated as 10.
+        result_ids = [result.id for result in search_results.results[: self.k]]
 
         expected_ids_not_in_response = set(self.expected_result_ids).difference(
             set(result_ids)
@@ -402,7 +407,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
     )
     assert_results: bool = Field(
         description="Whether to assert that results should be returned for a search. Checks that more than 0 results are returned.",
-        default=False,
+        default=True,
     )
 
     def diagnose(self, search_results: list[TModel]) -> str:
@@ -564,7 +569,11 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             # Count IDs that appear in both lists regardless of position
             overlap_count = len(set(result_ids_1).intersection(set(result_ids_2)))
 
-        overlap_proportion = overlap_count / self.k if self.k > 0 else 0
+        # Divide by the number of results actually comparable rather than by k: if
+        # either query returns fewer than k results, overlap_count can never reach k
+        # and a minimum_overlap of 1.0 would be unreachable however well search does.
+        comparable = min(len(result_ids_1), len(result_ids_2))
+        overlap_proportion = overlap_count / comparable if comparable > 0 else 0
         passed = overlap_proportion >= self.minimum_overlap
 
         return passed, search_results_1.results

@@ -11,6 +11,7 @@ from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
     RecallTestCase,
+    any_words_in_string,
 )
 
 test_cases = [
@@ -84,7 +85,9 @@ test_cases = [
         characteristics_test=lambda label: (
             "energy" in label.value.lower()
             or "polic" in label.value.lower()
-            or "act" in label.value.lower()
+            # 'energy'/'polic' are deliberate prefix matches, but 'act' as a substring
+            # also accepts 'Climate Action', 'extraction', 'practice'
+            or any_words_in_string(["act"], label.value)
             or "usa" in label.value.lower()
         ),
         all_or_any="all",

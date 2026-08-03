@@ -102,9 +102,9 @@ test_cases = [
         search_terms="nz",
         characteristics_test=lambda passage: ("new zealand" in passage.text.lower())
         or all_words_in_string(["net", "zero"], passage.text)  # type: ignore
-        or ("nz" in passage.text.lower()),
+        or any_words_in_string(["nz"], passage.text),
         all_or_any="all",
-        description="search for nz should return either new zealand or net zero in the passage text",
+        description="search for nz should return new zealand, net zero or nz in the passage text",
         assert_results=True,
     ),
     SearchComparisonTestCase[Passage](
@@ -252,9 +252,9 @@ test_cases = [
     FieldCharacteristicsTestCase[Passage](
         category="logic",
         search_terms="green-washing or greenwashing or climatewashing or climate-washing",
-        characteristics_test=lambda passage: any_words_in_string(
-            ["greenwashing", "green-washing", "climatewashing", "climate-washing"],
-            passage.text,
+        characteristics_test=lambda passage: any(
+            term in passage.text.lower().replace("-", "")
+            for term in ["greenwashing", "climatewashing"]
         ),
         description="OR logic in search.",
         k=20,
