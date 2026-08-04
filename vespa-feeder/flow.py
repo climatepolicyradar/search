@@ -164,7 +164,9 @@ def _build_run_summary_markdown(
         )
         for r in failed_results:
             failed_docs = [doc for error in r.errors for doc in error.failed_documents]
-            sample = "; ".join(f"`{doc.doc_id}`: {doc.error}" for doc in failed_docs[:3])
+            sample = "; ".join(
+                f"`{doc.doc_id}`: {doc.error}" for doc in failed_docs[:3]
+            )
             if len(failed_docs) > 3:
                 sample += f" (+{len(failed_docs) - 3} more)"
             markdown += (
@@ -307,7 +309,7 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
                     "--application",
                     application,
                     "--connections",
-                    "8",
+                    "4",
                     "--inflight",
                     "0",
                     "--verbose",
@@ -402,7 +404,9 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             )
 
             retry_attempt_count = (
-                feed_response.feeder_error_count + throttled_count + other_http_error_count
+                feed_response.feeder_error_count
+                + throttled_count
+                + other_http_error_count
             )
 
             if missing_count > 0:
