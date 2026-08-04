@@ -2,6 +2,8 @@ import re
 
 from pydantic import BaseModel, Field, computed_field
 
+from search.vespa.passage import VespaPassage
+
 
 class Coordinate(BaseModel):
     """A single x/y point in a bounding-box polygon."""
@@ -41,12 +43,6 @@ class Passage(BaseModel):
     language: str = Field(default="")
     type: str = Field(default="")
     type_confidence: float = Field(default=0.0)
-    # Persisted outputs of the `looks_like_*` heuristics below, derived at
-    # materialisation time. The detectors read `text`, never these.
-    short_heading: bool = Field(default=False)
-    table_of_contents: bool = Field(default=False)
-    reference_list: bool = Field(default=False)
-    page_number: int = Field(default=0)
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
     concepts: list[Concept] = Field(default_factory=list)
@@ -67,6 +63,26 @@ class Passage(BaseModel):
         """A canonical identifier for the passage."""
         return self.text_block_id
 
+    @classmethod
+    def from_vespa_passage(cls, vespa_passage: VespaPassage) -> "Passage":
+        """Build the client-facing `Passage` from a canonical `VespaPassage`."""
+        data = vespa_passage.model_dump()
+        return cls(
+            text_block_id=data["id"],
+            idx=data["idx"],
+            text=data["content"],
+            language=data["language"],
+            type=data["content_type"],
+            type_confidence=data["type_confidence"],
+            pages=[page["number"] for page in data["pages"]],
+            pages_with_bounding_boxes=data["pages"],
+            concepts=data["concepts"],
+            heading_id=data["heading_id"],
+            heading_text=data["heading_text"],
+            document_id=data["document_id"],
+            principal_id=data["principal_id"],
+            tokens=vespa_passage.tokens,
+        )
 
 def looks_like_reference_list(passage: Passage) -> bool:
     """

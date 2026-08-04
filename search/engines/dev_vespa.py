@@ -36,6 +36,7 @@ from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, Vesp
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
+from search.vespa.passage import VespaPassage
 
 logger = get_logger(__name__)
 
@@ -588,28 +589,6 @@ class CountAggregation[T](BaseModel):
 def _get_total_count(response: dict[str, Any]) -> int | None:
     return response.get("root", {}).get("fields", {}).get("totalCount")
 
-def _flatten_tokens(token_field: Any) -> list[str]:
-    """
-    Flatten Vespa token summary output into a list of strings.
-
-    Lucene linguistics with ``stemming: multiple`` returns each token as either a plain string or a list of stems (e.g. ``["run", "running"]``). This helper normalises both shapes into a flat list.
-    """
-
-    if isinstance(token_field, dict):
-        items = token_field.get("values", [])
-    elif isinstance(token_field, list):
-        items = token_field
-    else:
-        return []
-    flat: list[str] = []
-    for item in items:
-        if isinstance(item, list):
-            flat.extend(item)
-        else:
-            flat.append(item)
-    return flat
-
-
 def _execute_vespa_query(
     *,
     endpoint: str,
@@ -873,7 +852,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                         language=passage.get("language", ""),
                         type=passage.get("type", ""),
                         type_confidence=passage.get("type_confidence", 0.0),
-                        page_number=passage.get("page_number", 0),
                         pages=passage.get("pages", []),
                         heading_id=passage.get("heading_id"),
                         document_id=document_id,
@@ -1363,28 +1341,8 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
 
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
-            passages.append(
-                Passage(
-                    text_block_id=fields.get("id", ""),
-                    idx=fields.get("idx", 0),
-                    text=fields.get("text", ""),
-                    language=fields.get("language", ""),
-                    type=fields.get("type", ""),
-                    type_confidence=fields.get("type_confidence", 0.0),
-                    short_heading=fields.get("short_heading", False),
-                    table_of_contents=fields.get("table_of_contents", False),
-                    reference_list=fields.get("reference_list", False),
-                    page_number=fields.get("page_number", 0),
-                    pages=fields.get("pages", []),
-                    pages_with_bounding_boxes=fields.get("page_bounding_boxes", []),
-                    concepts=fields.get("concepts", []),
-                    heading_id=fields.get("heading_id"),
-                    heading_text=fields.get("heading_text"),
-                    document_id=fields.get("document_id", ""),
-                    principal_id=fields.get("principal_id"),
-                    tokens=_flatten_tokens(fields.get("text_tokens")),
-                )
-            )
+            vespa_passage = VespaPassage.model_validate(fields)
+            passages.append(Passage.from_vespa_passage(vespa_passage))
             if self.debug:
                 debug_info.append(
                     {

@@ -9,24 +9,12 @@ schema passages {
         field language type string {
             indexing: attribute | summary
         }
-        field text type string {
+        field content type string {
             indexing: index | summary
             stemming: multiple
             linguistics {
                 profile: passage_analysis
             }
-        }
-        field short_heading type bool {
-            indexing: attribute | summary
-            rank: filter
-        }
-        field table_of_contents type bool {
-            indexing: attribute | summary
-            rank: filter
-        }
-        field reference_list type bool {
-            indexing: attribute | summary
-            rank: filter
         }
         field document_id type string {
             indexing: attribute | summary
@@ -37,19 +25,11 @@ schema passages {
         field principal_document_ref type reference<documents> {
             indexing: attribute
         }
-        field type type string {
+        field content_type type string {
             indexing: attribute | summary
         }
         field type_confidence type double {
             indexing: attribute | summary
-        }
-        field page_number type int {
-            indexing: attribute | summary
-        }
-        field pages type array<int> {
-            indexing: attribute | summary
-            attribute: fast-search
-            rank: filter
         }
         struct coordinate {
             field x type float {}
@@ -62,8 +42,13 @@ schema passages {
             field number type int {}
             field bounding_boxes type array<bounding_box> {}
         }
-        field page_bounding_boxes type array<page_boxes> {
+        field pages type array<page_boxes> {
             indexing: summary
+            struct-field number {
+                indexing: attribute
+                attribute: fast-search
+                rank: filter
+            }
         }
         field heading_id type string {
             indexing: attribute | summary
@@ -120,41 +105,36 @@ schema passages {
     }
 
     fieldset default {
-        fields: text
+        fields: content
     }
 
     rank-profile nativerank {
         function text_score() {
-            expression: nativeRank(text) + nativeProximity(text)
+            expression: nativeRank(content) + nativeProximity(content)
         }
 
         first-phase {
             expression: text_score()
         }
-        summary-features: text_score() nativeRank(text) nativeProximity(text)
+        summary-features: text_score() nativeRank(content) nativeProximity(content)
     }
 
     document-summary debug-summary {
         summary id {}
         summary idx {}
         summary language {}
-        summary text {}
-        summary short_heading {}
-        summary table_of_contents {}
-        summary reference_list {}
+        summary content {}
         summary document_id {}
         summary principal_id {}
-        summary type {}
+        summary content_type {}
         summary type_confidence {}
-        summary page_number {}
         summary pages {}
-        summary page_bounding_boxes {}
         summary heading_id {}
         summary concepts {}
         summary concepts_value {}
         summary heading_text {}
         summary text_tokens {
-            source: text
+            source: content
             tokens
         }
         from-disk

@@ -305,7 +305,7 @@ def test_build_passage_concepts_lookup_aggregates_per_passage() -> None:
 
 def test_text_block_to_vespa_update_includes_and_omits_concepts() -> None:
     """Concepts are assigned when present, and the key is absent when there are none."""
-    concepts: list[materializer.VespaConceptField] = [
+    concepts = [
         {"id": "concept::Q1", "type": "concept", "value": "flooding", "count": 2}
     ]
     with_concepts = materializer._text_block_to_vespa_update(
@@ -318,7 +318,7 @@ def test_text_block_to_vespa_update_includes_and_omits_concepts() -> None:
 
 
 def test_text_block_to_vespa_update_includes_pages_from_multi_page_block() -> None:
-    """Pages is assigned as the full list of page numbers, not just the first."""
+    """Pages is assigned as the full list of page structs, not just the first."""
     block = _text_block(0)
     block["pages"] = [
         {"number": 3, "bounding_boxes": []},
@@ -327,7 +327,12 @@ def test_text_block_to_vespa_update_includes_pages_from_multi_page_block() -> No
 
     update = materializer._text_block_to_vespa_update(block, "doc-0")
 
-    assert update["fields"].get("pages") == {"assign": [3, 4]}
+    assert update["fields"].get("pages") == {
+        "assign": [
+            {"number": 3, "bounding_boxes": []},
+            {"number": 4, "bounding_boxes": []},
+        ]
+    }
 
 
 def test_text_block_to_vespa_update_omits_pages_when_block_has_none() -> None:
@@ -338,7 +343,7 @@ def test_text_block_to_vespa_update_omits_pages_when_block_has_none() -> None:
 
 
 def test_text_block_to_vespa_update_includes_page_bounding_boxes() -> None:
-    """page_bounding_boxes carries every page's boxes and coordinates."""
+    """Each page struct carries its own boxes and coordinates."""
     block = _text_block(0)
     block["pages"] = [
         {
@@ -358,7 +363,7 @@ def test_text_block_to_vespa_update_includes_page_bounding_boxes() -> None:
 
     update = materializer._text_block_to_vespa_update(block, "doc-0")
 
-    assert update["fields"].get("page_bounding_boxes") == {
+    assert update["fields"].get("pages") == {
         "assign": [
             {
                 "number": 3,
@@ -377,14 +382,7 @@ def test_text_block_to_vespa_update_includes_page_bounding_boxes() -> None:
     }
 
 
-def test_text_block_to_vespa_update_omits_page_bounding_boxes_when_block_has_none() -> None:
-    """page_bounding_boxes is absent from the update when the block has no pages."""
-    update = materializer._text_block_to_vespa_update(_text_block(0), "doc-0")
-
-    assert "page_bounding_boxes" not in update["fields"]
-
-
-def test_text_block_to_vespa_update_page_bounding_boxes_handles_empty_boxes_and_coordinates() -> None:
+def test_text_block_to_vespa_update_pages_handles_empty_boxes_and_coordinates() -> None:
     """A page with no boxes, and a box with no coordinates, degrade to empty lists rather than being omitted or erroring."""
     block = _text_block(0)
     block["pages"] = [
@@ -394,7 +392,7 @@ def test_text_block_to_vespa_update_page_bounding_boxes_handles_empty_boxes_and_
 
     update = materializer._text_block_to_vespa_update(block, "doc-0")
 
-    assert update["fields"].get("page_bounding_boxes") == {
+    assert update["fields"].get("pages") == {
         "assign": [
             {"number": 3, "bounding_boxes": []},
             {"number": 4, "bounding_boxes": [{"coordinates": []}]},
