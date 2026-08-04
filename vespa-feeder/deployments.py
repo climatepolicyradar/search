@@ -25,8 +25,6 @@ _FEEDS = [
         "s3_bucket": "cpr-prod-snowflake-data-export",
         "s3_key": "production/published/pipeline_data_in_vespa_documents_updates_v1/latest",
         "description": "Feed documents JSONL from S3 into Vespa",
-        # See _MAX_CONCURRENT_FEEDS in flow.py - the default container size
-        # OOMKilled under concurrent feeding of these (up to 200k records each).
         "job_variables": {"cpu": 1024, "memory": 2048},
     },
     {
@@ -47,8 +45,6 @@ _FEEDS = [
         "s3_bucket": "cpr-cache",
         "s3_key": "search/vespa/passages_feed_materializer",
         "description": "Feed passages JSONL from S3 into Vespa",
-        # See _MAX_CONCURRENT_FEEDS in flow.py - the default container size
-        # OOMKilled under concurrent feeding of these (up to 200k records each).
         "job_variables": {"cpu": 1024, "memory": 2048},
     },
 ]

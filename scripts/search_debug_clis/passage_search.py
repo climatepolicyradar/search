@@ -28,6 +28,20 @@ def highlight(s: str, words: list[str]) -> Text:
     return t
 
 
+def _build_filters(document_id: str | None, filters: str | None) -> str | None:
+    """Combine the --document-id shorthand with any raw --filters JSON."""
+    conditions: list[dict] = []
+    if document_id:
+        conditions.append(
+            {"field": "document_id", "op": "contains", "value": document_id}
+        )
+    if filters:
+        conditions.append(json.loads(filters))
+    if not conditions:
+            return None
+    return json.dumps({"op": "and", "filters": conditions})
+
+
 @app.command()
 def search(
     query: str,
@@ -35,11 +49,14 @@ def search(
     page_size: int = 10,
     debug: bool = True,
     max_len: int | None = 600,
+    filters: str | None = None,
+    document_id: str | None = None,
 ):
     """Search for passages."""
     engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
     results = engine.search(
         query=query,
+        filters_json_string=_build_filters(document_id, filters),
         pagination=Pagination(page_token=page, page_size=page_size),
         order_by=[OrderBy(field="relevance", direction="desc")],
     )

@@ -25,15 +25,19 @@ from prefect import flow, get_run_logger, task
 
 logger = logging.getLogger(__name__)
 
-# Vespa's own guidance warns against many worker processes each opening their
-# own full connection pool (default 8 connections per `vespa feed` process) -
-# that's a TLS-handshake storm with no shared backpressure state. We cap how
-# many `vespa feed` subprocesses run at once and pin each to a single
-# connection so overall concurrency stays in a sane, tunable range.
-# 8-way concurrency OOMKilled the passages feed (200k-record files) even at
-# 1024 CPU / 2048MB, so this is capped lower for that container size.
-_MAX_CONCURRENT_FEEDS = 4
-_feed_semaphore = threading.Semaphore(_MAX_CONCURRENT_FEEDS)
+# download_and_feed downloads a file just before feeding it rather than
+# downloading every file upfront, so at most _MAX_CONCURRENT_DOWNLOADS files
+# are ever resident on disk at once - with multiple passages files (up to
+# 200k records each), downloading them all upfront filled the ECS task's disk
+# (No space left on device) long before feeding even started.
+#
+# Each concurrent download also becomes a concurrent `vespa feed` subprocess,
+# so this doubles as a cap on `vespa feed` subprocesses - and since each
+# subprocess opens its own `--connections N` pool (see vespa_feed), total
+# concurrent connections to Vespa is _MAX_CONCURRENT_DOWNLOADS * N, not N.
+# Tune both together rather than assuming --connections alone controls load.
+_MAX_CONCURRENT_DOWNLOADS = 4
+_download_disk_semaphore = threading.Semaphore(_MAX_CONCURRENT_DOWNLOADS)
 
 # On SIGTERM (e.g. a graceful ECS stop or Prefect cancellation) we terminate
 # any `vespa feed` subprocesses still running rather than leaving them as
@@ -174,7 +178,9 @@ def _build_run_summary_markdown(
         )
         for r in failed_results:
             failed_docs = [doc for error in r.errors for doc in error.failed_documents]
-            sample = "; ".join(f"`{doc.doc_id}`: {doc.error}" for doc in failed_docs[:3])
+            sample = "; ".join(
+                f"`{doc.doc_id}`: {doc.error}" for doc in failed_docs[:3]
+            )
             if len(failed_docs) > 3:
                 sample += f" (+{len(failed_docs) - 3} more)"
             markdown += (
@@ -232,14 +238,9 @@ def list_s3_keys(bucket: str, key: str) -> list[str]:
 def download_and_feed(
     bucket: str, obj_key: str, endpoint: str, application: str
 ) -> FeedResult:
-    # Downloads a single file immediately before feeding it, rather than
-    # downloading every file upfront - with multiple passages files, downloading
-    # them all before feeding any of them filled the ECS task's disk
-    # (No space left on device) long before feeding even started.
-    # _feed_semaphore is held for the download too (not just the feed), so at
-    # most _MAX_CONCURRENT_FEEDS files are ever resident on disk at once.
+    # See _download_disk_semaphore above for why this is gated per-file.
     run_logger = get_run_logger()
-    with _feed_semaphore:
+    with _download_disk_semaphore:
         start_time = time.perf_counter()
         try:
             with tracer.start_as_current_span("download_from_s3") as span:
@@ -280,10 +281,9 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             input_record_count = sum(1 for line in feed_path.open() if line.strip())
             span.set_attribute("feed.input_record_count", input_record_count)
 
-            # _feed_semaphore (bounding concurrent `vespa feed` subprocesses) is
-            # acquired by the caller, download_and_feed, spanning both the
-            # download and the feed - not re-acquired here since
-            # threading.Semaphore isn't reentrant.
+            # _download_disk_semaphore is acquired by the caller,
+            # download_and_feed, spanning both the download and the feed -
+            # not re-acquired here since threading.Semaphore isn't reentrant.
             run_logger.info(
                 "Feeding %s to %s (application: %s, records: %d)",
                 feed_path,
@@ -292,6 +292,14 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
                 input_record_count,
             )
 
+            # --connections/--inflight are passed explicitly even though
+            # --inflight=0 matches the vespa CLI's own default, so it's
+            # documented here rather than relying on defaults that could
+            # silently change. This lets vespa feed manage its own connection
+            # pool and inflight backpressure within each subprocess. Note this
+            # is per-subprocess: with _MAX_CONCURRENT_DOWNLOADS concurrent
+            # subprocesses each opening --connections 4, total concurrent
+            # connections to Vespa is up to 4x this value, not this value.
             process = subprocess.Popen(
                 [
                     "vespa",
@@ -302,7 +310,9 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
                     "--application",
                     application,
                     "--connections",
-                    "1",
+                    "4",
+                    "--inflight",
+                    "0",
                     "--verbose",
                 ],
                 # VESPA_CLI_DATA_PLANE_TOKEN is set on this process's own
@@ -395,7 +405,9 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             )
 
             retry_attempt_count = (
-                feed_response.feeder_error_count + throttled_count + other_http_error_count
+                feed_response.feeder_error_count
+                + throttled_count
+                + other_http_error_count
             )
 
             if missing_count > 0:
@@ -480,8 +492,7 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
         )
         # Downloaded feed files are never cleaned up otherwise, and
         # download_from_s3 fetches all of them upfront - without this, disk
-        # usage on the ECS task grows with every file across the whole run
-        # instead of staying bounded to _MAX_CONCURRENT_FEEDS in-flight files.
+        # usage on the ECS task grows with every file across the whole run.
         feed_path.unlink(missing_ok=True)
 
 

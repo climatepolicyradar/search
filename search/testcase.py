@@ -226,7 +226,9 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         if found:
             lines.append("  Found:")
             for eid, rank in found:
-                lines.append(f"    '{eid}' at rank {rank}")
+                # Ranks beyond k are returned for context but don't count as recalled.
+                outside = " (outside top k)" if rank > self.k else ""
+                lines.append(f"    '{eid}' at rank {rank}{outside}")
         if missing:
             lines.append("  Missing:")
             for eid in missing:
@@ -241,7 +243,8 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             if forbidden_present:
                 lines.append("  Forbidden IDs present:")
                 for fid, rank in forbidden_present:
-                    lines.append(f"    '{fid}' at rank {rank}")
+                    outside = " (outside top k)" if rank > self.k else ""
+                    lines.append(f"    '{fid}' at rank {rank}{outside}")
 
         return "\n".join(lines)
 
@@ -254,7 +257,9 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             order_by=[OrderBy(field="relevance", direction="desc")],
             filters_json_string=self.filters_json_string(),
         )
-        result_ids = [result.id for result in search_results.results]
+        # page_size has a floor of 10, so the response can be longer than k. Truncate
+        # to k before checking, otherwise a k below 10 is silently treated as 10.
+        result_ids = [result.id for result in search_results.results[: self.k]]
 
         expected_ids_not_in_response = set(self.expected_result_ids).difference(
             set(result_ids)
@@ -286,6 +291,104 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         )
 
 
+class RelativeOrderTestCase(TestCase[TModel], Generic[TModel]):
+    """
+    Dictates that one result should rank above another for a given search.
+
+    Useful for expressing a relative preference between two known results without
+    committing to their absolute ranks. The higher result must appear in the top k
+    results; the lower result may be absent, which counts as ranking below.
+    """
+
+    higher_result_id: str = Field(
+        description="The ID which should rank above lower_result_id."
+    )
+    lower_result_id: str = Field(
+        description="The ID which should rank below higher_result_id."
+    )
+    k: int = Field(
+        description="The number of results to check the relative order within.",
+        default=20,
+        gt=0,
+    )
+
+    @model_validator(mode="after")
+    def check_result_ids_differ(self):
+        """Check that the two result IDs are different."""
+        if self.higher_result_id == self.lower_result_id:
+            raise ValueError("higher_result_id and lower_result_id must be different")
+        return self
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a relative order test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing where each of the two IDs actually ranked.
+        """
+        result_ids = [result.id for result in search_results]
+        id_to_rank = {rid: i + 1 for i, rid in enumerate(result_ids)}
+        higher_rank = id_to_rank.get(self.higher_result_id)
+        lower_rank = id_to_rank.get(self.lower_result_id)
+
+        lines = [
+            f"Relative order check in top {self.k} results "
+            f"({len(result_ids)} returned):",
+            f"  '{self.higher_result_id}' (expected higher): "
+            + (f"rank {higher_rank}" if higher_rank is not None else "not found"),
+            f"  '{self.lower_result_id}' (expected lower): "
+            + (f"rank {lower_rank}" if lower_rank is not None else "not found"),
+        ]
+        if higher_rank is None:
+            lines.append(
+                "  The expected-higher result must appear in the top k results to pass."
+            )
+
+        return "\n".join(lines)
+
+    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+        """Run the test case against the given engine."""
+
+        search_results = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=max(10, self.k)),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters_json_string=self.filters_json_string(),
+        )
+        results = search_results.results[: self.k]
+        result_ids = [result.id for result in results]
+
+        if self.higher_result_id not in result_ids:
+            # Can't demonstrate the ordering if the higher result isn't there.
+            passed = False
+        elif self.lower_result_id not in result_ids:
+            # The higher result is present and the lower one ranks below the cutoff.
+            passed = True
+        else:
+            passed = result_ids.index(self.higher_result_id) < result_ids.index(
+                self.lower_result_id
+            )
+
+        return passed, results
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.higher_result_id,
+            self.lower_result_id,
+            self.k,
+            self.corpus,
+            self.document_id,
+            self.principal_id,
+        )
+
+
 class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
     """Dictates characteristics that any or all of the top k results should have for a given search."""
 
@@ -304,7 +407,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
     )
     assert_results: bool = Field(
         description="Whether to assert that results should be returned for a search. Checks that more than 0 results are returned.",
-        default=False,
+        default=True,
     )
 
     def diagnose(self, search_results: list[TModel]) -> str:
@@ -466,7 +569,11 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             # Count IDs that appear in both lists regardless of position
             overlap_count = len(set(result_ids_1).intersection(set(result_ids_2)))
 
-        overlap_proportion = overlap_count / self.k if self.k > 0 else 0
+        # Divide by the number of results actually comparable rather than by k: if
+        # either query returns fewer than k results, overlap_count can never reach k
+        # and a minimum_overlap of 1.0 would be unreachable however well search does.
+        comparable = min(len(result_ids_1), len(result_ids_2))
+        overlap_proportion = overlap_count / comparable if comparable > 0 else 0
         passed = overlap_proportion >= self.minimum_overlap
 
         return passed, search_results_1.results
@@ -502,3 +609,16 @@ def any_words_in_string(include_words: list[str], string: str) -> bool:
     words = re.findall(r"\b\w+\b", string.lower())
 
     return any(word.lower() in words for word in include_words)
+
+def phrase_in_string(phrase: str, string: str) -> bool:
+    """Case-insensitive check for if a phrase appears in order, ignoring punctuation."""
+    phrase_words = re.findall(r"\b\w+\b", phrase.lower())
+    words = re.findall(r"\b\w+\b", string.lower())
+
+    if not phrase_words:
+        return False
+
+    return any(
+        words[i : i + len(phrase_words)] == phrase_words
+        for i in range(len(words) - len(phrase_words) + 1)
+    )

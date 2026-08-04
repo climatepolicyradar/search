@@ -1,0 +1,25 @@
+# Passage search query rewrites. Selected via rules.rulebase=passages in
+# DevVespaPassageSearchEngine. 
+# See https://docs.vespa.ai/en/linguistics/query-rewriting.html
+
+# Includes the default documents rulebase
+
+@language(en)
+@include(documents)
+
+# LHS +> ?"RHS" means LHS or RHS (RHS is tokenised ignoring punctuation
+# but tokens have to be adjacent in result)
+# e.g. 'ndc' or 'nationally determined contribution' (including 
+# nationally-determined-contribution, for example)
+# NOT 'nationally' or 'determined' or 'contribution' 
+
+# nature based solution has a different rule logic because the LHS can't 
+# be set as an exact phrase with ""; nature based solution +> ?"nbs" was
+# resulting in nature based solution being re-written as 
+# nature or based or solution or nbs, where as 
+# nature based solution -> ?"nature based solution" ?"nbs" means that the
+# query will be re-written as 'nature based solution' or 'nbs'.
+
+ndc +> ?"nationally determined contribution";
+nature based solution -> ?"nature based solution" ?"nbs";
+gga +> ?"global goal on adaptation";
