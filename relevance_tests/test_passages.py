@@ -1,5 +1,3 @@
-import re
-
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -11,7 +9,12 @@ from search.engines.dev_vespa import DevVespaPassageSearchEngine
 #    ExactVespaPassageSearchEngine,
 #    HybridVespaPassageSearchEngine,
 #)
-from search.passage import Passage
+from search.passage import (
+    Passage,
+    looks_like_reference_list,
+    looks_like_short_heading,
+    looks_like_table_of_contents,
+)
 from search.testcase import (
     FieldCharacteristicsTestCase,
     RecallTestCase,
@@ -21,81 +24,6 @@ from search.testcase import (
     any_words_in_string,
     phrase_in_string,
 )
-
-
-def looks_like_reference_list(text: str) -> bool:
-    """
-    True if the passage is a bibliography, endnote or numbered footnote block.
-
-    Note that 'et al.' on its own is NOT a usable signal - it appears in running
-    text, and per 100 words it's more frequent in the IPCC-style prose we want to
-    keep (3.6) than in the reference lists we want to drop (1.7). 'doi:' is a much
-    better signal, as it's rarely used outside reference lists, so it is scored
-    below alongside the other locators.
-
-    WARNING: Claude figured out the below ruleset based on seeing a sample of the data.
-    It should be flexible enough for use here, but should NOT be used in production
-    search.
-    """
-    words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
-    if len(words) < 20:
-        return False
-    n = len(words)
-    periods = text.count(".") / n * 100
-    initials = len(re.findall(r"\b[A-Z]\.", text)) / n * 100
-    bare_year = (
-        len(re.findall(r"\(\s*(?:n\.d\.|\d{4}[a-z]?)\s*\)\s*[.,]|,\s*\d{4}[a-z]?:", text))
-        / n
-        * 100
-    )
-    locators = (
-        len(re.findall(r"doi:|doi\.org|https?://|Retrieved from|Available online", text))
-        / n
-        * 100
-    )
-    parenthetical_cites = (
-        len(re.findall(r"\([A-Z][A-Za-z.\-]+[^)]{0,60}?\d{4}[a-z]?\)", text)) / n * 100
-    )
-    return (
-        periods / 10 + initials + 2 * bare_year + 2 * locators - 3 * parenthetical_cites
-    ) >= 10
-
-
-def looks_like_table_of_contents(text: str) -> bool:
-    """
-    Returns true if text looks like a TOC.
-
-    4 or more lines, at least 80% of which are short and do not terminate as sentences.
-
-    TODO: we may be able to rely on passage types once they're in the index 
-    (specifically looking for list/table). See FUS-158.
-    """
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    if len(lines) < 4:
-        return False
-    fragmentary = sum(
-        1
-        for line in lines
-        if len(line.split()) <= 12 and not line.rstrip().endswith((".", "?", ";"))
-    )
-    return fragmentary / len(lines) >= 0.8
-
-def looks_like_short_heading(text: str) -> bool:
-    """
-    True if the passage is a short ALLCAPS figure title or section heading.
-
-    Fewer than 12 words, and at least 90% of the cased characters are upper case.
-    The parser's `sectionHeading` type would be a better signal - see the note in
-    `looks_like_table_of_contents` for when we can switch to it.
-    
-    TODO: this should be replaced with using the passage type once it's in the index
-    """
-    words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
-    if not words or len(words) >= 12:
-        return False
-    letters = [char for char in text if char.isalpha()]
-
-    return sum(char.isupper() for char in letters) / len(letters) >= 0.9
 
 test_cases = [
     FieldCharacteristicsTestCase[Passage](
@@ -334,7 +262,7 @@ test_cases = [
         category="short_headings",
         search_terms="carbon",
         document_id="ICCN.document.i00000036.n0000",
-        characteristics_test=lambda passage: not looks_like_short_heading(passage.text),
+        characteristics_test=lambda passage: not looks_like_short_heading(passage),
         all_or_any="all",
         k=3,
         assert_results=True,
@@ -355,7 +283,7 @@ test_cases = [
         category="reference_lists",
         search_terms="energy efficiency",
         document_id="UNFCCC.non-party.1196.0",
-        characteristics_test=lambda passage: not looks_like_reference_list(passage.text),
+        characteristics_test=lambda passage: not looks_like_reference_list(passage),
         all_or_any="all",
         k=10,
         assert_results=True,
@@ -374,7 +302,7 @@ test_cases = [
         category="reference_lists",
         search_terms="biomass",
         document_id="UNFCCC.non-party.1184.0",
-        characteristics_test=lambda passage: not looks_like_reference_list(passage.text),
+        characteristics_test=lambda passage: not looks_like_reference_list(passage),
         all_or_any="all",
         k=10,
         assert_results=True,
@@ -394,7 +322,7 @@ test_cases = [
         category="reference_lists",
         search_terms="disaster",
         document_id="ICCN.document.i00000042.n0000",
-        characteristics_test=lambda passage: not looks_like_reference_list(passage.text),
+        characteristics_test=lambda passage: not looks_like_reference_list(passage),
         all_or_any="all",
         k=10,
         assert_results=True,
@@ -415,7 +343,7 @@ test_cases = [
         category="reference_lists",
         search_terms="nature-based solutions",
         document_id="Sabin.document.12109.75104",
-        characteristics_test=lambda passage: not looks_like_reference_list(passage.text),
+        characteristics_test=lambda passage: not looks_like_reference_list(passage),
         all_or_any="all",
         k=10,
         assert_results=True,
@@ -433,7 +361,7 @@ test_cases = [
         category="tables_of_contents",
         search_terms="resilience",
         document_id="AF.document.AF00000210.n0000",
-        characteristics_test=lambda passage: not looks_like_table_of_contents(passage.text),
+        characteristics_test=lambda passage: not looks_like_table_of_contents(passage),
         all_or_any="all",
         k=5,
         assert_results=True,
@@ -450,7 +378,7 @@ test_cases = [
         category="tables_of_contents",
         search_terms="energy efficiency",
         document_id="UNFCCC.non-party.1196.0",
-        characteristics_test=lambda passage: not looks_like_table_of_contents(passage.text),
+        characteristics_test=lambda passage: not looks_like_table_of_contents(passage),
         all_or_any="all",
         k=5,
         assert_results=True,
