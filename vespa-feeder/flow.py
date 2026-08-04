@@ -17,6 +17,7 @@ from prefect.artifacts import create_markdown_artifact
 from prefect.client.schemas.objects import State
 from prefect.runtime import deployment, flow_run
 from prefect.states import Failed
+from prefect.task_runners import ThreadPoolTaskRunner
 from pydantic import BaseModel, ConfigDict, Field
 from slack_notify import SlackNotify
 from telemetry import feeder_metrics, set_feed_stats, shutdown, tracer
@@ -498,6 +499,12 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
 
 @flow(
     log_prints=True,
+    # Caps how many `vespa_feed` tasks (and therefore `vespa feed` subprocesses)
+    # run concurrently. Unbounded concurrency here OOMKilled this flow
+    # repeatedly - each subprocess carries its own overhead regardless of the
+    # CLI's own --connections setting, which only bounds connections within a
+    # single subprocess.
+    task_runner=ThreadPoolTaskRunner(max_workers=4),  # type: ignore[arg-type]
     on_completion=[SlackNotify.on_success],
     on_failure=[SlackNotify.on_failure],
     on_crashed=[SlackNotify.on_crashed],
