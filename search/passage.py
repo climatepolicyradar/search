@@ -1,3 +1,5 @@
+import re
+
 from pydantic import BaseModel, Field, computed_field
 
 from search.vespa.passage import VespaPassage
@@ -81,3 +83,86 @@ class Passage(BaseModel):
             principal_id=data["principal_id"],
             tokens=vespa_passage.tokens,
         )
+
+def looks_like_reference_list(passage: Passage) -> bool:
+    """
+    True if the passage is a bibliography, endnote or numbered footnote block.
+
+    Note that 'et al.' on its own is NOT a usable signal - it appears in running
+    text, and per 100 words it's more frequent in the IPCC-style prose we want to
+    keep (3.6) than in the reference lists we want to drop (1.7). 'doi:' is a much
+    better signal, as it's rarely used outside reference lists, so it is scored
+    below alongside the other locators.
+
+    WARNING: Claude figured out the below ruleset based on seeing a sample of the data.
+    It should be flexible enough for use here, but should NOT be used in production
+    search.
+    """
+    text = passage.text
+    words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
+    if len(words) < 20:
+        return False
+    n = len(words)
+    periods = text.count(".") / n * 100
+    initials = len(re.findall(r"\b[A-Z]\.", text)) / n * 100
+    bare_year = (
+        len(
+            re.findall(
+                r"\(\s*(?:n\.d\.|\d{4}[a-z]?)\s*\)\s*[.,]|,\s*\d{4}[a-z]?:", text
+            )
+        )
+        / n
+        * 100
+    )
+    locators = (
+        len(
+            re.findall(r"doi:|doi\.org|https?://|Retrieved from|Available online", text)
+        )
+        / n
+        * 100
+    )
+    parenthetical_cites = (
+        len(re.findall(r"\([A-Z][A-Za-z.\-]+[^)]{0,60}?\d{4}[a-z]?\)", text)) / n * 100
+    )
+    return (
+        periods / 10 + initials + 2 * bare_year + 2 * locators - 3 * parenthetical_cites
+    ) >= 10
+
+
+def looks_like_table_of_contents(passage: Passage) -> bool:
+    """
+    Returns true if the passage looks like a TOC.
+
+    4 or more lines, at least 80% of which are short and do not terminate as sentences.
+
+    TODO: we may be able to rely on passage types once they're in the index
+    (specifically looking for list/table). See FUS-158.
+    """
+    lines = [line.strip() for line in passage.text.split("\n") if line.strip()]
+    if len(lines) < 4:
+        return False
+    fragmentary = sum(
+        1
+        for line in lines
+        if len(line.split()) <= 12 and not line.rstrip().endswith((".", "?", ";"))
+    )
+    return fragmentary / len(lines) >= 0.8
+
+
+def looks_like_short_heading(passage: Passage) -> bool:
+    """
+    True if the passage is a short ALLCAPS figure title or section heading.
+
+    Fewer than 12 words, and at least 90% of the cased characters are upper case.
+    The parser's `sectionHeading` type would be a better signal - see the note in
+    `looks_like_table_of_contents` for when we can switch to it.
+
+    TODO: this should be replaced with using the passage type once it's in the index
+    """
+    text = passage.text
+    words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
+    if not words or len(words) >= 12:
+        return False
+    letters = [char for char in text if char.isalpha()]
+
+    return sum(char.isupper() for char in letters) / len(letters) >= 0.9
