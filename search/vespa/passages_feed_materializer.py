@@ -16,14 +16,20 @@ import gzip
 import shutil
 from collections import Counter
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import Any
 
 import boto3
 import orjson
 from cpr_contracts import Document
 from mypy_boto3_s3 import S3Client
 
-from search.vespa.models import VespaAssign, VespaUpdate
+from search.vespa.models import VespaUpdate
+from search.vespa.passage import (
+    VespaConcept,
+    VespaPageBoxes,
+    VespaPassage,
+    VespaPassageUpdate,
+)
 from search.vespa.sources.data_in_api import DATA_CACHE_FILE as DOCUMENTS_CACHE
 from search.vespa.sources.data_in_api import read as read_documents
 from search.vespa.sources.embeddings_input_v2 import (
@@ -40,50 +46,6 @@ from search.vespa.sources.inference_results import read as read_inference_result
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
 OUTPUT_CACHE_DIR = REPO_ROOT_DIR / ".data_cache" / "vespa"
 OUTPUT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-class VespaPassage(TypedDict):
-    id: str
-    idx: int
-    language: str
-    text: str
-    document_id: str
-
-
-class VespaConceptField(TypedDict):
-    id: str
-    type: str
-    value: str
-    count: int
-
-
-class VespaCoordinate(TypedDict):
-    x: float
-    y: float
-
-
-class VespaBoundingBox(TypedDict):
-    coordinates: list[VespaCoordinate]
-
-
-class VespaPageBoxes(TypedDict):
-    number: int
-    bounding_boxes: list[VespaBoundingBox]
-
-
-class VespaPassageUpdate(TypedDict):
-    id: VespaAssign[str]
-    idx: VespaAssign[int]
-    language: VespaAssign[str]
-    text: VespaAssign[str]
-    document_id: VespaAssign[str]
-    document_ref: VespaAssign[str]
-    principal_document_ref: NotRequired[VespaAssign[str]]
-    heading_id: NotRequired[VespaAssign[str]]
-    heading_text: NotRequired[VespaAssign[str]]
-    concepts: NotRequired[VespaAssign[list[VespaConceptField]]]
-    pages: NotRequired[VespaAssign[list[int]]]
-    page_bounding_boxes: NotRequired[VespaAssign[list[VespaPageBoxes]]]
 
 BATCH_SIZE = 10_000  # write-buffer flush size
 CHUNK_SIZE = 200_000  # output file rotation size, see module docstring
@@ -131,16 +93,18 @@ def _build_principal_id_lookup() -> dict[str, str]:
     return lookup
 
 
-def _build_passage_concepts_lookup() -> dict[str, list[VespaConceptField]]:
+def _build_passage_concepts_lookup() -> dict[str, list[dict[str, Any]]]:
     """
     Build a `{passage_id → [concept, ...]}` map from the inference results.
 
     Concepts are aggregated per passage: repeated hits of the same concept in a
     passage collapse to a single entry whose `count` is the number of hits.
     Mirrors the aggregation in `documents_concepts_feed_materializer`, but at
-    passage grain (no cross-passage accumulation).
+    passage grain (no cross-passage accumulation). Returned as raw dicts
+    (rather than `VespaConcept` instances) - `VespaPassage.concepts` coerces
+    them via Pydantic validation when passed in.
     """
-    lookup: dict[str, list[VespaConceptField]] = {}
+    lookup: dict[str, list[dict[str, Any]]] = {}
     for _document_id, inference_result_input in read_inference_results():
         for passage_id, inference_results in inference_result_input.items():
             concept_counts: Counter[str] = Counter()
@@ -162,73 +126,65 @@ def _build_passage_concepts_lookup() -> dict[str, list[VespaConceptField]]:
     return lookup
 
 
-def _text_block_to_vespa_update(
+def _text_block_to_vespa_passage(
     block: TextBlock,
     document_id: str,
     principal_id: str | None = None,
-    concepts: list[VespaConceptField] | None = None,
+    concepts: list[dict[str, Any]] | None = None,
     block_text_by_id: dict[str, str] | None = None,
-) -> VespaUpdate[VespaPassageUpdate]:
+) -> VespaPassage:
     """
-    Build the Vespa update for a single passage/text block.
+    Build the canonical `VespaPassage` for a single passage/text block.
 
     `document_ref` is set to the full Vespa document id of the parent document
     so imported doc-level fields (principal_id, geographies, ...) resolve at
     query time. `principal_document_ref` is set when the parent document has
     a derivable Principal, so Principal-scoped imports (principal_title, ...)
     resolve too. `concepts` are the concepts detected within this passage.
+    `pages` is passed through near-verbatim - `TextBlock.pages` already has
+    the `{number, bounding_boxes}` shape the schema's `pages` field expects.
     """
-    fields: VespaPassageUpdate = {
-        "id": {"assign": block["id"]},
-        "idx": {"assign": block["idx"]},
-        "language": {"assign": block["language"]},
-        "text": {"assign": block["text"]},
-        "document_id": {"assign": document_id},
-        "document_ref": {"assign": f"id:documents:documents::{document_id}"},
-    }
-
-    if principal_id is not None:
-        fields["principal_document_ref"] = {
-            "assign": f"id:documents:documents::{principal_id}"
-        }
-
     heading_id = block.get("heading_id")
-    if heading_id is not None:
-        fields["heading_id"] = {"assign": heading_id}
-        heading_text = (block_text_by_id or {}).get(heading_id)
-        if heading_text is not None:
-            fields["heading_text"] = {"assign": heading_text}
+    heading_text = (
+        (block_text_by_id or {}).get(heading_id) if heading_id is not None else None
+    )
 
-    if concepts:
-        fields["concepts"] = {"assign": concepts}
+    return VespaPassage(
+        id=block["id"],
+        idx=block["idx"],
+        language=block["language"],
+        content=block["text"],
+        document_id=document_id,
+        document_ref=f"id:documents:documents::{document_id}",
+        principal_document_ref=(
+            f"id:documents:documents::{principal_id}"
+            if principal_id is not None
+            else None
+        ),
+        content_type=block["type"],
+        type_confidence=block["type_confidence"],
+        pages=[VespaPageBoxes.model_validate(page) for page in block.get("pages", [])],
+        heading_id=heading_id,
+        heading_text=heading_text,
+        concepts=[VespaConcept.model_validate(concept) for concept in (concepts or [])],
+    )
 
-    pages = [page["number"] for page in block.get("pages", [])]
-    if pages:
-        fields["pages"] = {"assign": pages}
 
-    page_bounding_boxes: list[VespaPageBoxes] = [
-        {
-            "number": page["number"],
-            "bounding_boxes": [
-                {
-                    "coordinates": [
-                        {"x": coord["x"], "y": coord["y"]}
-                        for coord in box["coordinates"]
-                    ]
-                }
-                for box in page["bounding_boxes"]
-            ],
-        }
-        for page in block.get("pages", [])
-    ]
-    if page_bounding_boxes:
-        fields["page_bounding_boxes"] = {"assign": page_bounding_boxes}
-
-    return {
-        "update": f"id:passages:passages::{block['id']}",
-        "create": True,
-        "fields": fields,
-    }
+def _text_block_to_vespa_update(
+    block: TextBlock,
+    document_id: str,
+    principal_id: str | None = None,
+    concepts: list[dict[str, Any]] | None = None,
+    block_text_by_id: dict[str, str] | None = None,
+) -> VespaUpdate[VespaPassageUpdate]:
+    """Build the Vespa feed update for a single passage/text block."""
+    return _text_block_to_vespa_passage(
+        block,
+        document_id,
+        principal_id=principal_id,
+        concepts=concepts,
+        block_text_by_id=block_text_by_id,
+    ).to_vespa_update()
 
 
 def _open_chunk(chunk_index: int) -> tuple[Path, Path]:
