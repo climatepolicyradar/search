@@ -198,7 +198,9 @@ def _download_one(bucket: str, obj_key: str, run_logger) -> Path:
     try:
         s3.download_file(bucket, obj_key, str(obj_path))
     except Exception as exc:
-        run_logger.error(f"Failed to download s3://{bucket}/{obj_key}: {exc}", exc_info=True)
+        run_logger.error(
+            f"Failed to download s3://{bucket}/{obj_key}: {exc}", exc_info=True
+        )
         raise
     return obj_path
 
@@ -255,7 +257,9 @@ def download_and_feed(
                 deployment.name or "local",
             )
 
-        return vespa_feed.fn(feed_path=feed_path, endpoint=endpoint, application=application)
+        return vespa_feed.fn(
+            feed_path=feed_path, endpoint=endpoint, application=application
+        )
 
 
 @task
@@ -496,14 +500,7 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
         feed_path.unlink(missing_ok=True)
 
 
-@flow(
-    log_prints=True,
-    on_completion=[SlackNotify.on_success],
-    on_failure=[SlackNotify.on_failure],
-    on_crashed=[SlackNotify.on_crashed],
-    on_cancellation=[SlackNotify.on_cancellation],
-)
-def vespa_feeder_flow(
+def vespa_feeder(
     s3_bucket: str,
     s3_key: str,
 ) -> State | None:
@@ -636,7 +633,86 @@ def vespa_feeder_flow(
     )
 
 
+# region Flows
+@flow(
+    name="search-vespa-feeder-labels",
+    description="Feed labels JSONL from S3 into Vespa",
+    log_prints=True,
+    on_completion=[SlackNotify.on_success],
+    on_failure=[SlackNotify.on_failure],
+    on_crashed=[SlackNotify.on_crashed],
+    on_cancellation=[SlackNotify.on_cancellation],
+)
+def labels_feeder_flow(
+    s3_bucket: str = "cpr-cache",
+    s3_key: str = "search/vespa/labels_feed_materializer.jsonl",
+) -> State | None:
+    return vespa_feeder(s3_bucket, s3_key)
+
+
+@flow(
+    name="search-vespa-feeder-documents",
+    description="Feed documents JSONL from S3 into Vespa",
+    log_prints=True,
+    on_completion=[SlackNotify.on_success],
+    on_failure=[SlackNotify.on_failure],
+    on_crashed=[SlackNotify.on_crashed],
+    on_cancellation=[SlackNotify.on_cancellation],
+)
+def documents_feeder_flow(
+    s3_bucket: str = "cpr-prod-snowflake-data-export",
+    s3_key: str = "production/published/pipeline_data_in_vespa_documents_updates_v1/latest",
+) -> State | None:
+    return vespa_feeder(s3_bucket, s3_key)
+
+
+@flow(
+    name="search-vespa-feeder-documents-concepts",
+    description="Feed documents concepts JSONL from S3 into Vespa",
+    log_prints=True,
+    on_completion=[SlackNotify.on_success],
+    on_failure=[SlackNotify.on_failure],
+    on_crashed=[SlackNotify.on_crashed],
+    on_cancellation=[SlackNotify.on_cancellation],
+)
+def documents_concepts_feeder_flow(
+    s3_bucket: str = "cpr-cache",
+    s3_key: str = "search/vespa/documents_concepts_feed_materializer.jsonl",
+) -> State | None:
+    return vespa_feeder(s3_bucket, s3_key)
+
+
+@flow(
+    name="search-vespa-feeder-documents-principal-concepts",
+    description="Feed documents principal concepts JSONL from S3 into Vespa",
+    log_prints=True,
+    on_completion=[SlackNotify.on_success],
+    on_failure=[SlackNotify.on_failure],
+    on_crashed=[SlackNotify.on_crashed],
+    on_cancellation=[SlackNotify.on_cancellation],
+)
+def documents_principal_concepts_feeder_flow(
+    s3_bucket: str = "cpr-cache",
+    s3_key: str = "search/vespa/documents_principal_concepts_feed_materializer.jsonl",
+) -> State | None:
+    return vespa_feeder(s3_bucket, s3_key)
+
+
+@flow(
+    name="search-vespa-feeder-passages",
+    description="Feed passages JSONL from S3 into Vespa",
+    log_prints=True,
+    on_completion=[SlackNotify.on_success],
+    on_failure=[SlackNotify.on_failure],
+    on_crashed=[SlackNotify.on_crashed],
+    on_cancellation=[SlackNotify.on_cancellation],
+)
+def passages_feeder_flow(
+    s3_bucket: str = "cpr-cache",
+    s3_key: str = "search/vespa/passages_feed_materializer",
+) -> State | None:
+    return vespa_feeder(s3_bucket, s3_key)
+
+
 if __name__ == "__main__":
-    vespa_feeder_flow(
-        s3_bucket="cpr-cache", s3_key="search/vespa/labels_feed_materializer.jsonl"
-    )
+    labels_feeder_flow()
