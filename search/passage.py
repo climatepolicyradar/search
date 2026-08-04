@@ -1,4 +1,5 @@
 import re
+from collections.abc import Callable
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -108,24 +109,229 @@ def looks_like_reference_list(passage: Passage) -> bool:
     ) >= 10
 
 
+# A line holding nothing but a page number or a roman-numeral folio.
+_LOCATOR_LINE = re.compile(
+    r"^[\s.·\-–—]*(\d{1,3}|[ivxlcdm]{1,8}|[IVXLCDM]{1,8})[\s.·]*$"
+)
+# A line holding nothing but a section number: 3.2.1, but not the decimal 9.00.
+_SECTION_NUMBER_LINE = re.compile(r"^\(?\d{1,2}(?:\.[1-9]\d?){2,}\.?\)?$")
+# A table cell holding only figures, symbols or an inventory notation key.
+_DATA_CELL = re.compile(
+    r"^(?:[\d\s.,;:%()\[\]<>≤≥=+\-–—/*'\"$€£¥&]+"
+    r"|(?:NE|NO|NA|N/A|IE|NC|C|X|nil|na|-|—|–|\.)\.?)$",
+    re.I,
+)
+# A title followed by the page it is on: 'Executive Summary .... 14', 'Annex B 7'.
+_TRAILING_LOCATOR = re.compile(
+    r"[A-Za-z\)]\.?[\s.·]+(\d{1,3}|[ivxlcdm]{2,8}|[IVXLCDM]{1,8})\.?$"
+)
+# An entry opening with hierarchical section numbering: '3.2 Baseline', '(1.4)'.
+_HIERARCHICAL = re.compile(r"^\(?\d{1,2}(?:\.[1-9]\d?)+\.?\)?(?:\s+[A-Za-z(]|$)")
+# An entry opening with a flat label: '4. Findings', 'B) Scope', 'Annex III'.
+_FLAT_NUMBER = re.compile(
+    r"^(?:\d{1,2}[.)]?|[IVXLCDM]{1,5}[.)]|[A-Za-z][.)]|\((?:[a-z]|[ivx]{1,4}|\d{1,2})\))\s+\S"
+    r"|^(?:chapter|annex|annexe|appendix|appendices|section|part|volume)\s+[\dIVXLCA-Z]",
+    re.I,
+)
+# The passage names itself as an index of something.
+_FRONT_MATTER = re.compile(
+    r"table of contents|^\s*contents\b|list of (?:tables|figures|acronyms|abbreviations|"
+    r"annexes|appendices|boxes)|table of authorities",
+    re.I | re.M,
+)
+# The standard sections a report's contents listing points at.
+_TOC_ENTRY_WORD = re.compile(
+    r"\b(?:foreword|preface|acknowledge?ments?|executive summary|introduction|conclusions?|"
+    r"references|bibliography|glossary|annexe?|appendix|abbreviations|acronyms|"
+    r"chapter|section|summary|overview|background)\b",
+    re.I,
+)
+# A sentence boundary mid-line: the mark of running prose, not of a title.
+_PROSE = re.compile(r"[.?;:]\s+[a-z]")
+# A line that closes like a sentence rather than like a title.
+_SENTENCE_END = re.compile(r"[.;:,]$")
+# A line broken off mid-clause, i.e. a wrapped table cell or paragraph.
+_MID_CLAUSE_END = re.compile(r"[;,:]$")
+_EQUALS = re.compile(r"=")
+_ROMAN_DIGITS = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
+
+_MIN_LINES = 4
+_MIN_ENTRIES = 5
+# Share of entries that must be short and free of mid-line sentence boundaries.
+_TITLE_LIKE_SHARE = 0.75
+_TITLE_MAX_WORDS = 25
+# A long entry that also closes like a sentence is real content; a long contents
+# entry is a wrapped title and carries no terminal punctuation.
+_SENTENCE_MIN_WORDS = 15
+_SENTENCE_SHARE = 0.30
+# Above this share of pure figure/symbol lines the passage is a data table.
+_DATA_CELL_SHARE = 0.25
+_MID_CLAUSE_SHARE = 0.20
+_EQUATION_SHARE = 0.20
+# Signature thresholds, as a share of entries.
+_HIERARCHICAL_SHARE = 0.35
+_STANDARD_SECTION_SHARE = 0.25
+_FLAT_NUMBER_SHARE = 0.65
+_PAGE_NUMBER_SHARE = 0.40
+# Share of trailing page numbers that must follow a distinct title. Without this,
+# a table header block reading 'Sector 1 / Sector 2 / Sector 3' is a perfect
+# ascending page column.
+_DISTINCT_TITLE_SHARE = 0.80
+# Front matter is at the front. On a fresh sample of passages this single veto
+# removed 11 of the 12 false positives the text signals produced, while keeping
+# every contents listing, which is why it is worth the per-chapter listings it
+# costs (see the docstring).
+_FRONT_MATTER_MAX_PAGE = 10
+
+
+def _folio(token: str) -> int | None:
+    """The integer value of an arabic or roman page number, else None."""
+    if token.isdigit():
+        return int(token)
+    total = largest = 0
+    for char in reversed(token.lower()):
+        value = _ROMAN_DIGITS.get(char)
+        if value is None:
+            return None
+        total += -value if value < largest else value
+        largest = max(largest, value)
+    return total
+
+
+def _never_goes_backwards(values: list[int]) -> bool:
+    """
+    True if a run of page numbers never decreases.
+
+    Page numbers climb down a contents listing, whereas the bare integers at the
+    end of a table row are in no particular order.
+    """
+    return all(b >= a for a, b in zip(values, values[1:]))
+
+
 def looks_like_table_of_contents(passage: Passage) -> bool:
     """
-    Returns true if the passage looks like a TOC.
+    True if the passage is a contents listing or other front-matter locator index.
 
-    4 or more lines, at least 80% of which are short and do not terminate as sentences.
+    Reads as: it is a contents listing if it sits in the document's front matter,
+    is a block of at least five title-like entries, is not a data table or
+    wrapped prose, and carries at least one of five positive signatures.
+
+    Lines are first sorted into page-number folios, standalone section numbers,
+    pure data cells and entries, because a parsed contents listing arrives with
+    its page column split onto its own lines and those lines must not be judged
+    as entries.
+
+    Fragmentary short lines are NOT on their own a usable signal: that describes
+    every parsed table, and it is why the previous version of this fired on half
+    of all multi-line passages. It is a gate here rather than a signature.
+    Entries ending in a period are common rather than disqualifying - that period
+    is usually a dot leader the parser swallowed.
+
+    The page veto is the single most effective condition and the only one that
+    does not read `text`. It is skipped when `pages` is empty.
+
+    Collapsed contents listings (a whole TOC on one line, no newlines) are not
+    detected: they are indistinguishable here from prose carrying a 'Table of
+    Contents' running-header artefact.
+
+    WARNING: Claude figured out the below ruleset from a labelled sample of the
+    data. It should be flexible enough for use here, but should be used with caution.
 
     TODO: we may be able to rely on passage types once they're in the index
     (specifically looking for list/table). See FUS-158.
     """
-    lines = [line.strip() for line in passage.text.split("\n") if line.strip()]
-    if len(lines) < 4:
+    if passage.pages and min(passage.pages) > _FRONT_MATTER_MAX_PAGE:
         return False
-    fragmentary = sum(
-        1
-        for line in lines
-        if len(line.split()) <= 12 and not line.rstrip().endswith((".", "?", ";"))
+
+    text = passage.text
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    if len(lines) < _MIN_LINES:
+        return False
+
+    folios: list[int] = []
+    sections, data, entries = [], [], []
+    for line in lines:
+        locator = _LOCATOR_LINE.match(line)
+        if _SECTION_NUMBER_LINE.match(line):
+            sections.append(line)
+        elif locator and (page := _folio(locator.group(1))):
+            folios.append(page)  # there is no page zero
+        elif locator or _DATA_CELL.match(line):
+            data.append(line)
+        else:
+            entries.append(line)
+    if len(entries) < _MIN_ENTRIES:
+        return False
+
+    def share_of_entries(predicate: Callable[[str], object]) -> float:
+        return sum(1 for line in entries if predicate(line)) / len(entries)
+
+    # Gate: the entries have to look like titles before anything else is worth
+    # asking.
+    entries_are_title_like = (
+        share_of_entries(
+            lambda line: len(line.split()) <= _TITLE_MAX_WORDS
+            and not _PROSE.search(line)
+        )
+        >= _TITLE_LIKE_SHARE
     )
-    return fragmentary / len(lines) >= 0.8
+    if not entries_are_title_like:
+        return False
+
+    # Vetoes: any one of these means the passage is a table or a paragraph that
+    # merely happens to be chopped into short lines.
+    is_mostly_data_cells = len(data) / len(lines) > _DATA_CELL_SHARE
+    entries_read_as_sentences = (
+        share_of_entries(
+            lambda line: len(line.split()) > _SENTENCE_MIN_WORDS
+            and _SENTENCE_END.search(line)
+        )
+        >= _SENTENCE_SHARE
+    )
+    entries_end_mid_clause = (
+        share_of_entries(_MID_CLAUSE_END.search) >= _MID_CLAUSE_SHARE
+    )
+    entries_contain_equations = share_of_entries(_EQUALS.search) >= _EQUATION_SHARE
+    if (
+        is_mostly_data_cells
+        or entries_read_as_sentences
+        or entries_end_mid_clause
+        or entries_contain_equations
+    ):
+        return False
+
+    # The page numbers a contents listing puts at the end of its entries, and the
+    # titles they follow.
+    page_numbers: list[int] = []
+    titles: set[str] = set()
+    for line in entries:
+        match = _TRAILING_LOCATOR.search(line)
+        if match and (page := _folio(match.group(1))):
+            page_numbers.append(page)
+            titles.add(line[: match.start(1)].rstrip(" .·"))
+
+    # Signatures: any one is enough.
+    names_itself_an_index = bool(_FRONT_MATTER.search(text))
+    is_hierarchically_numbered = (
+        sum(1 for line in entries if _HIERARCHICAL.match(line)) + len(sections)
+    ) / len(entries) >= _HIERARCHICAL_SHARE
+    names_standard_sections = (
+        share_of_entries(_TOC_ENTRY_WORD.search) >= _STANDARD_SECTION_SHARE
+    )
+    is_flatly_numbered = share_of_entries(_FLAT_NUMBER.match) >= _FLAT_NUMBER_SHARE
+    entries_end_in_climbing_page_numbers = (
+        len(page_numbers) / len(entries) >= _PAGE_NUMBER_SHARE
+        and len(titles) / len(page_numbers) >= _DISTINCT_TITLE_SHARE
+        and _never_goes_backwards(page_numbers)
+    )
+
+    return (
+        names_itself_an_index
+        or is_hierarchically_numbered
+        or names_standard_sections
+        or is_flatly_numbered
+        or entries_end_in_climbing_page_numbers
+    )
 
 
 def looks_like_short_heading(passage: Passage) -> bool:
