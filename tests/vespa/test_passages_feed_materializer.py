@@ -399,6 +399,7 @@ def test_text_block_to_vespa_update_pages_handles_empty_boxes_and_coordinates() 
         ]
     }
 
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
@@ -409,7 +410,7 @@ def test_text_block_to_vespa_update_pages_handles_empty_boxes_and_coordinates() 
     ],
     ids=["heading", "table_of_contents", "reference_list", "prose"],
 )
-def test_text_block_to_vespa_update_sets_detection_properties(
+def test_text_block_to_vespa_update_sets_heuristic_flags(
     text: str, expected: dict[str, bool]
 ) -> None:
     block = _text_block(0)
@@ -429,7 +430,7 @@ def test_text_block_to_passage_carries_block_type_through() -> None:
     `type`/`type_confidence` must reach the detectors.
 
     All three detector docstrings name the parser's block type as the signal that
-    should eventually replace the text heuristics. If this mapping drops
+    should eventually replace the text heuristics (FUS-158). If this mapping drops
     it, they silently see "" and 0.0 instead of failing.
     """
     block = _text_block(0)

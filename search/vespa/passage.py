@@ -44,6 +44,9 @@ class VespaPassageUpdate(TypedDict):
     idx: VespaAssign[int]
     language: VespaAssign[str]
     content: VespaAssign[str]
+    short_heading: VespaAssign[bool]
+    table_of_contents: VespaAssign[bool]
+    reference_list: VespaAssign[bool]
     document_id: VespaAssign[str]
     document_ref: VespaAssign[str]
     principal_document_ref: NotRequired[VespaAssign[str]]
@@ -87,6 +90,9 @@ class VespaPassage(BaseModel):
     idx: int = 0
     language: str = ""
     content: str = ""
+    short_heading: bool = False
+    table_of_contents: bool = False
+    reference_list: bool = False
     document_id: str = ""
     document_ref: str | None = None
     principal_document_ref: str | None = None
@@ -118,6 +124,9 @@ class VespaPassage(BaseModel):
             "idx": {"assign": self.idx},
             "language": {"assign": self.language},
             "content": {"assign": self.content},
+            "short_heading": {"assign": self.short_heading},
+            "table_of_contents": {"assign": self.table_of_contents},
+            "reference_list": {"assign": self.reference_list},
             "document_id": {"assign": self.document_id},
             "document_ref": {"assign": self.document_ref},
         }
