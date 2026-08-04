@@ -410,7 +410,7 @@ def test_text_block_to_vespa_update_pages_handles_empty_boxes_and_coordinates() 
     ],
     ids=["heading", "table_of_contents", "reference_list", "prose"],
 )
-def test_text_block_to_vespa_update_sets_heuristic_flags(
+def test_text_block_to_vespa_update_sets_properties(
     text: str, expected: dict[str, bool]
 ) -> None:
     block = _text_block(0)
