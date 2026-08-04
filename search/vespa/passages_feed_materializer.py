@@ -23,6 +23,12 @@ import orjson
 from cpr_contracts import Document
 from mypy_boto3_s3 import S3Client
 
+from search.passage import (
+    Passage,
+    looks_like_reference_list,
+    looks_like_short_heading,
+    looks_like_table_of_contents,
+)
 from search.vespa.models import VespaAssign, VespaUpdate
 from search.vespa.sources.data_in_api import DATA_CACHE_FILE as DOCUMENTS_CACHE
 from search.vespa.sources.data_in_api import read as read_documents
@@ -76,6 +82,9 @@ class VespaPassageUpdate(TypedDict):
     idx: VespaAssign[int]
     language: VespaAssign[str]
     text: VespaAssign[str]
+    short_heading: VespaAssign[bool]
+    table_of_contents: VespaAssign[bool]
+    reference_list: VespaAssign[bool]
     document_id: VespaAssign[str]
     document_ref: VespaAssign[str]
     principal_document_ref: NotRequired[VespaAssign[str]]
@@ -162,6 +171,20 @@ def _build_passage_concepts_lookup() -> dict[str, list[VespaConceptField]]:
     return lookup
 
 
+def _text_block_to_passage(block: TextBlock, document_id: str) -> Passage:
+    """Build the `Passage` that the `search.passage` detectors expect from a block."""
+    return Passage(
+        text_block_id=block["id"],
+        idx=block["idx"],
+        text=block["text"],
+        language=block["language"],
+        type=block["type"],
+        type_confidence=block["type_confidence"],
+        heading_id=block.get("heading_id"),
+        document_id=document_id,
+    )
+
+
 def _text_block_to_vespa_update(
     block: TextBlock,
     document_id: str,
@@ -178,11 +201,15 @@ def _text_block_to_vespa_update(
     a derivable Principal, so Principal-scoped imports (principal_title, ...)
     resolve too. `concepts` are the concepts detected within this passage.
     """
+    passage = _text_block_to_passage(block, document_id)
     fields: VespaPassageUpdate = {
         "id": {"assign": block["id"]},
         "idx": {"assign": block["idx"]},
         "language": {"assign": block["language"]},
         "text": {"assign": block["text"]},
+        "short_heading": {"assign": looks_like_short_heading(passage)},
+        "table_of_contents": {"assign": looks_like_table_of_contents(passage)},
+        "reference_list": {"assign": looks_like_reference_list(passage)},
         "document_id": {"assign": document_id},
         "document_ref": {"assign": f"id:documents:documents::{document_id}"},
     }

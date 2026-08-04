@@ -41,6 +41,11 @@ class Passage(BaseModel):
     language: str = Field(default="")
     type: str = Field(default="")
     type_confidence: float = Field(default=0.0)
+    # Persisted outputs of the `looks_like_*` heuristics below, derived at
+    # materialisation time. The detectors read `text`, never these.
+    short_heading: bool = Field(default=False)
+    table_of_contents: bool = Field(default=False)
+    reference_list: bool = Field(default=False)
     page_number: int = Field(default=0)
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
