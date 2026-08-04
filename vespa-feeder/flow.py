@@ -298,8 +298,8 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             # silently change. This lets vespa feed manage its own connection
             # pool and inflight backpressure within each subprocess. Note this
             # is per-subprocess: with _MAX_CONCURRENT_DOWNLOADS concurrent
-            # subprocesses each opening --connections 4, total concurrent
-            # connections to Vespa is up to 4x this value, not this value.
+            # subprocesses each opening --connections 2, total concurrent
+            # connections to Vespa is up to 2x this value, not this value.
             process = subprocess.Popen(
                 [
                     "vespa",
@@ -310,7 +310,7 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
                     "--application",
                     application,
                     "--connections",
-                    "4",
+                    "2",
                     "--inflight",
                     "0",
                     "--verbose",
