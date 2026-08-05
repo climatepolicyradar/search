@@ -5,11 +5,13 @@ Run with: uv run python vespa-feeder/deployments.py
 """
 
 import boto3
-from flow import (
+from documents_flow import (
     documents_concepts_feeder_flow,
     documents_feeder_flow,
     documents_principal_concepts_feeder_flow,
-    labels_feeder_flow,
+)
+from labels_flow import labels_feeder_flow
+from passages_flow import (
     passages_feeder_flow,
 )
 from prefect.docker import DockerImage
@@ -25,7 +27,17 @@ _FEEDS = [
     {"flow": documents_concepts_feeder_flow},
     {"flow": documents_principal_concepts_feeder_flow},
     # Passages
-    {"flow": passages_feeder_flow, "job_variables": {"cpu": 1024, "memory": 2048}},
+    # cpu=2048 was A/B tested against 1024 (same 8x2 connections default)
+    # and showed no measurable difference (~8.2s CLI feed time either
+    # way) - CPU isn't the constraint, so back to 1024. Combined with the
+    # 8x2 vs 4x4 connections result (4x4 was 15% slower despite the same
+    # total connection budget), the likely real ceiling is Vespa's
+    # server-side feedapi-handler capacity, which 8x2=16 connections was
+    # deliberately sized against.
+    {
+        "flow": passages_feeder_flow,
+        "job_variables": {"cpu": 1024, "memory": 4096},
+    },
 ]
 
 _DEFAULT_JOB_VARIABLES_NAME = "ecs-default-job-variables-prefect-mvp-prod"
