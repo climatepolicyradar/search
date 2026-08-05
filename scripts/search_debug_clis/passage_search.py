@@ -81,8 +81,8 @@ def search(
         table.add_row("type", passage.type)
         table.add_row("type_confidence", str(passage.type_confidence))
         table.add_row("language", passage.language)
-        if passage.page_number:
-            table.add_row("page_number", str(passage.page_number))
+        if passage.pages:
+            table.add_row("pages", str(passage.pages))
         if passage.heading_id:
             table.add_row("heading_id", passage.heading_id)
         if passage.heading_text:
