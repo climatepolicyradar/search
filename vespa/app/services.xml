@@ -202,7 +202,14 @@
                 <certificate file="security/katy.pem"/>
             </client>
         </clients>
-        <document-api/>
+        <document-api>
+            <!-- TODO: temporary - the data-lake passages export
+                 (pipeline_data_in_vespa_passage_updates_v1) includes columns
+                 (tokens, serialised_text, passage_source, topics) not yet
+                 modelled in passages.sd. Remove this once those fields are
+                 either properly added to the schema or stripped upstream. -->
+            <ignore-undefined-fields>true</ignore-undefined-fields>
+        </document-api>
 
         <!--
             <search> tells the container to answers queries and serve results for those queries.

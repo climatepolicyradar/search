@@ -1,3 +1,16 @@
+"""
+Shared engine behind every vespa-feeder.
+
+flow:
+- download a file from S3
+- optionally derive data from its records
+- feed it to Vespa via the `vespa feed` CLI.
+
+Domain-specific flows (labels_flow.py, documents_flow.py, passages_flow.py)
+import `vespa_feeder` and compose it with their own S3 source and (if any)
+deriver function. Nothing in this module is domain-specific.
+"""
+
 import logging
 import os
 import re
@@ -6,6 +19,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,26 +32,58 @@ from prefect.client.schemas.objects import State
 from prefect.runtime import deployment, flow_run
 from prefect.states import Failed
 from pydantic import BaseModel, ConfigDict, Field
-from slack_notify import SlackNotify
 from telemetry import feeder_metrics, set_feed_stats, shutdown, tracer
 
-from prefect import flow, get_run_logger, task
+from prefect import get_run_logger, task
 
 logger = logging.getLogger(__name__)
 
 # download_and_feed downloads a file just before feeding it rather than
-# downloading every file upfront, so at most _MAX_CONCURRENT_DOWNLOADS files
-# are ever resident on disk at once - with multiple passages files (up to
-# 200k records each), downloading them all upfront filled the ECS task's disk
-# (No space left on device) long before feeding even started.
+# downloading every file upfront, so at most max_concurrent_downloads files
+# are ever resident on disk at once - with the old materializer's passages
+# files (up to 200k records each), downloading them all upfront filled the
+# ECS task's disk (No space left on device) long before feeding even started.
+# _DEFAULT_MAX_CONCURRENT_DOWNLOADS is that disk-safety default; flows reading
+# from sources with much smaller files (e.g. the data-lake export's ~2-2.5k
+# record/~16MB chunks via Snowflake's own default COPY INTO split, ~100x
+# smaller than the old materializer's) can pass a higher
+# max_concurrent_downloads to vespa_feeder(), since disk isn't the binding
+# constraint for them - see passages_flow.py's passages_feeder_flow_from_snowflake/
+# passages_feeder_flow_with_derived_data, which do this.
 #
 # Each concurrent download also becomes a concurrent `vespa feed` subprocess,
 # so this doubles as a cap on `vespa feed` subprocesses - and since each
 # subprocess opens its own `--connections N` pool (see vespa_feed), total
-# concurrent connections to Vespa is _MAX_CONCURRENT_DOWNLOADS * N, not N.
+# concurrent connections to Vespa is max_concurrent_downloads * N, not N.
 # Tune both together rather than assuming --connections alone controls load.
-_MAX_CONCURRENT_DOWNLOADS = 4
-_download_disk_semaphore = threading.Semaphore(_MAX_CONCURRENT_DOWNLOADS)
+# At N=2 connections/subprocess, 8 concurrent downloads -> 16 connections,
+# matching feedapi-handler's total cluster capacity (8 threads/node x 2 nodes)
+# when it's otherwise idle - don't raise a flow's value past that without
+# checking for other concurrent load on Vespa first (the regular daily feed
+# cron, docproc, etc.).
+_DEFAULT_MAX_CONCURRENT_DOWNLOADS = 4
+
+# Per-subprocess connection pool size (see the `--connections` comment in
+# vespa_feed). Paired with _DEFAULT_MAX_CONCURRENT_DOWNLOADS above: at the
+# defaults, total concurrent connections to Vespa is
+# _DEFAULT_MAX_CONCURRENT_DOWNLOADS * _DEFAULT_CONNECTIONS. Benchmarking
+# (8x2 vs 4x4, same total connection budget) found 8x2 ~15% faster, so tune
+# both together rather than either in isolation.
+_DEFAULT_CONNECTIONS = 2
+
+# None means "no limit" - feed every file list_s3_keys discovers. This knob
+# exists for benchmarking/smoke-testing against a subset of a source without
+# needing a separate S3 prefix; production flows should leave it unset.
+_DEFAULT_MAX_FILES = None
+
+# `vespa feed`'s subprocess.communicate() has no timeout by default, so a
+# stalled connection to Vespa (or anything else that blocks the subprocess)
+# hangs the task forever - nothing notices or recovers, and the only sign is
+# a task run stuck at some huge elapsed time until a human cancels it by
+# hand. Files here normally feed in low single-digit seconds (a few thousand
+# records each), so 5 minutes is generous headroom before treating it as a
+# real hang rather than legitimate slowness.
+_VESPA_FEED_TIMEOUT_SECONDS = 300
 
 # On SIGTERM (e.g. a graceful ECS stop or Prefect cancellation) we terminate
 # any `vespa feed` subprocesses still running rather than leaving them as
@@ -106,6 +152,10 @@ class VespaFeedResponse(BaseModel):
     feeder_operation_count: int = Field(alias="feeder.operation.count", default=0)
     feeder_ok_count: int = Field(alias="feeder.ok.count", default=0)
     feeder_error_count: int = Field(alias="feeder.error.count", default=0)
+    # The CLI's own self-measured feed duration - comparing this against our
+    # wall-clock time around the subprocess call isolates process spawn/init/
+    # connection-setup overhead (ours - theirs) from actual transfer time.
+    feeder_seconds: float = Field(alias="feeder.seconds", default=0.0)
     http_response_error_count: int = Field(alias="http.response.error.count", default=0)
     http_response_code_counts: dict[str, int] = Field(
         alias="http.response.code.counts", default_factory=dict
@@ -198,9 +248,39 @@ def _download_one(bucket: str, obj_key: str, run_logger) -> Path:
     try:
         s3.download_file(bucket, obj_key, str(obj_path))
     except Exception as exc:
-        run_logger.error(f"Failed to download s3://{bucket}/{obj_key}: {exc}", exc_info=True)
+        run_logger.error(
+            f"Failed to download s3://{bucket}/{obj_key}: {exc}", exc_info=True
+        )
         raise
     return obj_path
+
+
+@task
+def derive_data(
+    feed_path: Path, derive_data_from_source: Callable[[dict], dict] | None
+) -> Path:
+    """
+    Apply `derive_data_from_source` to every record in `feed_path`, streaming.
+
+    Reads and writes one line at a time rather than loading the file into
+    memory, matching how the rest of this pipeline treats feed files (up to
+    ~200k records each) - see the module docstring comment on
+    `_MAX_CONCURRENT_DOWNLOADS`. A no-op passthrough (returns `feed_path`
+    unchanged) when no deriver is given, so feeds that don't need this pay
+    nothing extra.
+    """
+    if derive_data_from_source is None:
+        return feed_path
+
+    derived_path = feed_path.with_name(f"{feed_path.stem}.derived{feed_path.suffix}")
+    with feed_path.open("rb") as src, derived_path.open("wb") as dst:
+        for line in src:
+            if not line.strip():
+                continue
+            record = derive_data_from_source(orjson.loads(line))
+            dst.write(orjson.dumps(record) + b"\n")
+    feed_path.unlink()
+    return derived_path
 
 
 @task
@@ -236,11 +316,17 @@ def list_s3_keys(bucket: str, key: str) -> list[str]:
 
 @task
 def download_and_feed(
-    bucket: str, obj_key: str, endpoint: str, application: str
+    bucket: str,
+    obj_key: str,
+    endpoint: str,
+    application: str,
+    download_disk_semaphore: threading.Semaphore,
+    derive_data_from_source: Callable[[dict], dict] | None = None,
+    connections: int = _DEFAULT_CONNECTIONS,
 ) -> FeedResult:
-    # See _download_disk_semaphore above for why this is gated per-file.
+    # See _DEFAULT_MAX_CONCURRENT_DOWNLOADS above for why this is gated per-file.
     run_logger = get_run_logger()
-    with _download_disk_semaphore:
+    with download_disk_semaphore:
         start_time = time.perf_counter()
         try:
             with tracer.start_as_current_span("download_from_s3") as span:
@@ -255,7 +341,16 @@ def download_and_feed(
                 deployment.name or "local",
             )
 
-        return vespa_feed.fn(feed_path=feed_path, endpoint=endpoint, application=application)
+        feed_path = derive_data.fn(
+            feed_path=feed_path, derive_data_from_source=derive_data_from_source
+        )
+
+        return vespa_feed.fn(
+            feed_path=feed_path,
+            endpoint=endpoint,
+            application=application,
+            connections=connections,
+        )
 
 
 @task
@@ -268,7 +363,12 @@ def get_ssm_parameter(name: str) -> str:
 
 
 @task
-def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
+def vespa_feed(
+    feed_path: Path,
+    endpoint: str,
+    application: str,
+    connections: int = _DEFAULT_CONNECTIONS,
+) -> FeedResult:
     run_logger = get_run_logger()
 
     start_time = time.perf_counter()
@@ -281,7 +381,7 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             input_record_count = sum(1 for line in feed_path.open() if line.strip())
             span.set_attribute("feed.input_record_count", input_record_count)
 
-            # _download_disk_semaphore is acquired by the caller,
+            # The download/disk semaphore is acquired by the caller,
             # download_and_feed, spanning both the download and the feed -
             # not re-acquired here since threading.Semaphore isn't reentrant.
             run_logger.info(
@@ -297,9 +397,10 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             # documented here rather than relying on defaults that could
             # silently change. This lets vespa feed manage its own connection
             # pool and inflight backpressure within each subprocess. Note this
-            # is per-subprocess: with _MAX_CONCURRENT_DOWNLOADS concurrent
-            # subprocesses each opening --connections 2, total concurrent
-            # connections to Vespa is up to 2x this value, not this value.
+            # is per-subprocess: with max_concurrent_downloads concurrent
+            # subprocesses each opening --connections N, total concurrent
+            # connections to Vespa is up to N x max_concurrent_downloads, not N.
+            subprocess_wall_clock_start = time.perf_counter()
             process = subprocess.Popen(
                 [
                     "vespa",
@@ -310,7 +411,7 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
                     "--application",
                     application,
                     "--connections",
-                    "2",
+                    str(connections),
                     "--inflight",
                     "0",
                     "--verbose",
@@ -327,7 +428,23 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
             with _live_processes_lock:
                 _live_processes.add(process)
             try:
-                stdout, stderr = process.communicate()
+                try:
+                    stdout, stderr = process.communicate(
+                        timeout=_VESPA_FEED_TIMEOUT_SECONDS
+                    )
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    run_logger.error(
+                        "vespa feed timed out after %ds and was killed: feed_path=%s",
+                        _VESPA_FEED_TIMEOUT_SECONDS,
+                        feed_path,
+                    )
+                    span.set_status(
+                        StatusCode.ERROR,
+                        f"vespa feed timed out after {_VESPA_FEED_TIMEOUT_SECONDS}s",
+                    )
+                    raise
             finally:
                 with _live_processes_lock:
                     _live_processes.discard(process)
@@ -358,6 +475,21 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
                 raise
 
             feed_response = VespaFeedResponse.model_validate(response_data)
+
+            subprocess_wall_clock_seconds = (
+                time.perf_counter() - subprocess_wall_clock_start
+            )
+            spawn_and_setup_overhead_seconds = (
+                subprocess_wall_clock_seconds - feed_response.feeder_seconds
+            )
+            run_logger.info(
+                "TIMING vespa_feed_subprocess: wall_clock=%.3fs cli_feeder_seconds=%.3fs "
+                "spawn_and_setup_overhead=%.3fs (feed_path=%s)",
+                subprocess_wall_clock_seconds,
+                feed_response.feeder_seconds,
+                spawn_and_setup_overhead_seconds,
+                feed_path,
+            )
 
             # http_response_error_count from the CLI counts ALL non-2xx responses,
             # which already includes 429s - it is not a distinct quantity on top
@@ -496,19 +628,17 @@ def vespa_feed(feed_path: Path, endpoint: str, application: str) -> FeedResult:
         feed_path.unlink(missing_ok=True)
 
 
-@flow(
-    log_prints=True,
-    on_completion=[SlackNotify.on_success],
-    on_failure=[SlackNotify.on_failure],
-    on_crashed=[SlackNotify.on_crashed],
-    on_cancellation=[SlackNotify.on_cancellation],
-)
-def vespa_feeder_flow(
+def vespa_feeder(
     s3_bucket: str,
     s3_key: str,
+    derive_data_from_source: Callable[[dict], dict] | None = None,
+    max_concurrent_downloads: int = _DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+    max_files: int | None = _DEFAULT_MAX_FILES,
+    connections: int = _DEFAULT_CONNECTIONS,
 ) -> State | None:
     run_logger = get_run_logger()
     _register_sigterm_handler()
+    download_disk_semaphore = threading.Semaphore(max_concurrent_downloads)
 
     deployment_name = deployment.name or "local"
     flow_run_id = flow_run.id or "unknown"
@@ -534,6 +664,7 @@ def vespa_feeder_flow(
             span.set_attribute("flow.s3_bucket", s3_bucket)
             span.set_attribute("flow.s3_key", s3_key)
 
+            ssm_start = time.perf_counter()
             endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
             application = get_ssm_parameter(name="/search/vespa/application")
             # Set once on this process's environment rather than passed as a
@@ -542,18 +673,47 @@ def vespa_feeder_flow(
             os.environ["VESPA_CLI_DATA_PLANE_TOKEN"] = get_ssm_parameter(
                 name="/search/vespa/write_token"
             )
+            run_logger.info(
+                "TIMING ssm_parameters: %.2fs", time.perf_counter() - ssm_start
+            )
 
+            listing_start = time.perf_counter()
             obj_keys = list_s3_keys(bucket=s3_bucket, key=s3_key)
+            run_logger.info(
+                "TIMING list_s3_keys: %.2fs (%d files discovered)",
+                time.perf_counter() - listing_start,
+                len(obj_keys),
+            )
+            if max_files is not None:
+                run_logger.info(
+                    "max_files=%d set - truncating %d discovered files to %d",
+                    max_files,
+                    len(obj_keys),
+                    max_files,
+                )
+                obj_keys = obj_keys[:max_files]
+
+            download_and_feed_start = time.perf_counter()
             futures = [
                 download_and_feed.submit(
                     bucket=s3_bucket,
                     obj_key=obj_key,
                     endpoint=endpoint,
                     application=application,
+                    download_disk_semaphore=download_disk_semaphore,
+                    derive_data_from_source=derive_data_from_source,
+                    connections=connections,
                 )
                 for obj_key in obj_keys
             ]
             results = [future.result() for future in futures]
+            download_and_feed_seconds = time.perf_counter() - download_and_feed_start
+            run_logger.info(
+                "TIMING download_and_feed_phase: %.2fs for %d files (%.3fs/file)",
+                download_and_feed_seconds,
+                len(obj_keys),
+                download_and_feed_seconds / len(obj_keys) if obj_keys else 0.0,
+            )
 
             total_input = sum(result.input_count for result in results)
             total_operation = sum(result.operation_count for result in results)
@@ -633,10 +793,4 @@ def vespa_feeder_flow(
         flow_run_name,
         s3_bucket,
         s3_key,
-    )
-
-
-if __name__ == "__main__":
-    vespa_feeder_flow(
-        s3_bucket="cpr-cache", s3_key="search/vespa/labels_feed_materializer.jsonl"
     )

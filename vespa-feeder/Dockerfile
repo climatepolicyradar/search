@@ -21,3 +21,6 @@ COPY service-manifest.json .
 COPY feeder_metrics.py .
 COPY telemetry.py .
 COPY flow.py .
+COPY labels_flow.py .
+COPY documents_flow.py .
+COPY passages_flow.py .
