@@ -102,7 +102,7 @@ class VespaPassage(BaseModel):
     heading_id: str | None = None
     heading_text: str | None = None
     concepts: list[VespaConcept] = Field(default_factory=list)
-    concepts_value: list[str] = Field(default_factory=list)
+
     # Imported field (from document_ref) - inbound-only, never set on feed.
     principal_id: str | None = None
     # Raw debug-summary shape for `text_tokens`; use `.tokens` for the flattened form.
@@ -125,7 +125,9 @@ class VespaPassage(BaseModel):
             "language": {"assign": self.language},
             "content": {"assign": self.content},
             "looks_like_short_heading": {"assign": self.looks_like_short_heading},
-            "looks_like_table_of_contents": {"assign": self.looks_like_table_of_contents},
+            "looks_like_table_of_contents": {
+                "assign": self.looks_like_table_of_contents
+            },
             "looks_like_reference_list": {"assign": self.looks_like_reference_list},
             "document_id": {"assign": self.document_id},
             "document_ref": {"assign": self.document_ref},

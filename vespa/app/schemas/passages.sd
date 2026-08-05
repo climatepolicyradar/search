@@ -160,7 +160,6 @@ schema passages {
         summary pages {}
         summary heading_id {}
         summary concepts {}
-        summary concepts_value {}
         summary heading_text {}
         summary text_tokens {
             source: content
