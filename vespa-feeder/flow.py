@@ -28,6 +28,7 @@ import orjson
 from mypy_boto3_s3 import S3Client
 from opentelemetry.trace import StatusCode
 from prefect.artifacts import create_markdown_artifact
+from prefect.cache_policies import NO_CACHE
 from prefect.client.schemas.objects import State
 from prefect.runtime import deployment, flow_run
 from prefect.states import Failed
