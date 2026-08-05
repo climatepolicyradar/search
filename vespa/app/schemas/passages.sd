@@ -163,7 +163,7 @@ schema passages {
         summary type_confidence {}
         summary pages {}
         summary heading_id {}
-        summary concepts {}
+        summary labels {}
         summary heading_text {}
         summary text_tokens {
             source: content
