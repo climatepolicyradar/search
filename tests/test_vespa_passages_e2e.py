@@ -302,7 +302,7 @@ def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: 
     )
 
 
-def test_passage_properties_are_indexed_and_filterable(vespa_app: Vespa):
+def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa):
     """
     For the three derived properties:
 
@@ -328,9 +328,9 @@ def test_passage_properties_are_indexed_and_filterable(vespa_app: Vespa):
     hits = r.json().get("root", {}).get("children", [])
     flags_by_id = {
         hit["fields"]["id"]: (
-            hit["fields"]["short_heading"],
-            hit["fields"]["table_of_contents"],
-            hit["fields"]["reference_list"],
+            hit["fields"]["looks_like_short_heading"],
+            hit["fields"]["looks_like_table_of_contents"],
+            hit["fields"]["looks_like_reference_list"],
         )
         for hit in hits
     }
