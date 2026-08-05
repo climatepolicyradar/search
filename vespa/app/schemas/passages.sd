@@ -115,6 +115,10 @@ schema passages {
         field heading_text type string {
             indexing: index | summary
         }
+
+        field passage_source type string {
+            indexing: summary
+        }
     }
 
     # Fields imported from the parent document via document_ref. These let us
