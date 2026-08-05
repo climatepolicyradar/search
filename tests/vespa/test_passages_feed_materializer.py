@@ -44,7 +44,8 @@ _TOC_TEXT = (
     "1. Introduction 3\n"
     "2. National circumstances 12\n"
     "3. Greenhouse gas inventory 24\n"
-    "4. Policies and measures 41"
+    "4. Policies and measures 41\n"
+    "5. Conclusion 47"
 )
 _REFERENCES_TEXT = (
     "Smith, J. A. (2019). Climate finance in practice. Journal of Climate "
