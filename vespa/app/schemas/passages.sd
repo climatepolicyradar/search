@@ -62,13 +62,22 @@ schema passages {
         field heading_id type string {
             indexing: attribute | summary
         }
-        struct concept {
+        struct label {
+            # These are the core Label fields i.e. the node
             field id type string {}
             field type type string {}
             field value type string {}
-            field count type int {}
+            
+            # These are fields that related the label to the passage i.e. the edge
+            field classifier_id type string
+            field end_index type float
+            field labelled_text type string
+            field labellers type array<string>
+            field prediction_probability type float
+            field start_index type float
+            field timestamps type array<string>
         }
-        field concepts type array<concept> {
+        field labels type array<label> {
             struct-field id {
                 indexing: summary | attribute
                 attribute: fast-search
@@ -81,9 +90,26 @@ schema passages {
                 indexing: summary | attribute
                 attribute: fast-search
             }
-            struct-field count {
-                indexing: summary | attribute
-                attribute: fast-search
+            struct-field classifier_id {
+                indexing: summary
+            }
+            struct-field end_index {
+                indexing: summary
+            }
+            struct-field labelled_text {
+                indexing: summary
+            }
+            struct-field labellers {
+                indexing: summary
+            }
+            struct-field prediction_probability {
+                indexing: summary
+            }
+            struct-field start_index {
+                indexing: summary
+            }
+            struct-field timestamps {
+                indexing: summary
             }
         }
         field heading_text type string {
@@ -97,21 +123,12 @@ schema passages {
     import field document_ref.principal_id as principal_id {}
     import field document_ref.geographies_attribute as geographies {}
     import field document_ref.labels_type_id_value_attribute as labels_type_id_value_attribute {}
-    import field document_ref.concepts_type_id_value_attribute as concepts_type_id_value_attribute {}
     import field document_ref.attributes_published_date as attributes_published_date {}
 
     # Fields imported from the Principal document via principal_document_ref.
     # Lets passages filter / group / return Principal-scoped metadata in one
     # hop without denormalising per-passage.
     import field principal_document_ref.title_attribute as principal_title {}
-
-    field concepts_value type array<string> {
-        indexing: input concepts | for_each { get_field value } | index | summary
-        stemming: none
-        linguistics {
-            profile: document_label_analysis
-        }
-    }
 
     fieldset default {
         fields: content

@@ -1,8 +1,76 @@
+import re
+from typing import TypedDict
+
 from flow import vespa_feeder
 from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
 
 from prefect import flow
+
+# `topic["value"]`` arrives as a classifier's repr, e.g. `BertBasedClassifier("procedural` justice")`
+# The classifier name varies, but the label text is always the sole quoted argument.
+# TODO: This is gnarly and should be fixed upstream
+_CLASSIFIER_VALUE_RE = re.compile(r'^\w+\("(.*)"\)$')
+
+
+def _parse_classifier_value(value: str) -> str:
+    match = _CLASSIFIER_VALUE_RE.match(value)
+    return match.group(1) if match else value
+
+
+class DataLakeTopic(TypedDict):
+    classifier_id: str
+    concept_id: str
+    end_index: int
+    id: str
+    labelled_text: str
+    labellers: list[str]
+    prediction_probability: float
+    start_index: int
+    timestamps: list[str]
+    value: str
+
+
+class VespaPassageLabel(TypedDict):
+    # These are the core Label fields i.e. the node
+    id: str
+    type: str
+    value: str
+    # These are fields that related the label to the passage i.e. the edge
+    classifier_id: str
+    end_index: int
+    labelled_text: str
+    labellers: list[str]
+    prediction_probability: float
+    start_index: int
+    timestamps: list[str]
+
+
+def derive_labels_from_topics(record: dict) -> dict:
+    """Set `labels` on a passages update record, derived from its own `topic` field."""
+    topics: list[DataLakeTopic] = (
+        record.get("fields", {}).get("topics", {}).get("assign", [])
+    )
+
+    labels: list[VespaPassageLabel] = [
+        {
+            "id": f"concept::{topic['concept_id']}",
+            "type": "concept",
+            "value": _parse_classifier_value(topic["labellers"][0]),
+            "classifier_id": topic["classifier_id"],
+            "end_index": topic["end_index"],
+            "labelled_text": topic["labelled_text"],
+            "labellers": topic["labellers"],
+            "prediction_probability": topic["prediction_probability"],
+            "start_index": topic["start_index"],
+            "timestamps": topic["timestamps"],
+        }
+        for topic in topics
+    ]
+
+    record["fields"]["labels"] = {"assign": labels}
+    record["fields"].pop("topics", None)
+    return record
 
 
 def derive_document_ref(record: dict) -> dict:
