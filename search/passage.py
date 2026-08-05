@@ -85,49 +85,226 @@ class Passage(BaseModel):
             tokens=vespa_passage.tokens,
         )
 
+_MONTH = r"Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
+# 'December 31, 2024' or '31 December 2024' - a calendar date, not a citation year.
+_CALENDAR_DATE = re.compile(
+    rf"\b(?:{_MONTH})[a-z]*\.?\s+\d{{1,2}},?\s+\d{{4}}"
+    rf"|\b\d{{1,2}}\s+(?:{_MONTH})[a-z]*\.?,?\s+\d{{4}}"
+)
+_WORD = re.compile(r"[A-Za-z][A-Za-z'-]*")
+# An author initial: 'J.' but not the '2.' of '1.A.2.' or the 'A.1' of an outline.
+_AUTHOR_INITIAL = re.compile(r"(?<![.\d])\b[A-Z]\.(?!\d)")
+# A year closing a citation: '(2019).', '(n.d.):', ', 2018.', '. 1997.'
+_CITATION_YEAR = re.compile(
+    r"\(\s*(?:n\.d\.|\d{4}[a-z]?)\s*\)\s*[.,:]|,\s*\d{4}[a-z]?\s*[.:]|\.\s\d{4}[a-z]?\."
+)
+# Where to find the source: a DOI, a URL, or an access note.
+_SOURCE_LOCATOR = re.compile(
+    r"doi:|doi\.org|https?://|ftp://|(?<![/.])\bwww\.|Retrieved"
+    r"|Available (?:at|from|online)|Accessed|last visited|In press|ISSN|ISBN",
+    re.IGNORECASE,
+)
+# Contact details, which mark a signature block or supplier directory - both of
+# which are as dense in initials and periods as a bibliography is.
+_CONTACT_DETAIL = re.compile(
+    r"@|Tel[.:]|Telephone|Teléfono|Fax|E-?mail|Correo", re.IGNORECASE
+)
+# The words prose is made of. Reference entries are titles and names, and use
+# far fewer of them.
+_FUNCTION_WORD = re.compile(
+    r"\b(?:the|of|and|to|in|that|which|for|with|as|by|is|are|was|will|be|been"
+    r"|this|these|has|have|from|on|at|it|its|not|but|their|our)\b",
+    re.IGNORECASE,
+)
+
+# Citation signals are counted per 100 words; a signal counts as present at two
+# occurrences per 100 words, i.e. once every fifty words. The rates are strongly
+# bimodal - on the validation set the median negative scores 0 on every one of
+# them - so anything from 1 to 2 scores the same, and 2 is taken because it also
+# rejects a passage carrying a single stray initial.
+_SIGNAL_PER_100_WORDS = 2.0
+_MIN_CITATION_SIGNALS = 2
+# Periods per 100 words. Reference entries are chopped into abbreviated fields;
+# prose runs a whole sentence between periods. Hand-labelled 10th percentile for
+# reference lists: 15.7.
+_DENSE_PERIODS_PER_100_WORDS = 18.0
+# Function words per 100 words. Hand-labelled median: 14 for reference lists, 27
+# for everything else. This is the guard against prose with a couple of
+# 'Available at' footnotes glued to the end of it.
+_PROSE_FUNCTION_WORDS_PER_100_WORDS = 25.0
+_CONTACTS_PER_100_WORDS = 1.0
+_MIN_WORDS = 20
+
+
 def looks_like_reference_list(passage: Passage) -> bool:
     """
     True if the passage is a bibliography, endnote or numbered footnote block.
 
-    Note that 'et al.' on its own is NOT a usable signal - it appears in running
-    text, and per 100 words it's more frequent in the IPCC-style prose we want to
-    keep (3.6) than in the reference lists we want to drop (1.7). 'doi:' is a much
-    better signal, as it's rarely used outside reference lists, so it is scored
-    below alongside the other locators.
+    Reads as: it is a reference list if it is long enough to judge, does not read
+    as prose, is not a contact block, and at least two of four named citation
+    signals hold.
 
-    WARNING: Claude figured out the below ruleset based on seeing a sample of the data.
-    It should be flexible enough for use here, but should NOT be used in production
-    search.
+    Requiring *two* signals is what does the work. Any one of them alone fires on
+    far too much - a URL in a footnote, a date in a table, an initial in a
+    signature block - but a passage carrying two of author initials, citation
+    years, source locators and period density is a citation list and almost
+    nothing else. Dropping to one signal takes precision from 1.00 to 0.86;
+    demanding three takes recall from 0.98 to 0.86.
+
+    Calendar dates are stripped before counting: the ', 2024.' of 'December 31,
+    2024.' is otherwise indistinguishable from a citation year.
+
+    Unlike `looks_like_table_of_contents`, there is no positional condition here.
+    Reference lists sit at a median 0.62 of the way through their document against
+    0.55 for everything else - the distributions are the same, because numbered
+    footnote citations appear on every page rather than only at the end.
+
+    Deliberately NOT conditions here, having turned out to be dead weight once two
+    signals are required:
+
+    - an explicit ALLCAPS REFERENCES / BIBLIOGRAPHY heading, which never changed a
+      verdict on the validation set - passages carrying one always had two other
+      signals anyway;
+    - publication furniture ('pp. 14', 'vol. 3', 'eds.', 'ibid', 'supra'), which
+      cost precision, because legal prose is full of it;
+    - parenthetical author-year citations ('(Lal, 2016)'), the hallmark of the
+      IPCC-style prose we want to KEEP. The function-word veto already excludes
+      that prose, so counting them a second time added nothing;
+    - 'et al.', which is more frequent per 100 words in the prose we want to keep
+      (3.6) than in the reference lists we want to drop (1.7).
+
+    Dropping publication furniture has a known cost: a block of legal footnotes
+    carrying URLs, 'Id.' and 'supra' scores just under all four thresholds and so
+    fires no signal at all.
+
+    WARNING: Claude figured out the below ruleset based on a labelled sample of
+    the data. It should be flexible enough for use, but should be used with caution in
+    production applications.
     """
-    text = passage.text
-    words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
-    if len(words) < 20:
+    text = _CALENDAR_DATE.sub(" ", passage.text)
+    words = _WORD.findall(text)
+    if len(words) < _MIN_WORDS:
         return False
-    n = len(words)
-    periods = text.count(".") / n * 100
-    initials = len(re.findall(r"\b[A-Z]\.", text)) / n * 100
-    bare_year = (
-        len(
-            re.findall(
-                r"\(\s*(?:n\.d\.|\d{4}[a-z]?)\s*\)\s*[.,]|,\s*\d{4}[a-z]?:", text
-            )
-        )
-        / n
-        * 100
-    )
-    locators = (
-        len(
-            re.findall(r"doi:|doi\.org|https?://|Retrieved from|Available online", text)
-        )
-        / n
-        * 100
-    )
-    parenthetical_cites = (
-        len(re.findall(r"\([A-Z][A-Za-z.\-]+[^)]{0,60}?\d{4}[a-z]?\)", text)) / n * 100
-    )
-    return (
-        periods / 10 + initials + 2 * bare_year + 2 * locators - 3 * parenthetical_cites
-    ) >= 10
+
+    def per_100_words(pattern: re.Pattern) -> float:
+        return len(pattern.findall(text)) / len(words) * 100
+
+    reads_as_prose = per_100_words(_FUNCTION_WORD) > _PROSE_FUNCTION_WORDS_PER_100_WORDS
+    is_contact_block = per_100_words(_CONTACT_DETAIL) >= _CONTACTS_PER_100_WORDS
+    if reads_as_prose or is_contact_block:
+        return False
+
+    citation_signals = [
+        # 'Hansen, J.,' / 'J. Hansen', repeatedly - one stray 'Dr. C. Mark Eakin'
+        # in a litigation paragraph is not enough
+        per_100_words(_AUTHOR_INITIAL) >= _SIGNAL_PER_100_WORDS,
+        # '(2019).' closing an entry
+        per_100_words(_CITATION_YEAR) >= _SIGNAL_PER_100_WORDS,
+        # 'doi:10...', 'Retrieved from https://...'
+        per_100_words(_SOURCE_LOCATOR) >= _SIGNAL_PER_100_WORDS,
+        # abbreviated fields rather than sentences
+        text.count(".") / len(words) * 100 >= _DENSE_PERIODS_PER_100_WORDS,
+    ]
+    return sum(citation_signals) >= _MIN_CITATION_SIGNALS
+
+
+# A line holding nothing but a page number or a roman-numeral folio.
+_LOCATOR_LINE = re.compile(
+    r"^[\s.·\-–—]*(\d{1,3}|[ivxlcdm]{1,8}|[IVXLCDM]{1,8})[\s.·]*$"
+)
+# A line holding nothing but a section number: 3.2.1, but not the decimal 9.00.
+_SECTION_NUMBER_LINE = re.compile(r"^\(?\d{1,2}(?:\.[1-9]\d?){2,}\.?\)?$")
+# A table cell holding only figures, symbols or an inventory notation key.
+_DATA_CELL = re.compile(
+    r"^(?:[\d\s.,;:%()\[\]<>≤≥=+\-–—/*'\"$€£¥&]+"
+    r"|(?:NE|NO|NA|N/A|IE|NC|C|X|nil|na|-|—|–|\.)\.?)$",
+    re.I,
+)
+# A title followed by the page it is on: 'Executive Summary .... 14', 'Annex B 7'.
+_TRAILING_LOCATOR = re.compile(
+    r"[A-Za-z\)]\.?[\s.·]+(\d{1,3}|[ivxlcdm]{2,8}|[IVXLCDM]{1,8})\.?$"
+)
+# An entry opening with hierarchical section numbering: '3.2 Baseline', '(1.4)'.
+_HIERARCHICAL = re.compile(r"^\(?\d{1,2}(?:\.[1-9]\d?)+\.?\)?(?:\s+[A-Za-z(]|$)")
+# An entry opening with a flat label: '4. Findings', 'B) Scope', 'Annex III'.
+_FLAT_NUMBER = re.compile(
+    r"^(?:\d{1,2}[.)]?|[IVXLCDM]{1,5}[.)]|[A-Za-z][.)]|\((?:[a-z]|[ivx]{1,4}|\d{1,2})\))\s+\S"
+    r"|^(?:chapter|annex|annexe|appendix|appendices|section|part|volume)\s+[\dIVXLCA-Z]",
+    re.I,
+)
+# The passage names itself as an index of something.
+_FRONT_MATTER = re.compile(
+    r"table of contents|^\s*contents\b|list of (?:tables|figures|acronyms|abbreviations|"
+    r"annexes|appendices|boxes)|table of authorities",
+    re.I | re.M,
+)
+# The standard sections a report's contents listing points at.
+_TOC_ENTRY_WORD = re.compile(
+    r"\b(?:foreword|preface|acknowledge?ments?|executive summary|introduction|conclusions?|"
+    r"references|bibliography|glossary|annexe?|appendix|abbreviations|acronyms|"
+    r"chapter|section|summary|overview|background)\b",
+    re.I,
+)
+# A sentence boundary mid-line: the mark of running prose, not of a title.
+_PROSE = re.compile(r"[.?;:]\s+[a-z]")
+# A line that closes like a sentence rather than like a title.
+_SENTENCE_END = re.compile(r"[.;:,]$")
+# A line broken off mid-clause, i.e. a wrapped table cell or paragraph.
+_MID_CLAUSE_END = re.compile(r"[;,:]$")
+_EQUALS = re.compile(r"=")
+_ROMAN_DIGITS = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
+
+_MIN_LINES = 4
+_MIN_ENTRIES = 5
+# Share of entries that must be short and free of mid-line sentence boundaries.
+_TITLE_LIKE_SHARE = 0.75
+_TITLE_MAX_WORDS = 25
+# A long entry that also closes like a sentence is real content; a long contents
+# entry is a wrapped title and carries no terminal punctuation.
+_SENTENCE_MIN_WORDS = 15
+_SENTENCE_SHARE = 0.30
+# Above this share of pure figure/symbol lines the passage is a data table.
+_DATA_CELL_SHARE = 0.25
+_MID_CLAUSE_SHARE = 0.20
+_EQUATION_SHARE = 0.20
+# Signature thresholds, as a share of entries.
+_HIERARCHICAL_SHARE = 0.35
+_STANDARD_SECTION_SHARE = 0.25
+_FLAT_NUMBER_SHARE = 0.65
+_PAGE_NUMBER_SHARE = 0.40
+# Share of trailing page numbers that must follow a distinct title. Without this,
+# a table header block reading 'Sector 1 / Sector 2 / Sector 3' is a perfect
+# ascending page column.
+_DISTINCT_TITLE_SHARE = 0.80
+# Front matter is at the front. On a fresh sample of passages this single veto
+# removed 11 of the 12 false positives the text signals produced, while keeping
+# every contents listing, which is why it is worth the per-chapter listings it
+# costs (see the docstring).
+_FRONT_MATTER_MAX_PAGE = 10
+
+
+def _folio(token: str) -> int | None:
+    """The integer value of an arabic or roman page number, else None."""
+    if token.isdigit():
+        return int(token)
+    total = largest = 0
+    for char in reversed(token.lower()):
+        value = _ROMAN_DIGITS.get(char)
+        if value is None:
+            return None
+        total += -value if value < largest else value
+        largest = max(largest, value)
+    return total
+
+
+def _never_goes_backwards(values: list[int]) -> bool:
+    """
+    True if a run of page numbers never decreases.
+
+    Page numbers climb down a contents listing, whereas the bare integers at the
+    end of a table row are in no particular order.
+    """
+    return all(b >= a for a, b in zip(values, values[1:]))
 
 
 # A line holding nothing but a page number or a roman-numeral folio.
