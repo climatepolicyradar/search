@@ -23,6 +23,12 @@ import orjson
 from cpr_contracts import Document
 from mypy_boto3_s3 import S3Client
 
+from search.passage import (
+    Passage,
+    looks_like_reference_list,
+    looks_like_short_heading,
+    looks_like_table_of_contents,
+)
 from search.vespa.models import VespaUpdate
 from search.vespa.passage import (
     VespaConcept,
@@ -125,6 +131,19 @@ def _build_passage_concepts_lookup() -> dict[str, list[dict[str, Any]]]:
             ]
     return lookup
 
+def _text_block_to_passage(block: TextBlock, document_id: str) -> Passage:
+    """Build the `Passage` that the `search.passage` detectors expect from a block."""
+    return Passage(
+        text_block_id=block["id"],
+        idx=block["idx"],
+        text=block["text"],
+        language=block["language"],
+        type=block["type"],
+        type_confidence=block["type_confidence"],
+        heading_id=block.get("heading_id"),
+        document_id=document_id,
+    )
+
 
 def _text_block_to_vespa_passage(
     block: TextBlock,
@@ -148,7 +167,7 @@ def _text_block_to_vespa_passage(
     heading_text = (
         (block_text_by_id or {}).get(heading_id) if heading_id is not None else None
     )
-
+    passage = _text_block_to_passage(block, document_id)
     return VespaPassage(
         id=block["id"],
         idx=block["idx"],
@@ -163,6 +182,9 @@ def _text_block_to_vespa_passage(
         ),
         content_type=block["type"],
         type_confidence=block["type_confidence"],
+        looks_like_short_heading=looks_like_short_heading(passage),
+        looks_like_table_of_contents=looks_like_table_of_contents(passage),
+        looks_like_reference_list=looks_like_reference_list(passage),
         pages=[VespaPageBoxes.model_validate(page) for page in block.get("pages", [])],
         heading_id=heading_id,
         heading_text=heading_text,

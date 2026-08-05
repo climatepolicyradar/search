@@ -44,6 +44,9 @@ class Passage(BaseModel):
     language: str = Field(default="")
     type: str = Field(default="")
     type_confidence: float = Field(default=0.0)
+    looks_like_short_heading: bool = Field(default=False)
+    looks_like_table_of_contents: bool = Field(default=False)
+    looks_like_reference_list: bool = Field(default=False)
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
     concepts: list[Concept] = Field(default_factory=list)
@@ -75,6 +78,9 @@ class Passage(BaseModel):
             language=data["language"],
             type=data["content_type"],
             type_confidence=data["type_confidence"],
+            looks_like_short_heading=data["looks_like_short_heading"],
+            looks_like_table_of_contents=data["looks_like_table_of_contents"],
+            looks_like_reference_list=data["looks_like_reference_list"],
             pages=[page["number"] for page in data["pages"]],
             pages_with_bounding_boxes=data["pages"],
             concepts=data["concepts"],

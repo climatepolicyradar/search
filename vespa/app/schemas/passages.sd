@@ -16,6 +16,15 @@ schema passages {
                 profile: passage_analysis
             }
         }
+        field looks_like_short_heading type bool {
+            indexing: attribute | summary
+        }
+        field looks_like_table_of_contents type bool {
+            indexing: attribute | summary
+        }
+        field looks_like_reference_list type bool {
+            indexing: attribute | summary
+        }
         field document_id type string {
             indexing: attribute | summary
         }
@@ -124,6 +133,9 @@ schema passages {
         summary idx {}
         summary language {}
         summary content {}
+        summary looks_like_short_heading {}
+        summary looks_like_table_of_contents {}
+        summary looks_like_reference_list {}
         summary document_id {}
         summary principal_id {}
         summary content_type {}
