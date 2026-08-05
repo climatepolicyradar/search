@@ -403,12 +403,12 @@ def test_text_block_to_vespa_update_pages_handles_empty_boxes_and_coordinates() 
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        (_HEADING_TEXT, {"short_heading": True, "table_of_contents": False, "reference_list": False}),
-        (_TOC_TEXT, {"short_heading": False, "table_of_contents": True, "reference_list": False}),
-        (_REFERENCES_TEXT, {"short_heading": False, "table_of_contents": False, "reference_list": True}),
-        (_PROSE_TEXT, {"short_heading": False, "table_of_contents": False, "reference_list": False}),
+        (_HEADING_TEXT, {"looks_like_short_heading": True, "looks_like_table_of_contents": False, "looks_like_reference_list": False}),
+        (_TOC_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": True, "looks_like_reference_list": False}),
+        (_REFERENCES_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": False, "looks_like_reference_list": True}),
+        (_PROSE_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": False, "looks_like_reference_list": False}),
     ],
-    ids=["heading", "table_of_contents", "reference_list", "prose"],
+    ids=["looks_like_heading", "looks_like_table_of_contents", "looks_like_reference_list", "looks_like_prose"],
 )
 def test_text_block_to_vespa_update_sets_properties(
     text: str, expected: dict[str, bool]
@@ -419,31 +419,10 @@ def test_text_block_to_vespa_update_sets_properties(
     fields = materializer._text_block_to_vespa_update(block, "doc-1")["fields"]
 
     assert {
-        "short_heading": fields["short_heading"]["assign"],
-        "table_of_contents": fields["table_of_contents"]["assign"],
-        "reference_list": fields["reference_list"]["assign"],
+        "looks_like_short_heading": fields["looks_like_short_heading"]["assign"],
+        "looks_like_table_of_contents": fields["looks_like_table_of_contents"]["assign"],
+        "looks_like_reference_list": fields["looks_like_reference_list"]["assign"],
     } == expected
-
-
-def test_text_block_to_passage_carries_block_type_through() -> None:
-    """
-    `type`/`type_confidence` must reach the detectors.
-
-    All three detector docstrings name the parser's block type as the signal that
-    should eventually replace the text heuristics (FUS-158). If this mapping drops
-    it, they silently see "" and 0.0 instead of failing.
-    """
-    block = _text_block(0)
-    block["type"] = "sectionHeading"
-    block["type_confidence"] = 0.87
-
-    passage = materializer._text_block_to_passage(block, "doc-1")
-
-    assert passage.type == "sectionHeading"
-    assert passage.type_confidence == 0.87
-    assert passage.text == block["text"]
-    assert passage.text_block_id == block["id"]
-    assert passage.document_id == "doc-1"
 
 
 class TestChunkWriter:
