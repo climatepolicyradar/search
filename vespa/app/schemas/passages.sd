@@ -139,14 +139,28 @@ schema passages {
     }
 
     rank-profile nativerank {
+        inputs{
+            query(short_heading_weight) double: 0.15
+            query(table_of_contents_weight) double: 0.35
+            query(reference_list_weight) double: 0.5
+        }
+
         function text_score() {
             expression: nativeRank(content) + nativeProximity(content)
         }
-
-        first-phase {
-            expression: text_score()
+        function short_headings_penalty() {
+            expression: query(short_heading_weight) * attribute(looks_like_short_heading)
         }
-        summary-features: text_score() nativeRank(content) nativeProximity(content)
+        function table_of_contents_penalty() {
+            expression: query(table_of_contents_weight) * attribute(looks_like_table_of_contents)
+        }
+        function reference_list_penalty() {
+            expression: query(reference_list_weight) * attribute(looks_like_reference_list)
+        }
+        first-phase {
+            expression: text_score() - short_headings_penalty - table_of_contents_penalty - reference_list_penalty
+        }
+        summary-features: text_score() nativeRank(content) nativeProximity(content) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list)
     }
 
     document-summary debug-summary {
