@@ -69,13 +69,13 @@ schema passages {
             field value type string {}
             
             # These are fields that related the label to the passage i.e. the edge
-            field classifier_id type string
-            field end_index type float
-            field labelled_text type string
-            field labellers type array<string>
-            field prediction_probability type float
-            field start_index type float
-            field timestamps type array<string>
+            field classifier_id type string {}
+            field end_index type float {}
+            field labelled_text type string {}
+            field labellers type array<string> {}
+            field prediction_probability type float {}
+            field start_index type float {}
+            field timestamps type array<string> {}
         }
         field labels type array<label> {
             struct-field id {
