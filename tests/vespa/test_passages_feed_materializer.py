@@ -11,6 +11,8 @@ and a dropped connection only costs one chunk.
 from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from search.vespa import passages_feed_materializer as materializer
 from search.vespa.sources.embeddings_input_v2 import TextBlock
 
@@ -35,6 +37,24 @@ def _fake_embeddings(document_count: int, blocks_per_document: int) -> Iterator[
             for block_idx in range(blocks_per_document)
         ]
         yield document_id, {"pdf_data": {"text_blocks": text_blocks}}
+
+
+_HEADING_TEXT = "CARBON BUDGET FOR GRUDE EMISSIONS"
+_TOC_TEXT = (
+    "1. Introduction 3\n"
+    "2. National circumstances 12\n"
+    "3. Greenhouse gas inventory 24\n"
+    "4. Policies and measures 41"
+)
+_REFERENCES_TEXT = (
+    "Smith, J. A. (2019). Climate finance in practice. Journal of Climate "
+    "Policy, 12(3), 45-67. doi:10.1234/jcp.2019.001\n"
+    "Jones, B. C. (2020). Adaptation pathways. Nature Climate Change, 10(2), "
+    "112-119. doi:10.1234/ncc.2020.002\n"
+    "Garcia, M. (2021). Mitigation costs. Energy Policy, 45, 233-241. "
+    "Retrieved from https://example.org/report"
+)
+_PROSE_TEXT = "The carbon budget for crude emissions is 1.2 GtCO2e in 2030."
 
 
 def test_passages_feed_materializer_splits_output_into_chunks() -> None:
@@ -378,6 +398,31 @@ def test_text_block_to_vespa_update_pages_handles_empty_boxes_and_coordinates() 
             {"number": 4, "bounding_boxes": [{"coordinates": []}]},
         ]
     }
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (_HEADING_TEXT, {"looks_like_short_heading": True, "looks_like_table_of_contents": False, "looks_like_reference_list": False}),
+        (_TOC_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": True, "looks_like_reference_list": False}),
+        (_REFERENCES_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": False, "looks_like_reference_list": True}),
+        (_PROSE_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": False, "looks_like_reference_list": False}),
+    ],
+    ids=["looks_like_heading", "looks_like_table_of_contents", "looks_like_reference_list", "looks_like_prose"],
+)
+def test_text_block_to_vespa_update_sets_properties(
+    text: str, expected: dict[str, bool]
+) -> None:
+    block = _text_block(0)
+    block["text"] = text
+
+    fields = materializer._text_block_to_vespa_update(block, "doc-1")["fields"]
+
+    assert {
+        "looks_like_short_heading": fields["looks_like_short_heading"]["assign"],
+        "looks_like_table_of_contents": fields["looks_like_table_of_contents"]["assign"],
+        "looks_like_reference_list": fields["looks_like_reference_list"]["assign"],
+    } == expected
 
 
 class TestChunkWriter:

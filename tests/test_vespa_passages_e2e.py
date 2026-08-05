@@ -42,6 +42,23 @@ _TEST_SETTINGS = Settings(
     vespa_read_token="",  # nosec B106
 )
 
+_HEADING_TEXT = "CARBON BUDGET FOR GRUDE EMISSIONS"
+_TOC_TEXT = (
+    "1. Introduction 3\n"
+    "2. National circumstances 12\n"
+    "3. Greenhouse gas inventory 24\n"
+    "4. Policies and measures 41"
+)
+_REFERENCES_TEXT = (
+    "Smith, J. A. (2019). Climate finance in practice. Journal of Climate "
+    "Policy, 12(3), 45-67. doi:10.1234/jcp.2019.001\n"
+    "Jones, B. C. (2020). Adaptation pathways. Nature Climate Change, 10(2), "
+    "112-119. doi:10.1234/ncc.2020.002\n"
+    "Garcia, M. (2021). Mitigation costs. Energy Policy, 45, 233-241. "
+    "Retrieved from https://example.org/report"
+)
+_PROSE_TEXT = "The carbon budget for crude emissions is 1.2 GtCO2e in 2030."
+
 
 class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
     @classmethod
@@ -283,3 +300,44 @@ def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: 
     assert "tb-child" in passage_ids, (
         f"Expected passage tb-child to match principal_title filter, got: {passage_ids}"
     )
+
+
+def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa):
+    """
+    For the three derived properties:
+
+    Verifies (a) the bool fields deploy, (b) the materializer's derivations reach
+    the index, and (c) a rank profile / YQL filter can read them.
+    """
+    document = DocumentFactory.build(id="doc-1", title="Doc", labels=[_principal_label()])
+    _feed_document(vespa_app, document)
+    for block_id, text in (
+        ("tb-heading", _HEADING_TEXT),
+        ("tb-toc", _TOC_TEXT),
+        ("tb-refs", _REFERENCES_TEXT),
+        ("tb-prose", _PROSE_TEXT),
+    ):
+        _feed_passage(vespa_app, _text_block(block_id, text=text), document_id="doc-1")
+
+    r = req.post(
+        f"{vespa_app.end_point}/search/",
+        json={"yql": "select * from sources passages where true", "hits": 10},
+        timeout=5,
+    )
+    r.raise_for_status()
+    hits = r.json().get("root", {}).get("children", [])
+    flags_by_id = {
+        hit["fields"]["id"]: (
+            hit["fields"]["looks_like_short_heading"],
+            hit["fields"]["looks_like_table_of_contents"],
+            hit["fields"]["looks_like_reference_list"],
+        )
+        for hit in hits
+    }
+
+    assert flags_by_id == {
+        "tb-heading": (True, False, False),
+        "tb-toc": (False, True, False),
+        "tb-refs": (False, False, True),
+        "tb-prose": (False, False, False),
+    }

@@ -351,40 +351,50 @@ test_cases = [
             "Bibliography blocks must not be returned in the top 10 results"
         ),
     ),
-    #
-    # Example:
-    #    "Category of / Details / Indicative activities/ Modality / Targeting
-    #     resilience/ adaptation option / Homestead farming - support
-    #     vulnerable / Support to household - vegetable gardens / Provide
-    #     training in IPM and GAPS, via experienced service ..."
+    # Example (chapter 6 contents, repeats "agriculture" 8 times; 178 of the
+    # document's 2,400 passages mention the term at all):
+    #    "6.1 Guatemalan agriculture in context / of climate change / 6.1.1
+    #     Potential impacts of climate change on agriculture / 6.1.2 Dynamics
+    #     in the agricultural sector that increase vulnerability to climate
+    #     change / 6.2 Measures to improve productivity, mitigate the ..."
     FieldCharacteristicsTestCase[Passage](
         category="tables_of_contents",
-        search_terms="resilience",
-        document_id="AF.document.AF00000210.n0000",
+        search_terms="agriculture",
+        document_id="ICCN.document.i00000042.n0000",
         characteristics_test=lambda passage: not looks_like_table_of_contents(passage),
         all_or_any="all",
         k=5,
         assert_results=True,
-        description=(
-            "Table-of-contents blocks must not reach the top 5. "
-        ),
+        description=("Table-of-contents blocks must not reach the top 5. "),
     ),
-    # Example:
-    #    "System / Mitigation Option / Evidence / Agreement / Ec / Tec / Inst /
-    #     Soc / Env / Geo / Context / Industrial System Transitions / Energy
-    #     efficiency / Robust / High / Potential and adoption depend on
-    #     existing efficiency, energy prices and interest rates, as wel..."
+    #    "5.1 The supply and security of water resources of / Guatemala in the
+    #     context of climate change / 5.1.1 Surface offer. / 5.1.2 Underground
+    #     supply / 5.1.4 Potential impacts of climate change on the
+    #     availability of water resources ..."
     FieldCharacteristicsTestCase[Passage](
         category="tables_of_contents",
-        search_terms="energy efficiency",
-        document_id="UNFCCC.non-party.1196.0",
+        search_terms="water resources",
+        document_id="ICCN.document.i00000042.n0000",
         characteristics_test=lambda passage: not looks_like_table_of_contents(passage),
         all_or_any="all",
         k=5,
         assert_results=True,
-        description=(
-            "Table-of-contents blocks must not reach the top 5. "
-        ),
+        description=("Table-of-contents blocks must not reach the top 5. "),
+    ),
+    #    "Executive Summary / Chapter 01 Singapore's Commitment to Sustainable
+    #     Aviation / Chapter 02 Performance and Targets / Chapter 03 / Chapter
+    #     04 Airline Domain Initiatives / Chapter 05 Air Traffic Management
+    #     Domain Initiatives / Airport Domain Initiatives 18 / Chapter 06
+    #     Critical Enablers / Acknowledgements / Glossary"
+    FieldCharacteristicsTestCase[Passage](
+        category="tables_of_contents",
+        search_terms="domain initiatives",
+        document_id="CCLW.document.i00002502.n0000",
+        characteristics_test=lambda passage: not looks_like_table_of_contents(passage),
+        all_or_any="all",
+        k=5,
+        assert_results=True,
+        description=("Table-of-contents blocks must not reach the top 5. "),
     ),
     FieldCharacteristicsTestCase[Passage](
         category="phrase_integrity",
