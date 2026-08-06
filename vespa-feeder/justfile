@@ -1,15 +1,18 @@
-registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo $AWS_DEFAULT_REGION` + ".amazonaws.com"
-image := registry + "/search-vespa-feeder"
-
 test:
     uv run pytest
 
 build:
-    docker build --platform=linux/amd64 -t {{ image }}:latest .
+    #!/usr/bin/env bash
+    set -euo pipefail
+    registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$(aws configure get region 2>/dev/null || echo $AWS_DEFAULT_REGION).amazonaws.com"
+    docker build --platform=linux/amd64 -t "$registry/search-vespa-feeder:latest" .
 
 push:
-    aws ecr get-login-password | docker login --username AWS --password-stdin {{ registry }}
-    docker push {{ image }}:latest
+    #!/usr/bin/env bash
+    set -euo pipefail
+    registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$(aws configure get region 2>/dev/null || echo $AWS_DEFAULT_REGION).amazonaws.com"
+    aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+    docker push "$registry/search-vespa-feeder:latest"
 
 deploy:
     uv run python deployments.py
