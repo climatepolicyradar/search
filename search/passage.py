@@ -26,13 +26,25 @@ class PageWithBoundingBoxes(BaseModel):
     bounding_boxes: list[BoundingBox] = Field(default_factory=list)
 
 
-class Concept(BaseModel):
-    """A concept/topic mentioned within a passage, with its mention count."""
+class Label(BaseModel):
+    """A label/concept node, independent of any relationship to a passage."""
 
     id: str = Field(default="")
     type: str = Field(default="")
     value: str = Field(default="")
-    count: int = Field(default=0)
+
+
+class PassageLabelRelationship(BaseModel):
+    """A label applied to a passage, with the fields describing that relationship."""
+
+    value: Label
+    classifier_id: str = Field(default="")
+    end_index: float = Field(default=0.0)
+    labelled_text: str = Field(default="")
+    labellers: list[str] = Field(default_factory=list)
+    prediction_probability: float = Field(default=0.0)
+    start_index: float = Field(default=0.0)
+    timestamps: list[str] = Field(default_factory=list)
 
 
 class Passage(BaseModel):
@@ -49,7 +61,7 @@ class Passage(BaseModel):
     looks_like_reference_list: bool = Field(default=False)
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
-    concepts: list[Concept] = Field(default_factory=list)
+    labels: list[PassageLabelRelationship] = Field(default_factory=list)
     heading_id: str | None = Field(default=None)
     heading_text: str | None = Field(default=None)
     document_id: str = Field(default="")
@@ -83,7 +95,21 @@ class Passage(BaseModel):
             looks_like_reference_list=data["looks_like_reference_list"],
             pages=[page["number"] for page in data["pages"]],
             pages_with_bounding_boxes=data["pages"],
-            concepts=data["concepts"],
+            labels=[
+                PassageLabelRelationship(
+                    value=Label(
+                        id=label["id"], type=label["type"], value=label["value"]
+                    ),
+                    classifier_id=label["classifier_id"],
+                    end_index=label["end_index"],
+                    labelled_text=label["labelled_text"],
+                    labellers=label["labellers"],
+                    prediction_probability=label["prediction_probability"],
+                    start_index=label["start_index"],
+                    timestamps=label["timestamps"],
+                )
+                for label in data["labels"]
+            ],
             heading_id=data["heading_id"],
             heading_text=data["heading_text"],
             document_id=data["document_id"],

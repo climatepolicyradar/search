@@ -251,8 +251,8 @@ def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages
     assert passage.pages_with_bounding_boxes[1].bounding_boxes == []
 
 
-def test_passage_search_engine_reads_concepts_from_top_level_passages_schema() -> None:
-    """The top-level passages schema's concepts field lands on Passage.concepts."""
+def test_passage_search_engine_reads_labels_from_top_level_passages_schema() -> None:
+    """The top-level passages schema's labels field lands on Passage.labels."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
@@ -270,18 +270,30 @@ def test_passage_search_engine_reads_concepts_from_top_level_passages_schema() -
                         "language": "en",
                         "content_type": "Text",
                         "type_confidence": 1.0,
-                        "concepts": [
+                        "labels": [
                             {
-                                "id": "concept::Q1",
+                                "id": "concept::finance flow",
                                 "type": "concept",
-                                "value": "flooding",
-                                "count": 3,
+                                "value": "finance flow",
+                                "classifier_id": "classifier-1",
+                                "end_index": 12.0,
+                                "labelled_text": "finance flow",
+                                "labellers": ["classifier-1"],
+                                "prediction_probability": 0.9,
+                                "start_index": 0.0,
+                                "timestamps": ["2024-01-01T00:00:00"],
                             },
                             {
-                                "id": "concept::Q2",
+                                "id": "concept::drought",
                                 "type": "concept",
                                 "value": "drought",
-                                "count": 1,
+                                "classifier_id": "classifier-2",
+                                "end_index": 20.0,
+                                "labelled_text": "drought",
+                                "labellers": ["classifier-2"],
+                                "prediction_probability": 0.8,
+                                "start_index": 14.0,
+                                "timestamps": ["2024-01-02T00:00:00"],
                             },
                         ],
                         "document_id": "doc-0",
@@ -299,10 +311,11 @@ def test_passage_search_engine_reads_concepts_from_top_level_passages_schema() -
         )
 
     passage = result.results[0]
-    assert len(passage.concepts) == 2
-    assert passage.concepts[0].id == "concept::Q1"
-    assert passage.concepts[0].type == "concept"
-    assert passage.concepts[0].value == "flooding"
-    assert passage.concepts[0].count == 3
-    assert passage.concepts[1].value == "drought"
-    assert passage.concepts[1].count == 1
+    assert len(passage.labels) == 2
+    assert passage.labels[0].value.id == "concept::finance flow"
+    assert passage.labels[0].value.type == "concept"
+    assert passage.labels[0].value.value == "finance flow"
+    assert passage.labels[0].classifier_id == "classifier-1"
+    assert passage.labels[0].prediction_probability == 0.9
+    assert passage.labels[1].value.value == "drought"
+    assert passage.labels[1].classifier_id == "classifier-2"

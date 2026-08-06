@@ -2,8 +2,8 @@
 
 from search.vespa.passage import (
     VespaBoundingBox,
-    VespaConcept,
     VespaCoordinate,
+    VespaLabel,
     VespaPageBoxes,
     VespaPassage,
 )
@@ -16,7 +16,7 @@ def test_model_validate_tolerates_empty_dict() -> None:
     assert passage.id == ""
     assert passage.content == ""
     assert passage.pages == []
-    assert passage.concepts == []
+    assert passage.labels == []
     assert passage.tokens == []
 
 
@@ -108,7 +108,7 @@ def test_to_vespa_update_omits_unset_optional_fields() -> None:
         "type_confidence",
         "heading_id",
         "heading_text",
-        "concepts",
+        "labels",
         "pages",
     ):
         assert key not in fields
@@ -124,8 +124,19 @@ def test_to_vespa_update_includes_optional_fields_when_set() -> None:
         type_confidence=0.9,
         heading_id="heading-1",
         heading_text="Chapter 1",
-        concepts=[
-            VespaConcept(id="concept::Q1", type="concept", value="flooding", count=2)
+        labels=[
+            VespaLabel(
+                id="concept::finance flow",
+                type="concept",
+                value="finance flow",
+                classifier_id="classifier-1",
+                end_index=12.0,
+                labelled_text="finance flow",
+                labellers=["classifier-1"],
+                prediction_probability=0.9,
+                start_index=0.0,
+                timestamps=["2024-01-01T00:00:00"],
+            )
         ],
         pages=[
             VespaPageBoxes(
@@ -146,9 +157,20 @@ def test_to_vespa_update_includes_optional_fields_when_set() -> None:
     assert fields.get("type_confidence") == {"assign": 0.9}
     assert fields.get("heading_id") == {"assign": "heading-1"}
     assert fields.get("heading_text") == {"assign": "Chapter 1"}
-    assert fields.get("concepts") == {
+    assert fields.get("labels") == {
         "assign": [
-            {"id": "concept::Q1", "type": "concept", "value": "flooding", "count": 2}
+            {
+                "id": "concept::finance flow",
+                "type": "concept",
+                "value": "finance flow",
+                "classifier_id": "classifier-1",
+                "end_index": 12.0,
+                "labelled_text": "finance flow",
+                "labellers": ["classifier-1"],
+                "prediction_probability": 0.9,
+                "start_index": 0.0,
+                "timestamps": ["2024-01-01T00:00:00"],
+            }
         ]
     }
     assert fields.get("pages") == {
@@ -162,18 +184,29 @@ def test_to_vespa_update_includes_optional_fields_when_set() -> None:
 
 
 def test_to_vespa_update_fields_are_plain_dicts_not_models() -> None:
-    """Nested concepts/pages must be plain dicts so orjson.dumps can serialize the update."""
+    """Nested labels/pages must be plain dicts so orjson.dumps can serialize the update."""
     passage = VespaPassage(
         id="block-0",
         document_id="doc-0",
         document_ref="id:documents:documents::doc-0",
-        concepts=[
-            VespaConcept(id="concept::Q1", type="concept", value="flooding", count=1)
+        labels=[
+            VespaLabel(
+                id="concept::finance flow",
+                type="concept",
+                value="finance flow",
+                classifier_id="classifier-1",
+                end_index=12.0,
+                labelled_text="finance flow",
+                labellers=["classifier-1"],
+                prediction_probability=0.9,
+                start_index=0.0,
+                timestamps=["2024-01-01T00:00:00"],
+            )
         ],
     )
 
     fields = passage.to_vespa_update()["fields"]
-    concepts = fields.get("concepts")
-    assert concepts is not None
+    labels = fields.get("labels")
+    assert labels is not None
 
-    assert isinstance(concepts["assign"][0], dict)
+    assert isinstance(labels["assign"][0], dict)

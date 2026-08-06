@@ -31,10 +31,31 @@ class VespaPageBoxes(BaseModel):
 
 
 class VespaConcept(BaseModel):
+    """
+    Superseded by `VespaLabel`/`labels` (the `passages.sd` schema no longer has a
+    `concepts` field). Kept only so `passages_feed_materializer.py`'s legacy
+    (already schema-incompatible) path stays importable - see FUS-207.
+    """
+
     id: str = ""
     type: str = ""
     value: str = ""
     count: int = 0
+
+
+class VespaLabel(BaseModel):
+    # These are the core Label fields i.e. the node.
+    id: str = ""
+    type: str = ""
+    value: str = ""
+    # These are fields that relate the label to the passage i.e. the edge.
+    classifier_id: str = ""
+    end_index: float = 0.0
+    labelled_text: str = ""
+    labellers: list[str] = Field(default_factory=list)
+    prediction_probability: float = 0.0
+    start_index: float = 0.0
+    timestamps: list[str] = Field(default_factory=list)
 
 
 class VespaPassageUpdate(TypedDict):
@@ -54,7 +75,7 @@ class VespaPassageUpdate(TypedDict):
     type_confidence: NotRequired[VespaAssign[float]]
     heading_id: NotRequired[VespaAssign[str]]
     heading_text: NotRequired[VespaAssign[str]]
-    concepts: NotRequired[VespaAssign[list[dict[str, Any]]]]
+    labels: NotRequired[VespaAssign[list[dict[str, Any]]]]
     pages: NotRequired[VespaAssign[list[dict[str, Any]]]]
 
 
@@ -101,7 +122,7 @@ class VespaPassage(BaseModel):
     pages: list[VespaPageBoxes] = Field(default_factory=list)
     heading_id: str | None = None
     heading_text: str | None = None
-    concepts: list[VespaConcept] = Field(default_factory=list)
+    labels: list[VespaLabel] = Field(default_factory=list)
 
     # Imported field (from document_ref) - inbound-only, never set on feed.
     principal_id: str | None = None
@@ -142,9 +163,9 @@ class VespaPassage(BaseModel):
             fields["heading_id"] = {"assign": self.heading_id}
         if self.heading_text is not None:
             fields["heading_text"] = {"assign": self.heading_text}
-        if self.concepts:
-            fields["concepts"] = {
-                "assign": [concept.model_dump() for concept in self.concepts]
+        if self.labels:
+            fields["labels"] = {
+                "assign": [label.model_dump() for label in self.labels]
             }
         if self.pages:
             fields["pages"] = {"assign": [page.model_dump() for page in self.pages]}

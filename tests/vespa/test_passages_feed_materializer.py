@@ -304,18 +304,20 @@ def test_build_passage_concepts_lookup_aggregates_per_passage() -> None:
     ]
 
 
-def test_text_block_to_vespa_update_includes_and_omits_concepts() -> None:
-    """Concepts are assigned when present, and the key is absent when there are none."""
+def test_text_block_to_vespa_update_does_not_forward_concepts() -> None:
+    """
+    `concepts` is accepted but not written to `fields` - the `passages.sd` schema
+    no longer has a `concepts` field (see FUS-207); this feed does not yet have a
+    source able to populate the new `labels` field's relationship data.
+    """
     concepts = [
         {"id": "concept::Q1", "type": "concept", "value": "flooding", "count": 2}
     ]
     with_concepts = materializer._text_block_to_vespa_update(
         _text_block(0), "doc-0", concepts=concepts
     )
-    assert with_concepts["fields"].get("concepts") == {"assign": concepts}
-
-    without_concepts = materializer._text_block_to_vespa_update(_text_block(0), "doc-0")
-    assert "concepts" not in without_concepts["fields"]
+    assert "concepts" not in with_concepts["fields"]
+    assert "labels" not in with_concepts["fields"]
 
 
 def test_text_block_to_vespa_update_includes_pages_from_multi_page_block() -> None:

@@ -73,6 +73,13 @@ def derive_labels_from_topics(record: dict) -> dict:
     return record
 
 
+def derive_passage_data(record: dict) -> dict:
+    """Apply all passages derivers to a record, in sequence."""
+    record = derive_labels_from_topics(record)
+    record = derive_document_ref(record)
+    return record
+
+
 def derive_document_ref(record: dict) -> dict:
     """
     Set `document_ref` on a passages update record, manufactured from its own `document_id`.
@@ -106,6 +113,6 @@ def passages_feeder_flow() -> State | None:
     return vespa_feeder(
         s3_bucket="cpr-prod-snowflake-data-export",
         s3_key="production/published/pipeline_data_in_vespa_passage_updates_v1/latest",
-        derive_data_from_source=derive_document_ref,
+        derive_data_from_source=derive_passage_data,
         max_concurrent_downloads=8,
     )

@@ -1266,7 +1266,9 @@ passages_filter_field_to_vespa_field_map: dict[str, list[str]] = {
     "principal_id": ["principal_id"],
 }
 passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
-    "concepts.value.id": ArrayStructField("concepts", "id"),
+    "labels.value.id": ArrayStructField("labels", "id"),
+    "labels.value.value": ArrayStructField("labels", "value"),
+    "labels.type": ArrayStructField("labels", "type"),
 }
 
 

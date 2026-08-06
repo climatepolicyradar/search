@@ -1,6 +1,9 @@
 registry := `aws sts get-caller-identity --query Account --output text` + ".dkr.ecr." + `aws configure get region 2>/dev/null || echo $AWS_DEFAULT_REGION` + ".amazonaws.com"
 image := registry + "/search-vespa-feeder"
 
+test:
+    uv run pytest
+
 build:
     docker build --platform=linux/amd64 -t {{ image }}:latest .
 

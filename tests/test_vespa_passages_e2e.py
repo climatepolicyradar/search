@@ -32,6 +32,7 @@ from vespa.deployment import VespaDocker
 from search.engines import Pagination
 from search.engines.dev_vespa import DevVespaPassageSearchEngine, Settings
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
+from search.vespa.passage import VespaLabel, VespaPassage
 from search.vespa.passages_feed_materializer import _text_block_to_vespa_update
 from search.vespa.sources.embeddings_input_v2 import TextBlock
 
@@ -164,6 +165,30 @@ def _feed_passage(
     r = req.put(
         f"{app.end_point}/document/v1/passages/passages/docid/{block['id']}",
         json={**op, "create": True},  # type: ignore[arg-type]
+        timeout=5,
+    )
+    r.raise_for_status()
+
+
+def _feed_passage_with_labels(
+    app: Vespa,
+    block_id: str,
+    document_id: str,
+    labels: list[VespaLabel],
+) -> None:
+    """Feed a passage with `labels` set - the legacy materializer path doesn't set these."""
+    passage = VespaPassage(
+        id=block_id,
+        idx=0,
+        language="en",
+        content="some passage text",
+        document_id=document_id,
+        document_ref=f"id:documents:documents::{document_id}",
+        labels=labels,
+    )
+    r = req.put(
+        f"{app.end_point}/document/v1/passages/passages/docid/{block_id}",
+        json={**passage.to_vespa_update(), "create": True},  # type: ignore[arg-type]
         timeout=5,
     )
     r.raise_for_status()
@@ -342,3 +367,57 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
         "tb-refs": (False, False, True),
         "tb-prose": (False, False, False),
     }
+
+
+def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
+    """
+    A passage's `labels` field round-trips through the schema and is filterable
+    by `labels.value.id` - the shape and filter FUS-207 asks for.
+    """
+    document = DocumentFactory.build(id="doc-labels", labels=[_principal_label()])
+    _feed_document(vespa_app, document)
+    _feed_passage_with_labels(
+        vespa_app,
+        "tb-finance-flow",
+        document_id="doc-labels",
+        labels=[
+            VespaLabel(
+                id="concept::finance flow",
+                type="concept",
+                value="finance flow",
+                classifier_id="classifier-1",
+                end_index=12.0,
+                labelled_text="finance flow",
+                labellers=["classifier-1"],
+                prediction_probability=0.9,
+                start_index=0.0,
+                timestamps=["2024-01-01T00:00:00"],
+            )
+        ],
+    )
+    _feed_passage_with_labels(
+        vespa_app, "tb-drought", document_id="doc-labels", labels=[]
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters_json_string=(
+            '{"op": "and", "filters": ['
+            '{"field": "labels.value.id", "op": "contains", '
+            '"value": "concept::finance flow"}'
+            "]}"
+        ),
+    )
+    ids = [p.text_block_id for p in results.results]
+
+    assert ids == ["tb-finance-flow"]
+    matched = results.results[0]
+    assert len(matched.labels) == 1
+    assert matched.labels[0].value.id == "concept::finance flow"
+    assert matched.labels[0].value.type == "concept"
+    assert matched.labels[0].value.value == "finance flow"
+    assert matched.labels[0].classifier_id == "classifier-1"
+    assert matched.labels[0].prediction_probability == 0.9
