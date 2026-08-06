@@ -371,8 +371,9 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
 
 def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
     """
-    A passage's `labels` field round-trips through the schema and is filterable
-    by `labels.value.id` - the shape and filter FUS-207 asks for.
+    A passage's `labels` field round-trips and is filterable.
+
+    Verifies the schema round-trip and the `labels.value.id` filter.
     """
     document = DocumentFactory.build(id="doc-labels", labels=[_principal_label()])
     _feed_document(vespa_app, document)
@@ -420,4 +421,6 @@ def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
     assert matched.labels[0].value.type == "concept"
     assert matched.labels[0].value.value == "finance flow"
     assert matched.labels[0].classifier_id == "classifier-1"
-    assert matched.labels[0].prediction_probability == 0.9
+    # Vespa stores this as a 32-bit float, so it round-trips as the nearest
+    # float32 value rather than the exact Python double.
+    assert matched.labels[0].prediction_probability == pytest.approx(0.9)

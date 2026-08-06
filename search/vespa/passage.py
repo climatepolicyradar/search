@@ -32,9 +32,11 @@ class VespaPageBoxes(BaseModel):
 
 class VespaConcept(BaseModel):
     """
-    Superseded by `VespaLabel`/`labels` (the `passages.sd` schema no longer has a
-    `concepts` field). Kept only so `passages_feed_materializer.py`'s legacy
-    (already schema-incompatible) path stays importable - see FUS-207.
+    Superseded by `VespaLabel`/`labels`.
+
+    The `passages.sd` schema no longer has a `concepts` field. Kept only so
+    `passages_feed_materializer.py`'s legacy (already schema-incompatible) path
+    stays importable.
     """
 
     id: str = ""

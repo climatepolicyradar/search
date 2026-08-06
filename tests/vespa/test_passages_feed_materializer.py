@@ -306,9 +306,11 @@ def test_build_passage_concepts_lookup_aggregates_per_passage() -> None:
 
 def test_text_block_to_vespa_update_does_not_forward_concepts() -> None:
     """
-    `concepts` is accepted but not written to `fields` - the `passages.sd` schema
-    no longer has a `concepts` field (see FUS-207); this feed does not yet have a
-    source able to populate the new `labels` field's relationship data.
+    `concepts` is accepted but not written to `fields`.
+
+    The `passages.sd` schema no longer has a `concepts` field, and this feed
+    does not yet have a source able to populate the new `labels` field's
+    relationship data.
     """
     concepts = [
         {"id": "concept::Q1", "type": "concept", "value": "flooding", "count": 2}
