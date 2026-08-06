@@ -107,3 +107,13 @@ prefect-deploy:
     uv run python deployments.py
 
 # endregion
+
+vespa-query query:
+    #!/usr/bin/env bash
+    set -e
+    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
+    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    vespa query \
+        --target "$vespa_endpoint" \
+        --header "Authorization: Bearer $vespa_read_token" \
+        {{ query }}
