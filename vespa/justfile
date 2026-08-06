@@ -42,8 +42,9 @@ up:
     docker compose up -d
 
 # Deploy Vespa application to Docker
-# Copies Vespa app files to a temp build_dir and then strips Vespa Cloud-only 
+# Copies Vespa app files to a temp build_dir and then strips Vespa Cloud-only
 # deploy:* attributes (e.g. deploy:application), which the docker Vespa app
+
 # rejects during XML validation. See FUS-74.
 deploy:
     #!/usr/bin/env bash
@@ -170,5 +171,3 @@ remote-get-label id="un_convention::CBD":
     vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     uv run vespa document get "id:labels:labels::{{ id }}" --target $vespa_endpoint --header "Authorization: Bearer $vespa_read_token"
-
-
