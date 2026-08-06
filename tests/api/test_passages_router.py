@@ -63,8 +63,8 @@ def test_read_passages_with_document_id_filter(passages_client) -> None:
     assert "doc.4.5.6" in kwargs["filters_json_string"]
 
 
-def test_read_passages_with_concept_filter(passages_client) -> None:
-    """A ``concepts.value.id`` (topic) filter is forwarded to the engine."""
+def test_read_passages_with_label_filter(passages_client) -> None:
+    """A ``labels.value.id`` filter is forwarded to the engine."""
     client, mock_engine = passages_client
     mock_engine.search.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
@@ -72,14 +72,14 @@ def test_read_passages_with_concept_filter(passages_client) -> None:
 
     filters = (
         '{"op": "and", "filters": ['
-        '{"field": "concepts.value.id", "op": "contains", "value": "concept_123"}'
+        '{"field": "labels.value.id", "op": "contains", "value": "concept::finance flow"}'
         "]}"
     )
     response = client.get("/search/passages", params={"filters": filters})
 
     assert response.status_code == HTTPStatus.OK
     _, kwargs = mock_engine.search.call_args
-    assert "concept_123" in kwargs["filters_json_string"]
+    assert "concept::finance flow" in kwargs["filters_json_string"]
 
 
 def test_read_passages_with_malformed_filters_returns_400(passages_client) -> None:

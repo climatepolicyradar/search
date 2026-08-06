@@ -62,28 +62,32 @@ def test_passages_filter_group_ands_document_and_principal() -> None: # trunk-ig
     ) == ('(document_id contains "doc-1" and principal_id contains "principal-1")')
 
 
-def test_passages_concept_struct_filter_builds_same_element() -> None:
-    """A single concept/topic filter renders a `concepts` sameElement clause."""
+def test_passages_label_struct_filter_builds_same_element() -> None:
+    """A single `labels.value.id` filter renders a `labels` sameElement clause."""
     filter_group = Filter(
         op="and",
         filters=[
-            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
+            FieldFilter(
+                field="labels.value.id", op="contains", value="concept::finance flow"
+            ),
         ],
     )
     assert _build_filter_yql(
         filter_group,
         passages_filter_field_to_vespa_field_map,
         passages_filter_struct_field_to_vespa_field_map,
-    ) == 'concepts contains sameElement(id contains "concept_123")'
+    ) == 'labels contains sameElement(id contains "concept::finance flow")'
 
 
-def test_passages_concept_struct_filter_or_uses_separate_same_elements() -> None:
-    """Multiple OR'd topics render one `sameElement` per concept id."""
+def test_passages_label_struct_filter_or_uses_separate_same_elements() -> None:
+    """Multiple OR'd label ids render one `sameElement` per label id."""
     filter_group = Filter(
         op="or",
         filters=[
-            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
-            FieldFilter(field="concepts.value.id", op="contains", value="concept_456"),
+            FieldFilter(
+                field="labels.value.id", op="contains", value="concept::finance flow"
+            ),
+            FieldFilter(field="labels.value.id", op="contains", value="concept::drought"),
         ],
     )
     assert _build_filter_yql(
@@ -91,18 +95,20 @@ def test_passages_concept_struct_filter_or_uses_separate_same_elements() -> None
         passages_filter_field_to_vespa_field_map,
         passages_filter_struct_field_to_vespa_field_map,
     ) == (
-        '(concepts contains sameElement(id contains "concept_123") '
-        'or concepts contains sameElement(id contains "concept_456"))'
+        '(labels contains sameElement(id contains "concept::finance flow") '
+        'or labels contains sameElement(id contains "concept::drought"))'
     )
 
 
-def test_passages_filter_group_and_document_id_and_concept() -> None:
-    """A document_id filter combines with a concept/topic filter via AND."""
+def test_passages_filter_group_and_document_id_and_label() -> None:
+    """A document_id filter combines with a `labels.value.id` filter via AND."""
     filter_group = Filter(
         op="and",
         filters=[
             FieldFilter(field="document_id", op="contains", value="doc-1"),
-            FieldFilter(field="concepts.value.id", op="contains", value="concept_123"),
+            FieldFilter(
+                field="labels.value.id", op="contains", value="concept::finance flow"
+            ),
         ],
     )
     assert _build_filter_yql(
@@ -111,7 +117,7 @@ def test_passages_filter_group_and_document_id_and_concept() -> None:
         passages_filter_struct_field_to_vespa_field_map,
     ) == (
         '(document_id contains "doc-1" and '
-        'concepts contains sameElement(id contains "concept_123"))'
+        'labels contains sameElement(id contains "concept::finance flow"))'
     )
 
 
