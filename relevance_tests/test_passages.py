@@ -202,6 +202,7 @@ test_cases = [
         all_or_any="any",
         assert_results=True,
     ),
+    # TODO: add query-rewrite rule for acronym expansion
     FieldCharacteristicsTestCase[Passage](
         category="related phrases",
         search_terms="Ecosystem-based approaches",
@@ -210,6 +211,10 @@ test_cases = [
             and "ecosystem-based" not in passage.text.lower()
         ),  # "approaches" seems pretty generic; it's the nature->ecosystem part that matters
         description="Results for closely-related phrases (Ecosystem-based approaches -> nbs) should be found, even if the search phrase itself is not mentioned in the same paragraph",
+            # problem - in absence of semantics would need query re-write rule for nature->ecosystem,
+            #           then another step to go nature->nbs, but 'ecosystem based approaches' and 
+            #           'nature based solutions' are not synonymous so a re-write rule is not appropriate.
+            # solution - future work either on concepts or query expansion
         k=100,
         all_or_any="any",
         assert_results=True,
@@ -237,10 +242,14 @@ test_cases = [
             and "human right" not in passage.text.lower()
         ),
         description="Results for closely-related phrases (human rights -> rights-based approach) should be found, even if the search phrase itself is not mentioned in the same paragraph",
+            # problem - all k =100 contain "human right"
+            # solution - filter on a document that contains "rights-based approach" so 
+            #            that the test works as expected
         k=100,
         all_or_any="any",
         assert_results=True,
     ),
+    # TODO: use document filter on document containing "rights-based approach" so that the test works as expected
     FieldCharacteristicsTestCase[Passage](
         category="related phrases",
         search_terms="public health infrastructure",
@@ -351,50 +360,40 @@ test_cases = [
             "Bibliography blocks must not be returned in the top 10 results"
         ),
     ),
-    # Example (chapter 6 contents, repeats "agriculture" 8 times; 178 of the
-    # document's 2,400 passages mention the term at all):
-    #    "6.1 Guatemalan agriculture in context / of climate change / 6.1.1
-    #     Potential impacts of climate change on agriculture / 6.1.2 Dynamics
-    #     in the agricultural sector that increase vulnerability to climate
-    #     change / 6.2 Measures to improve productivity, mitigate the ..."
+    #
+    # Example:
+    #    "Category of / Details / Indicative activities/ Modality / Targeting
+    #     resilience/ adaptation option / Homestead farming - support
+    #     vulnerable / Support to household - vegetable gardens / Provide
+    #     training in IPM and GAPS, via experienced service ..."
     FieldCharacteristicsTestCase[Passage](
         category="tables_of_contents",
-        search_terms="agriculture",
-        document_id="ICCN.document.i00000042.n0000",
+        search_terms="resilience",
+        document_id="AF.document.AF00000210.n0000",
         characteristics_test=lambda passage: not looks_like_table_of_contents(passage),
         all_or_any="all",
         k=5,
         assert_results=True,
-        description=("Table-of-contents blocks must not reach the top 5. "),
+        description=(
+            "Table-of-contents blocks must not reach the top 5. "
+        ),
     ),
-    #    "5.1 The supply and security of water resources of / Guatemala in the
-    #     context of climate change / 5.1.1 Surface offer. / 5.1.2 Underground
-    #     supply / 5.1.4 Potential impacts of climate change on the
-    #     availability of water resources ..."
+    # Example:
+    #    "System / Mitigation Option / Evidence / Agreement / Ec / Tec / Inst /
+    #     Soc / Env / Geo / Context / Industrial System Transitions / Energy
+    #     efficiency / Robust / High / Potential and adoption depend on
+    #     existing efficiency, energy prices and interest rates, as wel..."
     FieldCharacteristicsTestCase[Passage](
         category="tables_of_contents",
-        search_terms="water resources",
-        document_id="ICCN.document.i00000042.n0000",
+        search_terms="energy efficiency",
+        document_id="UNFCCC.non-party.1196.0",
         characteristics_test=lambda passage: not looks_like_table_of_contents(passage),
         all_or_any="all",
         k=5,
         assert_results=True,
-        description=("Table-of-contents blocks must not reach the top 5. "),
-    ),
-    #    "Executive Summary / Chapter 01 Singapore's Commitment to Sustainable
-    #     Aviation / Chapter 02 Performance and Targets / Chapter 03 / Chapter
-    #     04 Airline Domain Initiatives / Chapter 05 Air Traffic Management
-    #     Domain Initiatives / Airport Domain Initiatives 18 / Chapter 06
-    #     Critical Enablers / Acknowledgements / Glossary"
-    FieldCharacteristicsTestCase[Passage](
-        category="tables_of_contents",
-        search_terms="domain initiatives",
-        document_id="CCLW.document.i00002502.n0000",
-        characteristics_test=lambda passage: not looks_like_table_of_contents(passage),
-        all_or_any="all",
-        k=5,
-        assert_results=True,
-        description=("Table-of-contents blocks must not reach the top 5. "),
+        description=(
+            "Table-of-contents blocks must not reach the top 5. "
+        ),
     ),
     FieldCharacteristicsTestCase[Passage](
         category="phrase_integrity",
@@ -432,17 +431,17 @@ test_cases = [
         # 2025 Annual Report – "Reinvigorating climate action in the face of worsening impacts and weakened leadership"
         document_id="ICCN.document.i00000036.n0000",
         expected_result_ids=[
-            # rank 13 - "The carbon sink decreases during El Nino events, due to
+            # rank 9 - "The carbon sink decreases during El Nino events, due to
             #            megafires (Canada, Siberia, Amazon), and extreme droughts.
             #            Since 2015, CO2 absorption north of the 20th parallel has
             #            halved, and 2024 marks a record level of tropical forest..."
             "019d89e9-0ddd-7593-bfb3-4549d0a4deea",
-            # rank 15 - "Due to carbon losses from cultivated and artificialized
+            # rank 11 - "Due to carbon losses from cultivated and artificialized
             #            soils, the second carbon budget for the land use, land-use
             #            change and forestry (LULUCF) sector has not been met. With
             #            an average carbon sink of -36 Mt CO2 eq per year..."
             "019d89e9-0dd7-7e01-9292-94219530df5d",
-            # rank 20 - "The LULUCF carbon sink deteriorated significantly between
+            # rank 16 - "The LULUCF carbon sink deteriorated significantly between
             #            2013 and 2017, falling from -50.2 to -28.1 Mt CO2e, a
             #            decrease of 45%. The maintenance of this carbon sink at an
             #            average level of -36 Mt CO2 eq since 2018..."
@@ -451,9 +450,15 @@ test_cases = [
         k=5,
         description=(
             "The three passages quantifying France's LULUCF carbon budget should "
-            "reach the top 5. They currently sit at 13, 15 and 20 behind ALLCAPS headings."
+            "reach the top 5."
+            # problem - passages that quantify the LULUCF carbon budget ranking above 
+            #.          passages that discuss carbon generally is a judgement with no 
+            #           lexical correlation i.e. there is not enough intent in the 
+            #           search query to really understand relevance
+            # solution - Aspirational. Not expected to pass.
         ),
     ),
+    # TODO: relax test to k=20?
     RecallTestCase[Passage](
         category="low_ranking_positives",
         search_terms="health",
@@ -477,6 +482,10 @@ test_cases = [
         description=(
             "Public-health provisions of the Tajik Ecological Code should reach the "
             "top 10."
+            # problem - Ranks 1-4 are type Lists, highly ranked on repeated occurrences
+            #           of “health”.
+            # solution - None yet. We want to make the lists into better passages for
+            #            search rather than de-rank them.
         ),
     ),
     # TODO: checking this one with Anne
@@ -485,14 +494,14 @@ test_cases = [
         search_terms="biomass",
         document_id="UNFCCC.non-party.1184.0",
         expected_result_ids=[
-            # rank 12 - "However, forests may become less resilient to heat stress in
+            # rank 9 - "However, forests may become less resilient to heat stress in
             #            future due to the long recovery period required to replace
             #            lost biomass and the projected increased frequency of heat
             #            and drought events (Frank et al. 2015a; McDowell and Allen..."
             #            NB: this is the citation-dense PROSE that a naive 'et al.'
             #            or doi-based reference filter would wrongly discard.
             "019d437a-5ba0-7f20-a5ad-3e5f3ffe685f",
-            # rank 18 - "Furthermore, fire emissions during 1997-2016 were dominated
+            # rank 13 - "Furthermore, fire emissions during 1997-2016 were dominated
             #            by savanna (65.3%), followed by tropical forest (15.1%),
             #            boreal forest (7.4%), temperate forest (2.3%), peatland
             #            (3.7%) and agricultural waste burning (6.3%)..."
@@ -501,8 +510,19 @@ test_cases = [
         k=10,
         description=(
             "Substantive biomass prose should outrank the chapter bibliography. "
+            # problem - rank 10 is a bibliography entry, which we can de-rank, but 
+            #           second passage still below substantive passages.
+            # rank 10 - Lamers, P., and M. Junginger, 2013: The "debt" is in the detail:
+            #           A synthesis of recent temporal forest carbon analyses on woody 
+            #           biomass for energy. Biofuels, Bioprod. Biorefining, 7, 373-385, 
+            #           doi:10.1002/bbb.1407.
+            # solution - de-rank bibliography/reference_item (in addition to existing 
+            #            looks_like_reference_list). Maybe just have the one passage 
+            #            required to pass the test as the other passages in the top 10
+            #            look substantive.
         ),
     ),
+    # TODO: remove second passage from test? de-rank bibliography/reference item
     RecallTestCase[Passage](
         category="low_ranking_positives",
         search_terms="disaster",
@@ -519,8 +539,13 @@ test_cases = [
         k=10,
         description=(
             "Discussion of reactive disaster adaptation should reach the top 10"
+            # problem - rank 3 and rank 10 are author biographies, rank 5 is a `Table`,
+            #           rank 6 is a `list` (heading).
+            # solution - de-rank biographies/authors and we want to make tables and 
+            #            lists into better passages for search rather than de-rank them.
         ),
     ),
+    # TODO: de-rank biographies/authors
     RelativeOrderTestCase[Passage](
         category="substantive_mention",
         search_terms="carbon market",
@@ -531,6 +556,15 @@ test_cases = [
         k=10,
         description=(
             "A passage talking about carbon markets directly should rank above one which only describes enabling conditions for carbon markets."
+            # problem - The more relevant passage has higher nativeRank but lower 
+            #           nativeProximity; the more relevant passage defines what the
+            #           national carbon emissions trading market is uses the literal 
+            #           phrase once, where as the less relevant passage mentions carbon 
+            #           markets repeatedly so has higher nativeProximity and ranks higher.
+            # solution - We could try reducing the weight of nativeProximity to not
+            #            inflate rank from phrase repetition, but that could risk the 
+            #            work done to date on the whole phrase ranking above a partial 
+            #            phrase, so leaving as is. Try adding weight of nativeFieldRank.
         ),
     ),
     FieldCharacteristicsTestCase[Passage](
