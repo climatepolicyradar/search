@@ -56,13 +56,13 @@ CURRENCY_SYMBOL_REPLACEMENTS = {
 def _normalize_currency_symbols(query: str) -> str:
     """
     Map currency symbols to words so queries match the indexed (charFiltered) form.
-    
-    This is needed as Vespa's query parser strips punctuation (incl. currency symbols) 
+
+    This is needed as Vespa's query parser strips punctuation (incl. currency symbols)
     *before* linguistics runs, so the `passage_analysis` charFilter in
     vespa/app/services.xml - which maps these symbols to words at index time
     (e.g. "$100" -> "dollar100") - never sees them on the query side. We apply the
     same mapping to the query string here so query terms match the indexed form.
-    
+
     This MUST be kept in sync with the `charFilters` block in services.xml. See FUS-79.
     """
     for symbol, word in CURRENCY_SYMBOL_REPLACEMENTS.items():
@@ -588,6 +588,7 @@ class CountAggregation[T](BaseModel):
 
 def _get_total_count(response: dict[str, Any]) -> int | None:
     return response.get("root", {}).get("fields", {}).get("totalCount")
+
 
 def _execute_vespa_query(
     *,
@@ -1268,7 +1269,7 @@ passages_filter_field_to_vespa_field_map: dict[str, list[str]] = {
 passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
     "labels.value.id": ArrayStructField("labels", "id"),
     "labels.value.value": ArrayStructField("labels", "value"),
-    "labels.type": ArrayStructField("labels", "type"),
+    "labels.value.type": ArrayStructField("labels", "type"),
 }
 
 
