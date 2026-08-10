@@ -24,7 +24,7 @@ Why shard into many ~200MB files rather than one big one:
 - Bounded memory/disk: a consumer processes one ~200MB file at a time rather
   than needing to hold (or stream-parse) one enormous file. The producer side
   (this flow) is bounded the same way - each shard is uploaded to S3 and its
-  local copy deleted as soon as it's finalized (see upload_and_remove_shard),
+  local copy deleted as soon as it's finalised (see upload_and_remove_shard),
   rather than writing the whole sampled corpus to disk before uploading
   anything. At sample_percent=100 that's ~10GB+, enough to exhaust the
   task's ephemeral storage before a single byte reached S3.
