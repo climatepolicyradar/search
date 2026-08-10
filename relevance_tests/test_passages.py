@@ -211,14 +211,14 @@ test_cases = [
             and "ecosystem-based" not in passage.text.lower()
         ),  # "approaches" seems pretty generic; it's the nature->ecosystem part that matters
         description="Results for closely-related phrases (Ecosystem-based approaches -> nbs) should be found, even if the search phrase itself is not mentioned in the same paragraph",
-            # problem - in absence of semantics would need query re-write rule for nature->ecosystem, it 
-            #           is then another step to go nature->nbs, but bigger concern is this test is written 
-            #           to fail - a passage containing "nature" is likely to include "ecosystem-based"?
+            # problem - in absence of semantics would need query re-write rule for nature->ecosystem,
+            #           then another step to go nature->nbs, but 'ecosystem based approaches' and 
+            #           'nature based solutions' are not synonymous so a re-write rule is not appropriate.
+            # solution - future work either on concepts or query expansion
         k=100,
         all_or_any="any",
         assert_results=True,
     ),
-    # TODO: rewrite so that the test passes so long as the passage contains "nature"
     FieldCharacteristicsTestCase[Passage](
         category="related phrases",
         search_terms="peatland rehabilitation",
@@ -242,14 +242,14 @@ test_cases = [
             and "human right" not in passage.text.lower()
         ),
         description="Results for closely-related phrases (human rights -> rights-based approach) should be found, even if the search phrase itself is not mentioned in the same paragraph",
-            # problem - we would need a query re-write rule if "rights-based approach" explicitly needs to 
-            #           be in top 10, but bigger concern is this test is written to fail - a passage 
-            #           containing "rights-based approach" is likely to include "human right"?
+            # problem - all k =100 contain "human right"
+            # solution - filter on a document that contains "rights-based approach" so 
+            #            that the test works as expected
         k=100,
         all_or_any="any",
         assert_results=True,
     ),
-    # TODO: rewrite so that the test passes so long as the passage contains "rights-based approach"
+    # TODO: use document filter on document containing "rights-based approach" so that the test works as expected
     FieldCharacteristicsTestCase[Passage](
         category="related phrases",
         search_terms="public health infrastructure",
@@ -450,13 +450,12 @@ test_cases = [
         k=5,
         description=(
             "The three passages quantifying France's LULUCF carbon budget should "
-            "reach the top 5. They currently sit at 9, 11, and 16."
+            "reach the top 5."
             # problem - passages that quantify the LULUCF carbon budget ranking above 
             #.          passages that discuss carbon generally is a judgement with no 
-            #           lexical correlation. Difficult to determine a signal that could
-            #           express this.
-            # solution - The test could be relaxed to k=20 otherwise is aspirational 
-            #            without semantics.
+            #           lexical correlation i.e. there is not enough intent in the 
+            #           search query to really understand relevance
+            # solution - Aspirational. Not expected to pass.
         ),
     ),
     # TODO: relax test to k=20?
@@ -486,7 +485,7 @@ test_cases = [
             # problem - Ranks 1-4 are type Lists, highly ranked on repeated occurrences
             #           of “health”.
             # solution - None yet. We want to make the lists into better passages for
-            #            search rather than starting to de-rank them.
+            #            search rather than de-rank them.
         ),
     ),
     # TODO: checking this one with Anne
@@ -513,6 +512,10 @@ test_cases = [
             "Substantive biomass prose should outrank the chapter bibliography. "
             # problem - rank 10 is a bibliography entry, which we can de-rank, but 
             #           second passage still below substantive passages.
+            # rank 10 - Lamers, P., and M. Junginger, 2013: The "debt" is in the detail:
+            #           A synthesis of recent temporal forest carbon analyses on woody 
+            #           biomass for energy. Biofuels, Bioprod. Biorefining, 7, 373-385, 
+            #           doi:10.1002/bbb.1407.
             # solution - de-rank bibliography/reference_item (in addition to existing 
             #            looks_like_reference_list). Maybe just have the one passage 
             #            required to pass the test as the other passages in the top 10
@@ -538,10 +541,11 @@ test_cases = [
             "Discussion of reactive disaster adaptation should reach the top 10"
             # problem - rank 3 and rank 10 are author biographies, rank 5 is a `Table`,
             #           rank 6 is a `list` (heading).
-            # solution - de-rank biographies/authors and tables
+            # solution - de-rank biographies/authors and we want to make tables and 
+            #            lists into better passages for search rather than de-rank them.
         ),
     ),
-    # TODO: de-rank biographies/authors and tables
+    # TODO: de-rank biographies/authors
     RelativeOrderTestCase[Passage](
         category="substantive_mention",
         search_terms="carbon market",
@@ -552,15 +556,15 @@ test_cases = [
         k=10,
         description=(
             "A passage talking about carbon markets directly should rank above one which only describes enabling conditions for carbon markets."
-            # problem - The expected-higher has higher nativeRank but lower 
-            #           nativeProximity; he passage at rank 2 — which defines what the
+            # problem - The more relevant passage has higher nativeRank but lower 
+            #           nativeProximity; the more relevant passage defines what the
             #           national carbon emissions trading market is uses the literal 
-            #           phrase once, where as the passage at rank 1 mentions carbon 
-            #           markets repeatedly.
+            #           phrase once, where as the less relevant passage mentions carbon 
+            #           markets repeatedly so has higher nativeProximity and ranks higher.
             # solution - We could try reducing the weight of nativeProximity to not
             #            inflate rank from phrase repetition, but that could risk the 
             #            work done to date on the whole phrase ranking above a partial 
-            #            phrase, so leaving as is for now i.e. expect to fail.
+            #            phrase, so leaving as is. Try adding weight of nativeFieldRank.
         ),
     ),
     FieldCharacteristicsTestCase[Passage](
