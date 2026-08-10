@@ -217,7 +217,7 @@ def feed_target(target: str, corpus_file: Path) -> None:
     )
 
 
-@flow(name="feed-from-production")
+@flow(name="search-vespa-dev-feed-from-production")
 def feed_from_production(
     target: str,
     sample_percent: int = 5,

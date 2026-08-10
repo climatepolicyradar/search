@@ -79,7 +79,9 @@ def upload_and_remove_shard(shard_path: Path) -> str:
     key = f"{_S3_PREFIX}/{shard_path.name}"
     s3.upload_file(str(shard_path), _S3_BUCKET, key)
     shard_path.unlink()
-    logger.info(f"Uploaded {shard_path.name} -> s3://{_S3_BUCKET}/{key} (local copy removed)")
+    logger.info(
+        f"Uploaded {shard_path.name} -> s3://{_S3_BUCKET}/{key} (local copy removed)"
+    )
     return shard_path.name
 
 
@@ -186,7 +188,7 @@ def delete_stale_shards(keep_names: list[str]) -> None:
                 s3.delete_object(Bucket=_S3_BUCKET, Key=key)
 
 
-@flow(name="export-production-snapshot")
+@flow(name="search-vespa-dev-export-production-snapshot")
 def export_production_snapshot(
     sample_percent: int = 100,
     workdir: str = "/tmp/vespa-snapshot",  # nosec B108
