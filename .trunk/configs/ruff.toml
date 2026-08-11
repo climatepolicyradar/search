@@ -27,7 +27,7 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
-"tests/*" = [
+"{tests/*,test_*.py}" = [
   # Pytest fixtures with dependency injection may redefine names
   "F811", # https://docs.astral.sh/ruff/rules/redefined-while-unused/
 
