@@ -28,17 +28,49 @@ def highlight(s: str, words: list[str]) -> Text:
     return t
 
 
-def _build_filters(document_id: str | None, filters: str | None) -> str | None:
-    """Combine the --document-id shorthand with any raw --filters JSON."""
+def _topic_condition(topic: str) -> dict:
+    """One topic condition. A bare wikibase id is given the `concept::` prefix."""
+    value = topic if topic.startswith("concept::") else f"concept::{topic}"
+    return {"field": "labels.value.id", "op": "contains", "value": value}
+
+
+def _build_topic_filter(topics: list[str], topic_or: bool) -> dict | None:
+    """
+    Group the --topic values into a single condition, AND by default, OR with `--or`.
+
+    Each topic sits in its own nested group because topics in a group would get collapsed
+    by the engine into a single `sameElement(...)`, so match nothing. See 
+    `_build_filter_yql` in `search/engines/dev_vespa.py`.
+    """
+    if not topics:
+        return None
+    conditions = [_topic_condition(topic) for topic in topics]
+    if topic_or:
+        return {"op": "or", "filters": conditions}
+    return {
+        "op": "and",
+        "filters": [{"op": "or", "filters": [condition]} for condition in conditions],
+    }
+
+
+def _build_filters(
+    document_id: str | None,
+    filters: str | None,
+    topics: list[str],
+    topic_or: bool,
+) -> str | None:
+    """Combine the --document-id and --topic shorthand with any raw --filters JSON."""
     conditions: list[dict] = []
     if document_id:
         conditions.append(
             {"field": "document_id", "op": "contains", "value": document_id}
         )
+    if topic_filter := _build_topic_filter(topics, topic_or):
+        conditions.append(topic_filter)
     if filters:
         conditions.append(json.loads(filters))
     if not conditions:
-            return None
+        return None
     return json.dumps({"op": "and", "filters": conditions})
 
 
@@ -51,12 +83,24 @@ def search(
     max_len: int | None = 600,
     filters: str | None = None,
     document_id: str | None = None,
+    topic: list[str] = typer.Option(
+        [],
+        "--topic",
+        help="Filter to passages tagged with this topic, e.g. Q1653 or "
+        "concept::Q1653. Repeatable. Default is to require all of them i.e. AND",
+    ),
+    topic_or: bool = typer.Option(
+        False,
+        "--or",
+        help="Match passages carrying ANY of the given --topic values. "
+        "Default is to require all of them i.e. AND",
+    ),
 ):
     """Search for passages."""
     engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
     results = engine.search(
         query=query,
-        filters_json_string=_build_filters(document_id, filters),
+        filters_json_string=_build_filters(document_id, filters, topic, topic_or),
         pagination=Pagination(page_token=page, page_size=page_size),
         order_by=[OrderBy(field="relevance", direction="desc")],
     )
@@ -87,6 +131,20 @@ def search(
             table.add_row("heading_id", passage.heading_id)
         if passage.heading_text:
             table.add_row("heading_text", passage.heading_text)
+        passage_topics = [
+            label for label in passage.labels if label.value.type == "concept"
+        ]
+        if passage_topics:
+            table.add_row(
+                "topics",
+                truncate(
+                    ", ".join(
+                        f"{label.value.value} ({label.value.id})"
+                        for label in passage_topics
+                    ),
+                    max_len,
+                ),
+            )
         text_display = truncate(passage.text, max_len)
         table.add_row("text", highlight(text_display, words))
         if passage.tokens:
