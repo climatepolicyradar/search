@@ -2,6 +2,11 @@ import re
 from typing import TypedDict
 
 from flow import vespa_feeder
+from passages_derived_data import (
+    looks_like_reference_list,
+    looks_like_short_heading,
+    looks_like_table_of_contents,
+)
 from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
 
@@ -73,10 +78,33 @@ def derive_labels_from_topics(record: dict) -> dict:
     return record
 
 
+def derive_passage_type_flags(record: dict) -> dict:
+    """
+    Set the three `looks_like_*` bools, derived from the record's own text and pages.
+
+    The Snowflake export doesn't carry them, so without this the fields default
+    false and the penalties they drive in passages.sd's `nativerank` profile are
+    inert. `pages` is absent for passages with no page data (HTML documents), in
+    which case `looks_like_table_of_contents` skips its front-matter page veto.
+    """
+    fields = record.get("fields", {})
+    content = fields.get("content", {}).get("assign", "")
+    pages = fields.get("pages", {}).get("assign") or []
+    page_numbers = [page["number"] for page in pages]
+
+    fields["looks_like_short_heading"] = {"assign": looks_like_short_heading(content)}
+    fields["looks_like_table_of_contents"] = {
+        "assign": looks_like_table_of_contents(content, page_numbers)
+    }
+    fields["looks_like_reference_list"] = {"assign": looks_like_reference_list(content)}
+    return record
+
+
 def derive_passage_data(record: dict) -> dict:
     """Apply all passages derivers to a record, in sequence."""
     record = derive_labels_from_topics(record)
     record = derive_document_ref(record)
+    record = derive_passage_type_flags(record)
     return record
 
 
