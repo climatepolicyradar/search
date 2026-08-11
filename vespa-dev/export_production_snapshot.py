@@ -6,7 +6,7 @@ every ad hoc dev-instance feed (see its module docstring), which is slow and
 puts read load on production every time someone iterates. This flow is the
 "export" half that docstring already earmarks: it does the same `vespa
 visit`, but on a schedule, and writes the result to S3 as sharded JSONL
-instead of a single ~10GB file - matching the folder-of-parts pattern
+instead of a single ~75GiB file - matching the folder-of-parts pattern
 `vespa-feeder/flow.py`'s `download_from_s3` already expects (a non-`.jsonl`
 S3 key is treated as a prefix and every object under it is downloaded and
 fed). `feed_from_production.py` is not yet wired up to read from this
@@ -26,8 +26,9 @@ Why shard into many ~200MB files rather than one big one:
   (this flow) is bounded the same way - each shard is uploaded to S3 and its
   local copy deleted as soon as it's finalised (see upload_and_remove_shard),
   rather than writing the whole sampled corpus to disk before uploading
-  anything. At sample_percent=100 that's ~10GB+, enough to exhaust the
-  task's ephemeral storage before a single byte reached S3.
+  anything. At sample_percent=100 that's ~75GiB (382 shards as of
+  2026-08-11), enough to exhaust the task's ephemeral storage before a single
+  byte reached S3.
 - Matches where this codebase is already headed: see the "folder pattern"
   comment in vespa-feeder/flow.py's download_from_s3.
 
@@ -71,7 +72,7 @@ def upload_and_remove_shard(shard_path: Path) -> str:
     Called as soon as each ~_SHARD_TARGET_BYTES shard is finalized (rather
     than after the whole corpus has been visited), so local disk usage stays
     bounded to about one shard at a time instead of the full sampled corpus -
-    at sample_percent=100 that's ~10GB+, which was exhausting the task's
+    at sample_percent=100 that's ~75GiB, which was exhausting the task's
     ephemeral storage before a single byte reached S3.
     """
     logger = get_run_logger()
@@ -207,7 +208,7 @@ if __name__ == "__main__":
         "--sample-percent",
         type=int,
         default=100,
-        help="Percent of production corpus to snapshot (100 = full ~10GB)",
+        help="Percent of production corpus to snapshot (100 = full ~75GiB)",
     )
     parser.add_argument("--workdir", default="/tmp/vespa-snapshot")  # nosec B108
     args = parser.parse_args()

@@ -17,6 +17,30 @@ _WORK_POOL = "mvp-prod-ecs"
 
 _DEFAULT_JOB_VARIABLES_NAME = "ecs-default-job-variables-prefect-mvp-prod"
 
+# The work pool's defaults (cpu=256, memory=512, no ephemeralStorage - so
+# Fargate's default 20GiB) are sized for small orchestration tasks and are
+# nowhere near enough for a full feed.
+#
+# feed_from_production.py's download_snapshot downloads *every* shard to local
+# disk before feeding any of them, so the task needs to hold the whole snapshot
+# at once. As of 2026-08-11 that's 382 shards / ~75GiB at
+# s3://cpr-cache/search/vespa/index/, and it grows with the corpus. 150GiB
+# leaves room for that growth plus the second, sampled copy download_snapshot
+# writes alongside the full download when sample_percent < 100 (Fargate's
+# ceiling is 200GiB, and storage over the free 20GiB is billed per GB-hour, so
+# this costs pennies for an occasional manual run).
+#
+# cpu/memory mirror vespa-feeder/deployments.py's passages feed: that A/B
+# tested cpu=2048 against 1024 and found no measurable difference, so the
+# constraint is Vespa's server-side feed capacity rather than local CPU.
+# Downloading and sampling both stream, so memory only needs to cover the
+# Prefect runtime and the vespa CLI.
+_FEED_JOB_VARIABLES = {
+    "cpu": 1024,
+    "memory": 4096,
+    "ephemeralStorage": {"sizeInGiB": 150},
+}
+
 if __name__ == "__main__":
     sts = boto3.client("sts")
     account_id = sts.get_caller_identity()["Account"]
@@ -49,7 +73,7 @@ if __name__ == "__main__":
             name=image_name,
             tag="latest",
         ),
-        job_variables=default_job_variables,
+        job_variables={**default_job_variables, **_FEED_JOB_VARIABLES},
         parameters={
             "sample_percent": 100,  # override with -p sample_percent=... per run
         },
