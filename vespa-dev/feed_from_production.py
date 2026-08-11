@@ -136,7 +136,7 @@ def list_snapshot_shards() -> list[str]:
 
 @task(retries=2, retry_delay_seconds=30)
 def download_shard(key: str, workdir: Path, sample_percent: int) -> Path:
-    """Download one snapshot shard, and return it's path"""
+    """Download one snapshot shard, and return its path"""
     logger = get_run_logger()
     name = key.rsplit("/", 1)[-1]
 
