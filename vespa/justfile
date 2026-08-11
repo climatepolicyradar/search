@@ -30,11 +30,40 @@ extract-labels:
 feed-labels:
     uv run vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target http://localhost:8080 --progress 30
 
-# No extract-passages/feed-passages: passages have no cpr-cache materializer.
-# They are fed straight from the data-lake Snowflake export by
-# search-vespa-feeder-passages (see ../vespa-feeder/passages_flow.py), whose
-# source is a prefix of many files rather than the single .jsonl these
-# recipes assumed.
+# `files` bounds the download - a local Vespa rarely wants the whole export.
+# Raise it for more data; the chunks are ~2-2.5k records / ~16MB each.
+extract-passages files="5":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    passages_export="s3://cpr-prod-snowflake-data-export/production/published/pipeline_data_in_vespa_passage_updates_v1/latest"
+    dest=../.data_cache/vespa/passages
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    # No extension filter, matching the feeder's list_s3_keys: everything
+    # under the prefix is a feed file.
+    aws s3 ls "$passages_export/" | awk '{print $4}' | grep . | head -n {{ files }} |
+        while read -r key; do
+            aws s3 cp "$passages_export/$key" "$dest/$key"
+        done
+
+feed-passages:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    src=../.data_cache/vespa/passages
+    shopt -s nullglob
+    files=("$src"/*)
+    if [ ${#files[@]} -eq 0 ]; then
+        echo "No files in $src - run 'just extract-passages' first" >&2
+        exit 1
+    fi
+    # Derived copies are throwaway: the extract is the cache, not these.
+    derived_dir=$(mktemp -d)
+    trap 'rm -rf "$derived_dir"' EXIT
+    for f in "${files[@]}"; do
+        derived="$derived_dir/$(basename "$f")"
+        uv run --project ../vespa-feeder python ../vespa-feeder/derive_passages_jsonl.py <"$f" >"$derived"
+        uv run vespa feed "$derived" --target http://localhost:8080 --progress 30
+    done
 
 # Run vespa dev
 up:
@@ -123,6 +152,9 @@ remote-feed-labels:
     vespa_write_token=$(aws ssm get-parameter --name "/search/vespa/write_token" --query "Parameter.Value" --output text --with-decryption)
     vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
     uv run vespa feed ../.data_cache/vespa/labels_feed_materializer.jsonl --target $vespa_endpoint --header "Authorization: Bearer $vespa_write_token" --progress 30
+
+# No remote-feed-passages: passages are fed straight from the data-lake
+# @see vespa-feeder/passages_flow.py
 
 remote-visit:
     #!/usr/bin/env bash

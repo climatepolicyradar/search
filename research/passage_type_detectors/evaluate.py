@@ -8,6 +8,7 @@ used to compare two candidate rules.
 """
 
 import json
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -15,14 +16,21 @@ from rich.console import Console
 from rich.table import Table
 from sklearn.metrics import precision_recall_fscore_support
 
-from search.passage import (
-    Passage,
+# The detectors are the feeder's - it is what production runs, so scoring
+# anything else would be scoring a copy. `passages_derived_data` is
+# deliberately stdlib-only, so importing it needs no more than this: the
+# feeder ships no package, its modules are flat files on PYTHONPATH.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "vespa-feeder"))
+
+from passages_derived_data import (  # noqa: E402
     looks_like_reference_list,
     looks_like_table_of_contents,
 )
 
 DATA_DIR = Path(__file__).parent / "data"
-Detector = Callable[[Passage], bool]
+# `looks_like_table_of_contents` reads page numbers, `looks_like_reference_list`
+# does not - both are adapted to this shape so `score` stays uniform.
+Detector = Callable[[str, list[int]], bool]
 # The slice the README quotes its baselines on, because it excludes the rows added
 # after the detectors were developed and so is comparable with their history.
 BASELINE_SLICE = "original strata only"
@@ -43,7 +51,7 @@ def score(
     for row in rows:
         pages = [row["min_page"]] if use_pages and row["min_page"] is not None else []
         truth.append(row["label"])
-        predicted.append(int(detector(Passage(text=row["content"], pages=pages))))
+        predicted.append(int(detector(row["content"], pages)))
     precision, recall, f1, _ = precision_recall_fscore_support(
         truth,
         predicted,
@@ -131,6 +139,6 @@ if __name__ == "__main__":
     report(
         "looks_like_reference_list",
         load_dataset("reflist_validation_set.jsonl"),
-        looks_like_reference_list,
+        lambda text, _pages: looks_like_reference_list(text),
         use_pages=False,
     )

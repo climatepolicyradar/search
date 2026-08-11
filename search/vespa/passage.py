@@ -5,10 +5,6 @@ Canonical typed representation of the Vespa `passages` schema.
 update (`.to_vespa_update()`) and parsing an inbound search-hit's `fields`
 dict (`VespaPassage.model_validate(fields)`). Living here rather than inside
 `search/passage.py` keeps "Vespa wire shape" distinct from "client API shape".
-
-Production passages are fed by `vespa-feeder/passages_flow.py` straight from
-the data-lake Snowflake export, which builds this shape as raw JSON; this
-module is the query path's and the tests' typed view of the same records.
 """
 
 from typing import Any, NotRequired, TypedDict
@@ -153,9 +149,7 @@ class VespaPassage(BaseModel):
         if self.heading_text is not None:
             fields["heading_text"] = {"assign": self.heading_text}
         if self.labels:
-            fields["labels"] = {
-                "assign": [label.model_dump() for label in self.labels]
-            }
+            fields["labels"] = {"assign": [label.model_dump() for label in self.labels]}
         if self.pages:
             fields["pages"] = {"assign": [page.model_dump() for page in self.pages]}
 

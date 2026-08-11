@@ -83,3 +83,9 @@ extend-exclude = ["relevance_tests/*.py"]
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+# The vespa-feeder ships no package - its modules are flat files resolved via
+# PYTHONPATH in its own image. Root code that imports one (research/
+# passage_type_detectors/evaluate.py, which scores the feeder's passage-type
+# rulesets) does the equivalent sys.path insert at runtime; this tells pyright
+# where to look so the import resolves statically too.
+extraPaths = ["vespa-feeder"]

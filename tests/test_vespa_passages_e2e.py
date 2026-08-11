@@ -31,12 +31,6 @@ from vespa.deployment import VespaDocker
 
 from search.engines import Pagination
 from search.engines.dev_vespa import DevVespaPassageSearchEngine, Settings
-from search.passage import (
-    Passage,
-    looks_like_reference_list,
-    looks_like_short_heading,
-    looks_like_table_of_contents,
-)
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.passage import VespaLabel, VespaPassage
 
@@ -46,25 +40,6 @@ _TEST_SETTINGS = Settings(
     vespa_endpoint=f"http://localhost:{_PORT}",  # type: ignore[arg-type]
     vespa_read_token="",  # nosec B106
 )
-
-_HEADING_TEXT = "CARBON BUDGET FOR GRUDE EMISSIONS"
-_TOC_TEXT = (
-    "1. Introduction 3\n"
-    "2. National circumstances 12\n"
-    "3. Greenhouse gas inventory 24\n"
-    "4. Policies and measures 41\n"
-    "5. Conclusion 47"
-)
-_REFERENCES_TEXT = (
-    "Smith, J. A. (2019). Climate finance in practice. Journal of Climate "
-    "Policy, 12(3), 45-67. doi:10.1234/jcp.2019.001\n"
-    "Jones, B. C. (2020). Adaptation pathways. Nature Climate Change, 10(2), "
-    "112-119. doi:10.1234/ncc.2020.002\n"
-    "Garcia, M. (2021). Mitigation costs. Energy Policy, 45, 233-241. "
-    "Retrieved from https://example.org/report"
-)
-_PROSE_TEXT = "The carbon budget for crude emissions is 1.2 GtCO2e in 2030."
-
 
 class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
     @classmethod
@@ -182,15 +157,20 @@ def _passage(
     document_id: str,
     principal_id: str | None = None,
     labels: list[VespaLabel] | None = None,
+    looks_like_short_heading: bool = False,
+    looks_like_table_of_contents: bool = False,
+    looks_like_reference_list: bool = False,
 ) -> VespaPassage:
     """
-    Build the record the passages feed would produce for this text.
+    Build a passage record with the given field values.
 
-    The `looks_like_*` flags are derived here rather than passed in, so the
-    feed's own derivation is what reaches the index. Production derives them
-    in `vespa-feeder/passages_derived_data.py`, a vendored twin of the
-    `search.passage` rulesets used here - the feeder builds from a Docker
-    context that can't import `search` (see that module's docstring).
+    The `looks_like_*` flags are passed in, not derived from `text`. What
+    decides them is the feeder's ruleset
+    (`vespa-feeder/passages_derived_data.py`), tested at that grain in
+    `vespa-feeder/test_passages_derived_data.py`. Nothing in this file should
+    have an opinion on which text is a contents listing - these tests only
+    care that whatever the feed assigns survives the round-trip to Vespa and
+    can be filtered on.
     """
     return VespaPassage(
         id=block_id,
@@ -206,9 +186,9 @@ def _passage(
         ),
         content_type="Text",
         type_confidence=0.9,
-        looks_like_short_heading=looks_like_short_heading(Passage(text=text)),
-        looks_like_table_of_contents=looks_like_table_of_contents(Passage(text=text)),
-        looks_like_reference_list=looks_like_reference_list(Passage(text=text)),
+        looks_like_short_heading=looks_like_short_heading,
+        looks_like_table_of_contents=looks_like_table_of_contents,
+        looks_like_reference_list=looks_like_reference_list,
         labels=labels or [],
     )
 
@@ -325,22 +305,34 @@ def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: 
     )
 
 
-def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa):
+def test_passage_type_flags_round_trip_and_are_filterable(vespa_app: Vespa):
     """
-    For the three derived properties:
+    The three `looks_like_*` bools survive the round-trip and filter.
 
-    Verifies (a) the bool fields deploy, (b) the feed's derivations reach
-    the index, and (c) a rank profile / YQL filter can read them.
+    Verifies (a) the bool fields deploy, (b) what the feed assigns is what
+    comes back, and (c) YQL can filter on them. Whether a given passage
+    *should* be flagged is the ruleset's business, not the schema's - see
+    `vespa-feeder/test_passages_derived_data.py`.
     """
     document = DocumentFactory.build(id="doc-1", title="Doc", labels=[_principal_label()])
     _feed_document(vespa_app, document)
-    for block_id, text in (
-        ("tb-heading", _HEADING_TEXT),
-        ("tb-toc", _TOC_TEXT),
-        ("tb-refs", _REFERENCES_TEXT),
-        ("tb-prose", _PROSE_TEXT),
+    for block_id, flags in (
+        ("tb-heading", (True, False, False)),
+        ("tb-toc", (False, True, False)),
+        ("tb-refs", (False, False, True)),
+        ("tb-prose", (False, False, False)),
     ):
-        _feed_passage(vespa_app, _passage(block_id, text, document_id="doc-1"))
+        short_heading, table_of_contents, reference_list = flags
+        _feed_passage(
+            vespa_app,
+            _passage(
+                block_id,
+                document_id="doc-1",
+                looks_like_short_heading=short_heading,
+                looks_like_table_of_contents=table_of_contents,
+                looks_like_reference_list=reference_list,
+            ),
+        )
 
     r = req.post(
         f"{vespa_app.end_point}/search/",
@@ -364,6 +356,28 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
         "tb-refs": (False, False, True),
         "tb-prose": (False, False, False),
     }
+
+    # Filtering, not just retrieval - these are `attribute`s the rank profile
+    # reads, so a YQL predicate has to be able to select on them. `= true`
+    # rather than `contains`: these are bools, not strings.
+    r = req.post(
+        f"{vespa_app.end_point}/search/",
+        json={
+            "yql": (
+                "select * from sources passages "
+                "where looks_like_table_of_contents = true"
+            ),
+            "hits": 10,
+        },
+        timeout=5,
+    )
+    r.raise_for_status()
+    filtered_hits = r.json().get("root", {}).get("children", [])
+    filtered_ids = [hit["fields"]["id"] for hit in filtered_hits]
+
+    assert filtered_ids == ["tb-toc"], (
+        f"Expected only tb-toc to match the flag filter, got: {filtered_ids}"
+    )
 
 
 def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
