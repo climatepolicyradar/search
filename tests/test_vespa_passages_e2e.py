@@ -31,10 +31,14 @@ from vespa.deployment import VespaDocker
 
 from search.engines import Pagination
 from search.engines.dev_vespa import DevVespaPassageSearchEngine, Settings
+from search.passage import (
+    Passage,
+    looks_like_reference_list,
+    looks_like_short_heading,
+    looks_like_table_of_contents,
+)
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.passage import VespaLabel, VespaPassage
-from search.vespa.passages_feed_materializer import _text_block_to_vespa_update
-from search.vespa.sources.embeddings_input_v2 import TextBlock
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 _PORT = 8089
@@ -154,40 +158,10 @@ def _feed_document(app: Vespa, document: Document) -> None:
     r.raise_for_status()
 
 
-def _feed_passage(
-    app: Vespa,
-    block: TextBlock,
-    document_id: str,
-    principal_id: str | None = None,
-) -> None:
+def _feed_passage(app: Vespa, passage: VespaPassage) -> None:
     """Feed a passage as an update operation — same format as JSONL feed."""
-    op = _text_block_to_vespa_update(block, document_id, principal_id=principal_id)
     r = req.put(
-        f"{app.end_point}/document/v1/passages/passages/docid/{block['id']}",
-        json={**op, "create": True},  # type: ignore[arg-type]
-        timeout=5,
-    )
-    r.raise_for_status()
-
-
-def _feed_passage_with_labels(
-    app: Vespa,
-    block_id: str,
-    document_id: str,
-    labels: list[VespaLabel],
-) -> None:
-    """Feed a passage with `labels` set - the legacy materializer path doesn't set these."""
-    passage = VespaPassage(
-        id=block_id,
-        idx=0,
-        language="en",
-        content="some passage text",
-        document_id=document_id,
-        document_ref=f"id:documents:documents::{document_id}",
-        labels=labels,
-    )
-    r = req.put(
-        f"{app.end_point}/document/v1/passages/passages/docid/{block_id}",
+        f"{app.end_point}/document/v1/passages/passages/docid/{passage.id}",
         json={**passage.to_vespa_update(), "create": True},  # type: ignore[arg-type]
         timeout=5,
     )
@@ -201,19 +175,42 @@ def _principal_label() -> DocumentLabelRelationship:
         timestamp=None,)
 
 
-def _text_block(
+def _passage(
     block_id: str = "tb-1",
     text: str = "some passage text",
-) -> TextBlock:
-    return {
-        "id": block_id,
-        "idx": 0,
-        "language": "en",
-        "text": text,
-        "type": "Text",
-        "type_confidence": 0.9,
-        "pages": [],
-    }
+    *,
+    document_id: str,
+    principal_id: str | None = None,
+    labels: list[VespaLabel] | None = None,
+) -> VespaPassage:
+    """
+    Build the record the passages feed would produce for this text.
+
+    The `looks_like_*` flags are derived here rather than passed in, so the
+    feed's own derivation is what reaches the index. Production derives them
+    in `vespa-feeder/passages_derived_data.py`, a vendored twin of the
+    `search.passage` rulesets used here - the feeder builds from a Docker
+    context that can't import `search` (see that module's docstring).
+    """
+    return VespaPassage(
+        id=block_id,
+        idx=0,
+        language="en",
+        content=text,
+        document_id=document_id,
+        document_ref=f"id:documents:documents::{document_id}",
+        principal_document_ref=(
+            f"id:documents:documents::{principal_id}"
+            if principal_id is not None
+            else None
+        ),
+        content_type="Text",
+        type_confidence=0.9,
+        looks_like_short_heading=looks_like_short_heading(Passage(text=text)),
+        looks_like_table_of_contents=looks_like_table_of_contents(Passage(text=text)),
+        looks_like_reference_list=looks_like_reference_list(Passage(text=text)),
+        labels=labels or [],
+    )
 
 
 def test_passage_imported_principal_id_resolves_to_parent(vespa_app: Vespa):
@@ -230,7 +227,7 @@ def test_passage_imported_principal_id_resolves_to_parent(vespa_app: Vespa):
         labels=[_principal_label()],
     )
     _feed_document(vespa_app, principal)
-    _feed_passage(vespa_app, _text_block("tb-1"), document_id="principal-1")
+    _feed_passage(vespa_app, _passage("tb-1", document_id="principal-1"))
 
     r = req.post(
         f"{vespa_app.end_point}/search/",
@@ -254,13 +251,15 @@ def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
     _feed_document(vespa_app, principal)
     _feed_passage(
         vespa_app,
-        _text_block("tb-100", "The grant of $100 was approved."),
-        document_id="principal-cur",
+        _passage(
+            "tb-100", "The grant of $100 was approved.", document_id="principal-cur"
+        ),
     )
     _feed_passage(
         vespa_app,
-        _text_block("tb-1000", "The grant of $1000 was approved."),
-        document_id="principal-cur",
+        _passage(
+            "tb-1000", "The grant of $1000 was approved.", document_id="principal-cur"
+        ),
     )
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
@@ -304,9 +303,7 @@ def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: 
     _feed_document(vespa_app, child)
     _feed_passage(
         vespa_app,
-        _text_block("tb-child"),
-        document_id="child-1",
-        principal_id="principal-climate",
+        _passage("tb-child", document_id="child-1", principal_id="principal-climate"),
     )
 
     # Query by the imported principal_title — proves the ref resolves on the
@@ -332,7 +329,7 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
     """
     For the three derived properties:
 
-    Verifies (a) the bool fields deploy, (b) the materializer's derivations reach
+    Verifies (a) the bool fields deploy, (b) the feed's derivations reach
     the index, and (c) a rank profile / YQL filter can read them.
     """
     document = DocumentFactory.build(id="doc-1", title="Doc", labels=[_principal_label()])
@@ -343,7 +340,7 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
         ("tb-refs", _REFERENCES_TEXT),
         ("tb-prose", _PROSE_TEXT),
     ):
-        _feed_passage(vespa_app, _text_block(block_id, text=text), document_id="doc-1")
+        _feed_passage(vespa_app, _passage(block_id, text, document_id="doc-1"))
 
     r = req.post(
         f"{vespa_app.end_point}/search/",
@@ -377,28 +374,28 @@ def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
     """
     document = DocumentFactory.build(id="doc-labels", labels=[_principal_label()])
     _feed_document(vespa_app, document)
-    _feed_passage_with_labels(
+    _feed_passage(
         vespa_app,
-        "tb-finance-flow",
-        document_id="doc-labels",
-        labels=[
-            VespaLabel(
-                id="concept::finance flow",
-                type="concept",
-                value="finance flow",
-                classifier_id="classifier-1",
-                end_index=12.0,
-                labelled_text="finance flow",
-                labellers=["classifier-1"],
-                prediction_probability=0.9,
-                start_index=0.0,
-                timestamps=["2024-01-01T00:00:00"],
-            )
-        ],
+        _passage(
+            "tb-finance-flow",
+            document_id="doc-labels",
+            labels=[
+                VespaLabel(
+                    id="concept::finance flow",
+                    type="concept",
+                    value="finance flow",
+                    classifier_id="classifier-1",
+                    end_index=12.0,
+                    labelled_text="finance flow",
+                    labellers=["classifier-1"],
+                    prediction_probability=0.9,
+                    start_index=0.0,
+                    timestamps=["2024-01-01T00:00:00"],
+                )
+            ],
+        ),
     )
-    _feed_passage_with_labels(
-        vespa_app, "tb-drought", document_id="doc-labels", labels=[]
-    )
+    _feed_passage(vespa_app, _passage("tb-drought", document_id="doc-labels"))
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
     results = engine.search(

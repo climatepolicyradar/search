@@ -4,9 +4,11 @@ Canonical typed representation of the Vespa `passages` schema.
 `VespaPassage` is used on both sides of the wire: building the outbound feed
 update (`.to_vespa_update()`) and parsing an inbound search-hit's `fields`
 dict (`VespaPassage.model_validate(fields)`). Living here rather than inside
-`passages_feed_materializer.py` keeps the query path from pulling in that
-module's S3/boto3/chunking dependencies; living here rather than inside
 `search/passage.py` keeps "Vespa wire shape" distinct from "client API shape".
+
+Production passages are fed by `vespa-feeder/passages_flow.py` straight from
+the data-lake Snowflake export, which builds this shape as raw JSON; this
+module is the query path's and the tests' typed view of the same records.
 """
 
 from typing import Any, NotRequired, TypedDict
@@ -28,21 +30,6 @@ class VespaBoundingBox(BaseModel):
 class VespaPageBoxes(BaseModel):
     number: int = 0
     bounding_boxes: list[VespaBoundingBox] = Field(default_factory=list)
-
-
-class VespaConcept(BaseModel):
-    """
-    Superseded by `VespaLabel`/`labels`.
-
-    The `passages.sd` schema no longer has a `concepts` field. Kept only so
-    `passages_feed_materializer.py`'s legacy (already schema-incompatible) path
-    stays importable.
-    """
-
-    id: str = ""
-    type: str = ""
-    value: str = ""
-    count: int = 0
 
 
 class VespaLabel(BaseModel):
