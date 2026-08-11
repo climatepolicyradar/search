@@ -243,7 +243,7 @@ if __name__ == "__main__":
         "--sample-percent",
         type=int,
         default=5,
-        help="Percent of production corpus to feed (100 = full ~10GB)",
+        help="Percent of production corpus to feed (100 = full ~75GiB)",
     )
     parser.add_argument("--workdir", default="/tmp/vespa-feed")  # nosec B108
     args = parser.parse_args()
