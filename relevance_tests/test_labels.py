@@ -5,6 +5,7 @@ from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
+    Settings,
 )
 from search.label import Label
 from search.testcase import (
@@ -327,7 +328,14 @@ def relevance_tests_labels():
 
     engines = [
         DevVespaLabelSearchEngine(settings=settings, debug=True),
-        # VespaLabelSearchEngine(),
+        DevVespaLabelSearchEngine(
+            settings=Settings(
+                vespa_endpoint=settings.vespa_endpoint,
+                vespa_read_token=settings.vespa_read_token,
+                vespa_dev_instance_name="fus-218-labels-snowflake",
+            ),
+            debug=True,
+        ),
     ]
 
     run_relevance_tests_parallel(
