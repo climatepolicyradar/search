@@ -606,7 +606,7 @@ test_cases = [
     #   lower  (0) - "[A] Our target is to maintain methane emissions intensity
     #                below 0.2% and achieve near-zero methane emissions by 2030."
     RelativeOrderTestCase[Passage](
-        category="concept_conjunction",
+        category="topic_concept_conjunction",
         search_terms="",
         topics=["Q567", "Q1651"],  # renewable energy, target
         document_id="CPR.document.i00004961.n0000",
@@ -618,7 +618,7 @@ test_cases = [
         # also contains a mention of renewables/methane etc.
     ),
     RelativeOrderTestCase[Passage](
-        category="concept_conjunction",
+        category="topic_concept_conjunction",
         search_terms="",
         topics=["Q567", "Q1651"],  # renewable energy, target
         document_id="CPR.document.i00004961.n0000",
@@ -639,7 +639,7 @@ test_cases = [
     #   lower  (0) - "... electrification of society and expansion of renewable
     #                energy are central to achieving the ambitious climate goals"
     RelativeOrderTestCase[Passage](
-        category="concept_conjunction",
+        category="topic_concept_conjunction",
         search_terms="",
         topics=["Q567", "Q1651"],  # renewable energy, target
         document_id="CCLW.document.i00007832.n0000",
@@ -665,7 +665,7 @@ test_cases = [
     #               proposed PCG. Municipal WWTW ATP Agreed Water Tariff
     #               Investment Capex Project Owner Loan Loan Repayments ..."
     RecallTestCase[Passage](
-        category="concept_conjunction",
+        category="topic_concept_conjunction",
         search_terms="",
         topics=["Q1277", "Q715"],  # fees and charges, tax
         document_id="GCF.document.FP209_22930.15594",
@@ -679,7 +679,7 @@ test_cases = [
     #               Regulation (EU) 2018/841 ... Official Journal (OJ) L 156"
     #               4,390 words, PASSAGE_LOCATION="References"
     FieldCharacteristicsTestCase[Passage](
-        category="reference_lists",
+        category="topic_reference_lists",
         search_terms="",
         topics=["Q786", "Q1274"],  # agriculture sector, subsidy
         document_id="ICCN.document.i00000027.n0000",
@@ -696,7 +696,7 @@ test_cases = [
     ),
     #
     RecallTestCase[Passage](
-        category="concept_conjunction",
+        category="topic_concept_conjunction",
         search_terms="",
         topics=["Q638", "Q374"],  # fossil fuel, extreme weather
         document_id="Sabin.document.14274.17897",
@@ -720,7 +720,7 @@ test_cases = [
     #   lower  (0) - "The concept of 'just transition' was developed by the North
     #                American trade unions movement in the 1970s ..."
     RelativeOrderTestCase[Passage](
-        category="aboutness",
+        category="topic_aboutness",
         search_terms="",
         topics=["Q47"],  # just transition
         document_id="CCLW.document.i00003205.n0000",
@@ -740,7 +740,7 @@ test_cases = [
     #   lower  (0) - "13 European Commission, 'EU Adaptation Strategy'. Accessed:
     #                Jul. 02, 2025. [Online]. Available: https://..."
     RelativeOrderTestCase[Passage](
-        category="aboutness",
+        category="topic_aboutness",
         search_terms="",
         topics=["Q1345"],  # adaptation finance
         document_id="ICCN.document.i00000015.n0000",
@@ -751,7 +751,7 @@ test_cases = [
         # TODO: add better description based on Anne explanation of scoring
     ),
     FieldCharacteristicsTestCase[Passage](
-        category="reference_lists",
+        category="topic_reference_lists",
         search_terms="",
         topics=["Q1345"],  # adaptation finance
         document_id="ICCN.document.i00000015.n0000",
@@ -766,7 +766,7 @@ test_cases = [
     #               crop subsidies (maximum 2% in total) ...? Tak No"
     #               labeller: "Answers on a questionnaire"
     FieldCharacteristicsTestCase[Passage](
-        category="questionnaires",
+        category="topic_questionnaires",
         search_terms="",
         topics=["Q1829"],  # finance flow
         document_id="CCLW.document.i00007398.n0000",
@@ -785,7 +785,7 @@ test_cases = [
     # All six judged passages labelled 0. Labeller: "None are about 'national
     # security'". Matches are on "security of supply" and "energy security".
     RecallTestCase[Passage](
-        category="phrase_integrity",
+        category="topic_phrase_integrity",
         search_terms="national security",
         topics=["Q622"],  # wind energy
         document_id="CPR.document.i00006724.n0000",
@@ -803,7 +803,7 @@ test_cases = [
     ),
     # Positive counterpart, same keyword, different document.
     RecallTestCase[Passage](
-        category="phrase_integrity",
+        category="topic_phrase_integrity",
         search_terms="national security",
         topics=["Q622"],  # wind energy
         document_id="Sabin.document.131799.133176",
@@ -821,7 +821,7 @@ test_cases = [
     #   lower  (0) - "Article 14. A National Park is a terrestrial, marine, or a
     #                combination of both areas ..."
     RelativeOrderTestCase[Passage](
-        category="aboutness",
+        category="topic_aboutness",
         search_terms="marine",
         topics=["Q1282"],  # zoning and spatial planning
         document_id="CCLW.document.i00005028.n0000",
@@ -835,7 +835,7 @@ test_cases = [
     #               of both aviation and marine international bunker fuels ..."
     #               a footnote matching on one incidental phrase
     RecallTestCase[Passage](
-        category="aboutness",
+        category="topic_aboutness",
         search_terms="aviation",
         topics=["Q218"],  # greenhouse gas
         document_id="UNFCCC.document.i00001987.n0000",
@@ -850,7 +850,7 @@ test_cases = [
     #
     # "Coal extraction and handling" (relevant) vs "· coal · diesel · propane ..."
     RecallTestCase[Passage](
-        category="short_headings",
+        category="topic_short_headings",
         search_terms="coal",
         topics=["Q638"],  # fossil fuel
         document_id="UNFCCC.document.i00007520.n0000",
@@ -874,7 +874,7 @@ test_cases = [
     # Labeller: "Pointing to the coal section is probably pretty relevant, even
     # if on it's face, this passage looks too bare".
     FieldCharacteristicsTestCase[Passage](
-        category="deranking_counter_examples",
+        category="topic_deranking_counter_examples",
         search_terms="coal",
         topics=["Q638"],  # fossil fuel
         document_id="UNFCCC.document.i00007520.n0000",
@@ -894,7 +894,7 @@ test_cases = [
     # Labeller: "Probably interested in this headline finding over the technical
     # detail".
     RecallTestCase[Passage](
-        category="deranking_counter_examples",
+        category="topic_deranking_counter_examples",
         search_terms="aviation",
         topics=["Q218"],  # greenhouse gas
         document_id="UNFCCC.document.i00001987.n0000",
@@ -906,7 +906,7 @@ test_cases = [
     ),
     #
     RecallTestCase[Passage](
-        category="low_ranking_positives",
+        category="topic_low_ranking_positives",
         search_terms="",
         topics=["Q374"],  # extreme weather
         document_id="Sabin.document.66970.66995",
