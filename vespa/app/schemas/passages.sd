@@ -25,6 +25,9 @@ schema passages {
         field looks_like_reference_list type bool {
             indexing: attribute | summary
         }
+        field prose_char_share type double {
+            indexing: attribute | summary
+        }
         field document_id type string {
             indexing: attribute | summary
         }
@@ -143,6 +146,8 @@ schema passages {
             query(short_heading_weight) double: 0.15
             query(table_of_contents_weight) double: 0.35
             query(reference_list_weight) double: 0.5
+            query(prose_share_threshold) double: 0.30
+            query(low_prose_weight) double: 0.12
         }
 
         function text_score() {
@@ -157,10 +162,26 @@ schema passages {
         function reference_list_penalty() {
             expression: query(reference_list_weight) * attribute(looks_like_reference_list)
         }
-        first-phase {
-            expression: text_score() - short_headings_penalty - table_of_contents_penalty - reference_list_penalty
+        # Demotes flattened grids - acronym glossaries, chapter-title grids,
+        # project-registry grids - which reach the top 10 on term matches alone.
+        # Gated on content_type because a low prose share is only evidence of a
+        # flattened grid in something already parsed as a Table or a List; plenty
+        # of legitimate short prose scores low. String attributes compare by hash
+        # in ranking expressions, which is what makes the `in` test work here.
+        # Passages fed before prose_char_share existed read as NaN, and NaN fails
+        # the `<` test, so they are left unpenalised until they are refed.
+        function low_prose_penalty() {
+            expression: query(low_prose_weight) * if(attribute(prose_char_share) < query(prose_share_threshold), 1, 0) * if(attribute(content_type) in ["Table", "List"], 1, 0)
         }
-        summary-features: text_score() nativeRank(content) nativeProximity(content) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list)
+        # The low-prose penalty is MULTIPLICATIVE while the three above are
+        # absolute, deliberately. Live top-100 scores run 0.014-0.041 for
+        # single-token queries and 0.03-0.67 for two-token ones, so subtracting a
+        # flat 0.12 would eject a hit from the top 100 rather than demote it
+        # within it. Do not simplify this to a subtraction.
+        first-phase {
+            expression: (text_score() - short_headings_penalty - table_of_contents_penalty - reference_list_penalty) * (1 - low_prose_penalty)
+        }
+        summary-features: text_score() nativeRank(content) nativeProximity(content) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(prose_char_share) low_prose_penalty
     }
 
     document-summary debug-summary {
@@ -171,6 +192,7 @@ schema passages {
         summary looks_like_short_heading {}
         summary looks_like_table_of_contents {}
         summary looks_like_reference_list {}
+        summary prose_char_share {}
         summary document_id {}
         summary principal_id {}
         summary content_type {}

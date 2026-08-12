@@ -375,3 +375,36 @@ def looks_like_short_heading(text: str) -> bool:
         return False
     letters = [char for char in text if char.isalpha()]
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
+
+
+# Where a parsed table cell stops and a line of running text begins.
+_PROSE_LINE_MIN_CHARS = 80
+
+
+def prose_char_share(text: str) -> float:
+    """
+    The share of a passage's non-blank-line characters that sit in long lines.
+
+    Long means at least 80 characters. 0.0 when there is nothing to measure.
+
+    Weighted by CHARACTERS, not by lines, and that is the whole point. A table's
+    header row is one short line while its body cells are long ones, so counting
+    lines weights a two-word column heading the same as a full sentence and every
+    table carrying a header reads as fragmentary; counting characters asks where
+    the text actually is. Measured at a 0.35 cut over 16 good tables: character
+    weighting misfires on 1 of them, line weighting on 8. Do not quietly switch
+    this to a line-based ratio.
+
+    This is NOT an 'is this prose' detector and must not be used as one - it
+    measures a single correlate, line length. It exists to demote flattened grids
+    (acronym glossaries, chapter-title grids, project-registry grids) that
+    currently occupy top-10 slots, which is why the penalty it drives in
+    `passages.sd` is gated on the passage's content type rather than applied to
+    everything that scores low.
+    """
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    total_chars = sum(len(line) for line in lines)
+    if not total_chars:
+        return 0.0
+    long_chars = sum(len(line) for line in lines if len(line) >= _PROSE_LINE_MIN_CHARS)
+    return long_chars / total_chars

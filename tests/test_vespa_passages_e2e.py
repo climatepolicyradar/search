@@ -204,13 +204,14 @@ def _principal_label() -> DocumentLabelRelationship:
 def _text_block(
     block_id: str = "tb-1",
     text: str = "some passage text",
+    block_type: str = "Text",
 ) -> TextBlock:
     return {
         "id": block_id,
         "idx": 0,
         "language": "en",
         "text": text,
-        "type": "Text",
+        "type": block_type,
         "type_confidence": 0.9,
         "pages": [],
     }
@@ -366,6 +367,80 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
         "tb-toc": (False, True, False),
         "tb-refs": (False, False, True),
         "tb-prose": (False, False, False),
+    }
+
+
+# A flattened grid of short cells scoring 0.0, and a line of running text scoring
+# 1.0. Both mention 'emissions' so one query retrieves both.
+_GRID_TEXT = (
+    "AFOLU\nAgriculture, Forestry and Other Land Use\nGHG\nGreenhouse Gas emissions\n"
+    "LULUCF\nLand Use, Land-Use Change and Forestry"
+)
+_LONG_PROSE_LINE = (
+    "Greenhouse gas emissions from the energy sector shall be reduced by thirty per "
+    "cent against the baseline, with progress reported annually to the secretariat."
+)
+
+
+def test_low_prose_penalty_applies_only_to_low_scoring_tables(vespa_app: Vespa):
+    """
+    The `low_prose_penalty` half of the `nativerank` first-phase expression.
+
+    Verifies (a) the `prose_char_share` double field deploys and round-trips, and
+    (b) the penalty's two gates both work - notably that comparing the
+    `content_type` string attribute against a string literal really does hold in
+    a ranking expression, which is only true because Vespa hashes both sides.
+
+    The grid and the prose line have identical content types apart from the one
+    under test, so the only thing separating their penalties is the gate.
+    """
+    document = DocumentFactory.build(
+        id="doc-prose", title="Doc", labels=[_principal_label()]
+    )
+    _feed_document(vespa_app, document)
+    for block_id, text, block_type in (
+        ("tb-grid-table", _GRID_TEXT, "Table"),
+        ("tb-grid-text", _GRID_TEXT, "Text"),
+        ("tb-prose-table", _LONG_PROSE_LINE, "Table"),
+    ):
+        _feed_passage(
+            vespa_app,
+            _text_block(block_id, text=text, block_type=block_type),
+            document_id="doc-prose",
+        )
+
+    # Scoped to this test's own document: `clean_docs` only purges the
+    # `documents` schema, so passages fed by earlier tests are still present and
+    # one of them mentions emissions too.
+    r = req.post(
+        f"{vespa_app.end_point}/search/",
+        json={
+            "yql": (
+                'select * from sources passages where content contains "emissions" '
+                'and document_id contains "doc-prose"'
+            ),
+            "hits": 10,
+            "ranking.profile": "nativerank",
+        },
+        timeout=5,
+    )
+    r.raise_for_status()
+    hits = r.json().get("root", {}).get("children", [])
+    features_by_id = {
+        hit["fields"]["id"]: (
+            round(hit["fields"]["summaryfeatures"]["attribute(prose_char_share)"], 4),
+            round(hit["fields"]["summaryfeatures"]["low_prose_penalty"], 4),
+        )
+        for hit in hits
+    }
+
+    assert features_by_id == {
+        # Low share AND a gated content type: penalised.
+        "tb-grid-table": (0.0, 0.12),
+        # Low share, but 'Text' is not a gated content type.
+        "tb-grid-text": (0.0, 0.0),
+        # A Table, but its text is running prose.
+        "tb-prose-table": (1.0, 0.0),
     }
 
 

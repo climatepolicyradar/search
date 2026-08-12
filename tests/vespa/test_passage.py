@@ -86,10 +86,29 @@ def test_to_vespa_update_includes_required_fields() -> None:
             "looks_like_short_heading": {"assign": False},
             "looks_like_table_of_contents": {"assign": False},
             "looks_like_reference_list": {"assign": False},
+            "prose_char_share": {"assign": 0.0},
             "document_id": {"assign": "doc-0"},
             "document_ref": {"assign": "id:documents:documents::doc-0"},
         },
     }
+
+
+def test_to_vespa_update_assigns_a_zero_prose_char_share() -> None:
+    """
+    0.0 is a real score - a wholly fragmentary passage - not an unset value.
+
+    It must therefore be assigned rather than omitted the way `type_confidence`
+    is, or the passages the penalty most wants to demote would be the only ones
+    it never reached.
+    """
+    passage = VespaPassage(
+        id="block-0",
+        document_id="doc-0",
+        document_ref="id:documents:documents::doc-0",
+        prose_char_share=0.0,
+    )
+
+    assert passage.to_vespa_update()["fields"]["prose_char_share"] == {"assign": 0.0}
 
 
 def test_to_vespa_update_omits_unset_optional_fields() -> None:

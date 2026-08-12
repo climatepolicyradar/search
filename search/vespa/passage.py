@@ -70,6 +70,7 @@ class VespaPassageUpdate(TypedDict):
     looks_like_short_heading: VespaAssign[bool]
     looks_like_table_of_contents: VespaAssign[bool]
     looks_like_reference_list: VespaAssign[bool]
+    prose_char_share: VespaAssign[float]
     document_id: VespaAssign[str]
     document_ref: VespaAssign[str]
     principal_document_ref: NotRequired[VespaAssign[str]]
@@ -116,6 +117,7 @@ class VespaPassage(BaseModel):
     looks_like_short_heading: bool = False
     looks_like_table_of_contents: bool = False
     looks_like_reference_list: bool = False
+    prose_char_share: float = 0.0
     document_id: str = ""
     document_ref: str | None = None
     principal_document_ref: str | None = None
@@ -152,6 +154,10 @@ class VespaPassage(BaseModel):
                 "assign": self.looks_like_table_of_contents
             },
             "looks_like_reference_list": {"assign": self.looks_like_reference_list},
+            # Unconditional: 0.0 is a meaningful score (a wholly fragmentary
+            # passage), not an unset value, so it must not be omitted the way
+            # `type_confidence` below is.
+            "prose_char_share": {"assign": self.prose_char_share},
             "document_id": {"assign": self.document_id},
             "document_ref": {"assign": self.document_ref},
         }

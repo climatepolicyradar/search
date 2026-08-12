@@ -28,6 +28,7 @@ from search.passage import (
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
+    prose_char_share,
 )
 from search.vespa.models import VespaUpdate
 from search.vespa.passage import (
@@ -185,6 +186,7 @@ def _text_block_to_vespa_passage(
         looks_like_short_heading=looks_like_short_heading(passage),
         looks_like_table_of_contents=looks_like_table_of_contents(passage),
         looks_like_reference_list=looks_like_reference_list(passage),
+        prose_char_share=prose_char_share(passage),
         pages=[VespaPageBoxes.model_validate(page) for page in block.get("pages", [])],
         heading_id=heading_id,
         heading_text=heading_text,

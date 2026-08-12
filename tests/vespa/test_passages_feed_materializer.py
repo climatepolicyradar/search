@@ -56,6 +56,12 @@ _REFERENCES_TEXT = (
     "Retrieved from https://example.org/report"
 )
 _PROSE_TEXT = "The carbon budget for crude emissions is 1.2 GtCO2e in 2030."
+# Over 80 characters on one line, unlike _PROSE_TEXT - which is prose, but scores
+# 0.0, `prose_char_share` measuring line length rather than prose.
+_LONG_PROSE_LINE = (
+    "The Party shall communicate a nationally determined contribution every five "
+    "years, and each successive contribution shall represent a progression beyond it."
+)
 
 
 def test_passages_feed_materializer_splits_output_into_chunks() -> None:
@@ -428,6 +434,23 @@ def test_text_block_to_vespa_update_sets_properties(
         "looks_like_table_of_contents": fields["looks_like_table_of_contents"]["assign"],
         "looks_like_reference_list": fields["looks_like_reference_list"]["assign"],
     } == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [(_TOC_TEXT, 0.0), (_LONG_PROSE_LINE, 1.0)],
+    ids=["short_lines_score_zero", "long_line_scores_one"],
+)
+def test_text_block_to_vespa_update_sets_prose_char_share(
+    text: str, expected: float
+) -> None:
+    """Covers the wiring; the measure is tested in test_passage_prose_char_share.py."""
+    block = _text_block(0)
+    block["text"] = text
+
+    fields = materializer._text_block_to_vespa_update(block, "doc-1")["fields"]
+
+    assert fields["prose_char_share"]["assign"] == expected
 
 
 class TestChunkWriter:

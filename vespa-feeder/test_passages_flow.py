@@ -100,6 +100,36 @@ def test_derive_passage_data_sets_the_type_flags_from_content_and_pages() -> Non
     assert flags(42)["looks_like_table_of_contents"] == {"assign": False}
 
 
+def test_derive_passage_data_sets_prose_char_share_from_content() -> None:
+    """
+    The measure lands on the record, derived from the record's own content.
+
+    Covers the wiring only - the measure itself is tested in
+    test_passages_derived_data.py. A grid of short cells scores 0.0, a line of
+    running prose scores 1.0.
+    """
+
+    def share(content: str) -> float:
+        record = derive_passage_data(
+            {
+                "fields": {
+                    "document_id": {"assign": "doc-0"},
+                    "content": {"assign": content},
+                }
+            }
+        )
+        return record["fields"]["prose_char_share"]["assign"]
+
+    assert share("AFOLU\nAgriculture, Forestry and Other Land Use\nBAU\nBusiness As Usual") == 0.0
+    assert (
+        share(
+            "The Party shall communicate a nationally determined contribution every five "
+            "years, and each successive contribution shall represent a progression beyond it."
+        )
+        == 1.0
+    )
+
+
 def test_derive_passage_data_handles_a_record_with_no_pages() -> None:
     """Passages from HTML documents have no page data - the export omits `pages`."""
     record = derive_passage_data(

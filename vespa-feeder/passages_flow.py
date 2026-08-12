@@ -6,6 +6,7 @@ from passages_derived_data import (
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
+    prose_char_share,
 )
 from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
@@ -80,12 +81,17 @@ def derive_labels_from_topics(record: dict) -> dict:
 
 def derive_passage_type_flags(record: dict) -> dict:
     """
-    Set the three `looks_like_*` bools, derived from the record's own text and pages.
+    Set the three `looks_like_*` bools and `prose_char_share`, from text and pages.
 
-    The Snowflake export doesn't carry them, so without this the fields default
-    false and the penalties they drive in passages.sd's `nativerank` profile are
-    inert. `pages` is absent for passages with no page data (HTML documents), in
-    which case `looks_like_table_of_contents` skips its front-matter page veto.
+    The Snowflake export doesn't carry them, so without this the bools default
+    false, `prose_char_share` defaults unset, and the penalties they drive in
+    passages.sd's `nativerank` profile are inert. `pages` is absent for passages
+    with no page data (HTML documents), in which case
+    `looks_like_table_of_contents` skips its front-matter page veto.
+
+    `prose_char_share` is a score rather than a flag, but it is derived from the
+    same two inputs in the same pass, so it lives here rather than in a deriver
+    of its own.
     """
     fields = record.get("fields", {})
     content = fields.get("content", {}).get("assign", "")
@@ -97,6 +103,7 @@ def derive_passage_type_flags(record: dict) -> dict:
         "assign": looks_like_table_of_contents(content, page_numbers)
     }
     fields["looks_like_reference_list"] = {"assign": looks_like_reference_list(content)}
+    fields["prose_char_share"] = {"assign": prose_char_share(content)}
     return record
 
 
