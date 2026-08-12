@@ -201,7 +201,7 @@ if __name__ == "__main__":
     create_deployment(
         flow=data_in_labels_feed_flow,
         description="Materialize data in labels feed",
-        schedule="0 3 * * *",  # daily at 3am
+        schedule="0 4 * * *",  # daily at 4am to override changes from `labels_feed_flow`
         flow_variables=DEFAULT_FLOW_VARIABLES,
     )
     create_deployment(
