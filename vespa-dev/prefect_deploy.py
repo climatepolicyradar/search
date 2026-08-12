@@ -17,28 +17,22 @@ _WORK_POOL = "mvp-prod-ecs"
 
 _DEFAULT_JOB_VARIABLES_NAME = "ecs-default-job-variables-prefect-mvp-prod"
 
-# The work pool's defaults (cpu=256, memory=512, no ephemeralStorage - so
-# Fargate's default 20GiB) are sized for small orchestration tasks and are
-# nowhere near enough for a full feed.
+# The work pool's defaults (cpu=256, memory=512) are sized for small
+# orchestration tasks; a full feed is hours of download + `vespa feed`, so it
+# gets the same cpu/memory as vespa-feeder/deployments.py's passages feed.
+# That one A/B tested cpu=2048 against 1024 and found no measurable
+# difference, so the constraint is Vespa's server-side feed capacity rather
+# than local CPU - no reason to go above 1024 here either.
 #
-# feed_from_production.py's download_snapshot downloads *every* shard to local
-# disk before feeding any of them, so the task needs to hold the whole snapshot
-# at once. As of 2026-08-11 that's 382 shards / ~75GiB at
-# s3://cpr-cache/search/vespa/index/, and it grows with the corpus. 150GiB
-# leaves room for that growth plus the second, sampled copy download_snapshot
-# writes alongside the full download when sample_percent < 100 (Fargate's
-# ceiling is 200GiB, and storage over the free 20GiB is billed per GB-hour, so
-# this costs pennies for an occasional manual run).
-#
-# cpu/memory mirror vespa-feeder/deployments.py's passages feed: that A/B
-# tested cpu=2048 against 1024 and found no measurable difference, so the
-# constraint is Vespa's server-side feed capacity rather than local CPU.
-# Downloading and sampling both stream, so memory only needs to cover the
-# Prefect runtime and the vespa CLI.
+# Deliberately no ephemeralStorage override: feed_from_production.py streams
+# the snapshot one shard at a time (download -> feed -> delete), so it needs
+# ~200MB of disk regardless of corpus size, and Fargate's default 20GiB is
+# ample. If that flow ever goes back to downloading the whole snapshot up
+# front, this needs to grow to the full corpus size instead - ~75GiB as of
+# 2026-08-11, and climbing.
 _FEED_JOB_VARIABLES = {
     "cpu": 1024,
     "memory": 4096,
-    "ephemeralStorage": {"sizeInGiB": 150},
 }
 
 if __name__ == "__main__":

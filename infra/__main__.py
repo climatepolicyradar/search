@@ -271,7 +271,7 @@ elif stack != "review":
         value=config.get("vespa_read_token"),
     )
 
-    # Used by vespa-dev/feed_from_production.py's feed_target task, run on the
+    # Used by vespa-dev/feed_from_production.py's feed_and_remove_shard task, run on the
     # Prefect ECS work pool (mvp-prod-ecs) - not provisioned by this stack, so its
     # task role isn't granted read access here. See vespa/app/services.xml for the
     # search-dev-scoped client this token authenticates against, and
