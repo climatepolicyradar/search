@@ -25,7 +25,7 @@ jobs:
       run-test: ${{ steps.filter.outputs.run-test }}
       run-pulumi-up: ${{ steps.filter.outputs.run-pulumi-up }}
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
-      run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
+      run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy == 'true' || steps.vespa-drift.outputs.drifted == 'true' }}
       run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
       run-vespa-feeder-deploy: ${{ steps.filter.outputs.run-vespa-feeder-deploy }}
     steps:
@@ -59,6 +59,32 @@ jobs:
               - 'search/vespa/**'
             run-vespa-feeder-deploy:
               - 'vespa-feeder/**'
+      # The filter above only sees the commits in *this* push, and GitHub keeps at most
+      # one pending run per concurrency group, so a run that is cancelled while queued
+      # takes its `vespa/app/**` changes with it. Nothing re-triggers the deploy until
+      # some later push happens to touch the same paths, which is how the schema changes
+      # in #430 sat undeployed for a week. Comparing against the last commit submitted to
+      # prod lets a missed deploy self-heal on the next push instead. This is OR'd into
+      # `run-vespa-deploy`, so it can only ever add a deploy, never suppress one.
+      - name: Check if main has drifted from the deployed Vespa app
+        id: vespa-drift
+        run: |
+          if ! git fetch --depth=1 origin +refs/tags/vespa-prod-deployed:refs/tags/vespa-prod-deployed; then
+            echo "No vespa-prod-deployed tag yet - relying on the path filter alone."
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          status=0
+          git diff --quiet refs/tags/vespa-prod-deployed HEAD -- vespa/app || status=$?
+          if [ "$status" -eq 0 ]; then
+            echo "Deployed Vespa app is up to date with main."
+            echo "drifted=false" >> "$GITHUB_OUTPUT"
+          else
+            # 1 means there are differences. Anything higher is a git failure, where
+            # deploying is the safe direction to err in.
+            git diff --stat refs/tags/vespa-prod-deployed HEAD -- vespa/app || true
+            echo "drifted=true" >> "$GITHUB_OUTPUT"
+          fi
 
   lint:
     permissions:

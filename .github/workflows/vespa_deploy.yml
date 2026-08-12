@@ -34,3 +34,9 @@ jobs:
         working-directory: ./vespa
       - run: vespa prod deploy ./app
         working-directory: ./vespa
+      # Records the commit last submitted to prod, so `merge_to_main` can tell when
+      # main has drifted ahead of what is deployed. @see the `vespa-drift` step there.
+      - name: Record deployed commit
+        run: |
+          git tag --force vespa-prod-deployed "$GITHUB_SHA"
+          git push --force origin refs/tags/vespa-prod-deployed
