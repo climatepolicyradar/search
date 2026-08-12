@@ -11,6 +11,7 @@ schema passages {
         }
         field content type string {
             indexing: index | summary
+            index: enable-bm25
             stemming: multiple
             linguistics {
                 profile: passage_analysis
@@ -161,6 +162,25 @@ schema passages {
             expression: text_score() - short_headings_penalty - table_of_contents_penalty - reference_list_penalty
         }
         summary-features: text_score() nativeRank(content) nativeProximity(content) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list)
+    }
+
+    rank-profile bm25 inherits nativerank {
+        inputs {
+            query(bm25_k) double: 8.0
+        }
+
+        function text_score() {
+            expression: bm25(content) / (bm25(content) + query(bm25_k)) + nativeProximity(content)
+        }
+
+        rank-properties {
+            # Placeholder mid-band value, NOT a chosen one - the simulated usable
+            # band is 0.25-0.5 and the real sweep has not run yet. k1 is left at
+            # Vespa's default because it cancels for single-token queries
+            bm25(content).b: 0.4
+        }
+
+        summary-features: text_score() bm25(content) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list)
     }
 
     document-summary debug-summary {

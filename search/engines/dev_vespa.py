@@ -1273,15 +1273,32 @@ passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
 }
 
 
+_DEFAULT_PASSAGE_RANK_PROFILE = "nativerank"
+
+
 class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     """Search engine for passages in dev Vespa."""
 
     model_class = Passage
 
-    def __init__(self, settings: Settings, debug: bool = False) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        debug: bool = False,
+        ranking_profile: str = _DEFAULT_PASSAGE_RANK_PROFILE,
+    ) -> None:
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
+        self.ranking_profile = ranking_profile
+
+    @property
+    def name(self) -> str:
+        """Engine name, carrying the rank profile when it is not the default."""
+        base = self.__class__.__name__
+        if self.ranking_profile == _DEFAULT_PASSAGE_RANK_PROFILE:
+            return base
+        return f"{base}_{self.ranking_profile}"
 
     def search(
         self,
@@ -1328,7 +1345,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "presentation.summary": "debug-summary",
         }
         if self.debug:
-            request_body["ranking.profile"] = "nativerank"
+            request_body["ranking.profile"] = self.ranking_profile
         request_body.update(sort_overrides)
 
         response = _execute_vespa_query(
