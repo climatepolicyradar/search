@@ -25,23 +25,32 @@ def derive_label_source(record: dict) -> dict:
     value = fields.get("value", {}).get("assign")
     relationships = fields.get("labels", {}).get("assign", [])
 
+    relationship_entries = []
+    for rel in relationships:
+        try:
+            relationship_entries.append(
+                {
+                    "type": rel["relationship"],
+                    "value": {
+                        "id": rel["id"],
+                        "type": rel["type"],
+                        "value": rel["value"],
+                        "labels": [],
+                    },
+                    "timestamp": None,
+                }
+            )
+        except KeyError as e:
+            print(
+                f"WARNING: skipping malformed label relationship on {label_id!r} "
+                f"(missing key {e}): {rel!r}"
+            )
+
     label_source = {
         "id": label_id,
         "type": label_type,
         "value": value,
-        "labels": [
-            {
-                "type": rel["relationship"],
-                "value": {
-                    "id": rel["id"],
-                    "type": rel["type"],
-                    "value": rel["value"],
-                    "labels": [],
-                },
-                "timestamp": None,
-            }
-            for rel in relationships
-        ],
+        "labels": relationship_entries,
     }
 
     record["fields"]["label_source"] = {"assign": json.dumps(label_source)}

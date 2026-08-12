@@ -75,3 +75,36 @@ def test_derive_label_data_applies_deriver() -> None:
     record = derive_label_data(_record_with_relationships())
 
     assert "label_source" in record["fields"]
+
+
+def test_derive_label_source_skips_malformed_relationship_without_failing() -> None:
+    """A malformed relationship entry is skipped, not fatal to the whole record."""
+    record = {
+        "fields": {
+            "id": {"assign": "concept::Q1"},
+            "type": {"assign": "concept"},
+            "value": {"assign": "adaptation finance"},
+            "labels": {
+                "assign": [
+                    {
+                        "id": "concept::Q2",
+                        "type": "concept",
+                        "relationship": "subconcept_of",
+                    },  # missing "value"
+                    {
+                        "id": "concept::Q3",
+                        "type": "concept",
+                        "value": "finance",
+                        "relationship": "subconcept_of",
+                    },
+                ]
+            },
+        }
+    }
+
+    record = derive_label_source(record)
+
+    label_source = json.loads(record["fields"]["label_source"]["assign"])
+    assert label_source["id"] == "concept::Q1"
+    assert len(label_source["labels"]) == 1
+    assert label_source["labels"][0]["value"]["id"] == "concept::Q3"
