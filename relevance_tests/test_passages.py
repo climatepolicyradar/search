@@ -928,6 +928,9 @@ def relevance_tests_passages():
         DevVespaPassageSearchEngine(
             settings=settings, debug=True, ranking_profile="bm25"
         ),
+        DevVespaPassageSearchEngine(
+            settings=settings, debug=True, ranking_profile="bm25_multiplicative"
+        ),
         #ExactVespaPassageSearchEngine(),
         #HybridVespaPassageSearchEngine(),
     ]

@@ -183,6 +183,28 @@ schema passages {
         summary-features: text_score() bm25(content) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list)
     }
 
+    # Inherits `bm25` so `bm25(content).b` is declared once and the two profiles
+    # cannot drift apart on it - that would confound any comparison between them.
+    # `query(bm25_k)` comes along unused; there is no saturation here.
+    rank-profile bm25_multiplicative inherits bm25 {
+        inputs {
+            query(prox_weight) double: 2.0
+        }
+
+        function text_score() {
+            expression: bm25(content)
+        }
+        function proximity_boost() {
+            expression: 1 + query(prox_weight) * nativeProximity(content)
+        }
+
+        first-phase {
+            expression: text_score() * proximity_boost * (1 - short_headings_penalty) * (1 - table_of_contents_penalty) * (1 - reference_list_penalty)
+        }
+
+        summary-features: text_score() proximity_boost bm25(content) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list)
+    }
+
     document-summary debug-summary {
         summary id {}
         summary idx {}
