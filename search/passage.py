@@ -581,3 +581,40 @@ def looks_like_short_heading(passage: Passage) -> bool:
     letters = [char for char in text if char.isalpha()]
 
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
+
+
+_ANSWER_TOKENS = (
+    " tak no",
+    " yes no",
+    " no yes",
+    "yes/no",
+    "not applicable",
+    " n/a",
+    " nie tak",
+    " oui non",
+)
+ 
+ 
+def looks_like_questionnaire(passage: Passage) -> bool:
+    """
+    True if the passage is a form or questionnaire rather than substantive text.
+ 
+    Example (CCLW.document.i00007398.n0000):
+        "Is the intervention financed partly or entirely by protein crop
+        subsidies (maximum 2% in total) in accordance with Article 96(3) of the
+        Strategic Plan Regulation? Tak No If the intervention is aimed at mixed
+        crops of legumes and grasses: ..."
+ 
+    Requires a question followed by a checkbox-style answer token. An earlier
+    version also fired on question *density*, which turned out to detect
+    mojibake rather than forms: in GEF.document.10298.n0000 a passage with no
+    questions at all scored five question marks because smart quotes failed to
+    decode ("? without-project?", "Project? s"). Density dropped; if a form
+    without answer tokens turns up, add its shape explicitly rather than
+    reinstating it.
+    """
+    text = passage.text
+    if "?" not in text:
+        return False
+    return any(token in text.lower() for token in _ANSWER_TOKENS)
+ 
