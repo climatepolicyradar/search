@@ -1,5 +1,3 @@
-import os
-
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -7,7 +5,6 @@ from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
-    Settings,
 )
 from search.label import Label
 from search.testcase import (
@@ -330,33 +327,8 @@ def relevance_tests_labels():
 
     engines = [
         DevVespaLabelSearchEngine(settings=settings, debug=True),
+        # VespaLabelSearchEngine(),
     ]
-
-    # Snowflake-fed shadow instance for before/after comparison.
-    # `vespa_dev_instance_name` alone does NOT isolate which Vespa instance is
-    # queried - it's purely a display/reporting label (see SearchEngine.__repr__
-    # and weights_and_biases.py). The actual query target is `vespa_endpoint`,
-    # so the shadow engine needs its own endpoint, not just a different label.
-    # Set SNOWFLAKE_LABELS_VESPA_ENDPOINT to the dev/shadow Vespa instance fed by
-    # `labels_feeder_flow` (vespa-feeder/labels_flow.py) before running this
-    # comparison - without it, this only tests the legacy-fed instance.
-    snowflake_labels_endpoint = os.environ.get("SNOWFLAKE_LABELS_VESPA_ENDPOINT")
-    if snowflake_labels_endpoint:
-        engines.append(
-            DevVespaLabelSearchEngine(
-                settings=Settings(
-                    vespa_endpoint=snowflake_labels_endpoint,  # type: ignore[arg-type]
-                    vespa_read_token=settings.vespa_read_token,
-                    vespa_dev_instance_name="fus-218-labels-snowflake",
-                ),
-                debug=True,
-            )
-        )
-    else:
-        print(
-            "SNOWFLAKE_LABELS_VESPA_ENDPOINT not set - skipping the Snowflake-fed "
-            "shadow engine comparison; only running against the legacy-fed instance."
-        )
 
     run_relevance_tests_parallel(
         engines=engines,
