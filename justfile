@@ -108,12 +108,17 @@ prefect-deploy:
 
 # endregion
 
-vespa-query query:
+vespa-query query instance="":
     #!/usr/bin/env bash
     set -e
-    vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
-    vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
-    vespa query \
+    if [ -n "{{ instance }}" ]; then
+        vespa_read_token=$(aws ssm get-parameter --name "/search/vespa-dev/read_token" --query "Parameter.Value" --output text --with-decryption)
+        vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa-dev/{{ instance }}" --query "Parameter.Value" --output text --with-decryption)
+    else
+        vespa_read_token=$(aws ssm get-parameter --name "/search/vespa/read_token" --query "Parameter.Value" --output text --with-decryption)
+        vespa_endpoint=$(aws ssm get-parameter --name "/search/vespa/endpoint" --query "Parameter.Value" --output text --with-decryption)
+    fi
+    uv run vespa query \
         --target "$vespa_endpoint" \
         --header "Authorization: Bearer $vespa_read_token" \
-        {{ query }}
+        "{{ query }}"
