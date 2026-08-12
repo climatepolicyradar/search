@@ -236,20 +236,17 @@ test_cases = [
     FieldCharacteristicsTestCase[Passage](
         category="related phrases",
         search_terms="human rights",
+        document_id="AF.document.003MTMWR.n0002",
         characteristics_test=(
             lambda passage: "rights-based approach"
             in passage.text.lower()  # Again not sure if this is the best order - human rights is more common
             and "human right" not in passage.text.lower()
         ),
         description="Results for closely-related phrases (human rights -> rights-based approach) should be found, even if the search phrase itself is not mentioned in the same paragraph",
-            # problem - all k =100 contain "human right"
-            # solution - filter on a document that contains "rights-based approach" so 
-            #            that the test works as expected
         k=100,
         all_or_any="any",
         assert_results=True,
     ),
-    # TODO: use document filter on document containing "rights-based approach" so that the test works as expected
     FieldCharacteristicsTestCase[Passage](
         category="related phrases",
         search_terms="public health infrastructure",
