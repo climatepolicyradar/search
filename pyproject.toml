@@ -79,6 +79,9 @@ disable = [
 [tool.typos.files]
 extend-exclude = ["relevance_tests/*.py"]
 
+[tool.typos.default.extend-words]
+tak = "tak" # Polish for 'yes' - a questionnaire answer token in search/passage.py
+
 
 [tool.pyright]
 venvPath = "."

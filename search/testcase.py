@@ -15,6 +15,31 @@ from search.passage import Passage
 TModel = TypeVar("TModel", Label, Passage, Document)
 
 
+def _topic_condition(topic: str) -> FieldFilter:
+    """One topic condition. A bare wikibase id is given the `concept::` prefix."""
+    value = topic if topic.startswith("concept::") else f"concept::{topic}"
+    return FieldFilter(field="labels.value.id", op="contains", value=value)
+
+
+def _build_topic_filter(topics: list[str], topics_or: bool) -> Filter | None:
+    """
+    Group the topics into a single condition, AND by default, OR with `topics_or`.
+
+    Each topic sits in its own nested group because topics in a group would get collapsed
+    by the engine into a single `sameElement(...)`, so match nothing. See
+    `_build_filter_yql` in `search/engines/dev_vespa.py`.
+    """
+    if not topics:
+        return None
+    conditions: list[Condition | Filter] = [_topic_condition(topic) for topic in topics]
+    if topics_or:
+        return Filter(op="or", filters=conditions)
+    return Filter(
+        op="and",
+        filters=[Filter(op="or", filters=[condition]) for condition in conditions],
+    )
+
+
 class TestCase(BaseModel, ABC, Generic[TModel]):
     """A test case"""
 
@@ -27,6 +52,16 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
     # Passage-only filters: restrict results to a single document / principal.
     document_id: str | None = None
     principal_id: str | None = None
+    # Passage-only filter: concept (topic) wikibase IDs, e.g. ["Q567", "Q1651"].
+    # A passage must carry every listed concept to match, unless `topics_or` is set.
+    topics: list[str] | None = None
+    topics_or: bool = Field(
+        description=(
+            "Match passages carrying ANY of the given topics. "
+            "Default is to require all of them i.e. AND."
+        ),
+        default=False,
+    )
 
     @field_validator("category", mode="before")
     @classmethod
@@ -37,8 +72,10 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
         return value.strip().lower().replace("-", "_").replace(" ", "_")
 
     def filters_json_string(self) -> str | None:
-        """Vespa filter JSON for this test case's corpus/document/principal, or None."""
+        """Vespa filter JSON for this test case's corpus/document/principal/topics, or None."""
         conditions: list[Condition | Filter] = []
+        if topic_filter := _build_topic_filter(self.topics or [], self.topics_or):
+            conditions.append(topic_filter)
         if self.corpus is not None:
             conditions.append(build_corpus_filter(self.corpus))
         if self.document_id is not None:
@@ -166,6 +203,8 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
             self.expected_result_ids,
             self.strict_order,
             self.corpus,
+            self.topics,
+            self.topics_or,
         )
 
 
@@ -288,6 +327,8 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             self.forbidden_result_ids,
             self.k,
             self.corpus,
+            self.topics,
+            self.topics_or,
         )
 
 
@@ -386,6 +427,8 @@ class RelativeOrderTestCase(TestCase[TModel], Generic[TModel]):
             self.corpus,
             self.document_id,
             self.principal_id,
+            self.topics,
+            self.topics_or,
         )
 
 
@@ -477,6 +520,8 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             self.corpus,
             self.document_id,
             self.principal_id,
+            self.topics,
+            self.topics_or,
         )
 
 
@@ -594,6 +639,8 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             self.corpus,
             self.document_id,
             self.principal_id,
+            self.topics,
+            self.topics_or,
         )
 
 
