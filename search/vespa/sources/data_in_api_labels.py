@@ -1,3 +1,5 @@
+"""TODO: this is temporary - https://linear.app/climate-policy-radar/issue/FUS-238/remove-temporary-data-in-pipelines-labels-vespa-materializer-and"""
+
 import itertools
 from collections.abc import Iterator
 
