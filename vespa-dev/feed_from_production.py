@@ -17,7 +17,7 @@ Ad hoc / local run (executes wherever you invoke it):
 As a registered Prefect deployment (executes on a worker instead of your
 laptop - worth setting up once this runs often, or before a full 100% feed):
     prefect deploy
-    prefect deployment run 'feed-from-production/<deployment-name>' \
+    prefect deployment run 'search-vespa-dev-feed-from-production/<deployment-name>' \
         -p target=... -p sample_percent=100
 
 Design notes

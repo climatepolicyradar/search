@@ -13,7 +13,7 @@ tenant   := "climate-policy-radar"
 dev_app  := tenant + ".search-dev"           # tenant.application under which personal instances live
 zone     := "dev.aws-us-east-1c"
 aws_region := "eu-west-1"
-feed_deployment := "feed-from-production/search-vespa-dev-feed-from-production"  # see prefect_deploy.py
+feed_deployment := "search-vespa-dev-feed-from-production/search-vespa-dev-feed-from-production"  # see prefect_deploy.py
  
 # Create the instance if it doesn't already exist yet. No-op if it's already
 # there - use `just deploy` to push changes to an existing instance.

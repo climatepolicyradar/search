@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # single shared target instance to feed. Each engineer's dev instance is
     # created/fed ad hoc (see justfile), so this deployment only exists to be
     # triggered manually with an explicit instance, e.g.:
-    #   prefect deployment run 'feed-from-production/search-vespa-dev-feed-from-production' \
+    #   prefect deployment run 'search-vespa-dev-feed-from-production/search-vespa-dev-feed-from-production' \
     #       -p target=climate-policy-radar.search-dev.<instance> \
     #       -p sample_percent=100
     feed_from_production.deploy(
