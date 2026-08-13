@@ -1273,7 +1273,7 @@ passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
 }
 
 
-_DEFAULT_PASSAGE_RANK_PROFILE = "nativerank"
+_DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 
 
 class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
