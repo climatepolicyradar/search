@@ -310,7 +310,11 @@ def test_ignores_prose():
     assert not looks_like_short_heading(_PROSE)
 
 
-def test_prose_type_section_heading_still_heading():
-    assert looks_like_short_heading(_PROSE, "sectionHeading")
+def test_ignores_prose_type_section_heading():
+    assert not looks_like_short_heading(_PROSE, "sectionHeading")
+
+
+def test_detects_short_type_section_heading():
+    assert looks_like_short_heading("Table 4: GHG emissions by sector", "sectionHeading")
 
 

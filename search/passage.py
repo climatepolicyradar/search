@@ -568,18 +568,18 @@ def looks_like_short_heading(passage: Passage) -> bool:
     """
     True if the passage is a short ALLCAPS figure title or section heading.
 
-    Fewer than 12 words and at least 90% of the cased characters are upper case or
+    Fewer than 12 words and either at least 90% of the cased characters are upper case or
     type is `sectionHeading`.
     """
-    if passage.type == "sectionHeading":
-        return True
-    
     text = passage.text
     words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
     if not words or len(words) >= 12:
         return False
-    letters = [char for char in text if char.isalpha()]
 
+    if passage.type == "sectionHeading":
+            return True
+    
+    letters = [char for char in text if char.isalpha()]
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
 
 
