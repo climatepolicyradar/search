@@ -167,7 +167,7 @@ def test_passage_search_engine_applies_order_by_to_request_body() -> None:
 
 def test_passage_search_engine_order_by_wins_over_debug_mode_ranking_profile() -> None:
     """
-    An explicit order_by sort overrides debug mode's ``nativerank`` profile.
+    An explicit order_by sort overrides debug mode's rank-profile choice profile.
 
     Matches ``DevVespaDocumentSearchEngine.search``, where sort overrides are
     always applied after any default/debug ``ranking.profile`` is set.
