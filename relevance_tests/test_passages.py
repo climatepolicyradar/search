@@ -922,7 +922,15 @@ def relevance_tests_passages():
     """Run relevance tests for passages"""
 
     engines = [
-        DevVespaPassageSearchEngine(settings=settings, debug=True),
+        DevVespaPassageSearchEngine(
+            settings=settings, debug=True, ranking_profile="nativerank"
+        ),
+        DevVespaPassageSearchEngine(
+            settings=settings, debug=True, ranking_profile="bm25"
+        ),
+        DevVespaPassageSearchEngine(
+            settings=settings, debug=True, ranking_profile="bm25_multiplicative"
+        ),
         #ExactVespaPassageSearchEngine(),
         #HybridVespaPassageSearchEngine(),
     ]
