@@ -249,7 +249,7 @@ class VespaConceptField(TypedDict):
 class VespaDocumentConcepts(TypedDict):
     concepts: VespaAssign[list[VespaConceptField]]
     # The same counts as `concepts[].count`, as a `tensor<float>(concept{})` so
-    # they can be dot-producted with a query-side topic tensor in ranking.
+    # they can be dot-producted with a query-side topic tensor in ranking.  # spellchecker:disable-line
     concept_counts: VespaAssign[dict[str, int]]
 
 
