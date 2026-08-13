@@ -381,11 +381,7 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
 def test_passage_search_applies_rulebase_rewrites(
     vespa_app: Vespa, query: str, expansion_text: str
 ):
-    """
-    
-    Searching for a term with rewrites defined in passages.sr rules matches the expanded phrase(s), not just the literal query.
-    
-    """
+    """Searching for a term with rewrites defined in passages.sr rules matches the expanded phrase(s), not just the literal query."""
     case_id = query.replace(" ", "-")
     principal = DocumentFactory.build(id=f"principal-{case_id}", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
