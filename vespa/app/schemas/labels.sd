@@ -72,6 +72,10 @@ schema labels {
                 attribute: fast-search
             }
         }
+
+        field label_source type string {
+            indexing: summary
+        }
     }
 
     field value_attribute type string {
