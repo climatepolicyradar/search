@@ -9,6 +9,7 @@ from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
     RecallTestCase,
+    RelativeOrderTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
 )
@@ -421,6 +422,27 @@ test_cases = [
         expected_result_ids=["UNFCCC.document.i00004848.n0000"],
         k=20,
     ),
+    RelativeOrderTestCase[Document](
+        category="topic ranking",
+        search_terms="climate finance",
+        topics=["Q1343"],
+        # 254 mentions of climate finance, vs 36.
+        higher_result_id="GCF.document.FP082_19920.21094",
+        lower_result_id="UNFCCC.non-party.1608.0",
+        description="Filtering by climate finance should rank a document mentioning it 254 times above one mentioning it 36 times.",
+        k=10,
+    ),
+    RelativeOrderTestCase[Document](
+        category="topic ranking",
+        search_terms="climate finance",
+        topics=["Q1343"],
+        # 597 mentions of climate finance, vs 4. On text alone the order is
+        # reversed - the 4-mention document has "Climate" in its title.
+        higher_result_id="GCF.document.FP086_14270.5550",
+        lower_result_id="CCLW.executive.2043.2464",
+        description="Filtering by climate finance should rank a document mentioning it 597 times above one that only wins on title text with 4 mentions.",
+        k=10,
+    ),
 ]
 
 
@@ -434,6 +456,8 @@ def relevance_tests_documents():
     engines = [
         # BM25TitleVespaDocumentSearchEngine(),
         DevVespaDocumentSearchEngine(settings=settings, debug=True),
+        # Topic ranking off, to A/B the topic-filtered cases against text-only ranking.
+        DevVespaDocumentSearchEngine(settings=settings, debug=True, topic_weight=0.0),
     ]
 
     run_relevance_tests_parallel(
