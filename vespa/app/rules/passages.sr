@@ -20,7 +20,16 @@
 # nature based solution -> ?"nature based solution" ?"nbs" means that the
 # query will be re-written as 'nature based solution' or 'nbs'.
 
+# e2e test fails with 'global goal ON adaptation' as it is a stopword that is filtered during indexing.  'global goal adaptation' matches what is being queried
+# from Claude:
+# RHS phrases must not spell out stopwords (see lucene-linguistics/en/stopwords.txt).
+# The passage_analysis profile strips stopwords when indexing, but an exact-phrase
+# query that spells one out doesn't match the resulting token positions - even
+# against text that verbatim contains the phrase. "global goal on adaptation"
+# (with "on") matched nothing; "global goal adaptation" matches correctly,
+# including passages that still say "...global goal on adaptation...".
+
 ndc +> ?"nationally determined contribution";
 nature based solution -> ?"nature based solution" ?"nbs";
-gga +> ?"global goal on adaptation";
+gga +> ?"global goal adaptation";
 evs +> ?"electric car" ?"electric vehicle";
