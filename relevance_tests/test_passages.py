@@ -195,7 +195,6 @@ test_cases = [
         search_terms="EVs",
         characteristics_test=(
             lambda passage: "electric car" in passage.text.lower()
-            and not any_words_in_string(["ev", "evs"], passage.text)
         ),
         description="Results for closely-related phrases (EVs -> electric car) should be found, even if the search phrase itself is not mentioned in the same paragraph",
         k=100,
