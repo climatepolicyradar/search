@@ -369,6 +369,51 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
     }
 
 
+@pytest.mark.parametrize(
+    ("query", "expansion_text"),
+    [
+        ("ndc", "The nationally determined contribution was submitted in 2021."),
+        ("nature based solution", "The nbs programme funded mangrove restoration."),
+        ("gga", "Progress on the global goal on adaptation was reviewed."),
+        ("evs", "Subsidies for electric car purchases were extended."),
+    ],
+)
+def test_passage_search_applies_rulebase_rewrites(
+    vespa_app: Vespa, query: str, expansion_text: str
+):
+    """
+    Searching for a term with rewrites defined in passages.sr rules matches the expanded phrase(s), not just the literal query.
+    """
+    case_id = query.replace(" ", "-")
+    principal = DocumentFactory.build(id=f"principal-{case_id}", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block(f"tb-match-{case_id}", expansion_text),
+        document_id=f"principal-{case_id}",
+    )
+    _feed_passage(
+        vespa_app,
+        _text_block(f"tb-control-{case_id}", "The budget was approved for solar panels."),
+        document_id=f"principal-{case_id}",
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
+    ids = [p.text_block_id for p in results.results]
+
+    assert f"tb-match-{case_id}" in ids, (
+        f"expected '{query}' rulebase rewrite to match {expansion_text!r}, got ids: {ids}"
+    )
+    assert f"tb-control-{case_id}" not in ids, (
+        f"unrelated control passage should not match '{query}', got ids: {ids}"
+    )
+
+
 def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
     """
     A passage's `labels` field round-trips and is filterable.
@@ -424,3 +469,4 @@ def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
     # Vespa stores this as a 32-bit float, so it round-trips as the nearest
     # float32 value rather than the exact Python double.
     assert matched.labels[0].prediction_probability == pytest.approx(0.9)
+
