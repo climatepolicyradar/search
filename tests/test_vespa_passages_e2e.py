@@ -370,29 +370,36 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
 
 
 @pytest.mark.parametrize(
-    ("query", "expansion_text"),
+    ("case_id", "query", "text", "should_match"),
     [
-        ("ndc", "The nationally determined contribution was submitted in 2021."),
-        ("nature based solution", "The nbs programme funded mangrove restoration."),
-        ("gga", "Progress on the global goal on adaptation was reviewed."),
-        ("evs", "Subsidies for electric car purchases were extended."),
+        ("ndc", "ndc test", "The nationally determined contribution was submitted in 2021.", True),
+        (
+            "nature-based-solution",
+            "nature based solution test",
+            "The nbs programme funded mangrove restoration.",
+            True,
+        ),
+        ("gga", "gga test", "Progress on the global goal on adaptation was reviewed.", True),
+        (
+            "gga-out-of-order",
+            "another gga test",
+            # "global" and "adaptation" appear, but not as the adjacent phrase
+            # "global goal adaptation" - the rule's rewrite must not match this.
+            "Progress on the global goal was reviewed against adaptation.",
+            False,
+        ),
+        ("evs", "evs test", "Subsidies for electric car purchases were extended.", True),
     ],
 )
 def test_passage_search_applies_rulebase_rewrites(
-    vespa_app: Vespa, query: str, expansion_text: str
+    vespa_app: Vespa, case_id: str, query: str, text: str, should_match: bool
 ):
-    """Searching for a term with rewrites defined in passages.sr rules matches the expanded phrase(s), not just the literal query."""
-    case_id = query.replace(" ", "-")
+    """Searching for a term with rewrites defined in passages.sr rules matches the expanded phrase(s), not just the literal query - and does not match text where the expanded phrase's words are out of order."""
     principal = DocumentFactory.build(id=f"principal-{case_id}", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
     _feed_passage(
         vespa_app,
-        _text_block(f"tb-match-{case_id}", expansion_text),
-        document_id=f"principal-{case_id}",
-    )
-    _feed_passage(
-        vespa_app,
-        _text_block(f"tb-control-{case_id}", "The budget was approved for solar panels."),
+        _text_block(f"tb-{case_id}", text),
         document_id=f"principal-{case_id}",
     )
 
@@ -404,12 +411,14 @@ def test_passage_search_applies_rulebase_rewrites(
     )
     ids = [p.text_block_id for p in results.results]
 
-    assert f"tb-match-{case_id}" in ids, (
-        f"expected '{query}' rulebase rewrite to match {expansion_text!r}, got ids: {ids}"
-    )
-    assert f"tb-control-{case_id}" not in ids, (
-        f"unrelated control passage should not match '{query}', got ids: {ids}"
-    )
+    if should_match:
+        assert f"tb-{case_id}" in ids, (
+            f"expected '{query}' rulebase rewrite to match {text!r}, got ids: {ids}"
+        )
+    else:
+        assert f"tb-{case_id}" not in ids, (
+            f"'{query}' should not match out-of-order text {text!r}, got ids: {ids}"
+        )
 
 
 def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
