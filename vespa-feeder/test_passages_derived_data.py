@@ -301,9 +301,20 @@ def test_detects_short_allcaps_heading():
     assert looks_like_short_heading("TABLE 4: GHG EMISSIONS BY SECTOR")
 
 
-def test_ignores_prose():
-    assert not looks_like_short_heading(
-        "The Party shall communicate a nationally determined contribution every five "
+_PROSE = ("The Party shall communicate a nationally determined contribution every five "
         "years, and each successive contribution shall represent a progression beyond "
         "the one it replaces."
-    )
+)
+
+def test_ignores_prose():
+    assert not looks_like_short_heading(_PROSE)
+
+
+def test_ignores_prose_type_section_heading():
+    assert not looks_like_short_heading(_PROSE, "sectionHeading")
+
+
+def test_detects_short_type_section_heading():
+    assert looks_like_short_heading("Table 4: GHG emissions by sector", "sectionHeading")
+
+
