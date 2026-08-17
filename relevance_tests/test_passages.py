@@ -157,6 +157,19 @@ test_cases = [
         all_or_any="all",
         assert_results=True,
     ),
+        FieldCharacteristicsTestCase[Passage](
+        category="acronym-gga",
+        search_terms="gga",
+        characteristics_test=lambda passage: all_words_in_string(
+            ["global", "goal", "adaptation"], passage.text
+        )
+        and "gga" not in passage.text.lower(),
+        description="Acronyms: search for GGA should include global goal on adaptation but there should be some results without gga.",
+        k=700,
+        all_or_any="any",
+        assert_results=True,
+    ),
+
     FieldCharacteristicsTestCase[Passage](
         category="shortened phrase",
         # Anne observed a user do this and be very confused
