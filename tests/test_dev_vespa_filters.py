@@ -535,7 +535,7 @@ def test_passage_order_by_idx_desc_sorts_missing_last() -> None:
 
 
 def test_passage_order_by_relevance_is_a_no_op() -> None:
-    """Relevance sort applies no ranking overrides (default nativerank order)."""
+    """Relevance sort applies no ranking overrides (default rank-profile order)."""
     overrides = _ranking_overrides_for_passage_order_by(
         [OrderBy(field="relevance", direction="desc")]
     )
