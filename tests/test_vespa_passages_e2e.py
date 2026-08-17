@@ -31,6 +31,7 @@ from vespa.deployment import VespaDocker
 
 from search.engines import Pagination
 from search.engines.dev_vespa import DevVespaPassageSearchEngine, Settings
+from search.passage import Passage
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.passage import VespaLabel, VespaPassage
 from search.vespa.passages_feed_materializer import _text_block_to_vespa_update
@@ -175,16 +176,21 @@ def _feed_passage_with_labels(
     block_id: str,
     document_id: str,
     labels: list[VespaLabel],
+    content: str = "some passage text",
+    concept_counts: dict[str, float] | None = None,
+    looks_like_table_of_contents: bool = False,
 ) -> None:
     """Feed a passage with `labels` set - the legacy materializer path doesn't set these."""
     passage = VespaPassage(
         id=block_id,
         idx=0,
         language="en",
-        content="some passage text",
+        content=content,
         document_id=document_id,
         document_ref=f"id:documents:documents::{document_id}",
         labels=labels,
+        concept_counts=concept_counts or {},
+        looks_like_table_of_contents=looks_like_table_of_contents,
     )
     r = req.put(
         f"{app.end_point}/document/v1/passages/passages/docid/{block_id}",
@@ -424,3 +430,182 @@ def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
     # Vespa stores this as a 32-bit float, so it round-trips as the nearest
     # float32 value rather than the exact Python double.
     assert matched.labels[0].prediction_probability == pytest.approx(0.9)
+
+
+# region Topic ranking
+_CLIMATE_FINANCE = "concept::Q1343"
+_FOSSIL_FUEL = "concept::Q638"
+
+
+def _concept_label(concept_id: str) -> VespaLabel:
+    """A minimal concept label, as one classifier span would produce."""
+    return VespaLabel(
+        id=concept_id,
+        type="concept",
+        value=concept_id.removeprefix("concept::"),
+        classifier_id="classifier-1",
+        end_index=12.0,
+        labelled_text="mention",
+        labellers=["classifier-1"],
+        prediction_probability=0.9,
+        start_index=0.0,
+        timestamps=["2024-01-01T00:00:00"],
+    )
+
+
+def _feed_topic_ranking_passages(vespa_app: Vespa) -> None:
+    """
+    Two passages under an OR filter over two topics, differing in how many they carry.
+
+    `tb-text-winner` mentions the query text twice and carries one topic;
+    `tb-topic-winner` mentions it once and carries both.
+    """
+    document = DocumentFactory.build(id="doc-topics", labels=[_principal_label()])
+    _feed_document(vespa_app, document)
+    _feed_passage_with_labels(
+        vespa_app,
+        "tb-text-winner",
+        document_id="doc-topics",
+        labels=[_concept_label(_CLIMATE_FINANCE)],
+        content=(
+            "Climate finance commitments were reviewed, and climate finance "
+            "delivery against those commitments is reported here in full."
+        ),
+        concept_counts={_CLIMATE_FINANCE: 1},
+    )
+    _feed_passage_with_labels(
+        vespa_app,
+        "tb-topic-winner",
+        document_id="doc-topics",
+        labels=[_concept_label(_CLIMATE_FINANCE), _concept_label(_FOSSIL_FUEL)],
+        content=(
+            "The subsidy regime is described below, alongside a note on climate "
+            "finance and the phase-out schedule agreed by the parties."
+        ),
+        concept_counts={_CLIMATE_FINANCE: 1, _FOSSIL_FUEL: 1},
+    )
+
+
+def _topic_filter_json(concept_ids: list[str]) -> str:
+    """An OR over the given concept ids, as `topics_or=True` produces."""
+    conditions = ",".join(
+        f'{{"field": "labels.value.id", "op": "contains", "value": "{concept_id}"}}'
+        for concept_id in concept_ids
+    )
+    return f'{{"op": "or", "filters": [{conditions}]}}'
+
+
+def _topic_search(
+    query: str | None,
+    concept_ids: list[str],
+    topic_weight: float,
+    debug: bool = False,
+) -> tuple[list[Passage], list[dict[str, Any]]]:
+    """Run a search filtered on `concept_ids`, returning results and debug info."""
+    engine = DevVespaPassageSearchEngine(
+        settings=_TEST_SETTINGS, topic_weight=topic_weight, debug=debug
+    )
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters_json_string=_topic_filter_json(concept_ids),
+    )
+    return results.results, engine.last_debug_info
+
+
+def _topic_ranked_ids(
+    query: str | None, concept_ids: list[str], topic_weight: float
+) -> list[str]:
+    results, _ = _topic_search(query, concept_ids, topic_weight)
+    return [p.text_block_id for p in results]
+
+
+def test_topic_score_counts_the_filtered_topics_a_passage_carries(vespa_app: Vespa):
+    """
+    `topic_score()` is presence-per-topic, weighted - not a mention count.
+
+    This is the mechanism the ordering tests below rest on, asserted directly so
+    a change in text scoring can't quietly mask it.
+    """
+    _feed_topic_ranking_passages(vespa_app)
+
+    results, debug_info = _topic_search(
+        "climate finance",
+        concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
+        topic_weight=1.0,
+        debug=True,
+    )
+    scores = {
+        passage.text_block_id: info["summaryfeatures"]["topic_score"]
+        for passage, info in zip(results, debug_info, strict=True)
+    }
+
+    assert scores == {"tb-topic-winner": 2.0, "tb-text-winner": 1.0}
+
+
+def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
+    """`topic_weight=0.0` switches topic ranking off, restoring text-only order."""
+    _feed_topic_ranking_passages(vespa_app)
+
+    assert _topic_ranked_ids(
+        "climate finance",
+        concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
+        topic_weight=0.0,
+    ) == ["tb-text-winner", "tb-topic-winner"]
+
+
+@pytest.mark.parametrize("query_text", ["climate finance", None])
+def test_topic_ranking_puts_the_passage_carrying_both_topics_first(
+    vespa_app: Vespa, query_text: str | None
+):
+    """
+    A passage carrying both filtered-for topics leads, with or without query text.
+
+    With query text, `tb-text-winner` wins on text alone and the topic score has
+    to overcome it. At the default weight of 1.0 it only closes about half of a
+    text gap of ~2.0, hence the 5.0 here - picking the shipped default is a
+    relevance-sweep job, not a property this test should pin.
+
+    Without query text the topic score is the only signal: the multiplicative
+    rank profile scores every passage 0 on text, so a topic score multiplied in
+    rather than added would leave the order arbitrary. Passage relevance tests
+    routinely search this way.
+    """
+    _feed_topic_ranking_passages(vespa_app)
+
+    assert _topic_ranked_ids(
+        query=query_text,
+        concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
+        topic_weight=5.0,
+    ) == ["tb-topic-winner", "tb-text-winner"]
+
+
+def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(vespa_app: Vespa):
+    """A table of contents carrying the filtered topic ranks below equivalent prose."""
+    document = DocumentFactory.build(id="doc-junk", labels=[_principal_label()])
+    _feed_document(vespa_app, document)
+    _feed_passage_with_labels(
+        vespa_app,
+        "tb-toc",
+        document_id="doc-junk",
+        labels=[_concept_label(_CLIMATE_FINANCE)],
+        content=_TOC_TEXT,
+        concept_counts={_CLIMATE_FINANCE: 1},
+        looks_like_table_of_contents=True,
+    )
+    _feed_passage_with_labels(
+        vespa_app,
+        "tb-prose",
+        document_id="doc-junk",
+        labels=[_concept_label(_CLIMATE_FINANCE)],
+        content="Climate finance is discussed at length in this section.",
+        concept_counts={_CLIMATE_FINANCE: 1},
+    )
+
+    assert _topic_ranked_ids(
+        query=None, concept_ids=[_CLIMATE_FINANCE], topic_weight=1.0
+    ) == ["tb-prose", "tb-toc"]
+
+
+# endregion Topic ranking
