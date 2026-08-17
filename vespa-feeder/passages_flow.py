@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 from typing import TypedDict
 
 from flow import vespa_feeder
@@ -52,7 +53,7 @@ class VespaPassageLabel(TypedDict):
 
 
 def derive_labels_from_topics(record: dict) -> dict:
-    """Set `labels` on a passages update record, derived from its own `topic` field."""
+    """Set `labels` and `concept_counts` on a passages update record from its `topics`."""
     topics: list[DataLakeTopic] = (
         record.get("fields", {}).get("topics", {}).get("assign", [])
     )
@@ -74,6 +75,9 @@ def derive_labels_from_topics(record: dict) -> dict:
     ]
 
     record["fields"]["labels"] = {"assign": labels}
+    record["fields"]["concept_counts"] = {
+        "assign": dict(Counter(label["id"] for label in labels))
+    }
     record["fields"].pop("topics", None)
     return record
 

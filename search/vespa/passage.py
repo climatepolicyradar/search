@@ -78,6 +78,7 @@ class VespaPassageUpdate(TypedDict):
     heading_id: NotRequired[VespaAssign[str]]
     heading_text: NotRequired[VespaAssign[str]]
     labels: NotRequired[VespaAssign[list[dict[str, Any]]]]
+    concept_counts: NotRequired[VespaAssign[dict[str, float]]]
     pages: NotRequired[VespaAssign[list[dict[str, Any]]]]
 
 
@@ -125,6 +126,7 @@ class VespaPassage(BaseModel):
     heading_id: str | None = None
     heading_text: str | None = None
     labels: list[VespaLabel] = Field(default_factory=list)
+    concept_counts: dict[str, float] = Field(default_factory=dict)
 
     # Imported field (from document_ref) - inbound-only, never set on feed.
     principal_id: str | None = None
@@ -169,6 +171,8 @@ class VespaPassage(BaseModel):
             fields["labels"] = {
                 "assign": [label.model_dump() for label in self.labels]
             }
+        if self.concept_counts:
+            fields["concept_counts"] = {"assign": self.concept_counts}
         if self.pages:
             fields["pages"] = {"assign": [page.model_dump() for page in self.pages]}
 
