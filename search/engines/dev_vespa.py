@@ -1392,9 +1392,8 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             # when self.debug once once `tokens`' field shape/necessity is settled
             # `tokens`' field shape/necessity is settled (see Passage.tokens).
             "presentation.summary": "debug-summary",
+            "ranking.profile": self.ranking_profile,
         }
-        if self.debug:
-            request_body["ranking.profile"] = self.ranking_profile
         request_body.update(sort_overrides)
 
         response = _execute_vespa_query(
