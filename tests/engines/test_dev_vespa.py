@@ -548,3 +548,134 @@ def test_document_search_engine_omits_topic_inputs_under_a_sort_override() -> No
     assert request_body["ranking.profile"] == "unranked"
     assert "input.query(topic_q)" not in request_body
     assert "input.query(topic_weight)" not in request_body
+
+
+def test_passage_search_engine_sends_ranking_profile_without_debug() -> None:
+    """
+    The rank profile is sent on every request, not just debug ones.
+
+    Without this the live API falls through to Vespa's implicit `default`
+    profile silently.
+    """
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["ranking.profile"] == "bm25_multiplicative"
+
+
+def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor() -> None:
+    """Topics being filtered for become the topic ranking tensor."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+            filters_json_string=_topic_filter_json("Q567", "Q1651"),
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["input.query(topic_q)"] == {
+        "concept::Q567": 1.0,
+        "concept::Q1651": 1.0,
+    }
+    assert request_body["input.query(topic_weight)"] == 1.0
+
+
+def test_passage_search_engine_sends_topic_inputs_without_a_text_query() -> None:
+    """
+    Topic-only searches are the case topic ranking matters most for.
+
+    Passage relevance tests routinely pass `search_terms=""`, where the topic
+    score is the only signal - so the inputs must not be gated on `userQuery()`.
+    """
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+            filters_json_string=_topic_filter_json("Q567"),
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert "userQuery()" not in request_body["yql"]
+    assert request_body["input.query(topic_q)"] == {"concept::Q567": 1.0}
+
+
+def test_passage_search_engine_forwards_topic_weight() -> None:
+    """We can use `topic_weight=0.0` to switch off topic ranking."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings, topic_weight=0.0)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+            filters_json_string=_topic_filter_json("Q567"),
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["input.query(topic_weight)"] == 0.0
+    assert engine.parameters == {
+        "ranking_profile": "bm25_multiplicative",
+        "topic_weight": 0.0,
+    }
+    assert engine.name == "DevVespaPassageSearchEngine"
+
+
+def test_passage_search_engine_omits_topic_inputs_under_a_sort_override() -> None:
+    """Topic ranking should be disabled when sorting by a field is specified."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="idx", direction="asc")],
+            filters_json_string=_topic_filter_json("Q567"),
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["ranking.profile"] == "unranked"
+    assert "input.query(topic_q)" not in request_body
+    assert "input.query(topic_weight)" not in request_body
