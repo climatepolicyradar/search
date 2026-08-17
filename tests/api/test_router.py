@@ -51,3 +51,14 @@ def test_get_document_returns_503_on_vespa_error(document_client) -> None:
     response = client.get("/search/documents/doc-1")
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+
+
+def test_get_labels_taxonomy_returns_non_empty_list() -> None:
+    client = TestClient(app)
+
+    response = client.get("/search/labels-taxonomy")
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total_size"] > 0
+    assert len(body["results"]) > 0

@@ -221,6 +221,31 @@ def read_labels(
     )
 
 
+@router.get("/labels-taxonomy", response_model=SearchResponse[DataInLabel])
+def read_labels_taxonomy():
+    logger.info("Getting labels_taxonomy")
+
+    engine = DevVespaLabelSearchEngine(settings=settings)
+    try:
+        results = engine.labels_taxonomy()
+    except Exception:
+        logger.exception("Error: read_labels_taxonomy request failed")
+        raise
+
+    logger.info("Success: read_labels_taxonomy request completed")
+
+    return SearchResponse[DataInLabel](
+        total_size=results.total_size,
+        page=1,
+        page_size=1,
+        total_pages=1,
+        next_page=None,
+        previous_page=None,
+        results=results.results,
+        aggregations=None,
+    )
+
+
 @router.get("/passages", response_model=SearchResponse[Passage])
 def read_passages(
     query: str | None = Query(None, description="What are you looking for?"),

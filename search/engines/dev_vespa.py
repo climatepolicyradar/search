@@ -30,6 +30,7 @@ from pydantic import AnyHttpUrl, BaseModel, TypeAdapter
 from pydantic_settings import BaseSettings
 from vespa.querybuilder import Grouping as G
 
+from api.labels_taxonomy import labels_taxonomy
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
@@ -1405,6 +1406,18 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
+
+    def labels_taxonomy(self) -> ListResponse[DataInLabel]:
+        """
+        Lists the labels needed for the side filter from a hardcoded list.
+
+        @see: ./labels_taxonomy.py for the reasons why.
+        """
+        return ListResponse(
+            results=labels_taxonomy,
+            total_size=len(labels_taxonomy),
+            next_page_token=None,
+        )
 
     def search(
         self,
