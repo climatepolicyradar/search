@@ -7,8 +7,12 @@ from search.engines import OrderBy, Pagination, dev_vespa
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     DevVespaPassageSearchEngine,
+    FieldFilter,
+    Filter,
     Settings,
     _document_sort_ranking_string,
+    _topic_ids_from_filters,
+    normalise_topic_id,
 )
 
 
@@ -319,3 +323,228 @@ def test_passage_search_engine_reads_labels_from_top_level_passages_schema() -> 
     assert passage.labels[0].prediction_probability == 0.9
     assert passage.labels[1].value.value == "drought"
     assert passage.labels[1].classifier_id == "classifier-2"
+
+
+def _topic_filter_json(*topics: str, op: str = "and") -> str:
+    """Filter JSON in the nested shape `_build_topic_filter` produces."""
+    return Filter(
+        op=op,  # pyright: ignore[reportArgumentType]
+        filters=[
+            Filter(
+                op="or",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.id",
+                        op="contains",
+                        value=normalise_topic_id(topic),
+                    )
+                ],
+            )
+            for topic in topics
+        ],
+    ).model_dump_json()
+
+
+@pytest.mark.parametrize(
+    ("filters", "expected"),
+    [
+        (None, []),
+        (Filter(op="and", filters=[]), []),
+        (
+            Filter(
+                op="and",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.id", op="contains", value="concept::Q567"
+                    )
+                ],
+            ),
+            ["concept::Q567"],
+        ),
+        # Nested groups, as `_build_topic_filter` produces for multiple topics.
+        (
+            Filter(
+                op="and",
+                filters=[
+                    Filter(
+                        op="or",
+                        filters=[
+                            FieldFilter(
+                                field="labels.value.id",
+                                op="contains",
+                                value="concept::Q567",
+                            )
+                        ],
+                    ),
+                    Filter(
+                        op="or",
+                        filters=[
+                            FieldFilter(
+                                field="labels.value.id",
+                                op="contains",
+                                value="concept::Q1651",
+                            )
+                        ],
+                    ),
+                ],
+            ),
+            ["concept::Q567", "concept::Q1651"],
+        ),
+        # Excluding a topic must not boost it.
+        (
+            Filter(
+                op="and",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.id",
+                        op="not_contains",
+                        value="concept::Q567",
+                    )
+                ],
+            ),
+            [],
+        ),
+        # Non-concept labels filtered on the same field are not topics.
+        (
+            Filter(
+                op="and",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.id", op="contains", value="country::AUS"
+                    ),
+                    FieldFilter(
+                        field="labels.value.id", op="contains", value="concept::Q567"
+                    ),
+                ],
+            ),
+            ["concept::Q567"],
+        ),
+        # Other fields are ignored.
+        (
+            Filter(
+                op="and",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.value", op="contains", value="concept::Q567"
+                    )
+                ],
+            ),
+            [],
+        ),
+        # Repeats collapse.
+        (
+            Filter(
+                op="or",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.id", op="contains", value="concept::Q567"
+                    ),
+                    FieldFilter(
+                        field="labels.value.id", op="contains", value="concept::Q567"
+                    ),
+                ],
+            ),
+            ["concept::Q567"],
+        ),
+    ],
+)
+def test_topic_ids_from_filters(filters: Filter | None, expected: list[str]) -> None:
+    assert _topic_ids_from_filters(filters) == expected
+
+
+def test_document_search_engine_sends_filtered_topics_as_a_query_tensor() -> None:
+    """Topics being filtered for become the topic ranking tensor."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+            filters_json_string=_topic_filter_json("Q567", "Q1651"),
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["ranking.profile"] == "nativerank"
+    assert request_body["input.query(topic_q)"] == {
+        "concept::Q567": 1.0,
+        "concept::Q1651": 1.0,
+    }
+    assert request_body["input.query(topic_weight)"] == 1.0
+
+
+def test_document_search_engine_omits_topic_inputs_without_topics_filter() -> None:
+    """No topic filter means no topic inputs, leaving ranking exactly as it was."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert "input.query(topic_q)" not in request_body
+    assert "input.query(topic_weight)" not in request_body
+
+
+def test_document_search_engine_forwards_topic_weight() -> None:
+    """`topic_weight=0.0` is the off switch for topic ranking."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings, topic_weight=0.0)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+            filters_json_string=_topic_filter_json("Q567"),
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["input.query(topic_weight)"] == 0.0
+    # Surfaced for relevance-test logging rather than baked into the engine name.
+    assert engine.parameters == {"topic_weight": 0.0}
+    assert engine.name == "DevVespaDocumentSearchEngine"
+
+
+def test_document_search_engine_omits_topic_inputs_under_a_sort_override() -> None:
+    """Topics ranking should be disabled when sorting by a field is specified."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="title", direction="asc")],
+            filters_json_string=_topic_filter_json("Q567"),
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["ranking.profile"] == "unranked"
+    assert "input.query(topic_q)" not in request_body
+    assert "input.query(topic_weight)" not in request_body

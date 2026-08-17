@@ -101,6 +101,13 @@ schema documents {
             }
         }
 
+        # Mention counts per concept, keyed by the same `concept::Q...` ids as
+        # `concepts.id`. Held as a tensor so it can be dot-producted with a
+        # query-side topic tensor in ranking, which `array<concept>` cannot be.
+        field concept_counts type tensor<float>(concept{}) {
+            indexing: attribute | summary
+        }
+
         field attributes_double type map<string, double> {
             struct-field key { indexing: attribute }
             struct-field value { indexing: attribute }
@@ -272,6 +279,11 @@ schema documents {
     }
 
     rank-profile nativerank inherits default {
+        inputs {
+            query(topic_q) tensor<float>(concept{})
+            query(topic_weight) double: 1.0
+        }
+
         function title_score () {
             expression: query(title_weight) * nativeRank(title) + nativeProximity(title) + fieldMatch(title).fieldCompleteness
         }
@@ -290,11 +302,14 @@ schema documents {
         function identifiers_score() {
             expression: query(identifier_weight) * (nativeRank(case_number) + nativeRank(project_id))
         }
+        function topic_score() {
+            expression: query(topic_weight) * sum(map(attribute(concept_counts), f(x)(log(1 + x))) * query(topic_q))
+        }
 
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + identifiers_score()
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + identifiers_score() + topic_score()
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) fieldMatch(title).fieldCompleteness nativeRank(title_synonyms) identifiers_score()
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) fieldMatch(title).fieldCompleteness nativeRank(title_synonyms) identifiers_score() topic_score()
     }
 
     rank-profile label-boosted inherits nativerank {

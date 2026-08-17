@@ -248,6 +248,14 @@ class VespaConceptField(TypedDict):
 
 class VespaDocumentConcepts(TypedDict):
     concepts: VespaAssign[list[VespaConceptField]]
+    # The same counts as `concepts[].count`, as a `tensor<float>(concept{})` so
+    # they can be dot-producted with a query-side topic tensor in ranking.  # spellchecker:disable-line
+    concept_counts: VespaAssign[dict[str, int]]
+
+
+def _concept_counts_tensor(concept_counts: Counter[str]) -> dict[str, int]:
+    """Mention counts keyed by the same `concept::` ids used in `concepts[].id`."""
+    return {f"concept::{cid}": count for cid, count in concept_counts.items()}
 
 
 def documents_concepts_feed_materializer():
@@ -278,11 +286,13 @@ def documents_concepts_feed_materializer():
                 }
                 for concept_id, count in concept_counts.items()
             ]
+            counts_tensor = _concept_counts_tensor(concept_counts)
 
             update_op: VespaUpdate[VespaDocumentConcepts] = {
                 "update": f"id:documents:documents::{document_id}",
                 "fields": {
                     "concepts": {"assign": vespa_concepts},
+                    "concept_counts": {"assign": counts_tensor},
                 },
                 "create": False,
             }
@@ -340,10 +350,14 @@ def documents_principal_concepts_feed_materializer():
                 }
                 for concept_id, count in concept_counts.items()
             ]
+            counts_tensor = _concept_counts_tensor(concept_counts)
 
             update_op: VespaUpdate[VespaDocumentConcepts] = {
                 "update": f"id:documents:documents::{principal_id}",
-                "fields": {"concepts": {"assign": vespa_concepts}},
+                "fields": {
+                    "concepts": {"assign": vespa_concepts},
+                    "concept_counts": {"assign": counts_tensor},
+                },
                 "create": False,
             }
             f.write(orjson.dumps(update_op) + b"\n")
