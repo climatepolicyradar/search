@@ -568,16 +568,53 @@ def looks_like_short_heading(passage: Passage) -> bool:
     """
     True if the passage is a short ALLCAPS figure title or section heading.
 
-    Fewer than 12 words, and at least 90% of the cased characters are upper case.
-    The parser's `sectionHeading` type would be a better signal - see the note in
-    `looks_like_table_of_contents` for when we can switch to it.
-
-    TODO: this should be replaced with using the passage type once it's in the index
+    Fewer than 12 words and either at least 90% of the cased characters are upper case or
+    type is `sectionHeading`.
     """
     text = passage.text
     words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
     if not words or len(words) >= 12:
         return False
-    letters = [char for char in text if char.isalpha()]
 
+    if passage.type == "sectionHeading":
+            return True
+    
+    letters = [char for char in text if char.isalpha()]
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
+
+
+_ANSWER_TOKENS = (
+    " tak no",
+    " yes no",
+    " no yes",
+    "yes/no",
+    "not applicable",
+    " n/a",
+    " nie tak",
+    " oui non",
+)
+ 
+ 
+def looks_like_questionnaire(passage: Passage) -> bool:
+    """
+    True if the passage is a form or questionnaire rather than substantive text.
+ 
+    Example (CCLW.document.i00007398.n0000):
+        "Is the intervention financed partly or entirely by protein crop
+        subsidies (maximum 2% in total) in accordance with Article 96(3) of the
+        Strategic Plan Regulation? Tak No If the intervention is aimed at mixed
+        crops of legumes and grasses: ..."
+ 
+    Requires a question followed by a checkbox-style answer token. An earlier
+    version also fired on question *density*, which turned out to detect
+    mojibake rather than forms: in GEF.document.10298.n0000 a passage with no
+    questions at all scored five question marks because smart quotes failed to
+    decode ("? without-project?", "Project? s"). Density dropped; if a form
+    without answer tokens turns up, add its shape explicitly rather than
+    reinstating it.
+    """
+    text = passage.text
+    if "?" not in text:
+        return False
+    return any(token in text.lower() for token in _ANSWER_TOKENS)
+ 

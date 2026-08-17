@@ -11,6 +11,7 @@ from search.engines.dev_vespa import DevVespaPassageSearchEngine
 #)
 from search.passage import (
     Passage,
+    looks_like_questionnaire,
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
@@ -595,6 +596,320 @@ test_cases = [
             "vocational institutions without the literal phrase. One ranks 2nd."
         ),
     ),
+    # Examples:
+    #   higher (2) - "In 2024, we have adjusted the energy transition measure in
+    #                our annual scorecard ... net-zero emissions energy business"
+    #   lower  (0) - "[A] Our target is to maintain methane emissions intensity
+    #                below 0.2% and achieve near-zero methane emissions by 2030."
+    RelativeOrderTestCase[Passage](
+        category="topic_concept_conjunction",
+        search_terms="",
+        topics=["Q567", "Q1651"],  # renewable energy, target
+        document_id="CPR.document.i00004961.n0000",
+        higher_result_id="019d4372-7612-76f1-873e-70ee96b5e4f9",
+        lower_result_id="019d4372-75f4-70c1-8bfb-ca2127383706",
+        k=20,
+        description="A renewables target should outrank a passage with a methane target, which mentions renewables separately from the target.",
+        # The long-term solution here seems to be targets being span- or sentence-level classifiers – so we can detect whether the target text 
+        # also contains a mention of renewables/methane etc.
+    ),
+    RelativeOrderTestCase[Passage](
+        category="topic_concept_conjunction",
+        search_terms="",
+        topics=["Q567", "Q1651"],  # renewable energy, target
+        document_id="CPR.document.i00004961.n0000",
+        higher_result_id="019d4372-7612-76f1-873e-70ee96b5e4f9",
+        lower_result_id="019d4372-7574-78c0-95d6-e7af94e49977",
+        # From Anne about giving the lower result a 0 relevance score: 
+        # "On the fence about this one. There are a few target-looking things 
+        # in here, just not really about renewables -- cutting "operational emissions"
+        # only implicitly means RE. "invested in low carbon solutions" is not a target 
+        # and could mean lots of things.
+        k=20,
+        description="A renewables target should outrank a passage that's more generically about targets.",
+    ),
+    #
+    # Examples:
+    #   higher (2) - "... need for increased expansion of renewable energy in
+    #                order to reach the 70% target in 2030 ... additional 2 GW"
+    #   lower  (0) - "... electrification of society and expansion of renewable
+    #                energy are central to achieving the ambitious climate goals"
+    RelativeOrderTestCase[Passage](
+        category="topic_concept_conjunction",
+        search_terms="",
+        topics=["Q567", "Q1651"],  # renewable energy, target
+        document_id="CCLW.document.i00007832.n0000",
+        # "...The government and the parties to the agreement agree that an additional 
+        # 2 GW of offshore wind power must be tendered for establishment before the end 
+        # of 2030.."
+        higher_result_id="019cb184-60cb-7743-a06a-f2b60f2dd0ce",
+        # "...that electrification of society and expansion of renewable energy are 
+        # central to achieving the ambitious climate goals in 2030 and full climate 
+        # neutrality by 2050 at the latest. The parties to the agreement note that 
+        # a number of initiatives have been adopted to expand renewable energy capacity 
+        # in Denmark..."
+        lower_result_id="019cb184-60cb-7743-a06a-f28cc1e95a61",
+        k=10,
+        description="A quantified renewables target should outrank an aspiration.",
+        # problem - both tags are correct; the passages differ only in whether
+        #           the commitment is quantified.
+        # solution - Anne note while labelling: "'this passage contains two targets' 
+        #           would be a great way to uprank".
+    ),
+    #
+    # Example (0) - "Figure 19 illustrates a conceptual structure for the
+    #               proposed PCG. Municipal WWTW ATP Agreed Water Tariff
+    #               Investment Capex Project Owner Loan Loan Repayments ..."
+    RecallTestCase[Passage](
+        category="topic_concept_conjunction",
+        search_terms="",
+        topics=["Q1277", "Q715"],  # fees and charges, tax
+        document_id="GCF.document.FP209_22930.15594",
+        expected_result_ids=[],
+        forbidden_result_ids=["019d43b0-6708-7630-bcec-dca0566302cb"],
+        k=5,
+        description="A figure's label soup must not reach the top 5.",
+    ),
+    #
+    # Example (0) - the References block: "6. European Parliament and Council
+    #               Regulation (EU) 2018/841 ... Official Journal (OJ) L 156"
+    #               4,390 words, PASSAGE_LOCATION="References"
+    FieldCharacteristicsTestCase[Passage](
+        category="topic_reference_lists",
+        search_terms="",
+        topics=["Q786", "Q1274"],  # agriculture sector, subsidy
+        document_id="ICCN.document.i00000027.n0000",
+        characteristics_test=lambda passage: not looks_like_reference_list(passage),
+        all_or_any="all",
+        k=5,
+        assert_results=True,
+        description="Long legal reference lists must not reach the top 5.",
+        # problem - existing reference_lists tests target academic bibliographies
+        #           (author, year, doi). This is a legislative citation list with
+        #           none of those markers
+        # classifier - both Q786 and Q1274 fire on citation titles.
+        # solution - extend looks_like_reference_list examples like this
+    ),
+    #
+    RecallTestCase[Passage](
+        category="topic_concept_conjunction",
+        search_terms="",
+        topics=["Q638", "Q374"],  # fossil fuel, extreme weather
+        document_id="Sabin.document.14274.17897",
+        expected_result_ids=[
+            # "... bulk petroleum storage facility in New Haven, Connecticut for
+            #  severe flooding and other weather-related risks ..."
+            "019fb5f7-b8ba-7f61-85b7-a32e6ab16a59",
+            # This doesn't explictly mention fossil fuels except for "Shell Oil", so 
+            # is relevant but not reliably due to be returned by search
+            "019fb5f7-b8c0-7e03-abf8-54048661fa2c",
+        ],
+        k=5,
+        description="Severe-weather standing allegations in a fossil fuel case.",
+    ),    
+    # ========================================================================
+    # aboutness: the concept is mentioned but is not what the passage is about
+    # ========================================================================
+    # Examples:
+    #   higher (1) - "This Plan is informed by significant feedback ... through
+    #                consultations on sustainable jobs legislation"
+    #   lower  (0) - "The concept of 'just transition' was developed by the North
+    #                American trade unions movement in the 1970s ..."
+    RelativeOrderTestCase[Passage](
+        category="topic_aboutness",
+        search_terms="",
+        topics=["Q47"],  # just transition
+        document_id="CCLW.document.i00003205.n0000",
+        higher_result_id="019cddc4-6d14-70d1-9b16-24976cdcde77",
+        lower_result_id="019cddc4-6cdb-7613-8b74-c2dc68f5296f",
+        k=10,
+        description="Concrete measures should outrank the etymology of the term.",
+        # classifier - definitional passages are the densest possible match for a
+        #              term-of-art concept. Q47 needs a stated position on
+        #              defines-vs-applies, with negative_labels populated, before
+        #              ranking work helps.
+    ),
+    #
+    # Examples:
+    #   higher (2) - "... banks can advocate for enabling conditions for
+    #                mobilising private sector finance for adaptation"
+    #   lower  (0) - "13 European Commission, 'EU Adaptation Strategy'. Accessed:
+    #                Jul. 02, 2025. [Online]. Available: https://..."
+    RelativeOrderTestCase[Passage](
+        category="topic_aboutness",
+        search_terms="",
+        topics=["Q1345"],  # adaptation finance
+        document_id="ICCN.document.i00000015.n0000",
+        higher_result_id="019d89e8-eaf6-7632-8dfd-ecf621f11128",
+        lower_result_id="019d89e8-eaf4-7520-b80e-a6850c92589b",
+        k=10,
+        description="Substantive guidance should outrank a lesser scored block.",
+        # TODO: add better description based on Anne explanation of scoring
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="topic_reference_lists",
+        search_terms="",
+        topics=["Q1345"],  # adaptation finance
+        document_id="ICCN.document.i00000015.n0000",
+        characteristics_test=lambda passage: not looks_like_reference_list(passage),
+        all_or_any="all",
+        k=5,
+        assert_results=True,
+        description="Endnote blocks must not reach the top 5.",
+    ),
+    #
+    # Example (0) - "Is the intervention financed partly or entirely by protein
+    #               crop subsidies (maximum 2% in total) ...? Tak No"
+    #               labeller: "Answers on a questionnaire"
+    FieldCharacteristicsTestCase[Passage](
+        category="topic_questionnaires",
+        search_terms="",
+        topics=["Q1829"],  # finance flow
+        document_id="CCLW.document.i00007398.n0000",
+        characteristics_test=lambda passage: not looks_like_questionnaire(passage),
+        all_or_any="all",
+        k=5,
+        assert_results=True,
+        description="Eligibility-form blocks must not reach the top 5.",
+        # classifier - Q1829 fires on a form asking *whether* something is
+        #              financed. Interrogative and conditional mood should be a
+        #              negative signal for the concept.
+        # Note: questionnaires appear in 12-20% of MCF docs (by corpus type), 8% of 
+        # Intl. agreements, 3.9% of Reports.
+    ),
+    # 
+    # All six judged passages labelled 0. Labeller: "None are about 'national
+    # security'". Matches are on "security of supply" and "energy security".
+    RecallTestCase[Passage](
+        category="topic_phrase_integrity",
+        search_terms="national security",
+        topics=["Q622"],  # wind energy
+        document_id="CPR.document.i00006724.n0000",
+        expected_result_ids=[],
+        forbidden_result_ids=[
+            "019cdd4d-d20c-7f50-b58b-e466e7a44bbf",
+            "019cdd4d-d237-7d00-951d-60e329fba262",
+            "019cdd4d-d286-7370-84e4-44962b8b76df",
+            "019cdd4d-d1d7-7bd3-a2cb-1d66174b3f48",
+            "019cdd4d-d273-7c62-8981-e19c2933e86a",
+            "019cdd4d-d20f-78d1-9f40-c9e14f7956df",
+        ],
+        k=5,
+        description="Nothing in the document is about national security.",
+    ),
+    # Positive counterpart, same keyword, different document.
+    RecallTestCase[Passage](
+        category="topic_phrase_integrity",
+        search_terms="national security",
+        topics=["Q622"],  # wind energy
+        document_id="Sabin.document.131799.133176",
+        expected_result_ids=[
+            "019e907a-ee72-7381-a90a-b47ef908f5cc",
+            "019e907a-ee73-7963-840f-5e4228a1041e",
+        ],
+        k=5,
+        description="Passages litigating about a proposed national-security justification to blocking wind energy.",
+    ),
+    #
+    # Examples:
+    #   higher (1) - "2. In the case of marine protected areas, their management
+    #                extends to where the State exercises sovereignty ..."
+    #   lower  (0) - "Article 14. A National Park is a terrestrial, marine, or a
+    #                combination of both areas ..."
+    RelativeOrderTestCase[Passage](
+        category="topic_aboutness",
+        search_terms="marine",
+        topics=["Q1282"],  # zoning and spatial planning
+        document_id="CCLW.document.i00005028.n0000",
+        higher_result_id="019cd9ce-d193-74c3-82d9-6f29938b54e4",
+        lower_result_id="019cd9ce-de24-7743-953e-8b3ddb86aa1f",
+        k=10,
+        description="Description of marine protected areas should outrank more generic mentions of national parks.",
+    ),
+    #
+    # Example (0) - "e Official estimates exclude emissions from the combustion
+    #               of both aviation and marine international bunker fuels ..."
+    #               a footnote matching on one incidental phrase
+    RecallTestCase[Passage](
+        category="topic_aboutness",
+        search_terms="aviation",
+        topics=["Q218"],  # greenhouse gas
+        document_id="UNFCCC.document.i00001987.n0000",
+        expected_result_ids=[
+            "019d4348-7930-7cb3-821f-80813dbaab4c",
+            "019d4348-792f-7120-a806-33bf762b9a6a",
+        ],
+        forbidden_result_ids=["019d4348-7910-7413-b3fd-46de3ae19992"],
+        k=5,
+        description="Aviation emissions prose over an exclusions footnote.",
+    ),
+    #
+    # "Coal extraction and handling" (relevant) vs "· coal · diesel · propane ..."
+    RecallTestCase[Passage](
+        category="topic_short_headings",
+        search_terms="coal",
+        topics=["Q638"],  # fossil fuel
+        document_id="UNFCCC.document.i00007520.n0000",
+        expected_result_ids=[
+            "019e88d1-94a8-7c90-9031-b30f7cf336ff",  # "Coal extraction and handling"
+            "019e8a44-4864-75b1-9c6d-1d0d060e0d57",  # CIAC methodology prose
+        ],
+        forbidden_result_ids=[
+            "019e8a44-124e-7b91-b772-f85f10947f1b",  
+            # "· coal
+            # · diesel
+            # · propane
+            # · butane petroleum coke
+            # · distillation gas heavy fuel oil National Inventory Report - 2026 Edition Canada.ca/inventaire-ges"
+            # type: list
+        ],
+        k=5,
+        description="A heading naming the topic is useful; a run of short bullets is less so.",
+    ),
+    # "Coal extraction and handling" — 4 words, sectionHeading, judged relevant.
+    # Labeller: "Pointing to the coal section is probably pretty relevant, even
+    # if on it's face, this passage looks too bare".
+    FieldCharacteristicsTestCase[Passage](
+        category="topic_deranking_counter_examples",
+        search_terms="coal",
+        topics=["Q638"],  # fossil fuel
+        document_id="UNFCCC.document.i00007520.n0000",
+        characteristics_test=lambda passage: not (
+            looks_like_short_heading(passage)
+            and "coal" in passage.text.lower()
+            and len(passage.text.split()) <= 6
+        ),
+        all_or_any="all",
+        k=5,
+        assert_results=True,
+        description="A short heading naming the topic is not an artefact.",
+    ),
+    #
+    # "See Annex 3.2 for data by vehicle mode ... Medium- and heavy-duty truck
+    # CO2 emissions increased by 75 percent from 1990 to 2021" — label 2.
+    # Labeller: "Probably interested in this headline finding over the technical
+    # detail".
+    RecallTestCase[Passage](
+        category="topic_deranking_counter_examples",
+        search_terms="aviation",
+        topics=["Q218"],  # greenhouse gas
+        document_id="UNFCCC.document.i00001987.n0000",
+        expected_result_ids=["019d4348-790f-7f42-ba94-840e3e1a4036"],
+        k=10,
+        description="A passage opening with a cross-reference can still rank highly.",
+        # NB - guards against de-ranking on a leading "See Annex/Table/Figure".
+        #      The pointer is followed by the finding the user wants.
+    ),
+    #
+    RecallTestCase[Passage](
+        category="topic_low_ranking_positives",
+        search_terms="",
+        topics=["Q374"],  # extreme weather
+        document_id="Sabin.document.66970.66995",
+        expected_result_ids=["019eddb3-6a94-7d00-a6ee-9a63a387389c"],
+        k=20,
+        description="Q374 should generalise to 'severe weather'.",
+    ),
 ]
 
 
@@ -606,7 +921,15 @@ def relevance_tests_passages():
     """Run relevance tests for passages"""
 
     engines = [
-        DevVespaPassageSearchEngine(settings=settings, debug=True),
+        DevVespaPassageSearchEngine(
+            settings=settings, debug=True, ranking_profile="nativerank"
+        ),
+        DevVespaPassageSearchEngine(
+            settings=settings, debug=True, ranking_profile="bm25"
+        ),
+        DevVespaPassageSearchEngine(
+            settings=settings, debug=True, ranking_profile="bm25_multiplicative"
+        ),
         #ExactVespaPassageSearchEngine(),
         #HybridVespaPassageSearchEngine(),
     ]

@@ -3,6 +3,12 @@
 import pytest
 
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
+from search.engines.dev_vespa import (
+    Filter,
+    _build_filter_yql,
+    passages_filter_field_to_vespa_field_map,
+    passages_filter_struct_field_to_vespa_field_map,
+)
 from search.label import Label
 from search.testcase import RelativeOrderTestCase
 
@@ -66,6 +72,48 @@ def test_relative_order_passes_when_higher_result_ranks_above_lower(
 
     assert passed == expected_passed
     assert [result.id for result in results] == result_ids
+
+
+def test_topics_or_matches_any_topic() -> None:
+    """With ``topics_or``, the topic clauses are ORed with each other."""
+    test_case = _test_case(
+        topics=["Q567", "Q1651"],
+        topics_or=True,
+        document_id="CPR.document.i00004961.n0000",
+    )
+
+    filters_json_string = test_case.filters_json_string()
+
+    assert filters_json_string is not None
+    assert _build_filter_yql(
+        Filter.model_validate_json(filters_json_string),
+        passages_filter_field_to_vespa_field_map,
+        passages_filter_struct_field_to_vespa_field_map,
+    ) == (
+        '((labels contains sameElement(id contains "concept::Q567") '
+        'or labels contains sameElement(id contains "concept::Q1651")) '
+        'and document_id contains "CPR.document.i00004961.n0000")'
+    )
+
+
+def test_already_prefixed_topics_are_left_alone() -> None:
+    """A topic given as ``concept::Q567`` isn't prefixed twice."""
+    filters_json_string = _test_case(topics=["concept::Q567"]).filters_json_string()
+
+    assert filters_json_string is not None
+    assert (
+        _build_filter_yql(
+            Filter.model_validate_json(filters_json_string),
+            passages_filter_field_to_vespa_field_map,
+            passages_filter_struct_field_to_vespa_field_map,
+        )
+        == 'labels contains sameElement(id contains "concept::Q567")'
+    )
+
+
+def test_no_topics_leaves_filters_unset() -> None:
+    """A test case without topics or other filters sends no filter JSON."""
+    assert _test_case().filters_json_string() is None
 
 
 def test_relative_order_rejects_identical_result_ids():
