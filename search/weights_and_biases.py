@@ -114,6 +114,9 @@ class WandbSession:
                 "search_engine": str(search_engine),
                 "search_engine_name": search_engine.name,
                 "search_engine_dev_instance_name": search_engine.instance_name,  # None => full/prod instance
+                **{
+                    f"search_engine.{k}": v for k, v in search_engine.parameters.items()
+                },
             },
         )
 

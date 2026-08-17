@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -92,10 +92,22 @@ class SearchEngine(ABC, Generic[TModel]):
         return None
 
     @property
+    def parameters(self) -> dict[str, Any]:
+        """
+        Tuning parameters this engine was built with.
+
+        Logged into the W&B run config and folded into :attr:`id`, so runs of the
+        same engine at different settings can be told apart without mangling
+        :attr:`name`.
+        """
+        return {}
+
+    @property
     def id(self) -> Identifier:
         """Canonical ID for search engine"""
 
-        return generate_id(str(self))
+        # Sorted so the id doesn't depend on the order parameters were declared in.
+        return generate_id(str(self), *sorted(self.parameters.items()))
 
 
 class VespaError(Exception):

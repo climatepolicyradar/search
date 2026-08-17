@@ -808,6 +808,105 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
 # endregion Document sorting
 
 
+# region Topic ranking
+_TOPIC_ID = "concept::Q1343"
+_TOPIC_FILTER = Filter(
+    op="and",
+    filters=[FieldFilter(field="labels.value.id", op="contains", value=_TOPIC_ID)],
+)
+
+
+def _feed_concept_counts(
+    app: Vespa, document: Document, counts: dict[str, int]
+) -> None:
+    """Update an existing document with concept mention counts, as the feed does."""
+    r = req.put(
+        f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
+        json={
+            "fields": {
+                "concepts": {
+                    "assign": [
+                        {
+                            "id": concept_id,
+                            "type": "concept",
+                            "value": concept_id.removeprefix("concept::"),
+                            "count": count,
+                            "passages_id": "test",
+                        }
+                        for concept_id, count in counts.items()
+                    ]
+                },
+                "concept_counts": {"assign": counts},
+            }
+        },
+        timeout=5,
+    )
+    r.raise_for_status()
+
+
+def _topic_ranked_titles(topic_weight: float) -> list[str]:
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS, topic_weight=topic_weight
+    )
+    results = engine.search(
+        query="climate finance",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        filters_json_string=_TOPIC_FILTER.model_dump_json(),
+    ).results
+    return [d.title for d in results]
+
+
+def test_topic_filter_reorders_documents_by_mention_count(vespa_app: Vespa):
+    """
+    A filtered-for topic promotes the document that discusses it most.
+
+    ``Passing mention`` wins on text alone; ``Heavy mention`` only wins once its
+    much larger mention count is folded into the score.
+    """
+    doc_light = DocumentFactory.build(
+        title="Climate finance passing mention",
+        description="climate finance",
+        labels=[],
+    )
+    doc_heavy = DocumentFactory.build(
+        title="Heavy mention", description="climate finance", labels=[]
+    )
+    _feed_document(vespa_app, doc_light)
+    _feed_document(vespa_app, doc_heavy)
+    _feed_concept_counts(vespa_app, doc_light, {_TOPIC_ID: 1})
+    _feed_concept_counts(vespa_app, doc_heavy, {_TOPIC_ID: 200})
+
+    assert _topic_ranked_titles(topic_weight=1.0) == [
+        "Heavy mention",
+        "Climate finance passing mention",
+    ]
+
+
+def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
+    """``topic_weight=0.0`` switches topic ranking off, restoring text-only order."""
+    doc_light = DocumentFactory.build(
+        title="Climate finance passing mention",
+        description="climate finance",
+        labels=[],
+    )
+    doc_heavy = DocumentFactory.build(
+        title="Heavy mention", description="climate finance", labels=[]
+    )
+    _feed_document(vespa_app, doc_light)
+    _feed_document(vespa_app, doc_heavy)
+    _feed_concept_counts(vespa_app, doc_light, {_TOPIC_ID: 1})
+    _feed_concept_counts(vespa_app, doc_heavy, {_TOPIC_ID: 200})
+
+    assert _topic_ranked_titles(topic_weight=0.0) == [
+        "Climate finance passing mention",
+        "Heavy mention",
+    ]
+
+
+# endregion Topic ranking
+
+
 # region single Document retrieval
 def test_get_returns_document_by_id(vespa_app: Vespa):
     doc = DocumentFactory.build(title="Climate Policy", labels=[])

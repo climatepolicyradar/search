@@ -7,7 +7,13 @@ from pydantic import BaseModel, Field, computed_field, field_validator, model_va
 from search.corpora import Corpus, build_corpus_filter
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination, SearchEngine
-from search.engines.dev_vespa import Condition, FieldFilter, Filter
+from search.engines.dev_vespa import (
+    TOPIC_FILTER_FIELD,
+    Condition,
+    FieldFilter,
+    Filter,
+    normalise_topic_id,
+)
 from search.identifiers import Identifier, generate_id
 from search.label import Label
 from search.passage import Passage
@@ -17,8 +23,9 @@ TModel = TypeVar("TModel", Label, Passage, Document)
 
 def _topic_condition(topic: str) -> FieldFilter:
     """One topic condition. A bare wikibase id is given the `concept::` prefix."""
-    value = topic if topic.startswith("concept::") else f"concept::{topic}"
-    return FieldFilter(field="labels.value.id", op="contains", value=value)
+    return FieldFilter(
+        field=TOPIC_FILTER_FIELD, op="contains", value=normalise_topic_id(topic)
+    )
 
 
 def _build_topic_filter(topics: list[str], topics_or: bool) -> Filter | None:
@@ -52,8 +59,9 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
     # Passage-only filters: restrict results to a single document / principal.
     document_id: str | None = None
     principal_id: str | None = None
-    # Passage-only filter: concept (topic) wikibase IDs, e.g. ["Q567", "Q1651"].
-    # A passage must carry every listed concept to match, unless `topics_or` is set.
+    # Concept (topic) wikibase IDs, e.g. ["Q567", "Q1651"]. A result must carry
+    # every listed concept to match, unless `topics_or` is set. On documents these
+    # also drive topic ranking - see `_topic_ids_from_filters` in dev_vespa.py.
     topics: list[str] | None = None
     topics_or: bool = Field(
         description=(

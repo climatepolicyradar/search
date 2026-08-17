@@ -113,6 +113,38 @@ class Filter(BaseModel):
     filters: list[Condition | Filter]
 
 
+TOPIC_ID_PREFIX = "concept::"
+TOPIC_FILTER_FIELD = "labels.value.id"
+
+
+def normalise_topic_id(topic: str) -> str:
+    """Give a bare wikibase id the `concept::` prefix stored in `concepts.id`."""
+    return topic if topic.startswith(TOPIC_ID_PREFIX) else f"{TOPIC_ID_PREFIX}{topic}"
+
+
+def _topic_ids_from_filters(filter_group: Filter | None) -> list[str]:
+    """
+    The topic ids a filter tree selects for, in order and deduplicated.
+
+    `not_contains` conditions are skipped: excluding a topic must not boost it.
+    """
+    if filter_group is None:
+        return []
+    topic_ids: dict[str, None] = {}
+    for item in filter_group.filters:
+        if isinstance(item, Filter):
+            topic_ids.update(dict.fromkeys(_topic_ids_from_filters(item)))
+        elif (
+            isinstance(item, FieldFilter)
+            and item.field == TOPIC_FILTER_FIELD
+            and item.op == "contains"
+            and isinstance(item.value, str)
+            and item.value.startswith(TOPIC_ID_PREFIX)
+        ):
+            topic_ids[item.value] = None
+    return list(topic_ids)
+
+
 class ArrayStructField(NamedTuple):
     """Used to locate a subfield within a Vespa array-of-structs field."""
 
@@ -673,6 +705,8 @@ documents_filter_field_to_vespa_field_map = {
 }
 documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
 
+_DEFAULT_TOPIC_WEIGHT = 1.0
+
 
 class DevVespaInstanceAddIn:
     """Surfaces the personal dev instance name (from settings) onto the engine id/config."""
@@ -706,7 +740,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     model_class = Document
 
     def __init__(
-        self, settings: Settings, debug: bool = False, bolding: bool = False
+        self,
+        settings: Settings,
+        debug: bool = False,
+        bolding: bool = False,
+        topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
     ) -> None:
         """
         Initialise the search engine.
@@ -717,11 +755,19 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         :param bolding: When ``False``, request the ``no-bolding`` document
             summary, returning plain title/description without ``<hi>`` tags.
             Ignored when ``debug=True``.
+        :param topic_weight: How much a filtered-for topic's mention counts
+            contribute to relevance. ``0.0`` switches topic ranking off.
         """
         self.debug = debug
         self.bolding = bolding
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
+        self.topic_weight = topic_weight
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        """Tuning parameters, surfaced in the search engine's ID and W&B logging."""
+        return {"topic_weight": self.topic_weight}
 
     _userQuery: str = (
         " and (userQuery() "
@@ -744,6 +790,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         """Fetch a list of relevant search results."""
 
         where = "true "
+        filters: Filter | None = None
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
@@ -770,6 +817,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "ranking.profile": "nativerank",
         }
         request_body.update(sort_overrides)
+
+        topic_ids = _topic_ids_from_filters(filters)
+        if topic_ids and not sort_overrides:
+            request_body["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
+            request_body["input.query(topic_weight)"] = self.topic_weight
 
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
@@ -1294,12 +1346,9 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         self.ranking_profile = ranking_profile
 
     @property
-    def name(self) -> str:
-        """Engine name, carrying the rank profile when it is not the default."""
-        base = self.__class__.__name__
-        if self.ranking_profile == _DEFAULT_PASSAGE_RANK_PROFILE:
-            return base
-        return f"{base}_{self.ranking_profile}"
+    def parameters(self) -> dict[str, Any]:
+        """Tuning parameters, surfaced in relevance-test logging."""
+        return {"ranking_profile": self.ranking_profile}
 
     def search(
         self,
