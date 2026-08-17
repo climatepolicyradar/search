@@ -43,7 +43,7 @@ def test_engine_with_no_instance_matches_pre_feature_behaviour():
     full = _dev_engine(None)
     assert full.instance_name is None
     assert full.id == generate_id(
-        "DevVespaPassageSearchEngine (Passage)", ("ranking_profile", "nativerank")
+        "DevVespaPassageSearchEngine (Passage)", ("ranking_profile", "bm25_multiplicative")
     )
     assert repr(full) == "DevVespaPassageSearchEngine (Passage)"
 
