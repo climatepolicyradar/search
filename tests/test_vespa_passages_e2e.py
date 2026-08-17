@@ -382,9 +382,9 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
         ("gga", "gga test", "Progress on the global goal on adaptation was reviewed.", True),
         (
             "gga-out-of-order",
-            "another gga test",
+            "gga test",
             # "global" and "adaptation" appear, but not as the adjacent phrase
-            # "global goal adaptation" - the rule's rewrite must not match this.
+            # "global goal adaptation" - the rule's rewrite shouldn't match this.
             "Progress on the global goal was reviewed against adaptation.",
             False,
         ),
