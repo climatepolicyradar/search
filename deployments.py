@@ -18,7 +18,6 @@ from prefect.variables import Variable
 
 from online_metrics.online_metrics_flow import collect_online_metrics
 from relevance_tests import test_documents, test_labels, test_passages
-from search.vespa.data_in_labels_feed_flow import data_in_labels_feed_flow
 from search.vespa.documents_feed_flow import documents_feed_flow
 from search.vespa.labels_feed_flow import labels_feed_flow
 from search.vespa.passages_feed_flow import passages_feed_flow
@@ -196,12 +195,6 @@ if __name__ == "__main__":
         flow=labels_feed_flow,
         description="Materialize labels feed",
         schedule="0 3 * * *",  # daily at 3am
-        flow_variables=DEFAULT_FLOW_VARIABLES,
-    )
-    create_deployment(
-        flow=data_in_labels_feed_flow,
-        description="Materialize data in labels feed",
-        schedule="0 4 * * *",  # daily at 4am to override changes from `labels_feed_flow`
         flow_variables=DEFAULT_FLOW_VARIABLES,
     )
     create_deployment(
