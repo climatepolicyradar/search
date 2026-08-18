@@ -5,6 +5,8 @@ from slack_notify import SlackNotify
 
 from prefect import flow
 
+_CONCEPTS_FEED_TIMEOUT_SECONDS = 7200
+
 
 def _principal_id_from_document_source(document_source: dict) -> str | None:
     """
@@ -75,6 +77,7 @@ def documents_concepts_feeder_flow() -> State | None:
     return vespa_feeder(
         s3_bucket="cpr-cache",
         s3_key="search/vespa/documents_concepts_feed_materializer.jsonl",
+        feed_timeout_seconds=_CONCEPTS_FEED_TIMEOUT_SECONDS,
     )
 
 
@@ -91,4 +94,5 @@ def documents_principal_concepts_feeder_flow() -> State | None:
     return vespa_feeder(
         s3_bucket="cpr-cache",
         s3_key="search/vespa/documents_principal_concepts_feed_materializer.jsonl",
+        feed_timeout_seconds=_CONCEPTS_FEED_TIMEOUT_SECONDS,
     )
