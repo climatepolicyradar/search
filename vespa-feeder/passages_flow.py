@@ -53,7 +53,11 @@ class VespaPassageLabel(TypedDict):
 
 
 def derive_labels_from_topics(record: dict) -> dict:
-    """Set `labels` and `concept_counts` on a passages update record from its `topics`."""
+    """
+    Set `labels` and `concept_counts` on a passages update record from its `topics`.
+    
+    They are coupled as the derived value for `concept_counts` depends on the derived `labels`.
+    """
     topics: list[DataLakeTopic] = (
         record.get("fields", {}).get("topics", {}).get("assign", [])
     )
