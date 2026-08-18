@@ -196,9 +196,9 @@ under_implementation = Label(
     ],
 )
 project_completed = Label(
-    id="entity_type::Project completed",
+    id="activity_status::Project completed",
     value="Project completed",
-    type="entity_type",
+    type="activity_status",
     labels=[
         LabelRelationship(
             type="subconcept_of",
@@ -207,9 +207,9 @@ project_completed = Label(
     ],
 )
 cancelled = Label(
-    id="entity_type::Cancelled",
+    id="activity_status::Cancelled",
     value="Cancelled",
-    type="entity_type",
+    type="activity_status",
     labels=[
         LabelRelationship(
             type="subconcept_of",
