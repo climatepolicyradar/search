@@ -51,6 +51,54 @@ def test_derive_passage_data_derives_labels_and_document_ref() -> None:
         ]
     }
     assert "topics" not in record["fields"]
+    assert record["fields"]["concept_counts"] == {"assign": {"concept::finance flow": 1}}
+
+
+def _topic(concept_id: str, start_index: int) -> dict:
+    """One topic span, as the data-lake export emits them."""
+    return {
+        "id": f"topic-{concept_id}-{start_index}",
+        "concept_id": concept_id,
+        "classifier_id": "classifier-1",
+        "end_index": start_index + 4,
+        "labelled_text": concept_id,
+        "labellers": [f'BertBasedClassifier("{concept_id}")'],
+        "prediction_probability": 0.9,
+        "start_index": start_index,
+        "timestamps": ["2024-01-01T00:00:00"],
+        "value": concept_id,
+    }
+
+
+def test_derive_passage_data_counts_repeated_concept_spans() -> None:
+    """Each topic is one span, so a concept mentioned twice counts twice."""
+    record = derive_passage_data(
+        {
+            "fields": {
+                "document_id": {"assign": "doc-0"},
+                "topics": {
+                    "assign": [
+                        _topic("Q1343", 0),
+                        _topic("Q1343", 20),
+                        _topic("Q638", 40),
+                    ]
+                },
+            }
+        }
+    )
+
+    assert record["fields"]["concept_counts"] == {
+        "assign": {"concept::Q1343": 2, "concept::Q638": 1}
+    }
+    # The counts collapse the same ids `labels` repeats, one entry per span.
+    assert len(record["fields"]["labels"]["assign"]) == 3
+
+
+def test_derive_passage_data_emits_empty_concept_counts_without_topics() -> None:
+    """A passage with no topics gets an empty tensor, not a missing field."""
+    record = derive_passage_data({"fields": {"document_id": {"assign": "doc-0"}}})
+
+    assert record["fields"]["concept_counts"] == {"assign": {}}
 
 
 def test_derive_passage_data_sets_the_type_flags_from_content_and_pages() -> None:

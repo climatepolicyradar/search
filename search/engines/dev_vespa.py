@@ -1338,16 +1338,22 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         settings: Settings,
         debug: bool = False,
         ranking_profile: str = _DEFAULT_PASSAGE_RANK_PROFILE,
+        topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
     ) -> None:
+        """Initialise the search engine."""
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
         self.ranking_profile = ranking_profile
+        self.topic_weight = topic_weight
 
     @property
     def parameters(self) -> dict[str, Any]:
         """Tuning parameters, surfaced in relevance-test logging."""
-        return {"ranking_profile": self.ranking_profile}
+        return {
+            "ranking_profile": self.ranking_profile,
+            "topic_weight": self.topic_weight,
+        }
 
     def search(
         self,
@@ -1358,6 +1364,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
         where = "true"
+        filters: Filter | None = None
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
@@ -1392,10 +1399,14 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             # when self.debug once once `tokens`' field shape/necessity is settled
             # `tokens`' field shape/necessity is settled (see Passage.tokens).
             "presentation.summary": "debug-summary",
+            "ranking.profile": self.ranking_profile,
         }
-        if self.debug:
-            request_body["ranking.profile"] = self.ranking_profile
         request_body.update(sort_overrides)
+
+        topic_ids = _topic_ids_from_filters(filters)
+        if topic_ids and not sort_overrides:
+            request_body["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
+            request_body["input.query(topic_weight)"] = self.topic_weight
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
