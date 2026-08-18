@@ -83,7 +83,15 @@ _DEFAULT_MAX_FILES = None
 # hand. Files here normally feed in low single-digit seconds (a few thousand
 # records each), so 5 minutes is generous headroom before treating it as a
 # real hang rather than legitimate slowness.
-_VESPA_FEED_TIMEOUT_SECONDS = 300
+#
+# This is a *hard kill*, not a retry: whatever `vespa feed` had already sent
+# stays in Vespa and the rest of the file is simply lost until a run finishes
+# within the budget. So flows whose source is one large monolithic file rather
+# than the small chunks above must raise it via vespa_feeder()'s
+# feed_timeout_seconds - sizing it for chunked files silently truncated the
+# documents-concepts feeds to ~a fifth of their records every night. See
+# documents_flow.py's documents_concepts_feeder_flow / FUS-261.
+_DEFAULT_VESPA_FEED_TIMEOUT_SECONDS = 300
 
 # On SIGTERM (e.g. a graceful ECS stop or Prefect cancellation) we terminate
 # any `vespa feed` subprocesses still running rather than leaving them as
@@ -323,6 +331,7 @@ def download_and_feed(
     download_disk_semaphore: threading.Semaphore,
     derive_data_from_source: Callable[[dict], dict] | None = None,
     connections: int = _DEFAULT_CONNECTIONS,
+    feed_timeout_seconds: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS,
 ) -> FeedResult:
     # See _DEFAULT_MAX_CONCURRENT_DOWNLOADS above for why this is gated per-file.
     run_logger = get_run_logger()
@@ -350,6 +359,7 @@ def download_and_feed(
             endpoint=endpoint,
             application=application,
             connections=connections,
+            feed_timeout_seconds=feed_timeout_seconds,
         )
 
 
@@ -368,6 +378,7 @@ def vespa_feed(
     endpoint: str,
     application: str,
     connections: int = _DEFAULT_CONNECTIONS,
+    feed_timeout_seconds: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS,
 ) -> FeedResult:
     run_logger = get_run_logger()
 
@@ -429,20 +440,18 @@ def vespa_feed(
                 _live_processes.add(process)
             try:
                 try:
-                    stdout, stderr = process.communicate(
-                        timeout=_VESPA_FEED_TIMEOUT_SECONDS
-                    )
+                    stdout, stderr = process.communicate(timeout=feed_timeout_seconds)
                 except subprocess.TimeoutExpired:
                     process.kill()
                     stdout, stderr = process.communicate()
                     run_logger.error(
                         "vespa feed timed out after %ds and was killed: feed_path=%s",
-                        _VESPA_FEED_TIMEOUT_SECONDS,
+                        feed_timeout_seconds,
                         feed_path,
                     )
                     span.set_status(
                         StatusCode.ERROR,
-                        f"vespa feed timed out after {_VESPA_FEED_TIMEOUT_SECONDS}s",
+                        f"vespa feed timed out after {feed_timeout_seconds}s",
                     )
                     raise
             finally:
@@ -635,6 +644,7 @@ def vespa_feeder(
     max_concurrent_downloads: int = _DEFAULT_MAX_CONCURRENT_DOWNLOADS,
     max_files: int | None = _DEFAULT_MAX_FILES,
     connections: int = _DEFAULT_CONNECTIONS,
+    feed_timeout_seconds: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS,
 ) -> State | None:
     run_logger = get_run_logger()
     _register_sigterm_handler()
@@ -703,6 +713,7 @@ def vespa_feeder(
                     download_disk_semaphore=download_disk_semaphore,
                     derive_data_from_source=derive_data_from_source,
                     connections=connections,
+                    feed_timeout_seconds=feed_timeout_seconds,
                 )
                 for obj_key in obj_keys
             ]
