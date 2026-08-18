@@ -6,6 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic_settings import SettingsConfigDict
 
+from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.utils import (
     documents_order_by,
@@ -217,6 +218,27 @@ def read_labels(
         next_page=None,
         previous_page=None,
         results=results.results,
+        aggregations=None,
+    )
+
+
+@router.get("/labels-taxonomy", response_model=SearchResponse[DataInLabel])
+def read_labels_taxonomy():
+    """
+    Lists the labels needed for the side filter from a hardcoded list.
+
+    @see: ./labels_taxonomy.py for the reasons why.
+    """
+    logger.info("Getting labels_taxonomy")
+
+    return SearchResponse[DataInLabel](
+        total_size=len(labels_taxonomy),
+        page=1,
+        page_size=1,
+        total_pages=1,
+        next_page=None,
+        previous_page=None,
+        results=labels_taxonomy,
         aggregations=None,
     )
 
