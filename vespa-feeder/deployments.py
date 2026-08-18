@@ -10,7 +10,7 @@ from documents_flow import (
     documents_feeder_flow,
     documents_principal_concepts_feeder_flow,
 )
-from labels_flow import data_in_labels_feeder_flow, labels_feeder_flow
+from labels_flow import labels_feeder_flow
 from passages_flow import (
     passages_feeder_flow,
 )
@@ -22,8 +22,6 @@ _WORK_POOL = "mvp-prod-ecs"
 _FEEDS = [
     # Labels
     {"flow": labels_feeder_flow},
-    # TODO: this is temporary - https://linear.app/climate-policy-radar/issue/FUS-238/remove-temporary-data-in-pipelines-labels-vespa-materializer-and
-    {"flow": data_in_labels_feeder_flow},
     # Documents
     {"flow": documents_feeder_flow, "job_variables": {"cpu": 1024, "memory": 2048}},
     {"flow": documents_concepts_feeder_flow},
