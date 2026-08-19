@@ -1,6 +1,6 @@
 """Unit tests for the passages feeder's record derivers."""
 
-from passages_flow import derive_passage_data
+from passages_flow import derive_heading_text, derive_passage_data
 
 
 def _record_with_topics() -> dict:
@@ -155,3 +155,128 @@ def test_derive_passage_data_handles_a_record_with_no_pages() -> None:
     )
 
     assert record["fields"]["looks_like_table_of_contents"] == {"assign": False}
+
+
+def _record(serialised_text: str | None, content: str = "") -> dict:
+    """One export record, carrying only the fields `derive_heading_text` reads."""
+    fields: dict = {
+        "document_id": {"assign": "doc-0"},
+        "content": {"assign": content},
+    }
+    if serialised_text is not None:
+        fields["serialised_text"] = {"assign": serialised_text}
+    return {"fields": fields}
+
+
+def _serialised(heading: str, content: str) -> str:
+    """
+    `serialised_text` exactly as the data-lake export builds it.
+
+    The prefix is spelled out here rather than imported from `passages_flow`, so a
+    typo in the constant fails these tests rather than passing them.
+    """
+    return (
+        "Section context: this excerpt is from the section titled "
+        f"'{heading}'. {content}"
+    )
+
+
+def test_derive_heading_text_parses_the_section_context_prefix() -> None:
+    """
+    The heading is lifted out of `serialised_text`, the only place it arrives.
+
+    The export has no `heading_text` column - only `heading_id`, which points at
+    another passage this per-record deriver cannot see.
+    """
+    content = "Victor Manuel Garcia Lemus Chapter 10 or Master of Science in Public Health"
+    record = derive_heading_text(
+        _record(_serialised("Appendix 2: Authors", content), content)
+    )
+
+    assert record["fields"]["heading_text"] == {"assign": "Appendix 2: Authors"}
+
+
+def test_derive_heading_text_keeps_apostrophes_in_the_heading() -> None:
+    """
+    Real headings contain apostrophes, so the parse must not stop at the first one.
+
+    "Authors' comments on the State party's observations on admissibility" is a real
+    corpus heading, and one the demoted-section detector must NOT fire on - so
+    truncating it here would silently change that verdict too.
+    """
+    heading = "Authors' comments on the State party's observations on admissibility"
+    content = "The authors submit that the State party has failed to address the merits."
+    record = derive_heading_text(_record(_serialised(heading, content), content))
+
+    assert record["fields"]["heading_text"] == {"assign": heading}
+
+
+def test_derive_heading_text_trims_content_rather_than_matching_a_delimiter() -> None:
+    """
+    The split point comes from `content`'s length, not from searching for `'. `.
+
+    Synthetic heading: a mis-parsed heading can carry a quoted phrase closing with the
+    same `'. ` the prefix uses. Searching for the first occurrence truncates here;
+    trimming `content` off the end cannot.
+    """
+    heading = "Definition of 'reference year'. References"
+    content = "Reference year means the base year against which reductions are measured."
+    record = derive_heading_text(_record(_serialised(heading, content), content))
+
+    assert record["fields"]["heading_text"] == {"assign": heading}
+
+
+def test_derive_heading_text_handles_content_that_repeats_the_heading() -> None:
+    """
+    A section whose first passage restates its own heading still parses.
+
+    Guards the `endswith(content)` trim: the word "References" appears both as the
+    heading and at the start of `content`, and only the trailing copy may be removed.
+    """
+    content = "References to Chapter 7 and 8 are set out below."
+    record = derive_heading_text(_record(_serialised("References", content), content))
+
+    assert record["fields"]["heading_text"] == {"assign": "References"}
+
+
+def test_derive_heading_text_is_absent_without_the_prefix() -> None:
+    """
+    Passages with no `heading_id` carry no prefix to parse.
+
+    The field is left alone rather than assigned `""`.
+    """
+    record = derive_heading_text(_record("Some other serialisation of the passage."))
+
+    assert "heading_text" not in record["fields"]
+
+
+def test_derive_heading_text_handles_a_missing_serialised_text() -> None:
+    """The deriver must not raise if the export omits the field entirely."""
+    record = derive_heading_text(_record(None, content="Hello"))
+
+    assert "heading_text" not in record["fields"]
+
+
+def test_derive_heading_text_ignores_an_empty_heading() -> None:
+    """An empty quoted title yields no field, rather than an empty-string assign."""
+    content = "Some body text."
+    record = derive_heading_text(_record(_serialised("", content), content))
+
+    assert "heading_text" not in record["fields"]
+
+
+def test_derive_passage_data_sets_heading_text() -> None:
+    """
+    `heading_text` lands via the full deriver chain, not just the deriver alone.
+
+    Values are taken verbatim from `ICCN.document.i00000042.n0000`, so this doubles
+    as a regression anchor against the real export format.
+    """
+    content = "https://doi.org/10.1186/s13071-016-1403-y Other development indicators"
+    record = derive_passage_data(
+        _record(_serialised("10.8 BIBLIOGRAPHIC REFERENCES", content), content)
+    )
+
+    assert record["fields"]["heading_text"] == {
+        "assign": "10.8 BIBLIOGRAPHIC REFERENCES"
+    }
