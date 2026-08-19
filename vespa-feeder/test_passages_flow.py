@@ -51,7 +51,9 @@ def test_derive_passage_data_derives_labels_and_document_ref() -> None:
         ]
     }
     assert "topics" not in record["fields"]
-    assert record["fields"]["concept_counts"] == {"assign": {"concept::finance flow": 1}}
+    assert record["fields"]["concept_counts"] == {
+        "assign": {"concept::finance flow": 1}
+    }
 
 
 def _topic(concept_id: str, start_index: int) -> dict:
@@ -188,7 +190,9 @@ def test_derive_heading_text_parses_the_section_context_prefix() -> None:
     The export has no `heading_text` column - only `heading_id`, which points at
     another passage this per-record deriver cannot see.
     """
-    content = "Victor Manuel Garcia Lemus Chapter 10 or Master of Science in Public Health"
+    content = (
+        "Victor Manuel Garcia Lemus Chapter 10 or Master of Science in Public Health"
+    )
     record = derive_heading_text(
         _record(_serialised("Appendix 2: Authors", content), content)
     )
@@ -205,7 +209,9 @@ def test_derive_heading_text_keeps_apostrophes_in_the_heading() -> None:
     truncating it here would silently change that verdict too.
     """
     heading = "Authors' comments on the State party's observations on admissibility"
-    content = "The authors submit that the State party has failed to address the merits."
+    content = (
+        "The authors submit that the State party has failed to address the merits."
+    )
     record = derive_heading_text(_record(_serialised(heading, content), content))
 
     assert record["fields"]["heading_text"] == {"assign": heading}
@@ -215,12 +221,14 @@ def test_derive_heading_text_trims_content_rather_than_matching_a_delimiter() ->
     """
     The split point comes from `content`'s length, not from searching for `'. `.
 
-    Synthetic heading: a mis-parsed heading can carry a quoted phrase closing with the
+    Synthetic heading: a misparsed heading can carry a quoted phrase closing with the
     same `'. ` the prefix uses. Searching for the first occurrence truncates here;
     trimming `content` off the end cannot.
     """
     heading = "Definition of 'reference year'. References"
-    content = "Reference year means the base year against which reductions are measured."
+    content = (
+        "Reference year means the base year against which reductions are measured."
+    )
     record = derive_heading_text(_record(_serialised(heading, content), content))
 
     assert record["fields"]["heading_text"] == {"assign": heading}

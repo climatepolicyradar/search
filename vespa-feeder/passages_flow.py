@@ -55,7 +55,7 @@ class VespaPassageLabel(TypedDict):
 def derive_labels_from_topics(record: dict) -> dict:
     """
     Set `labels` and `concept_counts` on a passages update record from its `topics`.
-    
+
     They are coupled as the derived value for `concept_counts` depends on the derived `labels`.
     """
     topics: list[DataLakeTopic] = (
@@ -134,6 +134,7 @@ def derive_document_ref(record: dict) -> dict:
     }
     return record
 
+
 _SECTION_CONTEXT_PREFIX = "Section context: this excerpt is from the section titled '"
 _SECTION_CONTEXT_SUFFIX = "'. "
 
@@ -142,7 +143,7 @@ def derive_heading_text(record: dict) -> dict:
     """
     Set `heading_text` on a passages update record, parsed out of `serialised_text`.
 
-    The snowflake export has no `heading_text` column, only `heading_id`, so this uses 
+    The snowflake export has no `heading_text` column, only `heading_id`, so this uses
     `serialised_text`: "Section context: ... titled '<HEADING>'. <content>".
 
     Left untouched if no `heading_id`.
