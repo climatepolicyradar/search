@@ -99,12 +99,15 @@ def derive_passage_type_flags(record: dict) -> dict:
     content = fields.get("content", {}).get("assign", "")
     pages = fields.get("pages", {}).get("assign") or []
     page_numbers = [page["number"] for page in pages]
+    content_type = fields.get("content_type", {}).get("assign", "")
 
     fields["looks_like_short_heading"] = {"assign": looks_like_short_heading(content)}
     fields["looks_like_table_of_contents"] = {
         "assign": looks_like_table_of_contents(content, page_numbers)
     }
-    fields["looks_like_reference_list"] = {"assign": looks_like_reference_list(content)}
+    fields["looks_like_reference_list"] = {
+        "assign": looks_like_reference_list(content, content_type)
+    }
     return record
 
 
