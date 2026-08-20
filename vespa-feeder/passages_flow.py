@@ -55,7 +55,7 @@ class VespaPassageLabel(TypedDict):
 def derive_labels_from_topics(record: dict) -> dict:
     """
     Set `labels` and `concept_counts` on a passages update record from its `topics`.
-    
+
     They are coupled as the derived value for `concept_counts` depends on the derived `labels`.
     """
     topics: list[DataLakeTopic] = (
@@ -115,6 +115,7 @@ def derive_passage_data(record: dict) -> dict:
     """Apply all passages derivers to a record, in sequence."""
     record = derive_labels_from_topics(record)
     record = derive_document_ref(record)
+    record = derive_heading_text(record)
     record = derive_passage_type_flags(record)
     return record
 
@@ -134,6 +135,41 @@ def derive_document_ref(record: dict) -> dict:
     record["fields"]["document_ref"] = {
         "assign": f"id:documents:documents::{document_id}"
     }
+    return record
+
+
+_SECTION_CONTEXT_PREFIX = "Section context: this excerpt is from the section titled '"
+_SECTION_CONTEXT_SUFFIX = "'. "
+
+
+def derive_heading_text(record: dict) -> dict:
+    """
+    Set `heading_text` on a passages update record, parsed out of `serialised_text`.
+
+    The snowflake export has no `heading_text` column, only `heading_id`, so this uses
+    `serialised_text`: "Section context: ... titled '<HEADING>'. <content>".
+
+    Left untouched unless the record carries that whole shape - the prefix, and a
+    `content` that is exactly the tail of `serialised_text`. A partial update without
+    `content`, a null, or a whitespace mismatch is skipped; a bad parse would index a
+    full passage body as `heading_text` and overwrite the stored value.
+    """
+    fields = record.get("fields", {})
+    serialised_text = fields.get("serialised_text", {}).get("assign") or ""
+    if not serialised_text.startswith(_SECTION_CONTEXT_PREFIX):
+        return record
+
+    content = fields.get("content", {}).get("assign") or ""
+    if not content or not serialised_text.endswith(content):
+        return record
+
+    heading = serialised_text[len(_SECTION_CONTEXT_PREFIX) : -len(content)]
+    if not heading.endswith(_SECTION_CONTEXT_SUFFIX):
+        return record
+
+    heading = heading.removesuffix(_SECTION_CONTEXT_SUFFIX).strip()
+    if heading:
+        fields["heading_text"] = {"assign": heading}
     return record
 
 
