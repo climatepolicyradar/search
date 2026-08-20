@@ -1,8 +1,7 @@
 <validation-overrides>
-    <allow until="2026-06-04">certificate-removal</allow>
+    <!-- these are all set to allow for user testing to allow for any hotfix deploys -->
+    <allow until="2026-09-10">certificate-removal</allow>
     <allow until="2026-09-10">indexing-change</allow>
-    <allow until="2026-06-04">content-cluster-removal</allow>
-    <!-- passages.pages: array<int> -> array<page_boxes>, part of the
-         data-lake schema alignment work. Remove once deployed. -->
-    <allow until="2026-08-20">field-type-change</allow>
+    <allow until="2026-09-10">content-cluster-removal</allow>
+    <allow until="2026-09-10">field-type-change</allow>
 </validation-overrides>
