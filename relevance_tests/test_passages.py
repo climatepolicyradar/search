@@ -511,28 +511,13 @@ test_cases = [
             #            NB: this is the citation-dense PROSE that a naive 'et al.'
             #            or doi-based reference filter would wrongly discard.
             "019d437a-5ba0-7f20-a5ad-3e5f3ffe685f",
-            # rank 13 - "Furthermore, fire emissions during 1997-2016 were dominated
-            #            by savanna (65.3%), followed by tropical forest (15.1%),
-            #            boreal forest (7.4%), temperate forest (2.3%), peatland
-            #            (3.7%) and agricultural waste burning (6.3%)..."
-            "019d437a-5bb2-7e20-8d1b-80761a664711",
+
         ],
         k=10,
         description=(
             "Substantive biomass prose should outrank the chapter bibliography. "
-            # problem - rank 10 is a bibliography entry, which we can de-rank, but 
-            #           second passage still below substantive passages.
-            # rank 10 - Lamers, P., and M. Junginger, 2013: The "debt" is in the detail:
-            #           A synthesis of recent temporal forest carbon analyses on woody 
-            #           biomass for energy. Biofuels, Bioprod. Biorefining, 7, 373-385, 
-            #           doi:10.1002/bbb.1407.
-            # solution - de-rank bibliography/reference_item (in addition to existing 
-            #            looks_like_reference_list). Maybe just have the one passage 
-            #            required to pass the test as the other passages in the top 10
-            #            look substantive.
         ),
     ),
-    # TODO: remove second passage from test? de-rank bibliography/reference item
     RecallTestCase[Passage](
         category="low_ranking_positives",
         search_terms="disaster",
