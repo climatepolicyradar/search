@@ -288,3 +288,32 @@ def test_derive_passage_data_sets_heading_text() -> None:
     assert record["fields"]["heading_text"] == {
         "assign": "10.8 BIBLIOGRAPHIC REFERENCES"
     }
+
+
+def test_derive_heading_text_skips_a_partial_update_without_content() -> None:
+    """
+    Without `content` there is nothing to trim, so nothing is written.
+
+    Partial updates may carry `serialised_text` alone. Parsing regardless would
+    assign the whole passage body as the heading, and `heading_text` is indexed.
+    """
+    record = derive_heading_text(
+        {
+            "fields": {
+                "document_id": {"assign": "doc-0"},
+                "serialised_text": {"assign": _serialised("Appendix 2", "Some body.")},
+            }
+        }
+    )
+
+    assert "heading_text" not in record["fields"]
+
+
+def test_derive_heading_text_skips_content_that_is_not_the_exact_tail() -> None:
+    """A whitespace mismatch between the two copies of the body is not guessed at."""
+    content = "Some body text."
+    record = derive_heading_text(
+        _record(_serialised("Appendix 2", content), content + "\n")
+    )
+
+    assert "heading_text" not in record["fields"]

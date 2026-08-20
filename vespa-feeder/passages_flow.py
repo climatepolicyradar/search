@@ -146,7 +146,10 @@ def derive_heading_text(record: dict) -> dict:
     The snowflake export has no `heading_text` column, only `heading_id`, so this uses
     `serialised_text`: "Section context: ... titled '<HEADING>'. <content>".
 
-    Left untouched if no `heading_id`.
+    Left untouched unless the record carries that whole shape - the prefix, and a
+    `content` that is exactly the tail of `serialised_text`. A partial update without
+    `content`, a null, or a whitespace mismatch is skipped; a bad parse would index a
+    full passage body as `heading_text` and overwrite the stored value.
     """
     fields = record.get("fields", {})
     serialised_text = fields.get("serialised_text", {}).get("assign") or ""
@@ -154,9 +157,13 @@ def derive_heading_text(record: dict) -> dict:
         return record
 
     content = fields.get("content", {}).get("assign") or ""
-    heading = serialised_text[len(_SECTION_CONTEXT_PREFIX) :]
-    if content and heading.endswith(content):
-        heading = heading[: -len(content)]
+    if not content or not serialised_text.endswith(content):
+        return record
+
+    heading = serialised_text[len(_SECTION_CONTEXT_PREFIX) : -len(content)]
+    if not heading.endswith(_SECTION_CONTEXT_SUFFIX):
+        return record
+
     heading = heading.removesuffix(_SECTION_CONTEXT_SUFFIX).strip()
     if heading:
         fields["heading_text"] = {"assign": heading}
