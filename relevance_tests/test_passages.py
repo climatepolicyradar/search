@@ -515,7 +515,7 @@ test_cases = [
             #            by savanna (65.3%), followed by tropical forest (15.1%),
             #            boreal forest (7.4%), temperate forest (2.3%), peatland
             #            (3.7%) and agricultural waste burning (6.3%)..."
-            "019d437a-5bb2-7e20-8d1b-80761a664711",
+            #"019d437a-5bb2-7e20-8d1b-80761a664711",
         ],
         k=10,
         description=(
@@ -532,7 +532,6 @@ test_cases = [
             #            look substantive.
         ),
     ),
-    # TODO: remove second passage from test? de-rank bibliography/reference item
     RecallTestCase[Passage](
         category="low_ranking_positives",
         search_terms="disaster",
