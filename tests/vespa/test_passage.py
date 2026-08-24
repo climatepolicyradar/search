@@ -86,6 +86,7 @@ def test_to_vespa_update_includes_required_fields() -> None:
             "looks_like_short_heading": {"assign": False},
             "looks_like_table_of_contents": {"assign": False},
             "looks_like_reference_list": {"assign": False},
+            "looks_like_demoted_section": {"assign": False},
             "document_id": {"assign": "doc-0"},
             "document_ref": {"assign": "id:documents:documents::doc-0"},
         },

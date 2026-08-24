@@ -26,6 +26,9 @@ schema passages {
         field looks_like_reference_list type bool {
             indexing: attribute | summary
         }
+        field looks_like_demoted_section type bool {
+            indexing: attribute | summary
+        }
         field document_id type string {
             indexing: attribute | summary
         }
@@ -151,6 +154,7 @@ schema passages {
             query(short_heading_weight) double: 0.15
             query(table_of_contents_weight) double: 0.35
             query(reference_list_weight) double: 0.5
+            query(demoted_section_weight) double: 0.5
             query(topic_q) tensor<float>(concept{})
             query(topic_weight) double: 1.0
         }
@@ -167,6 +171,9 @@ schema passages {
         function reference_list_penalty() {
             expression: query(reference_list_weight) * attribute(looks_like_reference_list)
         }
+        function demoted_section_penalty() {
+            expression: query(demoted_section_weight) * attribute(looks_like_demoted_section)
+        }
         # `min(x, 1)` for a boolean match of topics
         # Note: this scores how many of the
         # filtered topics a passage carries, not how often it mentions them.
@@ -176,9 +183,9 @@ schema passages {
             expression: query(topic_weight) * sum(map(attribute(concept_counts), f(x)(min(x, 1))) * query(topic_q))
         }
         first-phase {
-            expression: text_score() - short_headings_penalty - table_of_contents_penalty - reference_list_penalty + topic_score()
+            expression: text_score() - short_headings_penalty - table_of_contents_penalty - reference_list_penalty - demoted_section_penalty + topic_score()
         }
-        summary-features: text_score() topic_score() nativeRank(content) nativeProximity(content) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list)
+        summary-features: text_score() topic_score() nativeRank(content) nativeProximity(content) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(looks_like_demoted_section)
     }
 
     rank-profile bm25_multiplicative inherits nativerank {
@@ -201,10 +208,10 @@ schema passages {
         # `topic_score` is added to `text_score` so it can act independently – i.e. when
         # there is no search string.
         first-phase {
-            expression: (text_score() * proximity_boost + topic_score()) * (1 - short_headings_penalty) * (1 - table_of_contents_penalty) * (1 - reference_list_penalty)
+            expression: (text_score() * proximity_boost + topic_score()) * (1 - short_headings_penalty) * (1 - table_of_contents_penalty) * (1 - reference_list_penalty) * (1 - demoted_section_penalty)
         }
 
-        summary-features: text_score() topic_score() proximity_boost bm25(content) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list)
+        summary-features: text_score() topic_score() proximity_boost bm25(content) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(looks_like_demoted_section)
     }
 
     document-summary debug-summary {
@@ -215,6 +222,7 @@ schema passages {
         summary looks_like_short_heading {}
         summary looks_like_table_of_contents {}
         summary looks_like_reference_list {}
+        summary looks_like_demoted_section {}
         summary document_id {}
         summary principal_id {}
         summary content_type {}
