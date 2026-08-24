@@ -61,23 +61,52 @@ _DENSE_PERIODS_PER_100_WORDS = 18.0
 # 'Available at' footnotes glued to the end of it.
 _PROSE_FUNCTION_WORDS_PER_100_WORDS = 25.0
 _CONTACTS_PER_100_WORDS = 1.0
-_MIN_WORDS = 20
+
+# Above this many words, per-100-word rates are reliable, because they average many entries'
+# titles against each other; below it, the same signals switch from rate to bare presence. See
+# the docstring below for why lowering the rate threshold does not fix this instead.
+_DENSITY_MIN_WORDS = 60
+
+# A leading footnote or endnote marker before the citation proper: '58 ', '(1) ', '[4] ', '99. '
+_FOOTNOTE_MARKER = re.compile(r"^\(?\[?\d{1,4}\]?\)?[.)]?\s+")
+# A full URL or DOI token, not just the keyword `_SOURCE_LOCATOR` triggers on - used to measure
+# how much text is left once a short passage's own locator is stripped out of it.
+_FULL_LOCATOR_TOKEN = re.compile(r"(?:https?|ftp)://\S+|www\.\S+|doi:\s*\S+", re.IGNORECASE)
+# Below this many leftover words, a short passage carrying a source locator is essentially JUST
+# the locator (a bare 'Available at: <url>' footnote) - sufficient on its own, since these carry
+# no author-initial or citation-year at all and could never otherwise reach two signals.
+_MAX_WORDS_AROUND_BARE_LOCATOR = 10
+# The bare-locator shortcut only fires on these content types. A bare URL in a page header or
+# footer is as often the document's own repeating self-referential permalink or an e-signature
+# verification link as it is a genuine citation - textually indistinguishable, but pageHeader
+# and pageFooter carry no other signal to disambiguate them, so the shortcut is withheld there
+# rather than guessed at.
+_BARE_LOCATOR_CONTENT_TYPES = frozenset({"Text", "footnote"})
+# Below the density floor, citation-year and source-locator are the two signals specific enough
+# to citations that at least one of them is required; author-initial and period-density alone
+# are not, because they also fire on section headings, outline markers and signature blocks -
+# see docstring. Source-locator only counts towards this when content_type is safe, for the
+# same self-referential-URL reason the bare-locator shortcut below is restricted.
+_MIN_SHORT_SIGNALS = 2
 
 
-def looks_like_reference_list(text: str) -> bool:
+def looks_like_reference_list(text: str, content_type: str = "") -> bool:
     """
     True if the passage is a bibliography, endnote or numbered footnote block.
 
-    Reads as: it is a reference list if it is long enough to judge, does not read
-    as prose, is not a contact block, and at least two of four named citation
-    signals hold.
+    Covers a full list of several entries, or as few as one.
 
-    Requiring *two* signals is what does the work. Any one of them alone fires on
-    far too much - a URL in a footnote, a date in a table, an initial in a
-    signature block - but a passage carrying two of author initials, citation
-    years, source locators and period density is a citation list and almost
-    nothing else. Dropping to one signal takes precision from 1.00 to 0.86;
-    demanding three takes recall from 0.98 to 0.86.
+    Reads as: above a density floor, it is a reference list if it does not read as prose, is
+    not a contact block, and at least two of four named citation signals hold *at density*.
+    Below that floor, the same four signals are checked for bare presence instead, two of them
+    (period-density kept, the prose veto dropped) are enough, and a passage that is essentially
+    just a locator ('Available at: <url>') is sufficient on its own.
+
+    Requiring *two* signals at density is what does the work above the floor. Any one of them
+    alone fires on far too much - a URL in a footnote, a date in a table, an initial in a
+    signature block - but a passage carrying two of author initials, citation years, source
+    locators and period density is a citation list and almost nothing else. Dropping to one
+    signal takes precision from 1.00 to 0.86; demanding three takes recall from 0.98 to 0.86.
 
     Calendar dates are stripped before counting: the ', 2024.' of 'December 31,
     2024.' is otherwise indistinguishable from a citation year.
@@ -87,23 +116,10 @@ def looks_like_reference_list(text: str) -> bool:
     0.55 for everything else - the distributions are the same, because numbered
     footnote citations appear on every page rather than only at the end.
 
-    Deliberately NOT conditions here, having turned out to be dead weight once two
-    signals are required:
-
-    - an explicit ALLCAPS REFERENCES / BIBLIOGRAPHY heading, which never changed a
-      verdict on the validation set - passages carrying one always had two other
-      signals anyway;
-    - publication furniture ('pp. 14', 'vol. 3', 'eds.', 'ibid', 'supra'), which
-      cost precision, because legal prose is full of it;
-    - parenthetical author-year citations ('(Lal, 2016)'), the hallmark of the
-      IPCC-style prose we want to KEEP. The function-word veto already excludes
-      that prose, so counting them a second time added nothing;
-    - 'et al.', which is more frequent per 100 words in the prose we want to keep
-      (3.6) than in the reference lists we want to drop (1.7).
-
-    Dropping publication furniture has a known cost: a block of legal footnotes
-    carrying URLs, 'Id.' and 'supra' scores just under all four thresholds and so
-    fires no signal at all.
+    Below `_DENSITY_MIN_WORDS`, per-100-word rates stop being reliable,so below the floor, the prose veto is dropped rather than loosened, and precision is
+    recovered a different way: by presence rather than rate, and by requiring one of the two
+    citation-specific signals (citation-year, source-locator) rather than accepting any two of
+    the four interchangeably.
 
     WARNING: Claude figured out the below ruleset based on a labelled sample of
     the data. It should be flexible enough for use, but should be used with caution in
@@ -111,29 +127,54 @@ def looks_like_reference_list(text: str) -> bool:
     """
     text = _CALENDAR_DATE.sub(" ", text)
     words = _WORD.findall(text)
-    if len(words) < _MIN_WORDS:
+    if not words:
         return False
 
     def per_100_words(pattern: re.Pattern) -> float:
         return len(pattern.findall(text)) / len(words) * 100
 
-    reads_as_prose = per_100_words(_FUNCTION_WORD) > _PROSE_FUNCTION_WORDS_PER_100_WORDS
-    is_contact_block = per_100_words(_CONTACT_DETAIL) >= _CONTACTS_PER_100_WORDS
-    if reads_as_prose or is_contact_block:
+    if len(words) >= _DENSITY_MIN_WORDS:
+        reads_as_prose = per_100_words(_FUNCTION_WORD) > _PROSE_FUNCTION_WORDS_PER_100_WORDS
+        is_contact_block = per_100_words(_CONTACT_DETAIL) >= _CONTACTS_PER_100_WORDS
+        if reads_as_prose or is_contact_block:
+            return False
+
+        citation_signals = [
+            # 'Hansen, J.,' / 'J. Hansen', repeatedly - one stray 'Dr. C. Mark Eakin'
+            # in a litigation paragraph is not enough
+            per_100_words(_AUTHOR_INITIAL) >= _SIGNAL_PER_100_WORDS,
+            # '(2019).' closing an entry
+            per_100_words(_CITATION_YEAR) >= _SIGNAL_PER_100_WORDS,
+            # 'doi:10...', 'Retrieved from https://...'
+            per_100_words(_SOURCE_LOCATOR) >= _SIGNAL_PER_100_WORDS,
+            # abbreviated fields rather than sentences
+            text.count(".") / len(words) * 100 >= _DENSE_PERIODS_PER_100_WORDS,
+        ]
+        return sum(citation_signals) >= _MIN_CITATION_SIGNALS
+
+    if _CONTACT_DETAIL.search(text):
         return False
 
-    citation_signals = [
-        # 'Hansen, J.,' / 'J. Hansen', repeatedly - one stray 'Dr. C. Mark Eakin'
-        # in a litigation paragraph is not enough
-        per_100_words(_AUTHOR_INITIAL) >= _SIGNAL_PER_100_WORDS,
-        # '(2019).' closing an entry
-        per_100_words(_CITATION_YEAR) >= _SIGNAL_PER_100_WORDS,
-        # 'doi:10...', 'Retrieved from https://...'
-        per_100_words(_SOURCE_LOCATOR) >= _SIGNAL_PER_100_WORDS,
-        # abbreviated fields rather than sentences
+    remainder = _FULL_LOCATOR_TOKEN.sub("", _FOOTNOTE_MARKER.sub("", text, count=1))
+    if (
+        content_type in _BARE_LOCATOR_CONTENT_TYPES
+        and _SOURCE_LOCATOR.search(text)
+        and len(_WORD.findall(remainder)) <= _MAX_WORDS_AROUND_BARE_LOCATOR
+    ):
+        return True
+
+    citation_year_present = bool(_CITATION_YEAR.search(text))
+    source_locator_present = bool(_SOURCE_LOCATOR.search(text))
+    short_signals = [
+        bool(_AUTHOR_INITIAL.search(text)),
+        citation_year_present,
+        source_locator_present,
         text.count(".") / len(words) * 100 >= _DENSE_PERIODS_PER_100_WORDS,
     ]
-    return sum(citation_signals) >= _MIN_CITATION_SIGNALS
+    has_strong_signal = citation_year_present or (
+        source_locator_present and content_type in _BARE_LOCATOR_CONTENT_TYPES
+    )
+    return sum(short_signals) >= _MIN_SHORT_SIGNALS and has_strong_signal
 
 
 # A line holding nothing but a page number or a roman-numeral folio.

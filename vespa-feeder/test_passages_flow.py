@@ -150,6 +150,37 @@ def test_derive_passage_data_sets_the_type_flags_from_content_and_pages() -> Non
     assert flags(42)["looks_like_table_of_contents"] == {"assign": False}
 
 
+def test_derive_passage_data_threads_content_type_into_reference_list() -> None:
+    """
+    `content_type` reaches `looks_like_reference_list`, not just `content`/`pages`.
+
+    A bare-URL-only passage is the clearest demonstration: it can only ever be
+    caught via the bare-locator shortcut, which is gated on content_type
+    specifically because a bare URL in `pageFooter` is as often a document's own
+    self-referential permalink as a genuine citation (see the docstring in
+    `passages_derived_data.py`). Same content, different content_type, different
+    verdict - confirmed against a real row from
+    `PRODUCTION.PUBLISHED.PIPELINE_DATA_IN_VESPA_PASSAGE_UPDATES_V1`, which shapes
+    `content_type` as `{"assign": ...}` exactly like `content` and `pages` do.
+    """
+    bare_url_footnote = "89 http://www.um.edu.mt/ceer."
+
+    def is_reference_list(content_type: str) -> bool:
+        record = derive_passage_data(
+            {
+                "fields": {
+                    "document_id": {"assign": "doc-0"},
+                    "content": {"assign": bare_url_footnote},
+                    "content_type": {"assign": content_type},
+                }
+            }
+        )
+        return record["fields"]["looks_like_reference_list"]["assign"]
+
+    assert is_reference_list("footnote") is True
+    assert is_reference_list("pageFooter") is False
+
+
 def test_derive_passage_data_handles_a_record_with_no_pages() -> None:
     """Passages from HTML documents have no page data - the export omits `pages`."""
     record = derive_passage_data(
