@@ -15,10 +15,10 @@ fails loudly.
 
 import pytest
 from passages_derived_data import (
+    looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
-    looks_like_demoted_section,
 )
 
 TABLES_OF_CONTENTS = {

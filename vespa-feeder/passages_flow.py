@@ -4,10 +4,10 @@ from typing import TypedDict
 
 from flow import vespa_feeder
 from passages_derived_data import (
+    looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
-    looks_like_demoted_section,
 )
 from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify

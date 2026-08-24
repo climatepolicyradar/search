@@ -447,8 +447,7 @@ def looks_like_demoted_section(
     heading_text: str, text: str = "", content_type: str = "", max_words: int = 10
 ) -> bool:
     """
-    True if the passage sits in a references, bibliography or author-biography
-    section.
+    True if the passage sits in a references, bibliography or author-biography section.
     
     Reads as: the section heading, title, or page heading names one of those sections, is not a caption or
     source note, and is short enough to be a heading rather than a sentence once

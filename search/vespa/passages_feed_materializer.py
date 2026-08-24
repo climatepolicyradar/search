@@ -25,10 +25,10 @@ from mypy_boto3_s3 import S3Client
 
 from search.passage import (
     Passage,
+    looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
-    looks_like_demoted_section
 )
 from search.vespa.models import VespaUpdate
 from search.vespa.passage import (
