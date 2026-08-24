@@ -78,8 +78,8 @@ so the numbers are comparable to the development history:
 | `looks_like_table_of_contents`, text only                           | original strata           | 0.935 | 0.841 | 0.885 |
 | `looks_like_reference_list`                                         | original strata           | 1.000 | 0.828 | 0.906 |
 | "                                                                   | excl. ambiguous, all rows | 0.959 | 0.875 | 0.915 |
-| `looks_like_demoted_section`, max 6 words                           | original strata           |     - |     - |     - |
-| `looks_like_demoted_section`, max 10 words                          | original strata           |     - |     - |     - |
+| `looks_like_demoted_section`, max 6 words                           | original strata           | 1.000 | 0.732 | 0.845 |
+| `looks_like_demoted_section`, max 10 words                          | original strata           | 0.948 | 0.866 | 0.905 |
 
 For scale, the rules these replaced, on the same TOC/reference-list rows: the
 previous TOC rule scored P=0.328 / R=0.565 and fired on **50.2%** of all
