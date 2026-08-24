@@ -43,10 +43,6 @@ def score(
     for row in rows:
         pages = [row["min_page"]] if use_pages and row.get("min_page") is not None else []
         # `type` matters for `looks_like_reference_list` below its density floor -
-        # the bare-locator shortcut and the source-locator "strong signal" both
-        # gate on content_type - so it must be threaded through here, not just
-        # `text`/`pages`, or this would silently score the pre-content-type-aware
-        # behaviour instead of what actually runs in production.
         passage = Passage(text=row["content"], pages=pages, type=row["content_type"])
         truth.append(row["label"])
         predicted.append(int(detector(passage)))
@@ -148,11 +144,7 @@ if __name__ == "__main__":
     )
     # Every disagreement between the shipped detector and the reworked one, hand-
     # labelled, across two fresh, genuinely random 1,800-passage draws (content-type
-    # stratified, not keyword-targeted - see reflist_firing_rate_sample.sql). Its
-    # own `stratum` values are the content-type strata from that sampling query, not
-    # `fresh_disagreement`, so the "original strata only" row below is identical to
-    # "all rows" for this dataset specifically - the whole set already IS the
-    # adversarial slice, by construction. (Claude)
+    # stratified, not keyword-targeted
     report(
         "looks_like_reference_list (fresh disagreements: shipped vs. reworked)",
         load_dataset("reflist_fresh_disagreement.jsonl"),

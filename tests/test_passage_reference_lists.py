@@ -62,12 +62,8 @@ REFERENCE_LISTS = {
         "November 1966. NRCC 9279.",
         "List",
     ),
-    # A single reference item, not a list - the ticket's own motivating shape
-    # (FUS-209). Below the density floor, carried by author-initial + citation-year
-    # only. Used to be a documented, deliberate miss under the old 20-word floor,
-    # then briefly re-broken by an over-broad three-of-four-signals fix, before the
-    # current rule (two of four signals, at least one of citation-year /
-    # source-locator) resolved both at once.
+    # A single reference item, not a list. Below the density floor, carried by author-initial + citation-year
+    # only.
     "single_citation_below_density_floor": (
         "Hansen, J., 2003: Can we defuse the global warming time bomb?",
         "footnote",
