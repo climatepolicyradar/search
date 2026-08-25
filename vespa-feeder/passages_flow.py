@@ -89,10 +89,10 @@ def derive_labels_from_topics(record: dict) -> dict:
 
 def derive_passage_type_flags(record: dict) -> dict:
     """
-    Set the `looks_like_*` bools and `is_page_header_or_footer`, derived from the record's
-    own text, pages and content type.
+    Set the `looks_like_*` bools and `is_page_header_or_footer`.
 
-    The Snowflake export doesn't carry them, so without this the fields default
+    Derived from the record's own text, pages and content type. The Snowflake
+    export doesn't carry them, so without this the fields default
     false and the penalties they drive in passages.sd's `nativerank` profile are
     inert. `pages` is absent for passages with no page data (HTML documents), in
     which case `looks_like_table_of_contents` skips its front-matter page veto.
