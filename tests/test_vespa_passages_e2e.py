@@ -179,6 +179,7 @@ def _feed_passage_with_labels(
     content: str = "some passage text",
     concept_counts: dict[str, float] | None = None,
     looks_like_table_of_contents: bool = False,
+    is_page_header_or_footer: bool = False,
 ) -> None:
     """Feed a passage with `labels` set - the legacy materializer path doesn't set these."""
     passage = VespaPassage(
@@ -191,6 +192,7 @@ def _feed_passage_with_labels(
         labels=labels,
         concept_counts=concept_counts or {},
         looks_like_table_of_contents=looks_like_table_of_contents,
+        is_page_header_or_footer=is_page_header_or_footer,
     )
     r = req.put(
         f"{app.end_point}/document/v1/passages/passages/docid/{block_id}",
@@ -658,6 +660,33 @@ def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(vespa_app: V
     assert _topic_ranked_ids(
         query=None, concept_ids=[_CLIMATE_FINANCE], topic_weight=1.0
     ) == ["tb-prose", "tb-toc"]
+
+
+def test_junk_penalties_suppress_a_page_header_or_footer(vespa_app: Vespa):
+    """A page header/footer carrying the filtered topic ranks below equivalent prose."""
+    document = DocumentFactory.build(id="doc-junk-2", labels=[_principal_label()])
+    _feed_document(vespa_app, document)
+    _feed_passage_with_labels(
+        vespa_app,
+        "tb-header",
+        document_id="doc-junk-2",
+        labels=[_concept_label(_CLIMATE_FINANCE)],
+        content="Climate Finance Report | Page 4 of 20",
+        concept_counts={_CLIMATE_FINANCE: 1},
+        is_page_header_or_footer=True,
+    )
+    _feed_passage_with_labels(
+        vespa_app,
+        "tb-prose-2",
+        document_id="doc-junk-2",
+        labels=[_concept_label(_CLIMATE_FINANCE)],
+        content="Climate finance is discussed at length in this section.",
+        concept_counts={_CLIMATE_FINANCE: 1},
+    )
+
+    assert _topic_ranked_ids(
+        query=None, concept_ids=[_CLIMATE_FINANCE], topic_weight=1.0
+    ) == ["tb-prose-2", "tb-header"]
 
 
 # endregion Topic ranking
