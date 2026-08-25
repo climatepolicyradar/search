@@ -417,3 +417,11 @@ def looks_like_short_heading(text: str, content_type: str = "") -> bool:
     
     letters = [char for char in text if char.isalpha()]
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
+
+
+_PAGE_FURNITURE_CONTENT_TYPES = frozenset({"pageHeader", "pageFooter"})
+
+
+def is_page_header_or_footer(content_type: str = "") -> bool:
+    """True if the passage is a repeating page header or footer, not body content."""
+    return content_type in _PAGE_FURNITURE_CONTENT_TYPES

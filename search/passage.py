@@ -59,6 +59,7 @@ class Passage(BaseModel):
     looks_like_short_heading: bool = Field(default=False)
     looks_like_table_of_contents: bool = Field(default=False)
     looks_like_reference_list: bool = Field(default=False)
+    is_page_header_or_footer: bool = Field(default=False)
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
     labels: list[PassageLabelRelationship] = Field(default_factory=list)
@@ -93,6 +94,7 @@ class Passage(BaseModel):
             looks_like_short_heading=data["looks_like_short_heading"],
             looks_like_table_of_contents=data["looks_like_table_of_contents"],
             looks_like_reference_list=data["looks_like_reference_list"],
+            is_page_header_or_footer=data["is_page_header_or_footer"],
             pages=[page["number"] for page in data["pages"]],
             pages_with_bounding_boxes=data["pages"],
             labels=[
@@ -622,6 +624,14 @@ def looks_like_short_heading(passage: Passage) -> bool:
     
     letters = [char for char in text if char.isalpha()]
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
+
+
+_PAGE_FURNITURE_CONTENT_TYPES = frozenset({"pageHeader", "pageFooter"})
+
+
+def is_page_header_or_footer(passage: Passage) -> bool:
+    """True if the passage is a repeating page header or footer, not body content."""
+    return passage.type in _PAGE_FURNITURE_CONTENT_TYPES
 
 
 _ANSWER_TOKENS = (
