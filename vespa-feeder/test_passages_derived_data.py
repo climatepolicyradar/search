@@ -16,6 +16,7 @@ fails loudly.
 import pytest
 from passages_derived_data import (
     is_page_header_or_footer,
+    looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
@@ -429,6 +430,9 @@ def test_ignores_prose_type_section_heading():
 def test_detects_short_type_section_heading():
     assert looks_like_short_heading("Table 4: GHG emissions by sector", "sectionHeading")
 
+def test_detects_demoted_section_from_heading_text():
+    # body passage judged on its parent heading
+    assert looks_like_demoted_section("References", "Boyd, R., 2011. ...", "Text")
 
 # `is_page_header_or_footer` reads `content_type` directly rather than the passage
 # text, so these are written here rather than vendored from a shared fixtures dict.
@@ -448,3 +452,15 @@ def test_ignores_empty_content_type():
     assert not is_page_header_or_footer("")
 
 
+def test_detects_demoted_section_heading_on_own_text():
+    # a title/pageHeader/sectionHeading heading is judged on its own text
+    assert looks_like_demoted_section("Annex VI: Common reporting tables", "References", "sectionHeading")
+    assert looks_like_demoted_section("", "BIBLIOGRAPHY", "title")
+
+
+def test_ignores_terms_of_reference():
+    assert not looks_like_demoted_section("TERMS OF REFERENCE OF PROJECT STAFF", "", "Text")
+
+
+def test_ignores_source_note_caption():
+    assert not looks_like_demoted_section("SOURCE: Prepared by the authors.", "", "Text")

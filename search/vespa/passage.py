@@ -71,6 +71,7 @@ class VespaPassageUpdate(TypedDict):
     looks_like_table_of_contents: VespaAssign[bool]
     looks_like_reference_list: VespaAssign[bool]
     is_page_header_or_footer: VespaAssign[bool]
+    looks_like_demoted_section: VespaAssign[bool]
     document_id: VespaAssign[str]
     document_ref: VespaAssign[str]
     principal_document_ref: NotRequired[VespaAssign[str]]
@@ -119,6 +120,7 @@ class VespaPassage(BaseModel):
     looks_like_table_of_contents: bool = False
     looks_like_reference_list: bool = False
     is_page_header_or_footer: bool = False
+    looks_like_demoted_section: bool = False
     document_id: str = ""
     document_ref: str | None = None
     principal_document_ref: str | None = None
@@ -159,6 +161,7 @@ class VespaPassage(BaseModel):
             "is_page_header_or_footer": {
                 "assign": self.is_page_header_or_footer
             },
+            "looks_like_demoted_section": {"assign": self.looks_like_demoted_section},
             "document_id": {"assign": self.document_id},
             "document_ref": {"assign": self.document_ref},
         }

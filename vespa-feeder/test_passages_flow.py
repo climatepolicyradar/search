@@ -140,6 +140,7 @@ def test_derive_passage_data_sets_the_type_flags_from_content_and_pages() -> Non
                 "looks_like_table_of_contents",
                 "looks_like_reference_list",
                 "is_page_header_or_footer",
+                "looks_like_demoted_section",
             )
         }
 
@@ -148,6 +149,7 @@ def test_derive_passage_data_sets_the_type_flags_from_content_and_pages() -> Non
         "looks_like_table_of_contents": {"assign": True},
         "looks_like_reference_list": {"assign": False},
         "is_page_header_or_footer": {"assign": False},
+        "looks_like_demoted_section": {"assign": False},
     }
     assert flags(42)["looks_like_table_of_contents"] == {"assign": False}
 

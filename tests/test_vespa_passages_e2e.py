@@ -365,15 +365,16 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
             hit["fields"]["looks_like_short_heading"],
             hit["fields"]["looks_like_table_of_contents"],
             hit["fields"]["looks_like_reference_list"],
+            hit["fields"]["looks_like_demoted_section"]
         )
         for hit in hits
     }
 
     assert flags_by_id == {
-        "tb-heading": (True, False, False),
-        "tb-toc": (False, True, False),
-        "tb-refs": (False, False, True),
-        "tb-prose": (False, False, False),
+        "tb-heading": (True, False, False, False),
+        "tb-toc": (False, True, False, False),
+        "tb-refs": (False, False, True, False),
+        "tb-prose": (False, False, False, False),
     }
 
 

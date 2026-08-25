@@ -60,6 +60,7 @@ class Passage(BaseModel):
     looks_like_table_of_contents: bool = Field(default=False)
     looks_like_reference_list: bool = Field(default=False)
     is_page_header_or_footer: bool = Field(default=False)
+    looks_like_demoted_section: bool = Field(default=False)
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
     labels: list[PassageLabelRelationship] = Field(default_factory=list)
@@ -95,6 +96,7 @@ class Passage(BaseModel):
             looks_like_table_of_contents=data["looks_like_table_of_contents"],
             looks_like_reference_list=data["looks_like_reference_list"],
             is_page_header_or_footer=data["is_page_header_or_footer"],
+            looks_like_demoted_section=data["looks_like_demoted_section"],
             pages=[page["number"] for page in data["pages"]],
             pages_with_bounding_boxes=data["pages"],
             labels=[
@@ -634,6 +636,62 @@ def is_page_header_or_footer(passage: Passage) -> bool:
     return passage.type in _PAGE_FURNITURE_CONTENT_TYPES
 
 
+# `references` is deliberately plural-only: `\breference\b` fires on 'Terms of
+# Reference', 'Reference Scenario' and 'reference year', which are core NDC vocabulary.
+_DEMOTED_SECTION_WORD = re.compile(
+    r"\b(?:references|reference list|bibliograph(?:y|ies|ic|ical)"
+    r"|authors?|biograph(?:y|ies|ical))\b",
+    re.IGNORECASE,
+)
+# A caption, source note or parenthetical
+_CAPTION_OR_SENTENCE = re.compile(
+    r"^\s*(?:sources?|figures?|fig\.|tables?|notes?|chart|box)\b|^\s*\(",
+    re.IGNORECASE,
+)
+# Leading section numbering discounted when measuring heading length
+_LEADING_NUMBERING = re.compile(
+    r"^\s*(?:(?:chapter|annex|annexe|appendix|part|section|volume)\s+)?"
+    r"[\dIVXLCivxlc]+\b(?:\.\d+)*[.)]?\s*",
+    re.IGNORECASE,
+)
+
+_DEMOTED_HEADING_MAX_WORDS = 10
+
+_SELF_HEADING_TYPES = ("sectionHeading", "title", "pageHeader")
+
+
+def looks_like_demoted_section(
+    passage: Passage, max_words: int = _DEMOTED_HEADING_MAX_WORDS
+) -> bool:
+    """
+    True if the passage sits in a references, bibliography or author-biography section.
+
+    Reads as: the section heading, title, or page heading names one of those sections, is not a caption or
+    source note, and is short enough to be a heading rather than a sentence once
+    leading section numbering is discounted.
+
+    Complements `looks_like_reference_list`, which reads the passage's own text and
+    so misses prose that sits in a bibliography e.g. under '10.8 BIBLIOGRAPHIC 
+    REFERENCES', "Understanding the health status of ecosystems is crucial for 
+    high-level decision-making..." fires no citation signal at all.
+
+    A passage of type sectionHeading, title, or pageHeader is judged on its own text, because `heading_id` on 
+    such a passage points at its heading, never at itself e.g. the passage 'References' 
+    has heading_text 'Annex VI: Common reporting tables'.
+    """
+    heading = (
+        passage.text
+        if passage.type in _SELF_HEADING_TYPES
+        else (passage.heading_text or "")
+    ).strip()
+    if not heading or _CAPTION_OR_SENTENCE.search(heading):
+        return False
+    if not _DEMOTED_SECTION_WORD.search(heading):
+        return False
+    remainder = _LEADING_NUMBERING.sub("", heading)
+    return len(remainder.split()) <= max_words
+
+
 _ANSWER_TOKENS = (
     " tak no",
     " yes no",
@@ -644,8 +702,8 @@ _ANSWER_TOKENS = (
     " nie tak",
     " oui non",
 )
- 
- 
+
+
 def looks_like_questionnaire(passage: Passage) -> bool:
     """
     True if the passage is a form or questionnaire rather than substantive text.

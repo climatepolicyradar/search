@@ -408,10 +408,10 @@ def test_text_block_to_vespa_update_pages_handles_empty_boxes_and_coordinates() 
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        (_HEADING_TEXT, {"looks_like_short_heading": True, "looks_like_table_of_contents": False, "looks_like_reference_list": False}),
-        (_TOC_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": True, "looks_like_reference_list": False}),
-        (_REFERENCES_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": False, "looks_like_reference_list": True}),
-        (_PROSE_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": False, "looks_like_reference_list": False}),
+        (_HEADING_TEXT, {"looks_like_short_heading": True, "looks_like_table_of_contents": False, "looks_like_reference_list": False, "looks_like_demoted_section": False}),
+        (_TOC_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": True, "looks_like_reference_list": False, "looks_like_demoted_section": False}),
+        (_REFERENCES_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": False, "looks_like_reference_list": True, "looks_like_demoted_section": False}),
+        (_PROSE_TEXT, {"looks_like_short_heading": False, "looks_like_table_of_contents": False, "looks_like_reference_list": False, "looks_like_demoted_section": False}),
     ],
     ids=["looks_like_heading", "looks_like_table_of_contents", "looks_like_reference_list", "looks_like_prose"],
 )
@@ -427,6 +427,7 @@ def test_text_block_to_vespa_update_sets_properties(
         "looks_like_short_heading": fields["looks_like_short_heading"]["assign"],
         "looks_like_table_of_contents": fields["looks_like_table_of_contents"]["assign"],
         "looks_like_reference_list": fields["looks_like_reference_list"]["assign"],
+        "looks_like_demoted_section": fields["looks_like_demoted_section"]["assign"]
     } == expected
 
 

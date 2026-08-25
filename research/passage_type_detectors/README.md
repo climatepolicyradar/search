@@ -1,8 +1,8 @@
 # Passage type heuristics — validation sets
 
 Claude-labelled evaluation data and lightweight eval script for two passage-type
-heuristics in `search/passage.py`: `looks_like_table_of_contents` &
-`looks_like_reference_list`.
+heuristics in `search/passage.py`: `looks_like_table_of_contents`,
+`looks_like_reference_list`, and `looks_like_demoted_section`.
 
 ```bash
 uv run python research/passage_detectors/evaluate.py
@@ -20,6 +20,9 @@ Fields:
 | `stratum`                                     | how the row was sampled (see below)                                  |
 | `min_page`                                    | lowest PDF page the passage appears on                               |
 | `n`, `n_lines`                                | TOC set only: row index and non-empty line count                     |
+| `heading_text`                                | demoted-section set only: the section heading the passage sits under |
+| `heading_content_type`                        | demoted-section set only: `sectionHeading`, `title`, or `pageHeader` |
+| `n_passages_below`                            | demoted-section set only: how many passages this is heading for      |
 
 ## How to use (for agents)
 
@@ -75,6 +78,8 @@ so the numbers are comparable to the development history:
 | `looks_like_table_of_contents`, text only                           | original strata           | 0.935 | 0.841 | 0.885 |
 | `looks_like_reference_list`                                         | original strata           | 1.000 | 0.828 | 0.906 |
 | "                                                                   | excl. ambiguous, all rows | 0.959 | 0.875 | 0.915 |
+| `looks_like_demoted_section`, max 6 words                           | original strata           | 1.000 | 0.732 | 0.845 |
+| `looks_like_demoted_section`, max 10 words                          | original strata           | 0.948 | 0.866 | 0.905 |
 
 For scale, the rules these replaced, on the same TOC/reference-list rows: the
 previous TOC rule scored P=0.328 / R=0.565 and fired on **50.2%** of all
@@ -83,7 +88,7 @@ P=0.925 / R=0.713.
 
 The gap between the two TOC rows is the page veto: it takes precision from 0.935
 to 1.000 and costs recall, because it rejects the per-chapter contents listings
-that appear deep in long reports. That was a deliberate trade — a false positive
+that appear deep in long reports. That was a deliberate trade - a false positive
 makes a relevance assertion pass vacuously, which is the failure mode that left
 the `tables_of_contents` relevance cases unfalsifiable for months.
 
@@ -107,3 +112,7 @@ this stays checkable.
 - **Labels reflect the rules' purpose**, which is filtering junk out of
   relevance-test results. They are not a general-purpose document-structure
   ground truth.
+- **The demoted-section set is heading-grain.** Its 300 rows stand for 300
+  sections, not 300 passages, and `n_passages_below` records the fan-out.
+  Nothing here measures whether the representative passage was typical of its
+  section.
