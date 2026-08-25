@@ -4,6 +4,7 @@ from typing import TypedDict
 
 from flow import vespa_feeder
 from passages_derived_data import (
+    looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
@@ -88,7 +89,7 @@ def derive_labels_from_topics(record: dict) -> dict:
 
 def derive_passage_type_flags(record: dict) -> dict:
     """
-    Set the three `looks_like_*` bools, derived from the record's own text and pages.
+    Set the four `looks_like_*` bools, derived from the record's own text and pages.
 
     The Snowflake export doesn't carry them, so without this the fields default
     false and the penalties they drive in passages.sd's `nativerank` profile are
@@ -97,16 +98,20 @@ def derive_passage_type_flags(record: dict) -> dict:
     """
     fields = record.get("fields", {})
     content = fields.get("content", {}).get("assign", "")
+    content_type = fields.get("content_type", {}).get("assign", "")
+    heading_text = fields.get("heading_text", {}).get("assign", "")
     pages = fields.get("pages", {}).get("assign") or []
     page_numbers = [page["number"] for page in pages]
-    content_type = fields.get("content_type", {}).get("assign", "")
 
-    fields["looks_like_short_heading"] = {"assign": looks_like_short_heading(content)}
+    fields["looks_like_short_heading"] = {"assign": looks_like_short_heading(content, content_type)}
     fields["looks_like_table_of_contents"] = {
         "assign": looks_like_table_of_contents(content, page_numbers)
     }
     fields["looks_like_reference_list"] = {
         "assign": looks_like_reference_list(content, content_type)
+    }
+    fields["looks_like_demoted_section"] = {
+        "assign": looks_like_demoted_section(heading_text, content, content_type)
     }
     return record
 

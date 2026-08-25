@@ -1,7 +1,7 @@
 """
 Score the passage type detectors against the hand-labelled validation sets.
 
-    uv run python research/passage_detectors/evaluate.py
+    uv run python research/passage_type_detectors/evaluate.py
 
 See README.md for what each stratum is and, importantly, which ones must not be
 used to compare two candidate rules.
@@ -9,6 +9,7 @@ used to compare two candidate rules.
 
 import json
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 
 from rich.console import Console
@@ -17,6 +18,7 @@ from sklearn.metrics import precision_recall_fscore_support
 
 from search.passage import (
     Passage,
+    looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_table_of_contents,
 )
@@ -43,7 +45,12 @@ def score(
     for row in rows:
         pages = [row["min_page"]] if use_pages and row.get("min_page") is not None else []
         # `type` matters for `looks_like_reference_list` below its density floor -
-        passage = Passage(text=row["content"], pages=pages, type=row["content_type"])
+        passage = Passage(
+            text=row["content"],
+            pages=pages,
+            type=row["content_type"],
+            heading_text=row.get("heading_text"),
+        )
         truth.append(row["label"])
         predicted.append(int(detector(passage)))
     precision, recall, f1, _ = precision_recall_fscore_support(
@@ -150,4 +157,13 @@ if __name__ == "__main__":
         load_dataset("reflist_fresh_disagreement.jsonl"),
         looks_like_reference_list,
         use_pages=False,
+    )
+    demoted = load_dataset("demoted_section_validation_set.jsonl")
+    report(
+        "looks_like_demoted_section (shipped: max 10 words)",
+        demoted, looks_like_demoted_section, use_pages=False,
+    )
+    report(
+        "looks_like_demoted_section (higher-precision variant: max 6 words)",
+        demoted, partial(looks_like_demoted_section, max_words=6), use_pages=False,
     )

@@ -417,3 +417,60 @@ def looks_like_short_heading(text: str, content_type: str = "") -> bool:
     
     letters = [char for char in text if char.isalpha()]
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
+
+
+# `references` is deliberately plural-only: `\breference\b` fires on 'Terms of 
+# Reference', 'Reference Scenario' and 'reference year', which are core NDC vocabulary. 
+_DEMOTED_SECTION_WORD = re.compile(
+    r"\b(?:references|reference list|bibliograph(?:y|ies|ic|ical)"
+    r"|authors?|biograph(?:y|ies|ical))\b",
+    re.IGNORECASE,
+)
+# A caption, source note or parenthetical
+_CAPTION_OR_SENTENCE = re.compile(
+    r"^\s*(?:sources?|figures?|fig\.|tables?|notes?|chart|box)\b|^\s*\(",
+    re.IGNORECASE,
+)
+# Leading section numbering discounted when measuring heading length
+_LEADING_NUMBERING = re.compile(
+    r"^\s*(?:(?:chapter|annex|annexe|appendix|part|section|volume)\s+)?"
+    r"[\dIVXLCivxlc]+\b(?:\.\d+)*[.)]?\s*",
+    re.IGNORECASE,
+)
+
+_DEMOTED_HEADING_MAX_WORDS = 10
+
+_SELF_HEADING_TYPES = ("sectionHeading", "title", "pageHeader")
+
+
+def looks_like_demoted_section(
+    heading_text: str, text: str = "", content_type: str = "", max_words: int = 10
+) -> bool:
+    """
+    True if the passage sits in a references, bibliography or author-biography section.
+    
+    Reads as: the section heading, title, or page heading names one of those sections, is not a caption or
+    source note, and is short enough to be a heading rather than a sentence once
+    leading section numbering is discounted.
+    
+    Complements `looks_like_reference_list`, which reads the passage's own text and
+    so misses prose that sits in a bibliography e.g. under '10.8 BIBLIOGRAPHIC 
+    REFERENCES', "Understanding the health status of ecosystems is crucial for 
+    high-level decision-making..." fires no citation signal at all.
+    
+    A passage of type sectionHeading, title, or pageHeader is judged on its own text, because `heading_id` on 
+    such a passage points at its heading, never at itself e.g. the passage 'References' 
+    has heading_text 'Annex VI: Common reporting tables'.
+    """
+    heading = (
+        text
+        if content_type in _SELF_HEADING_TYPES
+        else (heading_text or "")
+    ).strip()
+    if not heading or _CAPTION_OR_SENTENCE.search(heading):
+        return False
+    if not _DEMOTED_SECTION_WORD.search(heading):
+        return False
+    remainder = _LEADING_NUMBERING.sub("", heading)
+    return len(remainder.split()) <= max_words
+
