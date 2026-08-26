@@ -329,18 +329,7 @@ other = Label(
 un_submission = Label(
     type="category", id="category::UN submission", value="UN submission", labels=[]
 )
-party = Label(
-    id="author_type::Party",
-    value="Party",
-    type="author_type",
-    labels=[LabelRelationship(type="subconcept_of", value=un_submission)],
-)
-non_party = Label(
-    id="author_type::Non-Party",
-    value="Non-Party",
-    type="author_type",
-    labels=[LabelRelationship(type="subconcept_of", value=un_submission)],
-)
+
 unfccc = Label(
     id="un_convention::UNFCCC",
     value="UNFCCC",
@@ -434,23 +423,191 @@ unccd = Label(
     labels=[LabelRelationship(type="subconcept_of", value=un_submission)],
 )
 voluntary_land_degradation_neutrality_targets = Label(
-    id="document_type::Voluntary Land Degradation Neutrality Targets (LDN-T)",
+    id="entity_type::Voluntary Land Degradation Neutrality Targets (LDN-T)",
     value="Voluntary Land Degradation Neutrality Targets (LDN-T)",
-    type="document_type",
+    type="entity_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
 )
 country_report = Label(
-    id="document_type::Country Report (CR)",
+    id="entity_type::Country Report (CR)",
     value="Country Report (CR)",
-    type="document_type",
+    type="entity_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
 )
 national_drought_plan = Label(
-    id="document_type::National Drought Plan (NDP)",
+    id="entity_type::National Drought Plan (NDP)",
     value="National Drought Plan (NDP)",
-    type="document_type",
+    type="entity_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
 )
+
+# region global stock take
+global_stocktake_category_label = Label(
+    id="category::Global Stocktake",
+    value="Global Stocktake",
+    type="category",
+)
+
+gst1_process_label = Label(
+    id="process::GST1",
+    value="GST1",
+    type="process",
+    labels=[
+        LabelRelationship(
+            type="subconcept_of",
+            value=global_stocktake_category_label,
+        )
+    ],
+)
+party = Label(
+    id="author_type::Party",
+    value="Party",
+    type="author_type",
+    labels=[
+        LabelRelationship(type="subconcept_of", value=global_stocktake_category_label)
+    ],
+)
+nationally_determined_contribution.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+national_adaptation_plan.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+biennial_transparency_report.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+long_term_low_emission_development_strategy.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+biennial_update_report.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+biennial_report.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+national_communication.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+national_inventory_report.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+adaptation_communication.labels.append(
+    LabelRelationship(
+        type="subconcept_of",
+        value=party,
+    )
+)
+non_party = Label(
+    id="author_type::Non-Party",
+    value="Non-Party",
+    type="author_type",
+    labels=[
+        LabelRelationship(type="subconcept_of", value=global_stocktake_category_label)
+    ],
+)
+facilitative_sharing_of_views_report = Label(
+    id="entity_type::Facilitative sharing of views report",
+    value="Facilitative Sharing of Views Report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+fast_start_finance_report = Label(
+    id="entity_type::Fast-Start Finance Report",
+    value="Fast-Start Finance Report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+global_stocktake_synthesis_report = Label(
+    id="entity_type::Global Stocktake Synthesis Report",
+    value="Global Stocktake Synthesis Report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+intersessional_document = Label(
+    id="entity_type::Intersessional Document",
+    value="Intersessional Document",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+ipcc_report = Label(
+    id="entity_type::IPCC Report",
+    value="IPCC Report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+pre_session_document = Label(
+    id="entity_type::Pre-Session Document",
+    value="Pre-Session Document",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+publication = Label(
+    id="entity_type::Publication",
+    value="Publication",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+non_party_report = Label(
+    id="entity_type::Report",
+    value="Report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+submission_to_the_global_stocktake = Label(
+    id="entity_type::Submission to the global stocktake",
+    value="Submission to the global stocktake",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+summary_report = Label(
+    id="entity_type::Summary report",
+    value="Summary report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+synthesis_report = Label(
+    id="entity_type::Synthesis report",
+    value="Synthesis report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+technical_analysis_summary_report = Label(
+    id="entity_type::technical analysis summary report",
+    value="technical analysis summary report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+technical_analysis_technical_report = Label(
+    id="entity_type::technical analysis technical report",
+    value="technical analysis technical report",
+    type="entity_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+
 
 labels_taxonomy = [
     corporate_discloser,
@@ -510,4 +667,19 @@ labels_taxonomy = [
     voluntary_land_degradation_neutrality_targets,
     country_report,
     national_drought_plan,
+    global_stocktake_category_label,
+    gst1_process_label,
+    facilitative_sharing_of_views_report,
+    fast_start_finance_report,
+    global_stocktake_synthesis_report,
+    intersessional_document,
+    ipcc_report,
+    pre_session_document,
+    publication,
+    non_party_report,
+    submission_to_the_global_stocktake,
+    summary_report,
+    synthesis_report,
+    technical_analysis_summary_report,
+    technical_analysis_technical_report,
 ]
