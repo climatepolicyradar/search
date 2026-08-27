@@ -96,7 +96,7 @@ multilateral_climate_fund_project = Label(
     labels=[],
 )
 adaptation_fund = Label(
-    type="multilateral_climate_fund",
+    type="agent",
     id="agent::Adaptation Fund",
     value="Adaptation Fund",
     labels=[
@@ -107,7 +107,7 @@ adaptation_fund = Label(
     ],
 )
 the_climate_investment_funds = Label(
-    type="multilateral_climate_fund",
+    type="agent",
     id="agent::The Climate Investment Funds",
     value="Climate Investment Funds",
     labels=[
@@ -118,7 +118,7 @@ the_climate_investment_funds = Label(
     ],
 )
 green_climate_fund = Label(
-    type="multilateral_climate_fund",
+    type="agent",
     id="agent::Green Climate Fund",
     value="Green Climate Fund",
     labels=[
@@ -129,7 +129,7 @@ green_climate_fund = Label(
     ],
 )
 global_environment_facility = Label(
-    type="multilateral_climate_fund",
+    type="agent",
     id="agent::Global Environment Facility",
     value="Global Environment Facility",
     labels=[
