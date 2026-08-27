@@ -28,7 +28,7 @@ k6/
 ## Running
 
 ```bash
-k6 run k6/documents/smoke.ts
+k6 run documents/smoke.ts
 ```
 
 Defaults to hitting production (`https://api.climatepolicyradar.org/search`).
