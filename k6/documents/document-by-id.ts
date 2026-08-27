@@ -10,10 +10,20 @@ const BASE_URL = __ENV.BASE_URL || "https://api.climatepolicyradar.org/search";
 
 type TDocumentResponse = { data?: { id?: string; title?: unknown } };
 
-export const options = {
-  vus: 5,
-  duration: "1m",
+// FUS-356: add a "load" profile here once load-test parameters (VU ramp
+// stages, thresholds) are agreed. Select it with `-e PROFILE=load`.
+const PROFILES = {
+  smoke: {
+    vus: 5,
+    duration: "1m",
+  },
 };
+
+type TProfileName = keyof typeof PROFILES;
+
+const profileName = (__ENV.PROFILE || "smoke") as TProfileName;
+
+export const options = PROFILES[profileName];
 
 export default function () {
   const documentId =
