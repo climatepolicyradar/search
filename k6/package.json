@@ -1,0 +1,8 @@
+{
+  "name": "search-k6",
+  "private": true,
+  "devDependencies": {
+    "@types/k6": "^2.2.0",
+    "typescript": "^7.0.2"
+  }
+}

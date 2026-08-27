@@ -1,4 +1,4 @@
-import http from "k6/http";
+import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
 
@@ -21,13 +21,13 @@ export default function () {
   const res = http.get(`${BASE_URL}/documents/${documentId}`);
 
   check(res, {
-    "status is 200": (r) => r.status === 200,
-    "response has matching data.id": (r) => {
-      const body = r.json() as TDocumentResponse;
+    "status is 200": (response: Response) => response.status === 200,
+    "response has matching data.id": (response: Response) => {
+      const body = response.json() as TDocumentResponse;
       return body?.data?.id === documentId;
     },
-    "response has data.title": (r) => {
-      const body = r.json() as TDocumentResponse;
+    "response has data.title": (response: Response) => {
+      const body = response.json() as TDocumentResponse;
       return (
         typeof body?.data?.title === "string" && body.data.title.length > 0
       );
