@@ -59,6 +59,7 @@ class Passage(BaseModel):
     looks_like_short_heading: bool = Field(default=False)
     looks_like_table_of_contents: bool = Field(default=False)
     looks_like_reference_list: bool = Field(default=False)
+    is_page_header_or_footer: bool = Field(default=False)
     looks_like_demoted_section: bool = Field(default=False)
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
@@ -94,6 +95,7 @@ class Passage(BaseModel):
             looks_like_short_heading=data["looks_like_short_heading"],
             looks_like_table_of_contents=data["looks_like_table_of_contents"],
             looks_like_reference_list=data["looks_like_reference_list"],
+            is_page_header_or_footer=data["is_page_header_or_footer"],
             looks_like_demoted_section=data["looks_like_demoted_section"],
             pages=[page["number"] for page in data["pages"]],
             pages_with_bounding_boxes=data["pages"],
@@ -626,8 +628,16 @@ def looks_like_short_heading(passage: Passage) -> bool:
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
 
 
-# `references` is deliberately plural-only: `\breference\b` fires on 'Terms of 
-# Reference', 'Reference Scenario' and 'reference year', which are core NDC vocabulary. 
+_PAGE_FURNITURE_CONTENT_TYPES = frozenset({"pageHeader", "pageFooter"})
+
+
+def is_page_header_or_footer(passage: Passage) -> bool:
+    """True if the passage is a repeating page header or footer, not body content."""
+    return passage.type in _PAGE_FURNITURE_CONTENT_TYPES
+
+
+# `references` is deliberately plural-only: `\breference\b` fires on 'Terms of
+# Reference', 'Reference Scenario' and 'reference year', which are core NDC vocabulary.
 _DEMOTED_SECTION_WORD = re.compile(
     r"\b(?:references|reference list|bibliograph(?:y|ies|ic|ical)"
     r"|authors?|biograph(?:y|ies|ical))\b",

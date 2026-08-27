@@ -1,5 +1,5 @@
 """
-Tests for the vendored `looks_like_*` passage heuristics.
+Tests for the vendored `looks_like_*` and `is_*` passage heuristics.
 
 Vendored from tests/test_passage_tables_of_contents.py and
 tests/test_passage_reference_lists.py in the repo root, for the same reason
@@ -15,6 +15,7 @@ fails loudly.
 
 import pytest
 from passages_derived_data import (
+    is_page_header_or_footer,
     looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_short_heading,
@@ -432,6 +433,23 @@ def test_detects_short_type_section_heading():
 def test_detects_demoted_section_from_heading_text():
     # body passage judged on its parent heading
     assert looks_like_demoted_section("References", "Boyd, R., 2011. ...", "Text")
+
+# `is_page_header_or_footer` reads `content_type` directly rather than the passage
+# text, so these are written here rather than vendored from a shared fixtures dict.
+def test_detects_page_header():
+    assert is_page_header_or_footer("pageHeader")
+
+
+def test_detects_page_footer():
+    assert is_page_header_or_footer("pageFooter")
+
+
+def test_ignores_body_text():
+    assert not is_page_header_or_footer("Text")
+
+
+def test_ignores_empty_content_type():
+    assert not is_page_header_or_footer("")
 
 
 def test_detects_demoted_section_heading_on_own_text():
