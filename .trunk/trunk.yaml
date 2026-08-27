@@ -55,6 +55,12 @@ lint:
         - name: lint
           run: bandit --exit-zero -c bandit.yaml --format json --output ${tmpfile} ${target}
 
+    - name: eslint
+      direct_configs: [k6/eslint.config.mjs]
+      commands:
+        - name: lint
+          run: eslint --config k6/eslint.config.mjs --output-file ${tmpfile} --format json ${target}
+
     - name: typos
       files:
         - python
@@ -81,6 +87,7 @@ lint:
     - actionlint@1.7.12
     - bandit@1.9.3
     - checkov@3.2.500
+    - eslint@9.35.0
     - git-diff-check
     - hadolint@2.14.0
     - markdownlint@0.47.0
