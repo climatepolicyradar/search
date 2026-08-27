@@ -419,7 +419,15 @@ def looks_like_short_heading(text: str, content_type: str = "") -> bool:
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
 
 
-# `references` is deliberately plural-only: `\breference\b` fires on 'Terms of 
+_PAGE_FURNITURE_CONTENT_TYPES = frozenset({"pageHeader", "pageFooter"})
+
+
+def is_page_header_or_footer(content_type: str = "") -> bool:
+    """True if the passage is a repeating page header or footer, not body content."""
+    return content_type in _PAGE_FURNITURE_CONTENT_TYPES
+
+
+# `references` is deliberately plural-only: `\breference\b` fires on 'Terms of
 # Reference', 'Reference Scenario' and 'reference year', which are core NDC vocabulary. 
 _DEMOTED_SECTION_WORD = re.compile(
     r"\b(?:references|reference list|bibliograph(?:y|ies|ic|ical)"
@@ -473,4 +481,3 @@ def looks_like_demoted_section(
         return False
     remainder = _LEADING_NUMBERING.sub("", heading)
     return len(remainder.split()) <= max_words
-

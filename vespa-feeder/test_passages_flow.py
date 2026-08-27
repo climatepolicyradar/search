@@ -139,6 +139,7 @@ def test_derive_passage_data_sets_the_type_flags_from_content_and_pages() -> Non
                 "looks_like_short_heading",
                 "looks_like_table_of_contents",
                 "looks_like_reference_list",
+                "is_page_header_or_footer",
                 "looks_like_demoted_section",
             )
         }
@@ -147,6 +148,7 @@ def test_derive_passage_data_sets_the_type_flags_from_content_and_pages() -> Non
         "looks_like_short_heading": {"assign": False},
         "looks_like_table_of_contents": {"assign": True},
         "looks_like_reference_list": {"assign": False},
+        "is_page_header_or_footer": {"assign": False},
         "looks_like_demoted_section": {"assign": False},
     }
     assert flags(42)["looks_like_table_of_contents"] == {"assign": False}
@@ -181,6 +183,26 @@ def test_derive_passage_data_threads_content_type_into_reference_list() -> None:
 
     assert is_reference_list("footnote") is True
     assert is_reference_list("pageFooter") is False
+
+
+def test_derive_passage_data_sets_is_page_header_or_footer_from_content_type() -> None:
+    """`is_page_header_or_footer` reads `content_type` directly, not `content`/`pages`."""
+
+    def is_page_header_or_footer(content_type: str) -> bool:
+        record = derive_passage_data(
+            {
+                "fields": {
+                    "document_id": {"assign": "doc-0"},
+                    "content": {"assign": "some text"},
+                    "content_type": {"assign": content_type},
+                }
+            }
+        )
+        return record["fields"]["is_page_header_or_footer"]["assign"]
+
+    assert is_page_header_or_footer("pageHeader") is True
+    assert is_page_header_or_footer("pageFooter") is True
+    assert is_page_header_or_footer("Text") is False
 
 
 def test_derive_passage_data_handles_a_record_with_no_pages() -> None:
