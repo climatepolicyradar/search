@@ -1,0 +1,47 @@
+name: k6 smoke tests
+
+# Smoke-tests the k6/routes/ suite against production. Deliberately not
+# merge-gating: BASE_URL defaults to production (search-api has no staging
+# environment, per the Fusion monitoring RFC), so failures here should be
+# investigated rather than block a PR outright.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "k6/**"
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      scripts: ${{ steps.find.outputs.scripts }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Find route scripts
+        id: find
+        working-directory: ./k6
+        run: |
+          scripts=$(find routes -name '*.ts' | sort | jq -R . | jq -sc .)
+          echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
+
+  smoke:
+    needs: [discover]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        script: ${{ fromJson(needs.discover.outputs.scripts) }}
+    name: smoke (${{ matrix.script }})
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Run k6 smoke test
+        working-directory: ./k6
+        run: k6 run -e PROFILE=smoke "${{ matrix.script }}"
