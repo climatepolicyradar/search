@@ -494,6 +494,94 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     )
 
 
+def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa):
+    """
+    "<acronym><ordinal>" title tokens are also indexed as the bare acronym.
+
+    UNFCCC titles are full of these - "BTR1", "NDC1", "BUR2", "NC3" - and the
+    standard tokenizer keeps them whole, so searching "BTR" used to match none of
+    them (FUS-326). title_index_analysis splits on the numeric boundary while
+    preserving the original, so both "BTR" and "BTR1" hit.
+    """
+    doc = DocumentFactory.build(
+        title="Colombia Biennial Transparency Report. BTR1",
+        description="A short description",
+        labels=[],
+    )
+    unrelated = DocumentFactory.build(
+        title="xyzzyacronymtest unrelated environmental policy",
+        description="An unrelated document",
+        labels=[],
+    )
+    _feed_document(vespa_app, doc)
+    _feed_document(vespa_app, unrelated)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
+
+    def search_ids(query: str) -> set[str]:
+        return {
+            d.id
+            for d in engine.search(
+                query=query,
+                pagination=Pagination(page_token=1, page_size=50),
+                order_by=[OrderBy(field="relevance", direction="desc")],
+            ).results
+        }
+
+    assert doc.id in search_ids("BTR"), "Searching 'BTR' should match a 'BTR1' title"
+    assert doc.id in search_ids("BTR1"), "Searching 'BTR1' should still match"
+
+    assert unrelated.id not in search_ids("BTR")
+
+    values = _flatten_tokens(engine.last_debug_info[0].get("title_tokens"))
+    assert "btr" in values, f"Expected split token 'btr' in title tokens, got: {values}"
+    assert "btr1" in values, (
+        f"Expected original token 'btr1' in title tokens, got: {values}"
+    )
+    # generateNumberParts is off - the bare ordinal must not become a token.
+    assert "1" not in values, f"Ordinal '1' should not be indexed alone, got: {values}"
+
+
+def test_linguistics_acronym_split_keeps_formula_queries_exact(vespa_app: Vespa):
+    """
+    Splitting "CO2" into `co` + `co2` must not make the two interchangeable.
+
+    title_index_analysis indexes the split part as well as the original, so a
+    "CO2" title also carries `co`. That is one-way by design: the query side does
+    not split, so searching "CO2" must still match only CO2 titles. Searching the
+    bare "CO" matching CO2 titles is the accepted cost (see services.xml).
+    """
+    co2_doc = DocumentFactory.build(
+        title="CO2 capture and storage strategy", description="d", labels=[]
+    )
+    co_doc = DocumentFactory.build(
+        title="Carbon monoxide CO exposure limits", description="d", labels=[]
+    )
+    _feed_document(vespa_app, co2_doc)
+    _feed_document(vespa_app, co_doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+
+    def search_ids(query: str) -> set[str]:
+        return {
+            d.id
+            for d in engine.search(
+                query=query,
+                pagination=Pagination(page_token=1, page_size=50),
+                order_by=[OrderBy(field="relevance", direction="desc")],
+            ).results
+        }
+
+    co2_hits = search_ids("CO2")
+    assert co2_doc.id in co2_hits
+    assert co_doc.id not in co2_hits, (
+        "Searching 'CO2' must not match a bare 'CO' title - the split is one-way"
+    )
+
+    # Documented, accepted side effect: the reverse direction does over-match.
+    assert {co2_doc.id, co_doc.id} <= search_ids("CO")
+
+
 # endregion Linguistics
 
 
