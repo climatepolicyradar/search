@@ -20,15 +20,18 @@ import { BASE_URL, resolveProfile } from "../../config.ts";
 // navigator-frontend's multi-select-within-a-facet shape), and a zero-result
 // combination — worth testing explicitly since empty-result queries can
 // behave very differently under load than populated ones.
-const filterCombinations = new SharedArray("filter-combinations", function () {
-  return JSON.parse(open("./fixtures/filter-combinations.json"));
-});
-
 type TFilterCombination = {
   name: string;
   expectZeroResults: boolean;
   filters: unknown;
 };
+
+const filterCombinations = new SharedArray(
+  "filter-combinations",
+  function (): TFilterCombination[] {
+    return JSON.parse(open("./fixtures/filter-combinations.json"));
+  },
+);
 
 type TDocumentResult = { id?: unknown; title?: unknown };
 type TSearchResponse = { results?: TDocumentResult[]; total_size?: number };
@@ -46,9 +49,8 @@ export const options = resolveProfile(PROFILES);
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const combination = filterCombinations[
-    Math.floor(Math.random() * filterCombinations.length)
-  ] as TFilterCombination;
+  const combination =
+    filterCombinations[Math.floor(Math.random() * filterCombinations.length)];
   const filtersParam = encodeURIComponent(JSON.stringify(combination.filters));
   const res = http.get(`${BASE_URL}/documents?filters=${filtersParam}`);
 
