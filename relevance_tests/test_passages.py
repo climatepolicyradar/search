@@ -822,6 +822,7 @@ test_cases = [
         # NB - guards against de-ranking on a leading "See Annex/Table/Figure".
         #      The pointer is followed by the finding the user wants.
     )
+]
 
 
 @flow(
