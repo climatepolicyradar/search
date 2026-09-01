@@ -39,7 +39,8 @@ k6/
       fields-combinations.ts  # GET /search/documents?fields=
       pagination-combinations.ts # GET /search/documents?page_token/page_size
       fixtures/
-        search-queries.json    # realistic free-text search terms
+        search-queries.json      # realistic free-text search terms
+        filter-combinations.json # real filters shapes, see note below
       {document_id}/
         index.ts               # GET /search/documents/{document_id}
         fixtures/
@@ -57,6 +58,7 @@ single-purpose, and runnable in isolation.
 ```bash
 k6 run routes/documents/index.ts
 k6 run "routes/documents/{document_id}/index.ts"
+k6 run routes/documents/filter-combinations.ts
 ```
 
 Defaults to hitting production (`https://api.climatepolicyradar.org/search`).
@@ -83,3 +85,30 @@ Today only the `smoke` profile is defined: low VUs (2-5), short duration
 [smoke testing guide](https://grafana.com/docs/k6/latest/testing-guides/test-types/smoke-testing/).
 A `load` profile (VU ramp stages, thresholds) is added per-script when that
 route's load test is scoped — see FUS-356 for `{document_id}/index.ts`.
+
+## `filters` shapes (`filter-combinations.ts`)
+
+`filters` is a free-form JSON string on `GET /search/documents` — its shape
+isn't in the
+[production OpenAPI schema](https://api.climatepolicyradar.org/search/openapi.json),
+so the fixture's combinations are real shapes, not guessed:
+
+- **Server-side contract**: `search/engines/dev_vespa.py`'s `Filter` /
+  `FieldFilter` / `AttributesCondition` models (validated in
+  `api/utils.py::normalise_filters`). A `Filter` is
+  `{op: "and"|"or", filters: [...]}`, nested arbitrarily; each leaf is either a
+  `FieldFilter` (`field`, `op: "contains"|"not_contains"`, `value`) or an
+  `AttributesCondition` (adds a `key`, `op` is a comparison, used for
+  `attributes.published_date` ranges). See `SimpleExampleFilter` /
+  `ComplexExampleFilter` in that file for canonical examples.
+- **Real-world usage**: navigator-frontend sends exactly this tree as the
+  `filters` query param (`JSON.stringify`'d, see `src/api/search.ts` and
+  `src/utils/search/filterPathsToQueryGroup.ts`). Real `labels.value.id` values
+  follow a `<labelType>::<value>` pattern, e.g. `category::Report`,
+  `status::Principal`, `jurisdiction::United States`.
+
+`filter-combinations.json` covers: a single filter, multiple filters combined
+with `and` (including an `AttributesCondition` date range), and a zero-result
+combination (a real label filter contradicted by a label value that doesn't
+exist) — zero-result queries can behave very differently under load than
+populated ones, so this case is checked explicitly rather than left to chance.
