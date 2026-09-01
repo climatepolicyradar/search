@@ -27,6 +27,71 @@
                             </item>
                         </tokenFilters>
                     </item>
+                    <!-- title_index_analysis: passage_analysis plus acronym+ordinal
+                         splitting, index side only. See vespa/app/services.xml. -->
+                    <item key="profile=title_index_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <charFilters>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[$]</item>
+                                    <item key="replacement">dollar</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[€]</item>
+                                    <item key="replacement">euro</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[£]</item>
+                                    <item key="replacement">pound</item>
+                                </conf>
+                            </item>
+                        </charFilters>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>wordDelimiterGraph</name>
+                                <conf>
+                                    <item key="generateWordParts">1</item>
+                                    <item key="generateNumberParts">0</item>
+                                    <item key="splitOnNumerics">1</item>
+                                    <item key="splitOnCaseChange">0</item>
+                                    <item key="catenateWords">0</item>
+                                    <item key="catenateNumbers">0</item>
+                                    <item key="catenateAll">0</item>
+                                    <item key="stemEnglishPossessive">0</item>
+                                    <item key="preserveOriginal">1</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>flattenGraph</name>
+                            </item>
+                            <item>
+                                <name>stop</name>
+                                <conf>
+                                    <item key="words">en/stopwords.txt</item>
+                                    <item key="ignoreCase">true</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
                     <item key="profile=passage_analysis;language=en">
                         <tokenizer>
                             <name>standard</name>
