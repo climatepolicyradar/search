@@ -25,6 +25,7 @@ hits, not after a test type):
 
 ```text
 k6/
+  config.ts              # shared BASE_URL / PROFILE resolution
   documents/
     document-by-id.ts   # GET /search/documents/{document_id}
     search-documents.ts # GET /search/documents
