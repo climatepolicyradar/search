@@ -113,6 +113,11 @@ jobs:
     needs: [changes, test]
     if: needs.changes.outputs.run-deploy == 'true'
 
+  k6-smoke-tests:
+    uses: ./.github/workflows/k6_smoke_tests.yml
+    needs: [deploy-api]
+    if: needs.deploy-api.result == 'success'
+
   deploy-prefect:
     uses: ./.github/workflows/prefect_deploy.yml
     needs: [changes, test]

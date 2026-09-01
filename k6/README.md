@@ -94,5 +94,6 @@ The [`k6 smoke tests`](../.github/workflows/k6_smoke_tests.yml) workflow runs
 every script under `routes/` in smoke mode against production, in parallel, via
 [`grafana/run-k6-action`](https://github.com/grafana/run-k6-action). It's
 deliberately not merge-gating (production traffic, no staging environment to
-target instead) — it runs on `workflow_dispatch` (on demand) and on PRs into
-`main`, as a non-blocking status check.
+target instead) — it runs on `workflow_dispatch` (on demand) and, as a reusable
+workflow, right after `deploy-api` succeeds in `merge_to_main.yml`, so a
+regression is flagged post-deploy rather than blocking the merge.
