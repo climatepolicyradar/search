@@ -14,12 +14,47 @@ const documentIds = new SharedArray("document-ids", function () {
 
 type TDocumentResponse = { data?: { id?: string; title?: unknown } };
 
-// TODO: FUS-356: add a "load" profile here once load-test parameters (VU ramp
-// stages, thresholds) are agreed. Select it with `-e PROFILE=load`.
+// `load` ramps to 50 VUs (the cheapest document route — single-doc fetch by
+// path param, no Vespa fan-out — so this is a starting point, not a
+// pre-validated ceiling) in 3 steps (10/25/50), holding briefly at each
+// rather than jumping straight to peak, so a capacity cliff shows up as a
+// clear step change tied to a specific VU count instead of an ambiguous
+// average over the whole run.
+//
+// Thresholds: p95 < 2s is the "existing 2s p95 line on the vespa-search
+// dashboard" the monitoring RFC names
+// (https://app.notion.com/p/3c79109609a48195972fd340c03d1508) — but that RFC
+// explicitly defers formalising it as a real SLO ("Deferred, not rejected —
+// no baseline data yet"), so treat this as a provisional, not agreed, target
+// until that decision lands. http_req_failed aborts the run early on a
+// failure spike rather than burning the full ramp on a route that's already
+// broken.
 const PROFILES = {
   smoke: {
     vus: 5,
     duration: "1m",
+  },
+  load: {
+    scenarios: {
+      rampingLoad: {
+        executor: "ramping-vus",
+        startVUs: 0,
+        stages: [
+          { duration: "30s", target: 10 },
+          { duration: "1m", target: 10 },
+          { duration: "30s", target: 25 },
+          { duration: "1m", target: 25 },
+          { duration: "30s", target: 50 },
+          { duration: "1m", target: 50 },
+          { duration: "30s", target: 0 },
+        ],
+      },
+    },
+    thresholds: {
+      // PROVISIONAL — see comment above. Not an agreed SLO.
+      http_req_duration: ["p(95)<2000"],
+      http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
+    },
   },
 };
 
