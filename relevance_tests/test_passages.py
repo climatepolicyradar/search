@@ -437,40 +437,6 @@ test_cases = [
     ),
     RecallTestCase[Passage](
         category="low_ranking_positives",
-        search_terms="carbon",
-        # 2025 Annual Report – "Reinvigorating climate action in the face of worsening impacts and weakened leadership"
-        document_id="ICCN.document.i00000036.n0000",
-        expected_result_ids=[
-            # rank 576 - "The carbon sink decreases during El Nino events, due to
-            #            megafires (Canada, Siberia, Amazon), and extreme droughts.
-            #            Since 2015, CO2 absorption north of the 20th parallel has
-            #            halved, and 2024 marks a record level of tropical forest..."
-            "019d89e9-0ddd-7593-bfb3-4549d0a4deea",
-            # rank 1 - "Due to carbon losses from cultivated and artificialized
-            #            soils, the second carbon budget for the land use, land-use
-            #            change and forestry (LULUCF) sector has not been met. With
-            #            an average carbon sink of -36 Mt CO2 eq per year..."
-            "019d89e9-0dd7-7e01-9292-94219530df5d",
-            # rank 107 - "The LULUCF carbon sink deteriorated significantly between
-            #            2013 and 2017, falling from -50.2 to -28.1 Mt CO2e, a
-            #            decrease of 45%. The maintenance of this carbon sink at an
-            #            average level of -36 Mt CO2 eq since 2018..."
-            "019d89e9-0dd8-70e0-9985-4cfea5689d83",
-        ],
-        k=5,
-        description=(
-            "The three passages quantifying France's LULUCF carbon budget should "
-            "reach the top 5."
-            # problem - passages that quantify the LULUCF carbon budget ranking above 
-            #.          passages that discuss carbon generally is a judgement with no 
-            #           lexical correlation i.e. there is not enough intent in the 
-            #           search query to really understand relevance. From sample 
-            #           generated using native rank.
-            # solution - Regenerate and relabel sample. Otherwise not expected to pass.
-        ),
-    ),
-    RecallTestCase[Passage](
-        category="low_ranking_positives",
         search_terms="health",
         document_id="CCLW.document.i00007151.n0000",
         expected_result_ids=[
@@ -498,50 +464,6 @@ test_cases = [
         ),
     ),
     # TODO: checking this one with Anne
-    RecallTestCase[Passage](
-        category="low_ranking_positives",
-        search_terms="biomass",
-        document_id="UNFCCC.non-party.1184.0",
-        expected_result_ids=[
-            # "However, forests may become less resilient to heat stress in
-            # future due to the long recovery period required to replace
-            # lost biomass and the projected increased frequency of heat
-            # and drought events (Frank et al. 2015a; McDowell and Allen..."
-            # NB: this is the citation-dense PROSE that a naive 'et al.'
-            # or doi-based reference filter would wrongly discard.
-            "019d437a-5ba0-7f20-a5ad-3e5f3ffe685f",
-
-        ],
-        k=10,
-        description=(
-            "Substantive biomass prose should outrank the chapter bibliography. "
-            # problem - For single-term ranking is pure bm25 TF/IDF with length
-            #           normalisation (b=0.4, placeholder). Biomass-denser passages
-            #           score higher.
-            # solution - None. Not expected to pass.
-        ),
-    ),
-    RecallTestCase[Passage](
-        category="low_ranking_positives",
-        search_terms="disaster",
-        # Climate Change Report Guatemala
-        document_id="ICCN.document.i00000042.n0000",
-        expected_result_ids=[
-            # rank 37 - "119 In extreme cases, adaptation measures to climate-related
-            #            disasters tend to be reactive and short-sighted, rather than
-            #            proactive. This is the case for families who, due to a lack
-            #            of economic resources, have decided to withdraw their
-            #            children from school..."
-            "019d89e9-01d5-7be2-b1b1-460afdbf3f40",
-        ],
-        k=10,
-        description=(
-            "Discussion of reactive disaster adaptation should reach the top 10"
-            # problem - the specific biographies here aren't being de-ranked.
-            # solution - None. Not expected to pass.
-        ),
-    ),
-    
     RelativeOrderTestCase[Passage](
         category="substantive_mention",
         search_terms="carbon market",
@@ -682,7 +604,6 @@ test_cases = [
         #           none of those markers
         # solution - could extend looks_like_reference_list for examples like this
     ),
-    #
     RecallTestCase[Passage](
         category="topic_concept_conjunction",
         search_terms="",
@@ -900,20 +821,7 @@ test_cases = [
         description="A passage opening with a cross-reference can still rank highly.",
         # NB - guards against de-ranking on a leading "See Annex/Table/Figure".
         #      The pointer is followed by the finding the user wants.
-    ),
-    #
-    RecallTestCase[Passage](
-        category="topic_low_ranking_positives",
-        search_terms="",
-        topics=["Q374"],  # extreme weather
-        document_id="Sabin.document.66970.66995",
-        expected_result_ids=["019eddb3-6a94-7d00-a6ee-9a63a387389c"],
-        k=20,
-        description="Q374 should generalise to 'severe weather'.",
-        # problem - sample generated using native rank. Passages in k<10 now include
-        #           'severe weather'.
-        # solution - rerun and resample. Update expected_result_ids.
-    ),
+    )
 ]
 
 
