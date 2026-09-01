@@ -15,19 +15,19 @@ import { BASE_URL, resolveProfile } from "../../config.ts";
 // Vespa skipping over ranked results internally), and a large `page_size`.
 // The fixed `query=climate` result set (~17k documents at time of writing)
 // is large enough that all three cases return full pages.
-const paginationCombinations = new SharedArray(
-  "pagination-combinations",
-  function () {
-    return JSON.parse(open("./fixtures/pagination-combinations.json"));
-  },
-);
-
 type TPaginationCombination = {
   name: string;
   pageToken: number;
   pageSize: number;
   verifyOffsetAdvances: boolean;
 };
+
+const paginationCombinations = new SharedArray(
+  "pagination-combinations",
+  function (): TPaginationCombination[] {
+    return JSON.parse(open("./fixtures/pagination-combinations.json"));
+  },
+);
 
 type TDocumentResult = { id?: unknown; title?: unknown };
 type TSearchResponse = { results?: TDocumentResult[] };
@@ -45,9 +45,10 @@ export const options = resolveProfile(PROFILES);
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const combination = paginationCombinations[
-    Math.floor(Math.random() * paginationCombinations.length)
-  ] as TPaginationCombination;
+  const combination =
+    paginationCombinations[
+      Math.floor(Math.random() * paginationCombinations.length)
+    ];
   const res = http.get(
     `${BASE_URL}/documents?query=climate&page_token=${combination.pageToken}&page_size=${combination.pageSize}`,
   );
