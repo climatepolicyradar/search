@@ -16,16 +16,19 @@ import { BASE_URL, resolveProfile } from "../../config.ts";
 // only two valid values). Covers no fields (baseline), each field alone, and
 // both together — the worst-case fan-out combination, and the target for
 // this script's eventual load-test graduation (FUS-357).
-const fieldsCombinations = new SharedArray("fields-combinations", function () {
-  return JSON.parse(open("./fixtures/fields-combinations.json"));
-});
-
 type TFieldsCombination = {
   name: string;
   fields: string[];
   expectValueType: boolean;
   expectType: boolean;
 };
+
+const fieldsCombinations = new SharedArray(
+  "fields-combinations",
+  function (): TFieldsCombination[] {
+    return JSON.parse(open("./fixtures/fields-combinations.json"));
+  },
+);
 
 type TFacets = {
   "labels.value.type"?: unknown;
@@ -46,9 +49,8 @@ export const options = resolveProfile(PROFILES);
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const combination = fieldsCombinations[
-    Math.floor(Math.random() * fieldsCombinations.length)
-  ] as TFieldsCombination;
+  const combination =
+    fieldsCombinations[Math.floor(Math.random() * fieldsCombinations.length)];
   // `fields` is a repeated query param (confirmed against the live API), not
   // a single comma-separated value.
   const fieldsQuery = combination.fields
