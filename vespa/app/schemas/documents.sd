@@ -6,7 +6,10 @@ schema documents {
             indexing: index | summary
             stemming: multiple
             linguistics {
-                profile: passage_analysis
+                profile {
+                    index: title_index_analysis
+                    search: passage_analysis
+                }
             }
             bolding: on
         }

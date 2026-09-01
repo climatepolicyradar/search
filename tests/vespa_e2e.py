@@ -1,3 +1,4 @@
+import datetime
 import os
 import shutil
 import tempfile
@@ -37,6 +38,24 @@ def _vespa_ready() -> bool:
         return False
 
 
+def _validation_overrides() -> str:
+    """
+    Blanket schema-change allowance for the throwaway e2e application.
+
+    The fixture reuses an already-running container when it finds one, so a
+    schema change that alters indexing (e.g. a new linguistics profile on
+    `title`) is rejected against the previously deployed app unless it is
+    allowed here.
+    """
+    until = datetime.date.today() + datetime.timedelta(days=25)
+    return (
+        "<validation-overrides>\n"
+        f'    <allow until="{until.isoformat()}">indexing-change</allow>\n'
+        f'    <allow until="{until.isoformat()}">field-type-change</allow>\n'
+        "</validation-overrides>\n"
+    )
+
+
 @pytest.fixture(scope="module")
 def vespa_app() -> Generator[Vespa, None, None]:
     remove_container = bool(os.environ.get("TEST_VESPA_REMOVE_CONTAINER"))
@@ -55,6 +74,7 @@ def vespa_app() -> Generator[Vespa, None, None]:
         shutil.copy(
             Path(__file__).parent / "vespa_test_services.xml", app_dir / "services.xml"
         )
+        (app_dir / "validation-overrides.xml").write_text(_validation_overrides())
         vespa_docker = VespaDocker(port=_PORT)
         app = vespa_docker.deploy_from_disk(
             application_name="searchtestvespae2e",
