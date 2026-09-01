@@ -718,6 +718,8 @@ documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = 
 
 _DEFAULT_TOPIC_WEIGHT = 1.0
 
+_DEFAULT_DOCUMENT_RANK_PROFILE = "bm25"
+
 
 class DevVespaInstanceAddIn:
     """Surfaces the personal dev instance name (from settings) onto the engine id/config."""
@@ -755,6 +757,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         settings: Settings,
         debug: bool = False,
         bolding: bool = False,
+        ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
     ) -> None:
         """
@@ -766,6 +769,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         :param bolding: When ``False``, request the ``no-bolding`` document
             summary, returning plain title/description without ``<hi>`` tags.
             Ignored when ``debug=True``.
+        :param ranking_profile: Vespa rank profile to score with. Defaults to
+            ``bm25``; pass ``nativerank`` to compare against the previous
+            behaviour.
         :param topic_weight: How much a filtered-for topic's mention counts
             contribute to relevance. ``0.0`` switches topic ranking off.
         """
@@ -773,12 +779,16 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.bolding = bolding
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
+        self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
 
     @property
     def parameters(self) -> dict[str, Any]:
         """Tuning parameters, surfaced in the search engine's ID and W&B logging."""
-        return {"topic_weight": self.topic_weight}
+        return {
+            "ranking_profile": self.ranking_profile,
+            "topic_weight": self.topic_weight,
+        }
 
     _userQuery: str = (
         " and (userQuery() "
@@ -828,7 +838,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
             "model.language": "en",
-            "ranking.profile": "nativerank",
+            "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
 
@@ -1067,7 +1077,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "hits": 0,
             "timeout": "5s",
             "model.language": "en",
-            "ranking.profile": "nativerank",
+            "ranking.profile": self.ranking_profile,
         }
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
@@ -1144,7 +1154,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "hits": 0,
             "timeout": "5s",
             "model.language": "en",
-            "ranking.profile": "nativerank",
+            "ranking.profile": self.ranking_profile,
         }
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
