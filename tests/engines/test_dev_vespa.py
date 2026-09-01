@@ -5,6 +5,7 @@ from pydantic import AnyHttpUrl
 
 from search.engines import OrderBy, Pagination, dev_vespa
 from search.engines.dev_vespa import (
+    _DEFAULT_DOCUMENT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
     DevVespaPassageSearchEngine,
     FieldFilter,
@@ -471,7 +472,7 @@ def test_document_search_engine_sends_filtered_topics_as_a_query_tensor() -> Non
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
-    assert request_body["ranking.profile"] == "nativerank"
+    assert request_body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
     assert request_body["input.query(topic_q)"] == {
         "concept::Q567": 1.0,
         "concept::Q1651": 1.0,
@@ -522,7 +523,10 @@ def test_document_search_engine_forwards_topic_weight() -> None:
     request_body = mock_execute.call_args.kwargs["request_body"]
     assert request_body["input.query(topic_weight)"] == 0.0
     # Surfaced for relevance-test logging rather than baked into the engine name.
-    assert engine.parameters == {"topic_weight": 0.0}
+    assert engine.parameters == {
+        "ranking_profile": _DEFAULT_DOCUMENT_RANK_PROFILE,
+        "topic_weight": 0.0,
+    }
     assert engine.name == "DevVespaDocumentSearchEngine"
 
 

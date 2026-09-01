@@ -35,6 +35,112 @@
                             </item>
                         </tokenFilters>
                     </item>
+                    <!-- title_index_analysis: passage_analysis plus acronym+ordinal
+                         splitting.
+
+                         WHY: UNFCCC titles are full of "<acronym><ordinal>" tokens -
+                         "BTR1", "NDC1", "NDC3.0", "BUR2", "NC3", "NAP3" - which the
+                         standard tokenizer keeps whole, so a search for "BTR" matched
+                         none of them (FUS-326). wordDelimiterGraph splits on the
+                         numeric boundary and preserveOriginal keeps the whole token,
+                         so "BTR1" indexes as both `btr` and `btr1`.
+
+                         KNOWN SIDE EFFECT: this also splits chemical formulae, so
+                         "CO2" indexes as `co` + `co2` and "NO2" as `no` + `no2`. The
+                         effect is one-way, NOT an equivalence: a query for "CO2" is
+                         still exact (the query side does not split, so it matches only
+                         `co2`), but a query for the bare "CO" now also matches CO2
+                         titles. Judged acceptable because bare two-letter queries are
+                         rare. Ranking is not distorted: preserveOriginal emits at the
+                         same position, so field length is unchanged - measured
+                         fieldMatch(title).fieldCompleteness and bm25(title) are
+                         identical for "CO2 capture storage strategy" and "carbon
+                         capture storage strategy". The only ranking effect is that
+                         `co`/`no` get a slightly higher document frequency, which
+                         lowers their IDF and so reduces their influence.
+
+                         Deliberately NOT applied to passage_analysis: splitting
+                         numerics across long-form passage text would multiply that
+                         side effect over every body paragraph and shift passage bm25
+                         statistics. -->
+                    <item key="profile=title_index_analysis;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <charFilters>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[$]</item>
+                                    <item key="replacement">dollar</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[€]</item>
+                                    <item key="replacement">euro</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[£]</item>
+                                    <item key="replacement">pound</item>
+                                </conf>
+                            </item>
+                        </charFilters>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <!-- generateNumberParts is off so this does one job:
+                                 "BTR1" -> btr + btr1, with no bare "1" token.
+
+                                 splitOnCaseChange is set to 0 for intent, but note it
+                                 is INERT here either way: `lowercase` runs above, so
+                                 no case information survives to this filter. Verified
+                                 by deploying with splitOnCaseChange=1 - "ExxonMobil"
+                                 and "PowerUp" still index whole. Moving this filter
+                                 above `lowercase` would make the flag live, and would
+                                 start splitting the ~1.6k CamelCase entity names in
+                                 the corpus (ExxonMobil, WildEarth, ClientEarth,
+                                 KlimaSeniorinnen). Don't reorder without deciding
+                                 that deliberately. -->
+                            <item>
+                                <name>wordDelimiterGraph</name>
+                                <conf>
+                                    <item key="generateWordParts">1</item>
+                                    <item key="generateNumberParts">0</item>
+                                    <item key="splitOnNumerics">1</item>
+                                    <item key="splitOnCaseChange">0</item>
+                                    <item key="catenateWords">0</item>
+                                    <item key="catenateNumbers">0</item>
+                                    <item key="catenateAll">0</item>
+                                    <item key="stemEnglishPossessive">0</item>
+                                    <item key="preserveOriginal">1</item>
+                                </conf>
+                            </item>
+                            <!-- Required after wordDelimiterGraph in an INDEX analyzer:
+                                 the graph it emits has to be flattened before indexing. -->
+                            <item>
+                                <name>flattenGraph</name>
+                            </item>
+                            <item>
+                                <name>stop</name>
+                                <conf>
+                                    <item key="words">en/stopwords.txt</item>
+                                    <item key="ignoreCase">true</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>snowballPorter</name>
+                                <conf>
+                                    <item key="language">English</item>
+                                </conf>
+                            </item>
+                        </tokenFilters>
+                    </item>
                     <!-- passage_analysis: stop words + stemming for long-form text.
                          charFilters map currency symbols to words so the
                              standard tokenizer preserves them, e.g. "$100" ->
