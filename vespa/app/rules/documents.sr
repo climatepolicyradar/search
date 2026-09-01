@@ -11,7 +11,7 @@
 # TO-DO: update the rules to align with nz (see below). Not done yet because tests expect 
 # specific documents, which is based of the following rules i.e. documents expected would
 # also need updating.
-tcfd -> task force on climate related financial disclosures;
+tcfd +> ?"task force climate related financial disclosures";
 fca -> financial conduct authority;
 ira -> inflation reduction act;
 sfdr -> sustainable finance disclosure regulation;

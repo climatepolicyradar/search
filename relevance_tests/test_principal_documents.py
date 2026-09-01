@@ -256,6 +256,7 @@ test_cases = [
         ),
         description="Search for 'necp' should return documents with the NECP word set in the title",
         k=10,
+        all_or_any="any"
     ),
     # TODO: use relevant labels if they exist, e.g., document type = "climate action plan"
     FieldCharacteristicsTestCase[Document](
@@ -434,6 +435,45 @@ test_cases = [
         ],
         description="searching for a child document title should return its parent family in principal search",
     ),
+    PrecisionTestCase[Document](
+        category="document name+acronym",
+        search_terms="colombia BTR",
+        expected_result_ids=[
+            # "Colombia Biennial Transparency Report. BTR1" - the only Colombian
+            # principal document whose title carries the BTR acronym.
+            "UNFCCC.family.i00000892.n0000",
+        ],
+        description="searching a geography plus a document-type acronym should return that country's document first (FUS-326)",
+    ),
+    PrecisionTestCase[Document](
+        category="document name+acronym",
+        search_terms="united kingdom NDC",
+        expected_result_ids=[
+            "UNFCCC.family.i00000492.n0000",  # "United Kingdom Nationally Determined Contribution. NDC3.0"
+            "UNFCCC.family.1521.0",  # "... NDC1 (Updated Submission, 2020)"
+            "UNFCCC.family.1522.0",  # "... NDC1 (Updated to 2030)"
+        ],
+        description="searching a geography plus 'NDC' should return the UK's NDCs above unrelated UK documents (FUS-326)",
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="rare term + common term",
+        search_terms="mangrove regulation",
+        characteristics_test=lambda document: "mangrove" in document.title.lower(),
+        description="Search for 'mangrove regulation' should be dominated by mangrove documents, not by (many more) documents whose titles merely contain 'regulation' (FUS-326)",
+        k=5,
+    ),
+    PrecisionTestCase[Document](
+        category="rare term + common term",
+        search_terms="electric arc furnace",
+        expected_result_ids=[
+            # "Energy Resources Regulations (Energy labeling of electric heating
+            # furnaces)" - the only principal document matching two of the three
+            # terms. Previously rank 17, behind "Electricity Act" documents
+            # matching only "electric".
+            "CCLW.family.8267.0",
+        ],
+        description="searching a three-word technical phrase should surface the document matching most of it, not documents matching only the most common word (FUS-326)",
+    ),
     RecallTestCase[Document](
         category="topic name",
         search_terms="air pollution",
@@ -461,8 +501,18 @@ test_cases = [
 def relevance_tests_principal_documents():
     """Run relevance tests for documents"""
 
+    # Both profiles run side by side so the report shows them against the same
+    # cases. `nativerank` is the pre-FUS-326 behaviour, kept deployed as the
+    # comparison baseline; `bm25` is the IDF-aware title ranking and is what the
+    # engine defaults to. They are distinguished in the report by `engine.id`,
+    # which folds in `parameters` (and so `ranking_profile`).
     engines = [
-        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
+        DevVespaPrincipalDocumentSearchEngine(
+            settings=settings, debug=True, ranking_profile="nativerank"
+        ),
+        DevVespaPrincipalDocumentSearchEngine(
+            settings=settings, debug=True, ranking_profile="bm25"
+        ),
     ]
 
     # Principals aren't a primitive, but we use the primitive name to determine where

@@ -4,9 +4,13 @@ schema documents {
         field id type string {}
         field title type string {
             indexing: index | summary
+            index: enable-bm25
             stemming: multiple
             linguistics {
-                profile: passage_analysis
+                profile {
+                    index: title_index_analysis
+                    search: passage_analysis
+                }
             }
             bolding: on
         }
@@ -310,6 +314,23 @@ schema documents {
             expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + identifiers_score() + topic_score()
         }
         summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) fieldMatch(title).fieldCompleteness nativeRank(title_synonyms) identifiers_score() topic_score()
+    }
+
+    rank-profile bm25 inherits nativerank {
+        inputs {
+            query(title_weight) double: 1.0
+            query(title_proximity_weight) double: 2.0
+        }
+        function title_score () {
+            expression: query(title_weight) * fieldMatch(title).completeness * bm25(title) + query(title_proximity_weight) * nativeProximity(title)
+        }
+        # title_synonyms_score is inherited and deliberately not rescaled to bm25:
+        # its small magnitude (~0.2) makes it a tie-breaker, not a competitor to
+        # title_score.
+        first-phase {
+            expression: title_score() + description_score() + passages_score() + geographies_score() + title_synonyms_score() + identifiers_score() + topic_score()
+        }
+        summary-features: title_score() description_score() passages_score() geographies_score() title_synonyms_score() bm25(title) fieldMatch(title).completeness fieldMatch(title).queryCompleteness fieldMatch(title).fieldCompleteness fieldMatch(title).significance nativeProximity(title) nativeRank(title_synonyms) identifiers_score() topic_score()
     }
 
     rank-profile label-boosted inherits nativerank {
