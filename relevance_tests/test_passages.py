@@ -910,6 +910,9 @@ test_cases = [
         expected_result_ids=["019eddb3-6a94-7d00-a6ee-9a63a387389c"],
         k=20,
         description="Q374 should generalise to 'severe weather'.",
+        # problem - sample generated using native rank. Passages in k<10 now include
+        #           'severe weather'.
+        # solution - rerun and resample. Update expected_result_ids.
     ),
 ]
 
