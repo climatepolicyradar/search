@@ -39,7 +39,8 @@ k6/
       fields-combinations.ts  # GET /search/documents?fields=
       pagination-combinations.ts # GET /search/documents?page_token/page_size
       fixtures/
-        search-queries.json    # realistic free-text search terms
+        search-queries.json       # realistic free-text search terms
+        fields-combinations.json  # all fields/facets combinations
       {document_id}/
         index.ts               # GET /search/documents/{document_id}
         fixtures/
@@ -57,6 +58,7 @@ single-purpose, and runnable in isolation.
 ```bash
 k6 run routes/documents/index.ts
 k6 run "routes/documents/{document_id}/index.ts"
+k6 run routes/documents/fields-combinations.ts
 ```
 
 Defaults to hitting production (`https://api.climatepolicyradar.org/search`).
