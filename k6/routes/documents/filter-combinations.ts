@@ -46,20 +46,22 @@ export default function () {
   const filtersParam = encodeURIComponent(JSON.stringify(combination.filters));
   const res = http.get(`${BASE_URL}/documents?filters=${filtersParam}`);
 
+  // k6 check/group names may not contain "::" — fixture names quote real
+  // label values (e.g. "status::Principal"), so strip it for display only.
+  const checkLabel = combination.name.replace(/::/g, ":");
+
   // check() records pass/fail per assertion without stopping the iteration
   // on failure (unlike a thrown error) — failures show up in the run
   // summary as a percentage. A smoke test's bar is 100% checks passing.
   // https://grafana.com/docs/k6/latest/using-k6/checks/
   check(res, {
-    [`${combination.name}: status is 200`]: (response: Response) =>
+    [`${checkLabel}: status is 200`]: (response: Response) =>
       response.status === 200,
-    [`${combination.name}: response has results array`]: (
-      response: Response,
-    ) => {
+    [`${checkLabel}: response has results array`]: (response: Response) => {
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
-    [`${combination.name}: result count matches expectation`]: (
+    [`${checkLabel}: result count matches expectation`]: (
       response: Response,
     ) => {
       const body = response.json() as TSearchResponse;

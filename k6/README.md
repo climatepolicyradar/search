@@ -107,8 +107,11 @@ so the fixture's combinations are real shapes, not guessed:
   follow a `<labelType>::<value>` pattern, e.g. `category::Report`,
   `status::Principal`, `jurisdiction::United States`.
 
-`filter-combinations.json` covers: a single filter, multiple filters combined
-with `and` (including an `AttributesCondition` date range), and a zero-result
+`filter-combinations.json` covers: a single filter; multiple filters combined
+with `and` (including an `AttributesCondition` date range); a top-level `or`
+(matches navigator-frontend's shape for multi-select within one facet, e.g. two
+categories); a nested `or`-within-`and` group (navigator-frontend's real shape
+when a multi-select facet is combined with other filters); and a zero-result
 combination (a real label filter contradicted by a label value that doesn't
 exist) — zero-result queries can behave very differently under load than
 populated ones, so this case is checked explicitly rather than left to chance.
