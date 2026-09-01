@@ -9,11 +9,17 @@ import { BASE_URL, resolveProfile } from "../../config.ts";
 // Required for any array data read in k6's init context.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
-// Filter shapes are real usage, not guessed: sourced from search-api's own
-// `Filter`/`FieldFilter`/`AttributesCondition` models (search/engines/dev_vespa.py)
-// and cross-checked against navigator-frontend's request-building code
-// (src/api/search.ts, src/utils/search/filterPathsToQueryGroup.ts), which
-// sends this exact `{op, filters: [...]}` tree as the `filters` query param.
+// `filters` is free-form JSON not enumerated in the OpenAPI schema, so these
+// combinations are sourced from real usage, not guessed: the shape matches
+// search-api's Filter/FieldFilter/AttributesCondition models
+// (search/engines/dev_vespa.py, see SimpleExampleFilter/ComplexExampleFilter
+// there) and is exactly what navigator-frontend sends as the `filters` param
+// (src/api/search.ts, src/utils/search/filterPathsToQueryGroup.ts). Covers a
+// single filter, multiple filters `and`-ed (incl. an AttributesCondition
+// date range), a top-level `or` and a nested `or`-in-`and` (both matching
+// navigator-frontend's multi-select-within-a-facet shape), and a zero-result
+// combination — worth testing explicitly since empty-result queries can
+// behave very differently under load than populated ones.
 const filterCombinations = new SharedArray("filter-combinations", function () {
   return JSON.parse(open("./fixtures/filter-combinations.json"));
 });
