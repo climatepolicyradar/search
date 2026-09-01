@@ -17,19 +17,19 @@ import { BASE_URL, resolveProfile } from "../../config.ts";
 // `relevance` has no externally-verifiable deterministic order, so only the
 // `published_date`/`title` cases assert actual sort order; all cases assert
 // the request succeeds with well-formed results.
-const orderByCombinations = new SharedArray(
-  "order-by-combinations",
-  function () {
-    return JSON.parse(open("./fixtures/order-by-combinations.json"));
-  },
-);
-
 type TOrderByCombination = {
   orderBy: string;
   isDefault: boolean;
   sortField: "published_date" | "title" | null;
   sortDirection: "asc" | "desc" | null;
 };
+
+const orderByCombinations = new SharedArray(
+  "order-by-combinations",
+  function (): TOrderByCombination[] {
+    return JSON.parse(open("./fixtures/order-by-combinations.json"));
+  },
+);
 
 type TDocumentResult = {
   id?: unknown;
@@ -70,9 +70,8 @@ function isSorted(
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const combination = orderByCombinations[
-    Math.floor(Math.random() * orderByCombinations.length)
-  ] as TOrderByCombination;
+  const combination =
+    orderByCombinations[Math.floor(Math.random() * orderByCombinations.length)];
   // Fixed, broad query: this test is about order_by behaviour, not query
   // relevance — a query with a large, stable result set keeps runs
   // comparable across iterations and profiles.
