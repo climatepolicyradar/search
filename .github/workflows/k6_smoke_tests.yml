@@ -7,41 +7,23 @@ name: k6 smoke tests
 on:
   workflow_dispatch:
   pull_request:
-    paths:
-      - "k6/**"
+    branches:
+      - main
 
 jobs:
-  discover:
-    runs-on: ubuntu-latest
-    outputs:
-      scripts: ${{ steps.find.outputs.scripts }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Find route scripts
-        id: find
-        working-directory: ./k6
-        run: |
-          scripts=$(find routes -name '*.ts' | sort | jq -R . | jq -sc .)
-          echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
-
   smoke:
-    needs: [discover]
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        script: ${{ fromJson(needs.discover.outputs.scripts) }}
-    name: smoke (${{ matrix.script }})
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install k6
-        run: |
-          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
-          sudo apt-get update
-          sudo apt-get install -y k6
+      - uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: "2.2.0"
 
-      - name: Run k6 smoke test
-        working-directory: ./k6
-        run: k6 run -e PROFILE=smoke "${{ matrix.script }}"
+      - uses: grafana/run-k6-action@v1
+        with:
+          path: |
+            k6/routes/**/*.ts
+          flags: -e PROFILE=smoke
+          parallel: true
+          fail-fast: false

@@ -91,8 +91,8 @@ route's load test is scoped — see FUS-356 for `{document_id}/index.ts`.
 ## CI
 
 The [`k6 smoke tests`](../.github/workflows/k6_smoke_tests.yml) workflow runs
-every script under `routes/` in smoke mode against production. It's deliberately
-not merge-gating (production traffic, no staging environment to target instead)
-— it runs on `workflow_dispatch` (on demand) and on PRs that touch `k6/**`, as a
-non-blocking status check. Each route script runs as its own job, so a
-regression or stale fixture in one route doesn't hide failures in the others.
+every script under `routes/` in smoke mode against production, in parallel, via
+[`grafana/run-k6-action`](https://github.com/grafana/run-k6-action). It's
+deliberately not merge-gating (production traffic, no staging environment to
+target instead) — it runs on `workflow_dispatch` (on demand) and on PRs into
+`main`, as a non-blocking status check.
