@@ -1,0 +1,26 @@
+[
+  {
+    "name": "no fields (baseline)",
+    "fields": [],
+    "expectValueType": false,
+    "expectType": false
+  },
+  {
+    "name": "single field: facets.labels.value.type",
+    "fields": ["facets.labels.value.type"],
+    "expectValueType": true,
+    "expectType": false
+  },
+  {
+    "name": "single field: facets.labels.type",
+    "fields": ["facets.labels.type"],
+    "expectValueType": false,
+    "expectType": true
+  },
+  {
+    "name": "both fields together (worst-case fan-out)",
+    "fields": ["facets.labels.value.type", "facets.labels.type"],
+    "expectValueType": true,
+    "expectType": true
+  }
+]
