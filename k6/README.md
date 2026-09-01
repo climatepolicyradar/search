@@ -27,14 +27,17 @@ hits, not after a test type):
 k6/
   documents/
     document-by-id.ts   # GET /search/documents/{document_id}
+    search-documents.ts # GET /search/documents
     fixtures/
-      document-ids.json # real, pre-verified document_ids
+      document-ids.json  # real, pre-verified document_ids
+      search-queries.json # realistic free-text search terms
 ```
 
 ## Running
 
 ```bash
 k6 run k6/documents/document-by-id.ts
+k6 run k6/documents/search-documents.ts
 ```
 
 Defaults to hitting production (`https://api.climatepolicyradar.org/search`).
