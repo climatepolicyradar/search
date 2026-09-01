@@ -256,6 +256,7 @@ test_cases = [
         ),
         description="Search for 'necp' should return documents with the NECP word set in the title",
         k=10,
+        all_or_any="any"
     ),
     # TODO: use relevant labels if they exist, e.g., document type = "climate action plan"
     FieldCharacteristicsTestCase[Document](
