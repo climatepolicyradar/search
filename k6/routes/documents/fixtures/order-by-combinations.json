@@ -1,0 +1,38 @@
+[
+  {
+    "orderBy": "relevance desc",
+    "isDefault": true,
+    "sortField": null,
+    "sortDirection": null
+  },
+  {
+    "orderBy": "relevance asc",
+    "isDefault": false,
+    "sortField": null,
+    "sortDirection": null
+  },
+  {
+    "orderBy": "attributes.published_date desc",
+    "isDefault": false,
+    "sortField": "published_date",
+    "sortDirection": "desc"
+  },
+  {
+    "orderBy": "attributes.published_date asc",
+    "isDefault": false,
+    "sortField": "published_date",
+    "sortDirection": "asc"
+  },
+  {
+    "orderBy": "title asc",
+    "isDefault": false,
+    "sortField": "title",
+    "sortDirection": "asc"
+  },
+  {
+    "orderBy": "title desc",
+    "isDefault": false,
+    "sortField": "title",
+    "sortDirection": "desc"
+  }
+]
