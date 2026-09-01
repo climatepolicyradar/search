@@ -39,8 +39,9 @@ k6/
       fields-combinations.ts  # GET /search/documents?fields=
       pagination-combinations.ts # GET /search/documents?page_token/page_size
       fixtures/
-        search-queries.json      # realistic free-text search terms
-        filter-combinations.json # real filters shapes, see note below
+        search-queries.json        # realistic free-text search terms
+        order-by-combinations.json # all sortable field/direction combinations
+        filter-combinations.json   # real filters shapes, see note below
       {document_id}/
         index.ts               # GET /search/documents/{document_id}
         fixtures/
@@ -58,6 +59,7 @@ single-purpose, and runnable in isolation.
 ```bash
 k6 run routes/documents/index.ts
 k6 run "routes/documents/{document_id}/index.ts"
+k6 run routes/documents/order-by-combinations.ts
 k6 run routes/documents/filter-combinations.ts
 ```
 
