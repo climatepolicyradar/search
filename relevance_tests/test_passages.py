@@ -69,7 +69,7 @@ test_cases = [
         search_terms='"national strategy for climate change 2050"',
         characteristics_test=lambda passage: "national strategy for climate change 2050"
         in passage.text.lower(),
-        description="Search in quotes should perform an exact match search.",
+        description="Search in quotes do not perform an exact match search - quotes are ignored.",
         k=100,
         all_or_any="all",
         assert_results=True,

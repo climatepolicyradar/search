@@ -70,6 +70,18 @@ def _normalize_currency_symbols(query: str) -> str:
     return query
 
 
+
+def _strip_quotes(query: str) -> str:
+    """
+    Remove double-quote characters so the query is never parsed as an exact phrase.
+
+    This is needed as Vespa's query parser treats `"..."` as an exact phrase (exact
+    consecutive terms). We deliberately do not want to support exact match search, so
+    quotes are ignored.
+    """
+    return query.replace('"', "")
+
+
 # region Settings
 class Settings(BaseSettings):
     vespa_endpoint: AnyHttpUrl
@@ -788,6 +800,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
 
+        if query:
+            query = _strip_quotes(query)
+
         where = "true "
         filters: Filter | None = None
 
@@ -1000,6 +1015,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         filters_json_string: str | None = None,
     ) -> list[CountAggregation[Label]]:
         """Return aggregations (label/concept groups with counts) filtered by the search query."""
+        if query:
+            query = _strip_quotes(query)
         # Build the top-level where clause from the search query and any filters,
         # mirroring how `search()` constructs its YQL.
         where = "true"
@@ -1096,6 +1113,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         group_attributes: list[str],
     ) -> dict[str, dict[tuple[str, str], tuple[Label, int]]]:
         """Run a Vespa grouping query and return label/concept buckets partitioned by attribute."""
+        if query:
+            query = _strip_quotes(query)
+
         where = "true"
         if query:
             where += self._userQuery
@@ -1363,6 +1383,9 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         filters_json_string: str | None = None,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
+        if query:
+            query = _strip_quotes(query)
+
         where = "true"
         filters: Filter | None = None
 
@@ -1475,6 +1498,8 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         label_type: str | None = None,
     ) -> ListResponse[DataInLabel]:
         """Fetch a list of relevant label search results."""
+        if query:
+            query = _strip_quotes(query)
 
         where = " true "
 
