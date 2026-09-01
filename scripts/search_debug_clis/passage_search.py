@@ -76,7 +76,9 @@ def _build_filters(
 
 @app.command()
 def search(
-    query: str,
+    query: str = typer.Argument(
+        "", help="Free-text query. Omit for a filter-only search (e.g. --topic/--document-id)."
+    ),
     page: int = 1,
     page_size: int = 10,
     debug: bool = True,

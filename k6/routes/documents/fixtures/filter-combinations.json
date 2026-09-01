@@ -1,0 +1,108 @@
+[
+  {
+    "name": "single filter: category label",
+    "expectZeroResults": false,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "field": "labels.value.id",
+          "op": "contains",
+          "value": "category::Report"
+        }
+      ]
+    }
+  },
+  {
+    "name": "combined filters: category + status + published_date range (and)",
+    "expectZeroResults": false,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "field": "labels.value.id",
+          "op": "contains",
+          "value": "category::Report"
+        },
+        {
+          "field": "labels.value.id",
+          "op": "contains",
+          "value": "status::Principal"
+        },
+        {
+          "field": "attributes.published_date",
+          "key": "published_date",
+          "op": "gte",
+          "value": "2015-01-01T00:00:00.000Z"
+        }
+      ]
+    }
+  },
+  {
+    "name": "combined filters: category Law or Policy (or)",
+    "expectZeroResults": false,
+    "filters": {
+      "op": "or",
+      "filters": [
+        {
+          "field": "labels.value.id",
+          "op": "contains",
+          "value": "category::Law"
+        },
+        {
+          "field": "labels.value.id",
+          "op": "contains",
+          "value": "category::Policy"
+        }
+      ]
+    }
+  },
+  {
+    "name": "combined filters: (category Law or Policy) and status Principal (nested or-in-and)",
+    "expectZeroResults": false,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "op": "or",
+          "filters": [
+            {
+              "field": "labels.value.id",
+              "op": "contains",
+              "value": "category::Law"
+            },
+            {
+              "field": "labels.value.id",
+              "op": "contains",
+              "value": "category::Policy"
+            }
+          ]
+        },
+        {
+          "field": "labels.value.id",
+          "op": "contains",
+          "value": "status::Principal"
+        }
+      ]
+    }
+  },
+  {
+    "name": "zero-result combination: status filter contradicted by a nonexistent status label",
+    "expectZeroResults": true,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "field": "labels.value.id",
+          "op": "contains",
+          "value": "status::Principal"
+        },
+        {
+          "field": "labels.value.id",
+          "op": "contains",
+          "value": "status::NonExistentStatusValue"
+        }
+      ]
+    }
+  }
+]
