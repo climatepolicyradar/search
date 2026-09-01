@@ -96,8 +96,8 @@ multilateral_climate_fund_project = Label(
     labels=[],
 )
 adaptation_fund = Label(
-    type="multilateral_climate_fund",
-    id="multilateral_climate_fund::Adaptation Fund",
+    type="agent",
+    id="agent::Adaptation Fund",
     value="Adaptation Fund",
     labels=[
         LabelRelationship(
@@ -107,8 +107,8 @@ adaptation_fund = Label(
     ],
 )
 the_climate_investment_funds = Label(
-    type="multilateral_climate_fund",
-    id="multilateral_climate_fund::The Climate Investment Funds",
+    type="agent",
+    id="agent::The Climate Investment Funds",
     value="Climate Investment Funds",
     labels=[
         LabelRelationship(
@@ -118,8 +118,8 @@ the_climate_investment_funds = Label(
     ],
 )
 green_climate_fund = Label(
-    type="multilateral_climate_fund",
-    id="multilateral_climate_fund::Green Climate Fund",
+    type="agent",
+    id="agent::Green Climate Fund",
     value="Green Climate Fund",
     labels=[
         LabelRelationship(
@@ -129,8 +129,8 @@ green_climate_fund = Label(
     ],
 )
 global_environment_facility = Label(
-    type="multilateral_climate_fund",
-    id="multilateral_climate_fund::Global Environment Facility",
+    type="agent",
+    id="agent::Global Environment Facility",
     value="Global Environment Facility",
     labels=[
         LabelRelationship(
@@ -329,18 +329,7 @@ other = Label(
 un_submission = Label(
     type="category", id="category::UN submission", value="UN submission", labels=[]
 )
-party = Label(
-    id="author_type::Party",
-    value="Party",
-    type="author_type",
-    labels=[LabelRelationship(type="subconcept_of", value=un_submission)],
-)
-non_party = Label(
-    id="author_type::Non-Party",
-    value="Non-Party",
-    type="author_type",
-    labels=[LabelRelationship(type="subconcept_of", value=un_submission)],
-)
+
 unfccc = Label(
     id="un_convention::UNFCCC",
     value="UNFCCC",
@@ -434,23 +423,24 @@ unccd = Label(
     labels=[LabelRelationship(type="subconcept_of", value=un_submission)],
 )
 voluntary_land_degradation_neutrality_targets = Label(
-    id="document_type::Voluntary Land Degradation Neutrality Targets (LDN-T)",
+    id="entity_type::Voluntary Land Degradation Neutrality Targets (LDN-T)",
     value="Voluntary Land Degradation Neutrality Targets (LDN-T)",
-    type="document_type",
+    type="entity_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
 )
 country_report = Label(
-    id="document_type::Country Report (CR)",
+    id="entity_type::Country Report (CR)",
     value="Country Report (CR)",
-    type="document_type",
+    type="entity_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
 )
 national_drought_plan = Label(
-    id="document_type::National Drought Plan (NDP)",
+    id="entity_type::National Drought Plan (NDP)",
     value="National Drought Plan (NDP)",
-    type="document_type",
+    type="entity_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
 )
+
 
 labels_taxonomy = [
     corporate_discloser,
@@ -490,8 +480,6 @@ labels_taxonomy = [
     ngo_civil_society,
     other,
     un_submission,
-    party,
-    non_party,
     unfccc,
     nationally_determined_contribution,
     national_adaptation_plan,
