@@ -18,6 +18,9 @@ above this).
 
 To type-check the scripts, also run `npm install` from this directory.
 
+Commands below assume you're already in this directory (`cd k6`) — paths are
+relative to here, not the repo root.
+
 ## Layout
 
 One directory per search-api route under `routes/`, mirroring the route's URL
@@ -52,15 +55,15 @@ single-purpose, and runnable in isolation.
 ## Running
 
 ```bash
-k6 run k6/routes/documents/index.ts
-k6 run "k6/routes/documents/{document_id}/index.ts"
+k6 run routes/documents/index.ts
+k6 run "routes/documents/{document_id}/index.ts"
 ```
 
 Defaults to hitting production (`https://api.climatepolicyradar.org/search`).
 Override with `BASE_URL`:
 
 ```bash
-BASE_URL=https://staging.example.com/search k6 run k6/routes/documents/index.ts
+BASE_URL=https://staging.example.com/search k6 run routes/documents/index.ts
 ```
 
 ## Smoke vs. load: one file, one `PROFILE`
@@ -70,9 +73,9 @@ Each script exports a `PROFILES` map and picks one via `-e PROFILE=<name>`
 across separate smoke/load files:
 
 ```bash
-k6 run k6/routes/documents/index.ts               # smoke (default)
-k6 run -e PROFILE=smoke k6/routes/documents/index.ts
-k6 run -e PROFILE=load k6/routes/documents/index.ts # once a load profile exists
+k6 run routes/documents/index.ts               # smoke (default)
+k6 run -e PROFILE=smoke routes/documents/index.ts
+k6 run -e PROFILE=load routes/documents/index.ts # once a load profile exists
 ```
 
 Today only the `smoke` profile is defined: low VUs (2-5), short duration
