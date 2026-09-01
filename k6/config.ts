@@ -10,9 +10,6 @@ export const BASE_URL =
 // added per-script once that route's load test is scoped) and passes it here
 // to pick one via `-e PROFILE=<name>` (defaulting to `smoke`).
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
-export function resolveProfile<TProfiles extends Record<string, object>>(
-  profiles: TProfiles,
-): TProfiles[keyof TProfiles] {
-  const profileName = (__ENV.PROFILE || "smoke") as keyof TProfiles;
-  return profiles[profileName];
+export function resolveProfile(profiles: Record<string, object>): object {
+  return profiles[__ENV.PROFILE || "smoke"];
 }
