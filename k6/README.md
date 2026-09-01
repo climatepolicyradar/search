@@ -20,32 +20,47 @@ To type-check the scripts, also run `npm install` from this directory.
 
 ## Layout
 
-One folder per search-api resource, one file per route (named after what it
-hits, not after a test type):
+One directory per search-api route under `routes/`, mirroring the route's URL
+path. Each route directory holds one file per test concern (named after what it
+tests, not "smoke"/"load") plus its own `fixtures/`. The base case for a route
+is `index.ts`:
 
 ```text
 k6/
-  config.ts              # shared BASE_URL / PROFILE resolution
-  documents/
-    document-by-id.ts   # GET /search/documents/{document_id}
-    search-documents.ts # GET /search/documents
-    fixtures/
-      document-ids.json  # real, pre-verified document_ids
-      search-queries.json # realistic free-text search terms
+  config.ts                    # shared BASE_URL / PROFILE resolution
+  routes/
+    documents/
+      index.ts                # GET /search/documents (base query)
+      filter-combinations.ts  # GET /search/documents?filters=
+      order-by-combinations.ts # GET /search/documents?order_by=
+      fields-combinations.ts  # GET /search/documents?fields=
+      pagination-combinations.ts # GET /search/documents?page_token/page_size
+      fixtures/
+        search-queries.json    # realistic free-text search terms
+      {document_id}/
+        index.ts               # GET /search/documents/{document_id}
+        fixtures/
+          document-ids.json    # real, pre-verified document_ids
 ```
+
+Every file in a route directory tests that one route — co-locating them means
+you can see all the ways a route is exercised in one place, and the directory
+structure traces back directly to the FastAPI route tree. Splitting further by
+test concern (rather than one file per route) keeps each file small,
+single-purpose, and runnable in isolation.
 
 ## Running
 
 ```bash
-k6 run k6/documents/document-by-id.ts
-k6 run k6/documents/search-documents.ts
+k6 run k6/routes/documents/index.ts
+k6 run "k6/routes/documents/{document_id}/index.ts"
 ```
 
 Defaults to hitting production (`https://api.climatepolicyradar.org/search`).
 Override with `BASE_URL`:
 
 ```bash
-BASE_URL=https://staging.example.com/search k6 run k6/documents/document-by-id.ts
+BASE_URL=https://staging.example.com/search k6 run k6/routes/documents/index.ts
 ```
 
 ## Smoke vs. load: one file, one `PROFILE`
@@ -55,13 +70,13 @@ Each script exports a `PROFILES` map and picks one via `-e PROFILE=<name>`
 across separate smoke/load files:
 
 ```bash
-k6 run k6/documents/document-by-id.ts               # smoke (default)
-k6 run -e PROFILE=smoke k6/documents/document-by-id.ts
-k6 run -e PROFILE=load k6/documents/document-by-id.ts # once a load profile exists
+k6 run k6/routes/documents/index.ts               # smoke (default)
+k6 run -e PROFILE=smoke k6/routes/documents/index.ts
+k6 run -e PROFILE=load k6/routes/documents/index.ts # once a load profile exists
 ```
 
 Today only the `smoke` profile is defined: low VUs (2-5), short duration
 (~1min), checking for zero failed checks — see k6's
 [smoke testing guide](https://grafana.com/docs/k6/latest/testing-guides/test-types/smoke-testing/).
 A `load` profile (VU ramp stages, thresholds) is added per-script when that
-route's load test is scoped — see FUS-356 for `document-by-id.ts`.
+route's load test is scoped — see FUS-356 for `{document_id}/index.ts`.

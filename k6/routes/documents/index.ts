@@ -2,7 +2,7 @@ import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
 
-import { BASE_URL, resolveProfile } from "../config.ts";
+import { BASE_URL, resolveProfile } from "../../config.ts";
 
 // SharedArray loads this JSON file once and shares it across all VUs
 // (see below), instead of every VU parsing its own copy in memory.
