@@ -8,8 +8,10 @@
 @default
 
 # Title acronyms & variants (formerly lucene-linguistics/en/title-synonyms.txt)
-# LHS +> ?"RHS" means LHS or RHS (RHS is tokenised ignoring punctuation
-# but tokens have to be adjacent in result)
+# LHS +> ?"RHS" means LHS or RHS. The quoted RHS is a phrase (tokens must be
+# adjacent) and is analysed at query time by `passage_analysis` (services.xml),
+# which lowercases, strips punctuation, removes stopwords (en/stopwords.txt) and
+# stems, hence the RHS is written without stopwords ("...on...", "...and...").
 tcfd +> ?"task force climate related financial disclosures";
 fca +> ?"financial conduct authority";
 ira +> ?"inflation reduction act";
