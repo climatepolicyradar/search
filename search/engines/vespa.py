@@ -423,66 +423,6 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
         return request_body
 
 
-class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
-    """
-    Vespa search engine combining text search with semantic embeddings.
-
-    Uses userInput for text search combined with nearestNeighbor for
-    embedding-based semantic search. Uses msmarco-distilbert-dot-v5
-    embedding model. Ranking profile: hybrid.
-    """
-
-    EMBEDDING_MODEL: str = "msmarco-distilbert-dot-v5"
-    DISTANCE_THRESHOLD: float = 0.24
-    TARGET_NUM_HITS: int = 1000
-
-    def _build_request(
-        self,
-        query: str,
-        pagination: Pagination,
-        filters_json_string: str | None,
-    ) -> dict[str, Any]:
-        """
-        Build request body for hybrid search (text + embeddings).
-
-        :param query: Search query from the user. May be empty, for a
-            filters-only search - there is nothing to embed in that case, so the
-            text and nearest-neighbour clauses are both dropped.
-        :param pagination: Pagination
-        :param filters_json_string: Filters JSON string
-        :return: Dictionary containing the Vespa query request body
-        """
-        search_term = (
-            f"""(
-                (userInput(@query_string)) or
-                ([{{"targetNumHits": {self.TARGET_NUM_HITS}, "distanceThreshold": {self.DISTANCE_THRESHOLD}}}]
-                 nearestNeighbor(text_embedding,query_embedding))
-            )"""
-            if query
-            else ""
-        )
-        where = self._build_where_clause(search_term, filters_json_string)
-        yql = f"select * from sources document_passage where {where}"
-
-        logger.info("🔎 Passage search query built (query=%r, yql=%s)", query, yql)
-
-        request_body: dict[str, Any] = {
-            "yql": yql,
-            "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
-            "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
-            "ranking.profile": "hybrid",
-            "hits": pagination.page_size,
-            "offset": (pagination.page_token - 1) * pagination.page_size,
-            "summary": self.DEFAULT_SUMMARY,
-        }
-        if query:
-            request_body["query_string"] = query
-            request_body["input.query(query_embedding)"] = (
-                f"embed({self.EMBEDDING_MODEL}, @query_string)"
-            )
-        return request_body
-
-
 class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
     """
     Vespa document search engine that matches against document titles using BM25.

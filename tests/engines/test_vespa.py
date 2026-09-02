@@ -11,7 +11,6 @@ from search.engines import Pagination
 from search.engines.dev_vespa import FieldFilter, Filter
 from search.engines.vespa import (
     ExactVespaPassageSearchEngine,
-    HybridVespaPassageSearchEngine,
     VespaLabelSearchEngine,
     VespaQueryError,
     _build_passage_filter_yql,
@@ -31,16 +30,6 @@ def exact_vespa_passage_engine():
     :return: ExactVespaPassageSearchEngine instance
     """
     return ExactVespaPassageSearchEngine()
-
-
-@pytest.fixture
-def hybrid_vespa_passage_engine():
-    """
-    Create a HybridVespaPassageSearchEngine instance for testing.
-
-    :return: HybridVespaPassageSearchEngine instance
-    """
-    return HybridVespaPassageSearchEngine()
 
 
 @pytest.fixture
@@ -121,34 +110,6 @@ def test_exact_request(terms, limit, offset):
         # An empty query must not reach a term operator: Vespa rejects it with
         # "The word of a word item cannot be empty".
         assert "query_string" not in request
-        assert request["yql"].endswith("where true")
-
-
-@given(
-    terms=search_terms_strategy,
-    limit=search_limit_strategy.filter(lambda x: x is not None),
-    offset=search_offset_strategy,
-)
-def test_hybrid_request(terms, limit, offset):
-    """Test hybrid request returns the expected fields."""
-
-    engine = HybridVespaPassageSearchEngine()
-    request = engine._build_request(
-        terms, Pagination(page_size=limit, page_token=offset + 1), None
-    )
-
-    assert isinstance(request, dict)
-    assert "yql" in request
-    assert request["ranking.profile"] == "hybrid"
-
-    if terms:
-        assert request["query_string"] == terms
-        assert "userInput(@query_string)" in request["yql"]
-        assert "nearestNeighbor" in request["yql"]
-    else:
-        # Nothing to embed, so both the text and nearest-neighbour clauses go.
-        assert "query_string" not in request
-        assert "input.query(query_embedding)" not in request
         assert request["yql"].endswith("where true")
 
 
