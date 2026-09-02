@@ -247,6 +247,7 @@ test_cases = [
         and "plan" in document.title.lower(),
         description="Search for 'erp' should return documents with 'emission(s) reduction plan' in the title",
         k=10,
+        all_or_any="any",
     ),
     FieldCharacteristicsTestCase[Document](
         category="entity name + acronym",

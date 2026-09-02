@@ -8,16 +8,15 @@
 @default
 
 # Title acronyms & variants (formerly lucene-linguistics/en/title-synonyms.txt)
-# TO-DO: update the rules to align with nz (see below). Not done yet because tests expect 
-# specific documents, which is based of the following rules i.e. documents expected would
-# also need updating.
+# LHS +> ?"RHS" means LHS or RHS (RHS is tokenised ignoring punctuation
+# but tokens have to be adjacent in result)
 tcfd +> ?"task force climate related financial disclosures";
-fca -> financial conduct authority;
-ira -> inflation reduction act;
-sfdr -> sustainable finance disclosure regulation;
-erp -> emissions reduction plan;
-necp -> national energy and climate plan;
-phaseout -> phase out;
+fca +> ?"financial conduct authority";
+ira +> ?"inflation reduction act";
+sfdr +> ?"sustainable finance disclosure regulation";
+erp +> ?"emissions reduction plan";
+necp +> ?"national energy climate plan";
+phaseout +> ?"phase out";
 
 # Many climate/energy laws are titled "... act ..."
 law +> ?act;
