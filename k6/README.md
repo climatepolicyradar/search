@@ -79,14 +79,18 @@ across separate smoke/load files:
 ```bash
 k6 run routes/documents/index.ts               # smoke (default)
 k6 run -e PROFILE=smoke routes/documents/index.ts
-k6 run -e PROFILE=load routes/documents/index.ts # once a load profile exists
+k6 run -e PROFILE=load "routes/documents/{document_id}/index.ts"
 ```
 
-Today only the `smoke` profile is defined: low VUs (2-5), short duration
-(~1min), checking for zero failed checks — see k6's
+The `smoke` profile is low VUs (2-5), short duration (~1min), checking for zero
+failed checks — see k6's
 [smoke testing guide](https://grafana.com/docs/k6/latest/testing-guides/test-types/smoke-testing/).
-A `load` profile (VU ramp stages, thresholds) is added per-script when that
-route's load test is scoped — see FUS-356 for `{document_id}/index.ts`.
+Every script has one. A `load` profile (VU ramp stages via `scenarios`, plus
+`thresholds`) is added per-script when that route's load test is scoped — today
+only `{document_id}/index.ts` has one (FUS-356). Passing `-e PROFILE=load` to a
+script without one silently falls back to k6's own defaults (1 VU, 1 iteration)
+rather than erroring, since `resolveProfile` returns `undefined` for an unknown
+profile name.
 
 ## CI
 
