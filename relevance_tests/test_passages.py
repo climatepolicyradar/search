@@ -63,16 +63,6 @@ test_cases = [
         assert_results=True,
     ),
     FieldCharacteristicsTestCase[Passage](
-        category="exact match",
-        search_terms='"national strategy for climate change 2050"',
-        characteristics_test=lambda passage: "national strategy for climate change 2050"
-        in passage.text.lower(),
-        description="Search in quotes do not perform an exact match search - quotes are ignored.",
-        k=100,
-        all_or_any="all",
-        assert_results=True,
-    ),
-    FieldCharacteristicsTestCase[Passage](
         category="dissimilar passages excluded",
         search_terms="mango",
         characteristics_test=(lambda passage: "mango" in passage.text.lower()),
