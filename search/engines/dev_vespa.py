@@ -797,7 +797,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         # so they can be searched.
         # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
         ' or ({defaultIndex: "geographies"}userInput(@query))'
-        ' or ({defaultIndex: "title_synonyms"}userInput(@query))'
         ' or ({defaultIndex: "identifiers"}userInput(@query)))'
     )
 
