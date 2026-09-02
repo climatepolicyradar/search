@@ -91,3 +91,13 @@ only `{document_id}/index.ts` has one (FUS-356). Passing `-e PROFILE=load` to a
 script without one silently falls back to k6's own defaults (1 VU, 1 iteration)
 rather than erroring, since `resolveProfile` returns `undefined` for an unknown
 profile name.
+
+## CI
+
+The [`k6 smoke tests`](../.github/workflows/k6_smoke_tests.yml) workflow runs
+every script under `routes/` in smoke mode against production, in parallel, via
+[`grafana/run-k6-action`](https://github.com/grafana/run-k6-action). It's
+deliberately not merge-gating (production traffic, no staging environment to
+target instead) — it runs on `workflow_dispatch` (on demand) and, as a reusable
+workflow, right after `deploy-api` succeeds in `merge_to_main.yml`, so a
+regression is flagged post-deploy rather than blocking the merge.

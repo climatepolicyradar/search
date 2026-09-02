@@ -76,13 +76,6 @@ disable = [
   "C0116", # test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
 ]
 
-[tool.typos.files]
-extend-exclude = ["relevance_tests/*.py"]
-
-[tool.typos.default.extend-words]
-tak = "tak" # Polish for 'yes' - a questionnaire answer token in search/passage.py
-
-
 [tool.pyright]
 venvPath = "."
 venv = ".venv"

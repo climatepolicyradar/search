@@ -1,0 +1,32 @@
+name: k6 smoke tests
+
+# Smoke-tests the k6/routes/ suite against production. Deliberately not
+# merge-gating: BASE_URL defaults to production (search-api has no staging
+# environment, per the Fusion monitoring RFC), so a failure here should be
+# investigated after the fact rather than block a merge. Runs on demand
+# (workflow_dispatch) and as a reusable workflow (workflow_call) invoked by
+# merge_to_main.yml once deploy-api succeeds.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: 2.2.0
+
+      - uses: grafana/run-k6-action@v1
+        with:
+          path: |
+            k6/routes/**/*.ts
+          flags: -e PROFILE=smoke
+          parallel: true
+          fail-fast: false
