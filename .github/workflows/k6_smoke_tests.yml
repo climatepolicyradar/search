@@ -10,8 +10,6 @@ on:
   workflow_dispatch:
   workflow_call:
 
-permissions: read-all
-
 jobs:
   smoke:
     runs-on: ubuntu-latest
