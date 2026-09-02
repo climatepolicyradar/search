@@ -80,17 +80,21 @@ across separate smoke/load files:
 k6 run routes/documents/index.ts               # smoke (default)
 k6 run -e PROFILE=smoke routes/documents/index.ts
 k6 run -e PROFILE=load "routes/documents/{document_id}/index.ts"
+k6 run -e PROFILE=load routes/documents/fields-combinations.ts
 ```
 
 The `smoke` profile is low VUs (2-5), short duration (~1min), checking for zero
 failed checks — see k6's
 [smoke testing guide](https://grafana.com/docs/k6/latest/testing-guides/test-types/smoke-testing/).
 Every script has one. A `load` profile (VU ramp stages via `scenarios`, plus
-`thresholds`) is added per-script when that route's load test is scoped — today
-only `{document_id}/index.ts` has one (FUS-356). Passing `-e PROFILE=load` to a
-script without one silently falls back to k6's own defaults (1 VU, 1 iteration)
-rather than erroring, since `resolveProfile` returns `undefined` for an unknown
-profile name.
+`thresholds`) is added per-script when that route's load test is scoped. In load
+mode, `fields-combinations.ts` fixes its request to that single worst-case
+combination instead of sweeping the smoke test's full fixture — the two profiles
+test different things (correctness across shapes vs. a capacity ceiling for the
+worst shape), not just different volumes of the same request. Passing
+`-e PROFILE=load` to a script without one silently falls back to k6's own
+defaults (1 VU, 1 iteration) rather than erroring, since `resolveProfile`
+returns `undefined` for an unknown profile name.
 
 ## CI
 
