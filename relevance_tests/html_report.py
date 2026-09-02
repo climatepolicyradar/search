@@ -9,7 +9,6 @@ SCORE_FEATURES = [
     "description_score",
     "passages_score",
     "geographies_score",
-    "title_synonyms_score",
     "identifiers_score",
 ]
 
