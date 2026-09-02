@@ -80,8 +80,18 @@ jobs:
         with:
           python-version-file: pyproject.toml
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: just install
+
+      - name: Install Node
+        uses: actions/setup-node@v7
+        with:
+          cache: npm
+          cache-dependency-path: k6/package-lock.json
+      - name: Install k6 script dependencies
+        working-directory: ./k6
+        run: npm ci
+
       - name: Trunk Check
         uses: trunk-io/trunk-action@v1
         with:
