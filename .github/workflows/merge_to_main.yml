@@ -108,6 +108,7 @@ jobs:
     if: needs.changes.outputs.run-deploy == 'true'
 
   k6-smoke-tests:
+    permissions: read-all
     uses: ./.github/workflows/k6_smoke_tests.yml
     needs: [deploy-api]
     if: needs.deploy-api.result == 'success'
