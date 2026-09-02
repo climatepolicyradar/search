@@ -7,7 +7,6 @@ import components.aws as components_aws
 import pulumi
 import pulumi_docker_build as docker_build
 from pulumi_aws import (
-    apprunner,
     ecr,
     ecs,
     get_caller_identity,
