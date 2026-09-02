@@ -10,7 +10,8 @@ on:
   workflow_dispatch:
   workflow_call:
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   smoke:

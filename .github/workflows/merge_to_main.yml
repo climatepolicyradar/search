@@ -100,12 +100,6 @@ jobs:
       - if: needs.changes.outputs.run-test == 'true'
         uses: ./.github/actions/test
 
-  deploy-api-apprunner-deprecated:
-    uses: ./.github/workflows/deploy.yml
-    secrets: inherit
-    needs: [changes, test]
-    if: needs.changes.outputs.run-deploy == 'true'
-
   # @see: https://github.com/marketplace/actions/amazon-ecs-deploy-express-service-action-for-github-actions#complete-example-with-all-options
   deploy-api:
     uses: ./.github/workflows/deploy_api.yml
@@ -114,6 +108,7 @@ jobs:
     if: needs.changes.outputs.run-deploy == 'true'
 
   k6-smoke-tests:
+    permissions: read-all
     uses: ./.github/workflows/k6_smoke_tests.yml
     needs: [deploy-api]
     if: needs.deploy-api.result == 'success'
