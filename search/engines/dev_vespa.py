@@ -70,7 +70,6 @@ def _normalize_currency_symbols(query: str) -> str:
     return query
 
 
-
 def _strip_quotes(query: str) -> str:
     """
     Remove double-quote characters so the query is never parsed as an exact phrase.
@@ -641,7 +640,7 @@ def _execute_vespa_query(
     request_body: dict[str, Any],
     request_context: str,
     post_fn=requests.post,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """
     Execute a Vespa query and emit contextual logs.
 
@@ -655,8 +654,16 @@ def _execute_vespa_query(
     :type request_context: str
     :param post_fn: HTTP post callable for dependency injection in tests.
     :type post_fn: typing.Callable[..., requests.Response]
-    :return: Decoded JSON response when successful, else ``None``.
-    :rtype: dict[str, Any] | None
+    :return: Decoded JSON response.
+    :rtype: dict[str, Any]
+    :raises VespaError: if the request never reached Vespa, Vespa returned a
+        non-success status, or the response body was not JSON.
+
+    Failures are raised, never returned as an empty result. "Vespa is broken"
+    and "nothing matched your query" are different answers, and a caller that
+    collapses the first into the second leaves clients unable to tell them
+    apart. The return type is deliberately non-optional so that regressing to
+    ``return None`` here fails type checking.
     """
     logger.info("Vespa request started [%s]", request_context)
     logger.debug(
@@ -674,12 +681,14 @@ def _execute_vespa_query(
                 "Authorization": f"Bearer {token}",
             },
         )
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "Error: Vespa request failed before a response was received [%s]",
             request_context,
         )
-        return None
+        raise VespaError(
+            f"Vespa request failed before a response was received [{request_context}]"
+        ) from exc
 
     if response.status_code >= 400:
         body_preview = (response.text or "")[:HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS]
@@ -690,13 +699,16 @@ def _execute_vespa_query(
             response.status_code,
             body_preview,
         )
-        return None
+        raise VespaError(
+            f"Vespa returned status {response.status_code} [{request_context}]: "
+            f"{body_preview}"
+        )
 
     try:
         response_json = response.json()
-    except ValueError:
+    except ValueError as exc:
         logger.exception("Error: Vespa returned invalid JSON [%s]", request_context)
-        return None
+        raise VespaError(f"Vespa returned invalid JSON [{request_context}]") from exc
 
     hit_count = len(response_json.get("root", {}).get("children", []) or [])
     logger.info(
@@ -858,8 +870,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body=request_body,
             request_context="documents.search",
         )
-        if response is None:
-            return ListResponse(results=[], total_size=None, next_page_token=None)
         documents = []
         debug_info: list[dict[str, Any]] = []
 
@@ -1085,8 +1095,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body=request_body,
             request_context="documents.aggregations",
         )
-        if response is None:
-            return []
 
         root = response.get("root", {})
         root_children: list[dict] = root.get("children") or []
@@ -1162,8 +1170,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body=request_body,
             request_context="documents.facets",
         )
-        if response is None:
-            return {}
 
         root_children: list[dict] = response.get("root", {}).get("children") or []
         groups: list[dict] = (
@@ -1447,8 +1453,6 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             request_body=request_body,
             request_context="passages.search",
         )
-        if response is None:
-            return ListResponse(results=[], total_size=None, next_page_token=None)
         passages: list[Passage] = []
         debug_info: list[dict[str, Any]] = []
 
@@ -1552,8 +1556,6 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
             request_body=request_body,
             request_context="labels.search",
         )
-        if response is None:
-            return ListResponse(results=[], total_size=None, next_page_token=None)
         labels: list[DataInLabel] = []
         debug_info: list[dict[str, Any]] = []
 
@@ -1618,8 +1620,6 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
             request_body=request_body,
             request_context="labels.all_label_types",
         )
-        if response is None:
-            return []
         types: list[str] = []
 
         root = response.get("root", {})

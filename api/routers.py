@@ -17,7 +17,7 @@ from api.utils import (
 )
 from search.data_in_models import Document
 from search.data_in_models import Label as DataInLabel
-from search.engines import OrderBy, Pagination, VespaError
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
@@ -47,13 +47,9 @@ FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
 @router.get("/documents/{document_id}", response_model=ItemResponse[Document])
 def read_document(document_id: str):
     engine = DevVespaDocumentSearchEngine(settings=settings)
-    try:
-        result = engine.get(document_id)
-    except VespaError as exc:
-        raise HTTPException(
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-            detail="Search service unavailable",
-        ) from exc
+    # `VespaError` deliberately propagates: `api.main.handle_vespa_error` turns
+    # backend failure into a 503 for every route.
+    result = engine.get(document_id)
     if result is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Document not found"
