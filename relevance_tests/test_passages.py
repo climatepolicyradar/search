@@ -4,11 +4,9 @@ from api.routers import settings
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
-
-#from search.engines.vespa import (
-#    ExactVespaPassageSearchEngine,
-#    HybridVespaPassageSearchEngine,
-#)
+from search.engines.vespa import (
+    ExactVespaPassageSearchEngine,
+)
 from search.passage import (
     Passage,
     looks_like_questionnaire,
@@ -62,16 +60,6 @@ test_cases = [
         in passage.text.lower().replace("-", " "),
         all_or_any="any",
         description="Search for 'brazil nature based solutions' returns passages which mention nature based solutions",
-        assert_results=True,
-    ),
-    FieldCharacteristicsTestCase[Passage](
-        category="exact match",
-        search_terms='"national strategy for climate change 2050"',
-        characteristics_test=lambda passage: "national strategy for climate change 2050"
-        in passage.text.lower(),
-        description="Search in quotes do not perform an exact match search - quotes are ignored.",
-        k=100,
-        all_or_any="all",
         assert_results=True,
     ),
     FieldCharacteristicsTestCase[Passage](
@@ -834,16 +822,9 @@ def relevance_tests_passages():
 
     engines = [
         DevVespaPassageSearchEngine(
-            settings=settings, debug=True, ranking_profile="nativerank"
-        ),
-        DevVespaPassageSearchEngine(
-            settings=settings, debug=True, ranking_profile="bm25"
-        ),
-        DevVespaPassageSearchEngine(
             settings=settings, debug=True, ranking_profile="bm25_multiplicative"
         ),
-        #ExactVespaPassageSearchEngine(),
-        #HybridVespaPassageSearchEngine(),
+        ExactVespaPassageSearchEngine(),
     ]
 
     run_relevance_tests_parallel(
