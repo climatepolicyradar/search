@@ -322,7 +322,7 @@ elif stack != "review":
         ),
     )
 
-    apprunner_read_s3_policy = iam.Policy(
+    ecs_read_s3_policy = iam.Policy(
         f"{application_name}-read-s3-policy",
         name=f"{application_name}-read-s3-policy",
         description="Policy to allow reading data files from S3",
@@ -339,53 +339,6 @@ elif stack != "review":
                     ],
                 }
             )
-        ),
-    )
-    apprunner_read_s3_policy_attachment = iam.RolePolicyAttachment(
-        f"{application_name}-apprunner-reads3-policy-attachment",
-        role=apprunner_instance_role.name,
-        policy_arn=apprunner_read_s3_policy.arn,
-    )
-
-    apprunner_service = apprunner.Service(
-        f"{application_name}-apprunner-service",
-        service_name=f"{application_name}",
-        source_configuration=apprunner.ServiceSourceConfigurationArgs(
-            authentication_configuration=apprunner.ServiceSourceConfigurationAuthenticationConfigurationArgs(
-                access_role_arn=apprunner_ecr_role.arn,
-            ),
-            image_repository=apprunner.ServiceSourceConfigurationImageRepositoryArgs(
-                image_identifier=repo.repository_url.apply(lambda url: f"{url}:latest"),
-                image_repository_type="ECR",
-                image_configuration=apprunner.ServiceSourceConfigurationImageRepositoryImageConfigurationArgs(
-                    port="8080",
-                    runtime_environment_variables={
-                        "BUCKET_NAME": bucket.bucket,
-                        "ENV": stack,
-                    },
-                    runtime_environment_secrets={
-                        "VESPA_ENDPOINT": vespa_endpoint.arn,
-                        "VESPA_READ_TOKEN": vespa_read_token.arn,
-                    },
-                ),
-            ),
-        ),
-        health_check_configuration=apprunner.ServiceHealthCheckConfigurationArgs(
-            protocol="HTTP",
-            path="/",
-            interval=10,
-            timeout=5,
-            healthy_threshold=1,
-            unhealthy_threshold=2,
-        ),
-        network_configuration=apprunner.ServiceNetworkConfigurationArgs(
-            ingress_configuration=apprunner.ServiceNetworkConfigurationIngressConfigurationArgs(
-                is_publicly_accessible=True,
-            ),
-            ip_address_type="IPV4",
-        ),
-        instance_configuration=apprunner.ServiceInstanceConfigurationArgs(
-            instance_role_arn=apprunner_instance_role.arn,
         ),
     )
 
@@ -516,12 +469,8 @@ elif stack != "review":
         value=config.get("WIKIBASE_PASSWORD"),
     )
 
-    # These exports are the public API for this stack, and consumed by external stacks
-    # Edit with caution
-    pulumi.export("apprunner_service_url", apprunner_service.service_url)
-
     # -----
-    # ECS Express Mode (running in parallel with AppRunner during migration)
+    # ECS Express Mode
     # -----
 
     # Task role: runtime permissions (S3 read) — reuses the same policy as AppRunner
@@ -544,9 +493,9 @@ elif stack != "review":
         ).json,
     )
     iam.RolePolicyAttachment(
-        f"{application_name}-ecs-task-reads3-policy-attachment",
+        f"{application_name}-ecs-task-reads-s3-policy-attachment",
         role=ecs_task_role.name,
-        policy_arn=apprunner_read_s3_policy.arn,
+        policy_arn=ecs_read_s3_policy.arn,
     )
 
     # Execution role: pulls the image and injects secrets at container startup
