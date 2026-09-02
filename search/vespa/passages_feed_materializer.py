@@ -25,6 +25,8 @@ from mypy_boto3_s3 import S3Client
 
 from search.passage import (
     Passage,
+    is_page_header_or_footer,
+    looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
@@ -168,6 +170,7 @@ def _text_block_to_vespa_passage(
         (block_text_by_id or {}).get(heading_id) if heading_id is not None else None
     )
     passage = _text_block_to_passage(block, document_id)
+    passage.heading_text = heading_text
     return VespaPassage(
         id=block["id"],
         idx=block["idx"],
@@ -185,6 +188,8 @@ def _text_block_to_vespa_passage(
         looks_like_short_heading=looks_like_short_heading(passage),
         looks_like_table_of_contents=looks_like_table_of_contents(passage),
         looks_like_reference_list=looks_like_reference_list(passage),
+        is_page_header_or_footer=is_page_header_or_footer(passage),
+        looks_like_demoted_section=looks_like_demoted_section(passage),
         pages=[VespaPageBoxes.model_validate(page) for page in block.get("pages", [])],
         heading_id=heading_id,
         heading_text=heading_text,

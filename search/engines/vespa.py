@@ -14,6 +14,14 @@ from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Item
 from search.document import Document
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, TModel
+from search.engines.dev_vespa import (
+    TOPIC_FILTER_FIELD,
+    TOPIC_ID_PREFIX,
+    Condition,
+    FieldFilter,
+    Filter,
+    _format_value,
+)
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
@@ -124,7 +132,7 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         query: str,
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None = None,  # noqa: ARG002
+        filters_json_string: str | None = None,
     ) -> ListResponse[TModel]:
         """
         Search Vespa using the configured search strategy.
@@ -231,6 +239,77 @@ class VespaDocumentSearchEngine(VespaSearchEngine[DocumentModel], ABC):
         )
 
 
+# Filters reach the engines in the dev-Vespa vocabulary
+# (:class:`search.engines.dev_vespa.Filter`), which names fields after the
+# ``passages`` schema. The engines below query the ``document_passage`` schema,
+# which names the same things differently, so the conditions need translating.
+#
+# Fields with no ``document_passage`` equivalent raise rather than being dropped:
+# a silently dropped filter returns unscoped results that still look valid.
+_PASSAGE_FILTER_FIELD_MAP: dict[str, str] = {
+    "document_id": "document_import_id",
+}
+
+# `concepts.id` on `document_passage` holds the bare wikibase id (e.g. "Q1829"),
+# where `passages` stores it on `labels.value.id` with a `concept::` prefix.
+_PASSAGE_TOPIC_FIELD = "concepts.id"
+
+
+def _passage_condition_yql(condition: Condition) -> str:
+    """Translate a single filter condition into ``document_passage`` YQL."""
+    if not isinstance(condition, FieldFilter):
+        raise VespaQueryError(
+            f"{type(condition).__name__} filters are not supported on document_passage"
+        )
+
+    if condition.field == TOPIC_FILTER_FIELD:
+        # Corpus filters share this field but use an `agent::` prefix, and there
+        # is no provider field on `document_passage` to map them onto.
+        if not (
+            isinstance(condition.value, str)
+            and condition.value.startswith(TOPIC_ID_PREFIX)
+        ):
+            raise VespaQueryError(
+                f"only {TOPIC_ID_PREFIX!r} values of {TOPIC_FILTER_FIELD!r} are "
+                f"supported on document_passage, got {condition.value!r}"
+            )
+        vespa_field = _PASSAGE_TOPIC_FIELD
+        value: str | float | bool = condition.value.removeprefix(TOPIC_ID_PREFIX)
+    elif condition.field in _PASSAGE_FILTER_FIELD_MAP:
+        vespa_field = _PASSAGE_FILTER_FIELD_MAP[condition.field]
+        value = condition.value
+    else:
+        raise VespaQueryError(
+            f"filter field {condition.field!r} has no document_passage equivalent"
+        )
+
+    expr = f"{vespa_field} contains {_format_value(value)}"
+    return f"!({expr})" if condition.op == "not_contains" else expr
+
+
+def _build_passage_filter_yql(filter_group: Filter) -> str:
+    """
+    Recursively build ``document_passage`` YQL for a filter group.
+
+    Unlike the ``passages`` schema this needs no ``sameElement`` grouping: two
+    topics ANDed as ``concepts.id contains "Q567" and concepts.id contains
+    "Q1651"`` already mean "the passage carries both concepts", each possibly on
+    a different element of the array.
+    """
+    parts = [
+        _build_passage_filter_yql(item)
+        if isinstance(item, Filter)
+        else _passage_condition_yql(item)
+        for item in filter_group.filters
+    ]
+    parts = [part for part in parts if part]
+    if not parts:
+        return ""
+
+    joined = f" {filter_group.op} ".join(parts)
+    return f"({joined})" if len(parts) > 1 else joined
+
+
 class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
     """
     Abstract base class for Vespa passage search engines.
@@ -239,6 +318,21 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
     """
 
     model_class = Passage
+
+    @staticmethod
+    def _build_where_clause(
+        search_term_yql: str, filters_json_string: str | None
+    ) -> str:
+        """Combine the search-term clause with any filters."""
+        parts = [search_term_yql] if search_term_yql else []
+        if filters_json_string:
+            filter_yql = _build_passage_filter_yql(
+                Filter.model_validate_json(filters_json_string)
+            )
+            if filter_yql:
+                parts.append(filter_yql)
+        # A query with neither terms nor filters still needs a match-all clause.
+        return " and ".join(parts) if parts else "true"
 
     def _parse_vespa_response(
         self, response: VespaQueryResponse
@@ -294,81 +388,39 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
         self,
         query: str,
         pagination: Pagination,
-        filters_json_string: str | None,  # noqa: ARG002
+        filters_json_string: str | None,
     ) -> dict[str, Any]:
         """
         Build request body for exact match search.
 
-        :param query: Search query from the user
-        :param limit: Maximum number of results to return
-        :param offset: Number of results to skip
+        :param query: Search query from the user. May be empty, for a
+            filters-only search.
+        :param pagination: Pagination
+        :param filters_json_string: Filters JSON string
         :return: Dictionary containing the Vespa query request body
         """
-        yql = """
-        select * from sources document_passage where
-            (text_block_not_stemmed contains ({stem: false}@query_string))
-        """
+        search_term = (
+            "(text_block_not_stemmed contains ({stem: false}@query_string))"
+            if query
+            else ""
+        )
+        where = self._build_where_clause(search_term, filters_json_string)
+        yql = f"select * from sources document_passage where {where}"
 
-        return {
+        logger.info("🔎 Passage search query built (query=%r, yql=%s)", query, yql)
+
+        request_body: dict[str, Any] = {
             "yql": yql,
             "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
             "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
-            "query_string": query,
             "ranking.profile": "exact_not_stemmed",
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "summary": self.DEFAULT_SUMMARY,
         }
-
-
-class HybridVespaPassageSearchEngine(VespaPassageSearchEngine):
-    """
-    Vespa search engine combining text search with semantic embeddings.
-
-    Uses userInput for text search combined with nearestNeighbor for
-    embedding-based semantic search. Uses msmarco-distilbert-dot-v5
-    embedding model. Ranking profile: hybrid.
-    """
-
-    EMBEDDING_MODEL: str = "msmarco-distilbert-dot-v5"
-    DISTANCE_THRESHOLD: float = 0.24
-    TARGET_NUM_HITS: int = 1000
-
-    def _build_request(
-        self,
-        query: str,
-        pagination: Pagination,
-        filters_json_string: str | None,  # noqa: ARG002
-    ) -> dict[str, Any]:
-        """
-        Build request body for hybrid search (text + embeddings).
-
-        :param query: Search query from the user
-        :param limit: Maximum number of results to return
-        :param offset: Number of results to skip
-        :return: Dictionary containing the Vespa query request body
-        """
-        yql = f"""
-        select * from sources document_passage where
-            (
-                (userInput(@query_string)) or
-                ([{{"targetNumHits": {self.TARGET_NUM_HITS}, "distanceThreshold": {self.DISTANCE_THRESHOLD}}}]
-                 nearestNeighbor(text_embedding,query_embedding))
-            )
-
-        """
-
-        return {
-            "yql": yql,
-            "timeout": str(self.DEFAULT_TIMEOUT_SECONDS),
-            "ranking.softtimeout.factor": self.DEFAULT_RANKING_SOFTTIMEOUT_FACTOR,
-            "query_string": query,
-            "ranking.profile": "hybrid",
-            "hits": pagination.page_size,
-            "offset": (pagination.page_token - 1) * pagination.page_size,
-            "input.query(query_embedding)": f"embed({self.EMBEDDING_MODEL}, @query_string)",
-            "summary": self.DEFAULT_SUMMARY,
-        }
+        if query:
+            request_body["query_string"] = query
+        return request_body
 
 
 class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):

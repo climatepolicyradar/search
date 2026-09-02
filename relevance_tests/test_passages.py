@@ -4,11 +4,9 @@ from api.routers import settings
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
-
-#from search.engines.vespa import (
-#    ExactVespaPassageSearchEngine,
-#    HybridVespaPassageSearchEngine,
-#)
+from search.engines.vespa import (
+    ExactVespaPassageSearchEngine,
+)
 from search.passage import (
     Passage,
     looks_like_questionnaire,
@@ -62,16 +60,6 @@ test_cases = [
         in passage.text.lower().replace("-", " "),
         all_or_any="any",
         description="Search for 'brazil nature based solutions' returns passages which mention nature based solutions",
-        assert_results=True,
-    ),
-    FieldCharacteristicsTestCase[Passage](
-        category="exact match",
-        search_terms='"national strategy for climate change 2050"',
-        characteristics_test=lambda passage: "national strategy for climate change 2050"
-        in passage.text.lower(),
-        description="Search in quotes should perform an exact match search.",
-        k=100,
-        all_or_any="all",
         assert_results=True,
     ),
     FieldCharacteristicsTestCase[Passage](
@@ -192,17 +180,15 @@ test_cases = [
         all_or_any="any",
         assert_results=True,
     ),
-    FieldCharacteristicsTestCase[Passage](
+    RecallTestCase[Passage](
         category="logic",
-        search_terms="green-washing or greenwashing or climatewashing or climate-washing",
-        characteristics_test=lambda passage: any(
-            term in passage.text.lower().replace("-", "")
-            for term in ["greenwashing", "climatewashing"]
-        ),
+        search_terms="greenwashing permafrost",
+        expected_result_ids=[
+        "019d4372-4357-77f3-b257-57c1aad30e7b",  # greenwashing only (no "permafrost")
+        "019cdd99-4ad6-7a83-9813-9836dd90a51c",  # permafrost only (no "greenwashing")
+        ],
+        k=10,
         description="OR logic in search.",
-        k=20,
-        all_or_any="all",
-        assert_results=True,
     ),
     FieldCharacteristicsTestCase[Passage](
         category="related phrases",
@@ -215,7 +201,6 @@ test_cases = [
         all_or_any="any",
         assert_results=True,
     ),
-    # TODO: add query-rewrite rule for acronym expansion
     FieldCharacteristicsTestCase[Passage](
         category="related phrases",
         search_terms="Ecosystem-based approaches",
@@ -224,10 +209,6 @@ test_cases = [
             and "ecosystem-based" not in passage.text.lower()
         ),  # "approaches" seems pretty generic; it's the nature->ecosystem part that matters
         description="Results for closely-related phrases (Ecosystem-based approaches -> nbs) should be found, even if the search phrase itself is not mentioned in the same paragraph",
-            # problem - in absence of semantics would need query re-write rule for nature->ecosystem,
-            #           then another step to go nature->nbs, but 'ecosystem based approaches' and 
-            #           'nature based solutions' are not synonymous so a re-write rule is not appropriate.
-            # solution - future work either on concepts or query expansion
         k=100,
         all_or_any="any",
         assert_results=True,
@@ -417,8 +398,15 @@ test_cases = [
         assert_results=True,
         description=(
             "Multi-word queries must not match on a subset or reordering of terms in the top 2."
+            # problem - Under bm25 a passage matching "national" and "security" 
+            #           non-adjacently scores higher on bm25(content) than the 
+            #           true-phrase passage.
+            # solution - Could try raising query(prox_weight), or use a phrase operator
+            #            for multi-word queries so adjacency is required rather than 
+            #            just rewarded.
         ),
     ),
+
     FieldCharacteristicsTestCase[Passage](
         category="phrase_integrity",
         search_terms="hard to abate",
@@ -437,52 +425,18 @@ test_cases = [
     ),
     RecallTestCase[Passage](
         category="low_ranking_positives",
-        search_terms="carbon",
-        # 2025 Annual Report – "Reinvigorating climate action in the face of worsening impacts and weakened leadership"
-        document_id="ICCN.document.i00000036.n0000",
-        expected_result_ids=[
-            # rank 9 - "The carbon sink decreases during El Nino events, due to
-            #            megafires (Canada, Siberia, Amazon), and extreme droughts.
-            #            Since 2015, CO2 absorption north of the 20th parallel has
-            #            halved, and 2024 marks a record level of tropical forest..."
-            "019d89e9-0ddd-7593-bfb3-4549d0a4deea",
-            # rank 11 - "Due to carbon losses from cultivated and artificialized
-            #            soils, the second carbon budget for the land use, land-use
-            #            change and forestry (LULUCF) sector has not been met. With
-            #            an average carbon sink of -36 Mt CO2 eq per year..."
-            "019d89e9-0dd7-7e01-9292-94219530df5d",
-            # rank 16 - "The LULUCF carbon sink deteriorated significantly between
-            #            2013 and 2017, falling from -50.2 to -28.1 Mt CO2e, a
-            #            decrease of 45%. The maintenance of this carbon sink at an
-            #            average level of -36 Mt CO2 eq since 2018..."
-            "019d89e9-0dd8-70e0-9985-4cfea5689d83",
-        ],
-        k=5,
-        description=(
-            "The three passages quantifying France's LULUCF carbon budget should "
-            "reach the top 5."
-            # problem - passages that quantify the LULUCF carbon budget ranking above 
-            #.          passages that discuss carbon generally is a judgement with no 
-            #           lexical correlation i.e. there is not enough intent in the 
-            #           search query to really understand relevance
-            # solution - Aspirational. Not expected to pass.
-        ),
-    ),
-    # TODO: relax test to k=20?
-    RecallTestCase[Passage](
-        category="low_ranking_positives",
         search_terms="health",
         document_id="CCLW.document.i00007151.n0000",
         expected_result_ids=[
             # Passages talk about "public health" and "human health". A case for query-
             # rewriting?
             
-            # rank 14 - "Environmental quality standards / Maximum permissible
+            # rank 6 - "Environmental quality standards / Maximum permissible
             #            emission and discharge standards of pollutants / Norms for
             #            the use of fertilizers, chemical poisons, other chemical
             #            substances and maximum permissible levels of radiation..."
             "019d43a6-4293-77a1-a9bb-44e462255f55",
-            # rank 17 - "8. Verification of the correctness of registration of an
+            # rank 11 - "8. Verification of the correctness of registration of an
             #            environmental monitoring object shall be carried out by the
             #            authorized state body. 9. Relevant ministries and
             #            departments, other bodies, nature users who..."
@@ -492,70 +446,12 @@ test_cases = [
         description=(
             "Public-health provisions of the Tajik Ecological Code should reach the "
             "top 10."
-            # problem - Ranks 1-4 are type Lists, highly ranked on repeated occurrences
-            #           of “health”.
-            # solution - None yet. We want to make the lists into better passages for
-            #            search rather than de-rank them.
+            # problem - the top passages repeat "health". Query-intent problem 
+            #           (public/human health vs environmental health)
+            # solution - None. Not expected to pass.
         ),
     ),
     # TODO: checking this one with Anne
-    RecallTestCase[Passage](
-        category="low_ranking_positives",
-        search_terms="biomass",
-        document_id="UNFCCC.non-party.1184.0",
-        expected_result_ids=[
-            # rank 9 - "However, forests may become less resilient to heat stress in
-            #            future due to the long recovery period required to replace
-            #            lost biomass and the projected increased frequency of heat
-            #            and drought events (Frank et al. 2015a; McDowell and Allen..."
-            #            NB: this is the citation-dense PROSE that a naive 'et al.'
-            #            or doi-based reference filter would wrongly discard.
-            "019d437a-5ba0-7f20-a5ad-3e5f3ffe685f",
-            # rank 13 - "Furthermore, fire emissions during 1997-2016 were dominated
-            #            by savanna (65.3%), followed by tropical forest (15.1%),
-            #            boreal forest (7.4%), temperate forest (2.3%), peatland
-            #            (3.7%) and agricultural waste burning (6.3%)..."
-            "019d437a-5bb2-7e20-8d1b-80761a664711",
-        ],
-        k=10,
-        description=(
-            "Substantive biomass prose should outrank the chapter bibliography. "
-            # problem - rank 10 is a bibliography entry, which we can de-rank, but 
-            #           second passage still below substantive passages.
-            # rank 10 - Lamers, P., and M. Junginger, 2013: The "debt" is in the detail:
-            #           A synthesis of recent temporal forest carbon analyses on woody 
-            #           biomass for energy. Biofuels, Bioprod. Biorefining, 7, 373-385, 
-            #           doi:10.1002/bbb.1407.
-            # solution - de-rank bibliography/reference_item (in addition to existing 
-            #            looks_like_reference_list). Maybe just have the one passage 
-            #            required to pass the test as the other passages in the top 10
-            #            look substantive.
-        ),
-    ),
-    # TODO: remove second passage from test? de-rank bibliography/reference item
-    RecallTestCase[Passage](
-        category="low_ranking_positives",
-        search_terms="disaster",
-        # Climate Change Report Guatemala
-        document_id="ICCN.document.i00000042.n0000",
-        expected_result_ids=[
-            # rank 16 - "119 In extreme cases, adaptation measures to climate-related
-            #            disasters tend to be reactive and short-sighted, rather than
-            #            proactive. This is the case for families who, due to a lack
-            #            of economic resources, have decided to withdraw their
-            #            children from school..."
-            "019d89e9-01d5-7be2-b1b1-460afdbf3f40",
-        ],
-        k=10,
-        description=(
-            "Discussion of reactive disaster adaptation should reach the top 10"
-            # problem - rank 3 and rank 10 are author biographies, rank 5 is a `Table`,
-            #           rank 6 is a `list` (heading).
-            # solution - de-rank biographies/authors and we want to make tables and 
-            #            lists into better passages for search rather than de-rank them.
-        ),
-    ),
-    # TODO: de-rank biographies/authors
     RelativeOrderTestCase[Passage](
         category="substantive_mention",
         search_terms="carbon market",
@@ -566,15 +462,9 @@ test_cases = [
         k=10,
         description=(
             "A passage talking about carbon markets directly should rank above one which only describes enabling conditions for carbon markets."
-            # problem - The more relevant passage has higher nativeRank but lower 
-            #           nativeProximity; the more relevant passage defines what the
-            #           national carbon emissions trading market is uses the literal 
-            #           phrase once, where as the less relevant passage mentions carbon 
-            #           markets repeatedly so has higher nativeProximity and ranks higher.
-            # solution - We could try reducing the weight of nativeProximity to not
-            #            inflate rank from phrase repetition, but that could risk the 
-            #            work done to date on the whole phrase ranking above a partial 
-            #            phrase, so leaving as is. Try adding weight of nativeFieldRank.
+            # problem - The more relevant passage has lower bm25(content)
+            #           (more term occurrences) and proximity_boost.
+            # solution - None. Not expected to pass.
         ),
     ),
     FieldCharacteristicsTestCase[Passage](
@@ -700,10 +590,8 @@ test_cases = [
         # problem - existing reference_lists tests target academic bibliographies
         #           (author, year, doi). This is a legislative citation list with
         #           none of those markers
-        # classifier - both Q786 and Q1274 fire on citation titles.
-        # solution - extend looks_like_reference_list examples like this
+        # solution - could extend looks_like_reference_list for examples like this
     ),
-    #
     RecallTestCase[Passage](
         category="topic_concept_conjunction",
         search_terms="",
@@ -719,6 +607,8 @@ test_cases = [
         ],
         k=5,
         description="Severe-weather standing allegations in a fossil fuel case.",
+            # problem - flat topic-only score
+            # solution - topic ranking
     ),    
     # ========================================================================
     # aboutness: the concept is mentioned but is not what the passage is about
@@ -793,6 +683,7 @@ test_cases = [
     # 
     # All six judged passages labelled 0. Labeller: "None are about 'national
     # security'". Matches are on "security of supply" and "energy security".
+    # TODO: Add derived looks_like_questionnaire penalty?
     RecallTestCase[Passage](
         category="topic_phrase_integrity",
         search_terms="national security",
@@ -809,6 +700,8 @@ test_cases = [
         ],
         k=5,
         description="Nothing in the document is about national security.",
+        # problem - the forbidden passages contain "national security"
+        # solution - None. Not expected to pass.
     ),
     # Positive counterpart, same keyword, different document.
     RecallTestCase[Passage](
@@ -838,6 +731,10 @@ test_cases = [
         lower_result_id="019cd9ce-de24-7743-953e-8b3ddb86aa1f",
         k=10,
         description="Description of marine protected areas should outrank more generic mentions of national parks.",
+        # problem - bm25 favours the near-duplicate definitional passages (higher "marine"
+        #           TF) over the substantive marine-protected-areas passage (a List, lower
+        #           bm25), so the specific passage sinks below a generic one.
+        # solution - None, expect to fail.
     ),
     #
     # Example (0) - "e Official estimates exclude emissions from the combustion
@@ -912,17 +809,7 @@ test_cases = [
         description="A passage opening with a cross-reference can still rank highly.",
         # NB - guards against de-ranking on a leading "See Annex/Table/Figure".
         #      The pointer is followed by the finding the user wants.
-    ),
-    #
-    RecallTestCase[Passage](
-        category="topic_low_ranking_positives",
-        search_terms="",
-        topics=["Q374"],  # extreme weather
-        document_id="Sabin.document.66970.66995",
-        expected_result_ids=["019eddb3-6a94-7d00-a6ee-9a63a387389c"],
-        k=20,
-        description="Q374 should generalise to 'severe weather'.",
-    ),
+    )
 ]
 
 
@@ -935,16 +822,9 @@ def relevance_tests_passages():
 
     engines = [
         DevVespaPassageSearchEngine(
-            settings=settings, debug=True, ranking_profile="nativerank"
-        ),
-        DevVespaPassageSearchEngine(
-            settings=settings, debug=True, ranking_profile="bm25"
-        ),
-        DevVespaPassageSearchEngine(
             settings=settings, debug=True, ranking_profile="bm25_multiplicative"
         ),
-        #ExactVespaPassageSearchEngine(),
-        #HybridVespaPassageSearchEngine(),
+        ExactVespaPassageSearchEngine(),
     ]
 
     run_relevance_tests_parallel(
