@@ -5,10 +5,13 @@ name: k6 smoke tests
 # environment, per the Fusion monitoring RFC), so a failure here should be
 # investigated after the fact rather than block a merge. Runs on demand
 # (workflow_dispatch) and as a reusable workflow (workflow_call) invoked by
-# merge_to_main.yml once deploy-api succeeds.
+# merge_to_main.yml once deploy-api succeeds. Results stream to Grafana Cloud
 on:
   workflow_dispatch:
   workflow_call:
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -23,6 +26,10 @@ jobs:
         with:
           k6-version: 2.2.0
 
+      # cloud-run-locally (the action's default) is cloud-streamed: load
+      # still generates on this runner (free), only results stream to
+      # Grafana — see the k6 section of k6/README.md for why this mode over
+      # local-only or full cloud-run.
       - uses: grafana/run-k6-action@v1
         with:
           path: |
@@ -30,3 +37,7 @@ jobs:
           flags: -e PROFILE=smoke
           parallel: true
           fail-fast: false
+        env:
+          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+          K6_CLOUD_STACK_ID: ${{ secrets.K6_CLOUD_STACK_ID }}
+          K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}

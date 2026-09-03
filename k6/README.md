@@ -105,3 +105,34 @@ deliberately not merge-gating (production traffic, no staging environment to
 target instead) — it runs on `workflow_dispatch` (on demand) and, as a reusable
 workflow, right after `deploy-api` succeeds in `merge_to_main.yml`, so a
 regression is flagged post-deploy rather than blocking the merge.
+
+## Grafana
+
+CI runs stream results to Grafana Cloud k6, via `run-k6-action`'s
+`cloud-run-locally` mode (its default — `true`) rather than its full
+cloud-execution mode (`cloud-run-locally: false`). Both modes get results into
+Grafana; the difference is where the load itself is generated. `true` runs k6 on
+the GitHub runner (free) and only streams results to Grafana; `false` generates
+load from Grafana's own infrastructure, which costs more per test (see the
+"on-premises execution adjustment" — cloud-run-locally gets a 25% VUH discount)
+for no benefit here, since a GitHub runner easily handles our present load and
+there's no IP-allowlist reason to originate traffic from Grafana's network. This
+mirrors the `k6 cloud run --local-execution` CLI flag's semantics one-for-one —
+the action is a wrapper over the same underlying k6 binary and behaviour.
+
+Requires three repo secrets, none of which exist yet as of writing — someone
+with Grafana admin access needs to generate them (Testing & synthetics →
+Performance → Settings → Access, in the CPR Grafana Cloud org; a **Stack
+token**, not a personal token, since this is for CI, not an individual):
+
+- `K6_CLOUD_TOKEN` — the Grafana Cloud k6 Stack API token.
+- `K6_CLOUD_STACK_ID` — the numeric ID of the CPR Grafana Cloud stack (visible
+  on the stack's Details page in the Cloud Portal — distinct from the stack slug
+  that appears in the Grafana URL).
+- `K6_CLOUD_PROJECT_ID` — the Grafana Cloud k6 project these runs report under
+  (a Stack-level token must specify a project; this groups CI's runs together in
+  the Grafana UI rather than landing unsorted).
+
+Until these secrets are set, the `k6 smoke tests` workflow will fail at the
+`run-k6-action` step with an authentication error — this is expected and does
+not indicate a problem with the scripts themselves.
