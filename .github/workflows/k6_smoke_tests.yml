@@ -9,6 +9,9 @@ name: k6 smoke tests
 on:
   workflow_dispatch:
   workflow_call:
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
