@@ -1,0 +1,26 @@
+[
+  {
+    "orderBy": "idx asc",
+    "isDefault": true,
+    "sortField": "idx",
+    "sortDirection": "asc"
+  },
+  {
+    "orderBy": "idx desc",
+    "isDefault": false,
+    "sortField": "idx",
+    "sortDirection": "desc"
+  },
+  {
+    "orderBy": "relevance desc",
+    "isDefault": false,
+    "sortField": null,
+    "sortDirection": null
+  },
+  {
+    "orderBy": "relevance asc",
+    "isDefault": false,
+    "sortField": null,
+    "sortDirection": null
+  }
+]
