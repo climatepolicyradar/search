@@ -48,8 +48,10 @@ k6/
           document-ids.json    # real, pre-verified document_ids
     passages/
       index.ts                # GET /search/passages (base query)
+      filter-combinations.ts  # GET /search/passages?filters=
       fixtures/
-        search-queries.json    # realistic free-text search terms
+        search-queries.json      # realistic free-text search terms
+        filter-combinations.json # real filters shapes, see note below
 ```
 
 Every file in a route directory tests that one route — co-locating them means
