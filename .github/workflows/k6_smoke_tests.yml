@@ -19,6 +19,13 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+      fail-fast: false
+      matrix:
+        resource: [documents]
+    env:
+      K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+      K6_CLOUD_STACK_ID: ${{ secrets.K6_CLOUD_STACK_ID }}
+      K6_CLOUD_DOCUMENTS_PROJECT_ID: ${{ secrets.K6_CLOUD_DOCUMENTS_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v7
 
@@ -26,18 +33,21 @@ jobs:
         with:
           k6-version: 2.2.0
 
-      # cloud-run-locally (the action's default) is cloud-streamed: load
-      # still generates on this runner (free), only results stream to
-      # Grafana — see the k6 section of k6/README.md for why this mode over
-      # local-only or full cloud-run.
+      - name: Resolve project ID for ${{ matrix.resource }}
+        id: project
+        run: |
+          case "${{ matrix.resource }}" in
+            documents) echo "id=$K6_CLOUD_DOCUMENTS_PROJECT_ID" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Unknown resource: ${{ matrix.resource }}" >&2; exit 1 ;;
+          esac
+
       - uses: grafana/run-k6-action@v1
         with:
-          path: |
-            k6/routes/**/*.ts
+          path: k6/routes/${{ matrix.resource }}/**/*.ts
           flags: -e PROFILE=smoke
           parallel: true
           fail-fast: false
         env:
           K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
           K6_CLOUD_STACK_ID: ${{ secrets.K6_CLOUD_STACK_ID }}
-          K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}
+          K6_CLOUD_PROJECT_ID: ${{ steps.project.outputs.id }}
