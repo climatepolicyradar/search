@@ -50,10 +50,12 @@ k6/
       index.ts                # GET /search/passages (base query)
       filter-combinations.ts  # GET /search/passages?filters=
       order-by-combinations.ts # GET /search/passages?order_by=
+      pagination-combinations.ts # GET /search/passages?page_token/page_size
       fixtures/
         search-queries.json        # realistic free-text search terms
         filter-combinations.json   # real filters shapes, see note below
         order-by-combinations.json # all sortable field/direction combinations
+        pagination-combinations.json # page_token/page_size combinations
 ```
 
 Every file in a route directory tests that one route — co-locating them means
