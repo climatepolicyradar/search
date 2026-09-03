@@ -8,7 +8,8 @@ Run against a real Vespa instance via the shared ``vespa_e2e`` fixtures
 (port 8089). Run with: uv run pytest tests/test_vespa_labels_e2e.py
 """
 
-from typing import Any
+from pathlib import Path
+from typing import Any, TypedDict
 from urllib.parse import quote
 
 import pytest
@@ -30,14 +31,48 @@ from search.engines.dev_vespa import (
     Filter,
 )
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from search.vespa.labels_feed_materializer import (
-    VespaLabel,
-    VespaLabelLabelRelationship,
-    _vespa_label_to_vespa_update,
-)
 from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids
 
 pytest_plugins = ["tests.vespa_e2e"]
+
+
+class VespaLabelLabelRelationship(TypedDict):
+    id: str
+    type: str
+    value: str
+    timestamp: int | None
+    relationship: str | None
+
+
+class VespaLabel(TypedDict):
+    id: str
+    type: str
+    value: str
+    alternative_labels: list[str]
+    subconcept_labels: list[str]
+    description: str
+    negative_labels: list[str]
+    label_source: str
+    labels: list[VespaLabelLabelRelationship]
+
+
+def _vespa_label_to_vespa_update(label: VespaLabel) -> dict:
+    """Convert a Vespa label to a Vespa update operation (test-local copy)."""
+    return {
+        "update": f"id:labels:labels::{label['id']}",
+        "create": True,
+        "fields": {
+            "id": {"assign": label["id"]},
+            "type": {"assign": label["type"]},
+            "value": {"assign": label["value"]},
+            "alternative_labels": {"assign": label["alternative_labels"]},
+            "subconcept_labels": {"assign": label["subconcept_labels"]},
+            "description": {"assign": label["description"]},
+            "negative_labels": {"assign": label["negative_labels"]},
+            "label_source": {"assign": label["label_source"]},
+            "labels": {"assign": label["labels"]},
+        },
+    }
 
 
 class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
@@ -555,6 +590,84 @@ def test_label_filter_same_element_excludes_split_relationships(vespa_app: Vespa
     ).results
 
     assert "category::Split" not in {label.id for label in results}
+
+
+def _feed_snowflake_shaped_label(
+    vespa_app: Vespa,
+    label_id: str,
+    label_type: str,
+    value: str,
+    relationships: list[dict] | None = None,
+) -> None:
+    """
+    Feed a label using exactly the shape the Snowflake dbt model produces:
+    no `label_source`, and relationship structs with only id/type/value/relationship
+    (no `timestamp` key at all) - then apply the real `derive_label_data` deriver,
+    exactly as `labels_feeder_flow` would, before feeding.
+    """
+    import sys
+
+    vespa_feeder_dir = str(Path(__file__).resolve().parents[1] / "vespa-feeder")
+    if vespa_feeder_dir not in sys.path:
+        sys.path.insert(0, vespa_feeder_dir)
+    from labels_flow import derive_label_data
+
+    record = {
+        "fields": {
+            "id": {"assign": label_id},
+            "type": {"assign": label_type},
+            "value": {"assign": value},
+            "alternative_labels": {"assign": []},
+            "description": {"assign": ""},
+            "negative_labels": {"assign": []},
+            "subconcept_labels": {"assign": []},
+            "labels": {"assign": relationships or []},
+        }
+    }
+    record = derive_label_data(record)
+
+    response = req.put(
+        f"{vespa_app.end_point}/document/v1/labels/labels/docid/{quote(label_id, safe='')}?create=true",
+        json={"fields": record["fields"]},
+        timeout=5,
+    )
+    response.raise_for_status()
+
+
+def test_snowflake_shaped_label_is_queryable(vespa_app: Vespa) -> None:
+    """
+    A label fed in the exact shape the Snowflake export produces (no label_source,
+    no timestamp key on relationships) is queryable and its label_source is
+    correctly reconstructed by derive_label_data, matching legacy behaviour.
+    """
+    _feed_snowflake_shaped_label(
+        vespa_app,
+        "concept::Q9001",
+        "concept",
+        "unique snowflake test label",
+        relationships=[
+            {
+                "id": "concept::Q9000",
+                "type": "concept",
+                "value": "parent snowflake label",
+                "relationship": "subconcept_of",
+            }
+        ],
+    )
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query="unique snowflake test label",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+
+    result_ids = {label.id for label in results}
+    assert "concept::Q9001" in result_ids
+
+    hit = next(label for label in results if label.id == "concept::Q9001")
+    assert hit.labels[0].type == "subconcept_of"
+    assert hit.labels[0].value.id == "concept::Q9000"
 
 
 def test_label_search_returns_non_empty_label_source(vespa_app: Vespa):
