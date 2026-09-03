@@ -1,10 +1,12 @@
 import os
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 from pathlib import Path
 from time import perf_counter
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.observability.src.api import (
     FastAPITelemetry,
@@ -14,6 +16,7 @@ from api.observability.src.api import (
 )
 from api.routers import router
 from api.search_metrics import SearchMetrics
+from search.engines import VespaError
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -70,6 +73,31 @@ app.add_middleware(
 )
 
 
+VESPA_UNAVAILABLE_DETAIL = "Search service unavailable"
+
+
+@app.exception_handler(VespaError)
+async def handle_vespa_error(request: Request, exc: VespaError) -> JSONResponse:
+    """
+    Surface a failed Vespa request to the client as HTTP 503.
+
+    Registered once, application-wide, so that every route - including ones
+    added later - reports backend failure rather than an empty result set. The
+    exception detail is logged but not returned: it can contain the Vespa
+    response body.
+    """
+    logger.error(
+        "Error: Vespa unavailable while serving request method=%s path=%s: %s",
+        request.method,
+        request.url.path,
+        exc,
+    )
+    return JSONResponse(
+        status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        content={"detail": VESPA_UNAVAILABLE_DETAIL},
+    )
+
+
 @app.middleware("http")
 async def log_request_lifecycle(request: Request, call_next):
     """Log incoming API requests with outcome and latency."""
@@ -106,13 +134,20 @@ async def log_request_lifecycle(request: Request, call_next):
         status_code=response.status_code,
         duration_ms=duration_ms,
     )
-    logger.info(
-        "Success: Request completed method=%s path=%s status_code=%s duration_ms=%s",
-        request.method,
-        route_path,
-        response.status_code,
-        duration_ms,
-    )
+
+    # An error response logged at INFO as "Success" is invisible to log grepping
+    # and error alerting. A 4xx is us correctly refusing a bad request, so it is
+    # not our failure - but it is not a success either, and a burst of them is
+    # usually a caller bug worth seeing, so it warns rather than sinking into
+    # the INFO stream.
+    status_log = "%s: Request completed method=%s path=%s status_code=%s duration_ms=%s"
+    status_log_args = (request.method, route_path, response.status_code, duration_ms)
+    if response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
+        logger.error(status_log, "Error", *status_log_args)
+    elif response.status_code >= HTTPStatus.BAD_REQUEST:
+        logger.warning(status_log, "Rejected", *status_log_args)
+    else:
+        logger.info(status_log, "Success", *status_log_args)
     return response
 
 
