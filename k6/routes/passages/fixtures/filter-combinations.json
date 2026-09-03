@@ -1,0 +1,92 @@
+[
+  {
+    "name": "single filter: document_id",
+    "expectZeroResults": false,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "field": "document_id",
+          "op": "contains",
+          "value": "CCLW.document.i00007398.n0000"
+        }
+      ]
+    }
+  },
+  {
+    "name": "single filter: labels.value.type (concept)",
+    "expectZeroResults": false,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "field": "labels.value.type",
+          "op": "contains",
+          "value": "concept"
+        }
+      ]
+    }
+  },
+  {
+    "name": "combined filters: document_id + labels.value.type (and)",
+    "expectZeroResults": false,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "field": "document_id",
+          "op": "contains",
+          "value": "CCLW.document.i00007398.n0000"
+        },
+        {
+          "field": "labels.value.type",
+          "op": "contains",
+          "value": "concept"
+        }
+      ]
+    }
+  },
+  {
+    "name": "combined filters: (document A or document B) and labels.value.type (nested or-in-and)",
+    "expectZeroResults": false,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "op": "or",
+          "filters": [
+            {
+              "field": "document_id",
+              "op": "contains",
+              "value": "CCLW.document.i00007398.n0000"
+            },
+            {
+              "field": "document_id",
+              "op": "contains",
+              "value": "CPR.document.i00006774.n0000"
+            }
+          ]
+        },
+        {
+          "field": "labels.value.type",
+          "op": "contains",
+          "value": "concept"
+        }
+      ]
+    }
+  },
+  {
+    "name": "zero-result combination: document_id for a real document with no passages",
+    "expectZeroResults": true,
+    "filters": {
+      "op": "and",
+      "filters": [
+        {
+          "field": "document_id",
+          "op": "contains",
+          "value": "Sabin.document.12835.14111"
+        }
+      ]
+    }
+  }
+]
