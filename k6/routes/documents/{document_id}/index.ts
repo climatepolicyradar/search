@@ -59,7 +59,10 @@ const PROFILES = {
 
 // k6 requires `options` to be a named export — this is how it reads VU/
 // duration config for the run, not a convention we chose.
-export const options = resolveProfile(PROFILES);
+export const options = resolveProfile(
+  "documents/{document_id}: base query",
+  PROFILES,
+);
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {

@@ -74,7 +74,13 @@ BASE_URL=https://staging.example.com/search k6 run routes/documents/index.ts
 
 Each script exports a `PROFILES` map and picks one via `-e PROFILE=<name>`
 (defaulting to `smoke` if unset), rather than duplicating the request logic
-across separate smoke/load files:
+across separate smoke/load files. `resolveProfile` also takes a route-qualified
+cloud name (e.g. `"documents/{document_id}: base query"`), set as
+`options.cloud.name` — this is what Grafana Cloud k6 groups a script's runs
+under; without it, Cloud falls back to the script's own filename, and multiple
+routes following the `index.ts` base-case convention (see Layout above) would
+otherwise collide under one indistinguishable "index.ts" name in the project's
+runs list:
 
 ```bash
 k6 run routes/documents/index.ts               # smoke (default)
@@ -94,7 +100,8 @@ test different things (correctness across shapes vs. a capacity ceiling for the
 worst shape), not just different volumes of the same request. Passing
 `-e PROFILE=load` to a script without one silently falls back to k6's own
 defaults (1 VU, 1 iteration) rather than erroring, since `resolveProfile`
-returns `undefined` for an unknown profile name.
+returns `undefined` for an unknown profile name (the cloud name is only merged
+in when a profile is found).
 
 ## CI
 
