@@ -19,6 +19,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    strategy:
       fail-fast: false
       matrix:
         resource: [documents]
