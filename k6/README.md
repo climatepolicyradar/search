@@ -46,6 +46,16 @@ k6/
         index.ts               # GET /search/documents/{document_id}
         fixtures/
           document-ids.json    # real, pre-verified document_ids
+    passages/
+      index.ts                # GET /search/passages (base query)
+      filter-combinations.ts  # GET /search/passages?filters=
+      order-by-combinations.ts # GET /search/passages?order_by=
+      pagination-combinations.ts # GET /search/passages?page_token/page_size
+      fixtures/
+        search-queries.json        # realistic free-text search terms
+        filter-combinations.json   # real filters shapes, see note below
+        order-by-combinations.json # all sortable field/direction combinations
+        pagination-combinations.json # page_token/page_size combinations
 ```
 
 Every file in a route directory tests that one route — co-locating them means
@@ -87,6 +97,8 @@ k6 run routes/documents/index.ts               # smoke (default)
 k6 run -e PROFILE=smoke routes/documents/index.ts
 k6 run -e PROFILE=load "routes/documents/{document_id}/index.ts"
 k6 run -e PROFILE=load routes/documents/fields-combinations.ts
+k6 run -e PROFILE=load routes/passages/index.ts
+k6 run -e PROFILE=load routes/passages/filter-combinations.ts
 ```
 
 The `smoke` profile is low VUs (2-5), short duration (~1min), checking for zero
@@ -97,11 +109,17 @@ Every script has one. A `load` profile (VU ramp stages via `scenarios`, plus
 mode, `fields-combinations.ts` fixes its request to that single worst-case
 combination instead of sweeping the smoke test's full fixture — the two profiles
 test different things (correctness across shapes vs. a capacity ceiling for the
-worst shape), not just different volumes of the same request. Passing
-`-e PROFILE=load` to a script without one silently falls back to k6's own
-defaults (1 VU, 1 iteration) rather than erroring, since `resolveProfile`
-returns `undefined` for an unknown profile name (the cloud name is only merged
-in when a profile is found).
+worst shape), not just different volumes of the same request.
+`passages/filter-combinations.ts` fixes to its most structurally complex real
+combination the same way, though passages' `filters` clause adds YQL predicates
+to one query rather than triggering extra Vespa calls, so there's no
+fan-out-maximising combination to chase there the way there is for
+`/documents?fields=`. `passages/index.ts` has no combinations to fix at all — it
+sweeps the same query fixture in both profiles, since a single Vespa query with
+no fan-out has nothing more expensive to target. Passing `-e PROFILE=load` to a
+script without one silently falls back to k6's own defaults (1 VU, 1 iteration)
+rather than erroring, since `resolveProfile` returns `undefined` for an unknown
+profile name (the cloud name is only merged in when a profile is found).
 
 ## CI
 

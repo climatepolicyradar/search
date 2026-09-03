@@ -9,9 +9,6 @@ name: k6 smoke tests
 on:
   workflow_dispatch:
   workflow_call:
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -22,11 +19,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        resource: [documents]
+        resource: [documents, passages]
     env:
       K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
       K6_CLOUD_STACK_ID: ${{ secrets.K6_CLOUD_STACK_ID }}
       K6_CLOUD_DOCUMENTS_PROJECT_ID: ${{ secrets.K6_CLOUD_DOCUMENTS_PROJECT_ID }}
+      K6_CLOUD_PASSAGES_PROJECT_ID: ${{ secrets.K6_CLOUD_PASSAGES_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v7
 
@@ -39,6 +37,7 @@ jobs:
         run: |
           case "${{ matrix.resource }}" in
             documents) echo "id=$K6_CLOUD_DOCUMENTS_PROJECT_ID" >> "$GITHUB_OUTPUT" ;;
+            passages) echo "id=$K6_CLOUD_PASSAGES_PROJECT_ID" >> "$GITHUB_OUTPUT" ;;
             *) echo "Unknown resource: ${{ matrix.resource }}" >&2; exit 1 ;;
           esac
 
