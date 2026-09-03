@@ -45,6 +45,53 @@ const PROFILES = {
     vus: 5,
     duration: "1m",
   },
+  load: {
+    // ramp to 50 VUs in 3 steps (10/25/50), holding briefly at each rather
+    // than jumping straight to peak, so a capacity cliff shows up as a clear
+    // step change tied to a specific VU count instead of an ambiguous
+    // average over the whole run. /search/passages is a single Vespa query
+    // with a 5s timeout (search/engines/dev_vespa.py:1363) — a `filters`
+    // clause adds YQL predicates to that same query rather than triggering
+    // extra Vespa calls (unlike /documents?fields=), so there is no
+    // fan-out-maximising combination to chase the way fields-combinations.ts
+    // does. Load mode instead fixes the request to the fixture's most
+    // structurally complex real shape (the nested or-in-and) as the closest
+    // available proxy for "most expensive single query", rather than
+    // sweeping all combinations, so a threshold breach is attributable to
+    // one specific request shape. Same VU ramp as index.ts (FUS-358) and
+    // documents/{document_id}/index.ts (FUS-356).
+    scenarios: {
+      rampingLoad: {
+        executor: "ramping-vus",
+        startVUs: 0,
+        stages: [
+          { duration: "30s", target: 10 },
+          { duration: "1m", target: 10 },
+          { duration: "30s", target: 25 },
+          { duration: "1m", target: 25 },
+          { duration: "30s", target: 50 },
+          { duration: "1m", target: 50 },
+          { duration: "30s", target: 0 },
+        ],
+      },
+    },
+    // Thresholds: p95 < 2s is the "existing 2s p95 line on the vespa-search
+    // dashboard" the monitoring RFC names
+    // (https://app.notion.com/p/3c79109609a48195972fd340c03d1508) — but that RFC
+    // explicitly defers formalising it as a real SLO ("Deferred, not rejected —
+    // no baseline data yet", still Open as of writing), so treat this as a
+    // provisional, not agreed, target until that decision lands. Reused as-is
+    // from documents' graduated thresholds (FUS-356/FUS-357) — the RFC figure
+    // is a route-agnostic dashboard line, not per-route, so there's no
+    // separate number to reference yet. http_req_failed aborts the run early
+    // on a failure spike rather than burning the full ramp on a route that's
+    // already broken.
+    thresholds: {
+      // PROVISIONAL — see comment above. Not an agreed SLO.
+      http_req_duration: ["p(95)<2000"],
+      http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
+    },
+  },
 };
 
 // k6 requires `options` to be a named export — this is how it reads VU/
@@ -56,8 +103,16 @@ export const options = resolveProfile(
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const combination =
-    filterCombinations[Math.floor(Math.random() * filterCombinations.length)];
+  const isLoadProfile = __ENV.PROFILE === "load";
+
+  // Smoke mode sweeps all combinations to check correctness; load mode
+  // repeats the single most structurally complex real shape (the nested
+  // or-in-and) to find a capacity ceiling for it, per FUS-358's scope — the
+  // two profiles are testing different things, not just different volumes of
+  // the same thing.
+  const combination = isLoadProfile
+    ? filterCombinations.find((c) => c.name.includes("nested or-in-and"))!
+    : filterCombinations[Math.floor(Math.random() * filterCombinations.length)];
   const filtersParam = encodeURIComponent(JSON.stringify(combination.filters));
   const res = http.get(
     `${BASE_URL}/passages?query=climate&filters=${filtersParam}`,
