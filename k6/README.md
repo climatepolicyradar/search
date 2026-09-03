@@ -49,9 +49,11 @@ k6/
     passages/
       index.ts                # GET /search/passages (base query)
       filter-combinations.ts  # GET /search/passages?filters=
+      order-by-combinations.ts # GET /search/passages?order_by=
       fixtures/
-        search-queries.json      # realistic free-text search terms
-        filter-combinations.json # real filters shapes, see note below
+        search-queries.json        # realistic free-text search terms
+        filter-combinations.json   # real filters shapes, see note below
+        order-by-combinations.json # all sortable field/direction combinations
 ```
 
 Every file in a route directory tests that one route — co-locating them means
