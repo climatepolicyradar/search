@@ -74,7 +74,13 @@ BASE_URL=https://staging.example.com/search k6 run routes/documents/index.ts
 
 Each script exports a `PROFILES` map and picks one via `-e PROFILE=<name>`
 (defaulting to `smoke` if unset), rather than duplicating the request logic
-across separate smoke/load files:
+across separate smoke/load files. `resolveProfile` also takes a route-qualified
+cloud name (e.g. `"documents/{document_id}: base query"`), set as
+`options.cloud.name` — this is what Grafana Cloud k6 groups a script's runs
+under; without it, Cloud falls back to the script's own filename, and multiple
+routes following the `index.ts` base-case convention (see Layout above) would
+otherwise collide under one indistinguishable "index.ts" name in the project's
+runs list:
 
 ```bash
 k6 run routes/documents/index.ts               # smoke (default)
@@ -94,14 +100,68 @@ test different things (correctness across shapes vs. a capacity ceiling for the
 worst shape), not just different volumes of the same request. Passing
 `-e PROFILE=load` to a script without one silently falls back to k6's own
 defaults (1 VU, 1 iteration) rather than erroring, since `resolveProfile`
-returns `undefined` for an unknown profile name.
+returns `undefined` for an unknown profile name (the cloud name is only merged
+in when a profile is found).
 
 ## CI
 
 The [`k6 smoke tests`](../.github/workflows/k6_smoke_tests.yml) workflow runs
-every script under `routes/` in smoke mode against production, in parallel, via
+smoke mode against production, in parallel, via
 [`grafana/run-k6-action`](https://github.com/grafana/run-k6-action). It's
 deliberately not merge-gating (production traffic, no staging environment to
 target instead) — it runs on `workflow_dispatch` (on demand) and, as a reusable
 workflow, right after `deploy-api` succeeds in `merge_to_main.yml`, so a
 regression is flagged post-deploy rather than blocking the merge.
+
+The workflow has one job per `routes/<resource>/` group (currently just
+`smoke-documents`, scoped to `k6/routes/documents/**/*.ts`) rather than one job
+covering all of `routes/`. Each job reports to its own Grafana Cloud k6 project
+— see the Grafana section below for why. Adding a new resource (e.g. passages,
+when that story lands) means adding a new `smoke-<resource>` job with its own
+path glob and project secret, not editing the existing one.
+
+## Grafana
+
+CI runs stream results to Grafana Cloud k6, via `run-k6-action`'s
+`cloud-run-locally` mode (its default — `true`) rather than its full
+cloud-execution mode (`cloud-run-locally: false`). Both modes get results into
+Grafana; the difference is where the load itself is generated. `true` runs k6 on
+the GitHub runner (free) and only streams results to Grafana; `false` generates
+load from Grafana's own infrastructure, which costs more per test (see the
+"on-premises execution adjustment" — cloud-run-locally gets a 25% VUH discount)
+for no benefit here, since a GitHub runner easily handles our present load and
+there's no IP-allowlist reason to originate traffic from Grafana's network. This
+mirrors the `k6 cloud run --local-execution` CLI flag's semantics one-for-one —
+the action is a wrapper over the same underlying k6 binary and behaviour.
+
+### Per-resource Grafana projects
+
+Each `routes/<resource>/` group reports to its own Grafana Cloud k6 project,
+rather than all of `search-api` sharing one. `search-api` currently serves
+`documents`, `passages`, and `labels` from one deployed service, but nothing
+here assumes that stays true — if a resource is ever split out into its own
+deployed API, its k6 results are already isolated in their own project rather
+than needing to be untangled out of a shared one after the fact. The cost is a
+little duplication today (one project, one secret, for `documents` alone),
+traded for not having to migrate dashboards/history later if the split happens.
+
+Requires these repo secrets. None exist yet as of writing — someone with Grafana
+admin access needs to generate them (Testing & synthetics → Performance →
+Settings → Access, in the CPR Grafana Cloud org; a **Stack token**, not a
+personal token, since this is for CI, not an individual):
+
+- `K6_CLOUD_TOKEN` — the Grafana Cloud k6 Stack API token. Shared across all
+  resource groups; a Stack token isn't itself tied to one project.
+- `K6_CLOUD_STACK_ID` — the numeric ID of the CPR Grafana Cloud stack (visible
+  on the stack's Details page in the Cloud Portal — distinct from the stack slug
+  that appears in the Grafana URL). Also shared.
+- `K6_CLOUD_<RESOURCE>_PROJECT_ID` — one per resource group (currently just
+  `K6_CLOUD_DOCUMENTS_PROJECT_ID`), the Grafana Cloud k6 project that resource's
+  runs report under. A Stack-level token must specify a project on every run, so
+  this isn't optional. Create the project first in Grafana (Testing & synthetics
+  → Performance → Projects → new project, named after the resource, e.g.
+  `documents`) — its ID only exists once the project does.
+
+Until these secrets are set, the `k6 smoke tests` workflow will fail at the
+`run-k6-action` step with an authentication error — this is expected and does
+not indicate a problem with the scripts themselves.

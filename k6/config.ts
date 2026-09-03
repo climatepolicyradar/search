@@ -10,6 +10,21 @@ export const BASE_URL =
 // added per-script once that route's load test is scoped) and passes it here
 // to pick one via `-e PROFILE=<name>` (defaulting to `smoke`).
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
-export function resolveProfile(profiles: Record<string, object>): object {
-  return profiles[__ENV.PROFILE || "smoke"];
+//
+// `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
+// to group a script's runs. Without it, Cloud falls back to the script's own
+// filename — multiple routes named `index.ts` (the base-query convention,
+// see k6/README.md's Layout section) then collide under one indistinguishable
+// "index.ts" name in the project's runs list. Passing a route-qualified name
+// here (e.g. "documents/{document_id}: base query") keeps every script's runs
+// separately identifiable regardless of its filename.
+export function resolveProfile(
+  cloudName: string,
+  profiles: Record<string, object>,
+): object {
+  const profile = profiles[__ENV.PROFILE || "smoke"] as
+    | Record<string, unknown>
+    | undefined;
+  if (!profile) return profile as unknown as object;
+  return { ...profile, cloud: { name: cloudName } };
 }
