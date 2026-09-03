@@ -46,6 +46,10 @@ k6/
         index.ts               # GET /search/documents/{document_id}
         fixtures/
           document-ids.json    # real, pre-verified document_ids
+    passages/
+      index.ts                # GET /search/passages (base query)
+      fixtures/
+        search-queries.json    # realistic free-text search terms
 ```
 
 Every file in a route directory tests that one route — co-locating them means
