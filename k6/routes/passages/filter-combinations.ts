@@ -46,30 +46,57 @@ const PROFILES = {
     duration: "1m",
   },
   load: {
-    // ramp to 50 VUs in 3 steps (10/25/50), holding briefly at each rather
-    // than jumping straight to peak, so a capacity cliff shows up as a clear
-    // step change tied to a specific VU count instead of an ambiguous
-    // average over the whole run. /search/passages is a single Vespa query
-    // with a 5s timeout (search/engines/dev_vespa.py:1363) — a `filters`
-    // clause adds YQL predicates to that same query rather than triggering
-    // extra Vespa calls (unlike /documents?fields=), so there is no
-    // fan-out-maximising combination to chase the way fields-combinations.ts
-    // does. Load mode instead fixes the request to the fixture's most
-    // structurally complex real shape (the nested or-in-and) as the closest
-    // available proxy for "most expensive single query", rather than
-    // sweeping all combinations, so a threshold breach is attributable to
-    // one specific request shape. Same VU ramp as index.ts (FUS-358) and
-    // documents/{document_id}/index.ts (FUS-356).
+    // Two phases test two different things, per review feedback on the
+    // original single 3-step ramp (10/25/50 VUs, 30s climbs, 1m holds):
+    // that shape only measures reactivity to a rapid spike, not the
+    // sustained-throughput ceiling, since search-api's autoscaling never
+    // gets time to act during it. search-api is ECS Fargate with
+    // target-tracking on AVERAGE_CPU at 70%, 1-4 tasks
+    // (search/infra/__main__.py:606-639); that policy exposes no
+    // configurable cooldown, and AWS's target-tracking re-evaluation plus a
+    // fresh Fargate task registering healthy behind the load balancer both
+    // take a few minutes, so a 1m hold can complete the whole ramp on a
+    // single task and never observe a scale-out.
+    //
+    // Phase 1 (sustained ceiling): a slow 2m climb into each of 10/25/50
+    // VUs, holding 6m at each — long enough to sustain CPU above the 70%
+    // target and let task count settle — so a capacity cliff shows up tied
+    // to a specific, autoscaled-for VU count rather than an artefact of the
+    // ramp outrunning ECS.
+    //
+    // Phase 2 (spike reactivity): ramp back to a near-zero baseline, hold
+    // long enough for ECS to have scaled in again, then jump straight to 50
+    // VUs in 15s. This isolates "how fast can it react to a sudden spike"
+    // against a known low-scale starting point, rather than measuring a
+    // spike on top of whatever task count phase 1 left behind.
+    //
+    // /search/passages is a single Vespa query with a 5s timeout
+    // (search/engines/dev_vespa.py:1363) — a `filters` clause adds YQL
+    // predicates to that same query rather than triggering extra Vespa
+    // calls (unlike /documents?fields=), so there is no fan-out-maximising
+    // combination to chase the way fields-combinations.ts does. Load mode
+    // instead fixes the request to the fixture's most structurally complex
+    // real shape (the nested or-in-and) as the closest available proxy for
+    // "most expensive single query", rather than sweeping all combinations,
+    // so a threshold breach is attributable to one specific request shape.
+    // Same ramp as index.ts (FUS-358).
     scenarios: {
       rampingLoad: {
         executor: "ramping-vus",
         startVUs: 0,
         stages: [
-          { duration: "30s", target: 10 },
-          { duration: "1m", target: 10 },
-          { duration: "30s", target: 25 },
-          { duration: "1m", target: 25 },
-          { duration: "30s", target: 50 },
+          // Phase 1: sustained ceiling
+          { duration: "2m", target: 10 },
+          { duration: "6m", target: 10 },
+          { duration: "2m", target: 25 },
+          { duration: "6m", target: 25 },
+          { duration: "2m", target: 50 },
+          { duration: "6m", target: 50 },
+          // Reset to baseline, giving ECS time to scale back in
+          { duration: "1m", target: 2 },
+          { duration: "5m", target: 2 },
+          // Phase 2: spike reactivity
+          { duration: "15s", target: 50 },
           { duration: "1m", target: 50 },
           { duration: "30s", target: 0 },
         ],
