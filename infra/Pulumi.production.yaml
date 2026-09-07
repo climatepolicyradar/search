@@ -21,3 +21,6 @@ config:
     secure: AAABAPB1HCdeACsUocIQ/4M3sH/jp+vxtLJLmcxkVzrpSonrOqwtMUaHH4JLI/tUG8NIozpCfe160F/D0Gh+Sj+JgKNku5rzJWkZVWloCDO/iwkHJsVe
   search:vespa_dev_write_token:
     secure: AAABAGB+Pd5RBizPGywHXYRjETOl47OfYXOHreJ9BcPOmAa0u/2U9UhdFS4Y5XOccYdMJQJ6w+Hlmup6tD+FPjnyN1ruGnvQJo5lhfmrGmIji71jbd/n
+  search:k6_cloud_token:
+    secure: AAABAEYtpXpMHqgYxNThrhufERI+VNv0nqnUN2cz7UZ52CHfT47+JLbDu6zSBG8QpEYpfbHVJdAKLp7EAWOec6NE80S+RC7j/jtfAmAl56nsMvTp9BJHo4Twl6raiXPJ
+  search:k6_cloud_stack_id: "482413"
