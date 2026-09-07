@@ -4,9 +4,8 @@ import { SharedArray } from "k6/data";
 
 import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
 
-// SharedArray loads this JSON file once and shares it across all VUs
-// (see below), instead of every VU parsing its own copy in memory.
-// Required for any array data read in k6's init context.
+// SharedArray shares this data once across all VUs instead of every VU
+// holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
 // `fields` is the parameter most directly responsible for /search/documents'
@@ -25,12 +24,43 @@ type TFieldsCombination = {
 const fieldsCombinations = new SharedArray(
   "fields-combinations",
   function (): TFieldsCombination[] {
-    return JSON.parse(open("./fixtures/fields-combinations.json"));
+    return [
+      {
+        name: "no fields (baseline)",
+        fields: [],
+        expectValueType: false,
+        expectType: false,
+      },
+      {
+        name: "single field: facets.labels.value.type",
+        fields: ["facets.labels.value.type"],
+        expectValueType: true,
+        expectType: false,
+      },
+      {
+        name: "single field: facets.labels.type",
+        fields: ["facets.labels.type"],
+        expectValueType: false,
+        expectType: true,
+      },
+      {
+        name: "both fields together (worst-case fan-out)",
+        fields: ["facets.labels.value.type", "facets.labels.type"],
+        expectValueType: true,
+        expectType: true,
+      },
+    ];
   },
 );
 
 const searchQueries = new SharedArray("search-queries", function (): string[] {
-  return JSON.parse(open("./fixtures/search-queries.json"));
+  return [
+    "climate adaptation",
+    "deforestation",
+    "carbon pricing",
+    "renewable energy",
+    "flood risk",
+  ];
 });
 
 // The load profile's fixed worst-case request: both `fields` values (the

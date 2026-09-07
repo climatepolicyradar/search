@@ -4,12 +4,16 @@ import { SharedArray } from "k6/data";
 
 import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../../config.ts";
 
-// SharedArray loads this JSON file once and shares it across all VUs
-// (see below), instead of every VU parsing its own copy in memory.
-// Required for any array data read in k6's init context.
+// SharedArray shares this data once across all VUs instead of every VU
+// holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 const documentIds = new SharedArray("document-ids", function () {
-  return JSON.parse(open("./fixtures/document-ids.json"));
+  return [
+    "CPR.document.i00006774.n0000",
+    "Sabin.document.12835.14111",
+    "UNFCCC.document.i00002090.n0000",
+    "Sabin.document.3703.5490",
+  ];
 });
 
 type TDocumentResponse = { data?: { id?: string; title?: unknown } };

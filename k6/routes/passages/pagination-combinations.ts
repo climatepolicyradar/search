@@ -4,9 +4,8 @@ import { SharedArray } from "k6/data";
 
 import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
 
-// SharedArray loads this JSON file once and shares it across all VUs
-// (see below), instead of every VU parsing its own copy in memory.
-// Required for any array data read in k6's init context.
+// SharedArray shares this data once across all VUs instead of every VU
+// holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
 // `page_token` is a 1-based page number; search-api computes Vespa's offset
@@ -26,7 +25,26 @@ type TPaginationCombination = {
 const paginationCombinations = new SharedArray(
   "pagination-combinations",
   function (): TPaginationCombination[] {
-    return JSON.parse(open("./fixtures/pagination-combinations.json"));
+    return [
+      {
+        name: "first page (default)",
+        pageToken: 1,
+        pageSize: 10,
+        verifyOffsetAdvances: false,
+      },
+      {
+        name: "deep page (tests offset cost)",
+        pageToken: 50,
+        pageSize: 10,
+        verifyOffsetAdvances: true,
+      },
+      {
+        name: "large page_size",
+        pageToken: 1,
+        pageSize: 100,
+        verifyOffsetAdvances: false,
+      },
+    ];
   },
 );
 

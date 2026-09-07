@@ -4,9 +4,8 @@ import { SharedArray } from "k6/data";
 
 import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
 
-// SharedArray loads this JSON file once and shares it across all VUs
-// (see below), instead of every VU parsing its own copy in memory.
-// Required for any array data read in k6's init context.
+// SharedArray shares this data once across all VUs instead of every VU
+// holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
 // Confirmed via the production OpenAPI schema
@@ -27,7 +26,44 @@ type TOrderByCombination = {
 const orderByCombinations = new SharedArray(
   "order-by-combinations",
   function (): TOrderByCombination[] {
-    return JSON.parse(open("./fixtures/order-by-combinations.json"));
+    return [
+      {
+        orderBy: "relevance desc",
+        isDefault: true,
+        sortField: null,
+        sortDirection: null,
+      },
+      {
+        orderBy: "relevance asc",
+        isDefault: false,
+        sortField: null,
+        sortDirection: null,
+      },
+      {
+        orderBy: "attributes.published_date desc",
+        isDefault: false,
+        sortField: "published_date",
+        sortDirection: "desc",
+      },
+      {
+        orderBy: "attributes.published_date asc",
+        isDefault: false,
+        sortField: "published_date",
+        sortDirection: "asc",
+      },
+      {
+        orderBy: "title asc",
+        isDefault: false,
+        sortField: "title",
+        sortDirection: "asc",
+      },
+      {
+        orderBy: "title desc",
+        isDefault: false,
+        sortField: "title",
+        sortDirection: "desc",
+      },
+    ];
   },
 );
 

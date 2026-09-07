@@ -4,9 +4,8 @@ import { SharedArray } from "k6/data";
 
 import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
 
-// SharedArray loads this JSON file once and shares it across all VUs
-// (see below), instead of every VU parsing its own copy in memory.
-// Required for any array data read in k6's init context.
+// SharedArray shares this data once across all VUs instead of every VU
+// holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
 // `filters` is free-form JSON not enumerated in the OpenAPI schema, so these
@@ -33,7 +32,98 @@ type TFilterCombination = {
 const filterCombinations = new SharedArray(
   "filter-combinations",
   function (): TFilterCombination[] {
-    return JSON.parse(open("./fixtures/filter-combinations.json"));
+    return [
+      {
+        name: "single filter: document_id",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "document_id",
+              op: "contains",
+              value: "CCLW.document.i00007398.n0000",
+            },
+          ],
+        },
+      },
+      {
+        name: "single filter: labels.value.type (concept)",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "labels.value.type",
+              op: "contains",
+              value: "concept",
+            },
+          ],
+        },
+      },
+      {
+        name: "combined filters: document_id + labels.value.type (and)",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "document_id",
+              op: "contains",
+              value: "CCLW.document.i00007398.n0000",
+            },
+            {
+              field: "labels.value.type",
+              op: "contains",
+              value: "concept",
+            },
+          ],
+        },
+      },
+      {
+        name: "combined filters: (document A or document B) and labels.value.type (nested or-in-and)",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              op: "or",
+              filters: [
+                {
+                  field: "document_id",
+                  op: "contains",
+                  value: "CCLW.document.i00007398.n0000",
+                },
+                {
+                  field: "document_id",
+                  op: "contains",
+                  value: "CPR.document.i00006774.n0000",
+                },
+              ],
+            },
+            {
+              field: "labels.value.type",
+              op: "contains",
+              value: "concept",
+            },
+          ],
+        },
+      },
+      {
+        name: "zero-result combination: document_id for a real document with no passages",
+        expectZeroResults: true,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "document_id",
+              op: "contains",
+              value: "Sabin.document.12835.14111",
+            },
+          ],
+        },
+      },
+    ];
   },
 );
 

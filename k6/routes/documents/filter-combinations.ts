@@ -4,9 +4,8 @@ import { SharedArray } from "k6/data";
 
 import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
 
-// SharedArray loads this JSON file once and shares it across all VUs
-// (see below), instead of every VU parsing its own copy in memory.
-// Required for any array data read in k6's init context.
+// SharedArray shares this data once across all VUs instead of every VU
+// holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
 // `filters` is free-form JSON not enumerated in the OpenAPI schema, so these
@@ -29,7 +28,114 @@ type TFilterCombination = {
 const filterCombinations = new SharedArray(
   "filter-combinations",
   function (): TFilterCombination[] {
-    return JSON.parse(open("./fixtures/filter-combinations.json"));
+    return [
+      {
+        name: "single filter: category label",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "category::Report",
+            },
+          ],
+        },
+      },
+      {
+        name: "combined filters: category + status + published_date range (and)",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "category::Report",
+            },
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "status::Principal",
+            },
+            {
+              field: "attributes.published_date",
+              key: "published_date",
+              op: "gte",
+              value: "2015-01-01T00:00:00.000Z",
+            },
+          ],
+        },
+      },
+      {
+        name: "combined filters: category Law or Policy (or)",
+        expectZeroResults: false,
+        filters: {
+          op: "or",
+          filters: [
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "category::Law",
+            },
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "category::Policy",
+            },
+          ],
+        },
+      },
+      {
+        name: "combined filters: (category Law or Policy) and status Principal (nested or-in-and)",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              op: "or",
+              filters: [
+                {
+                  field: "labels.value.id",
+                  op: "contains",
+                  value: "category::Law",
+                },
+                {
+                  field: "labels.value.id",
+                  op: "contains",
+                  value: "category::Policy",
+                },
+              ],
+            },
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "status::Principal",
+            },
+          ],
+        },
+      },
+      {
+        name: "zero-result combination: status filter contradicted by a nonexistent status label",
+        expectZeroResults: true,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "status::Principal",
+            },
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "status::NonExistentStatusValue",
+            },
+          ],
+        },
+      },
+    ];
   },
 );
 
