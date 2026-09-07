@@ -89,17 +89,18 @@ SLEEP_SECONDS=0.1 k6 run routes/documents/index.ts
 ## Smoke vs. load: one file, one `PROFILE`
 
 Each script exports a `PROFILES` map and picks one via `-e PROFILE=<name>`
-(defaulting to `smoke` if unset), rather than duplicating the request logic
-across separate smoke/load files. `resolveProfile` also takes a route-qualified
-cloud name (e.g. `"documents/{document_id}: base query"`), set as
-`options.cloud.name` — this is what Grafana Cloud k6 groups a script's runs
+(defaulting to `load` if unset — see the note on Grafana Cloud below), rather
+than duplicating the request logic across separate smoke/load files. Always pass
+`-e PROFILE=smoke` explicitly for a smoke check. `resolveProfile` also takes a
+route-qualified cloud name (e.g. `"documents/{document_id}: base query"`), set
+as `options.cloud.name` — this is what Grafana Cloud k6 groups a script's runs
 under; without it, Cloud falls back to the script's own filename, and multiple
 routes following the `index.ts` base-case convention (see Layout above) would
 otherwise collide under one indistinguishable "index.ts" name in the project's
 runs list:
 
 ```bash
-k6 run routes/documents/index.ts               # smoke (default)
+k6 run routes/documents/index.ts               # load (default)
 k6 run -e PROFILE=smoke routes/documents/index.ts
 k6 run -e PROFILE=load "routes/documents/{document_id}/index.ts"
 k6 run -e PROFILE=load routes/documents/fields-combinations.ts
@@ -189,3 +190,28 @@ personal token, since this is for CI, not an individual):
 Until these secrets are set, the `k6 smoke tests` workflow will fail at the
 `run-k6-action` step with an authentication error — this is expected and does
 not indicate a problem with the scripts themselves.
+
+### Scheduled load tests
+
+Graduated load tests (see FUS-403) run on a recurring schedule from Grafana
+Cloud k6 itself, not from GitHub Actions — a scheduled cloud-run test needs no
+runner minutes and doesn't wait on CI. Provisioned via Pulumi
+(`infra/k6_load_tests.py`, `LOAD_TESTS`), not by hand.
+
+**Separate projects from smoke.** Each resource gets a
+`SMOKE: search-api <resource>` project (above) for CI's smoke runs, and a
+distinct `LOAD: search-api <resource>` project for its scheduled load-test runs
+— not one project shared by both test types. Grafana Cloud k6 has no per-test or
+per-schedule way to set `PROFILE` (or any env var) for a cloud-triggered run —
+only an org-wide environment variables setting, too coarse to distinguish one
+script's smoke run from its own load run — so smoke and load results would
+otherwise land in the same project's run history with no way to tell which is
+which at a glance.
+
+**Default profile is `load`, not `smoke`, for this reason.** Since Grafana Cloud
+can't pass `-e PROFILE=load` at trigger time, a script uploaded as-is must
+default to the profile the schedule is meant to run — see `config.ts`'s
+`resolveProfile`. CI's smoke workflow is unaffected (it already passes
+`-e PROFILE=smoke` explicitly), but any local `k6 run` with no `-e PROFILE=...`
+now runs `load`, not `smoke` — pass `-e PROFILE=smoke` explicitly for a smoke
+check.

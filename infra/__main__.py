@@ -6,6 +6,7 @@ import re
 import components.aws as components_aws
 import pulumi
 import pulumi_docker_build as docker_build
+from k6_load_tests import create_k6_load_test_resources
 from pulumi_aws import (
     ecr,
     ecs,
@@ -21,6 +22,7 @@ from pulumi_aws.ecs.express_gateway_service import (
     ExpressGatewayServicePrimaryContainerSecretArgs,
     ExpressGatewayServiceScalingTargetArgs,
 )
+from pulumiverse_grafana import Provider as GrafanaProvider
 
 from search.config import (
     REPO_ROOT_DIR,
@@ -701,5 +703,17 @@ elif stack != "review":
             }
         ),
     )
+
+    # endregion
+
+    # region k6
+    
+    if stack == "production":
+        grafana_provider = GrafanaProvider(
+            "grafana",
+            k6_access_token=config.get_secret("k6_cloud_token"),
+            stack_id=config.get_int("k6_cloud_stack_id"),
+        )
+        create_k6_load_test_resources(grafana_provider)
 
     # endregion

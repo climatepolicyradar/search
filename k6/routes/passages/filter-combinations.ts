@@ -14,11 +14,27 @@ const BASE_URL = __ENV.BASE_URL || "https://api.climatepolicyradar.org/search";
 // to 1s of simulated think time, the standard smoke/load-test pacing.
 const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
 
+// Which profile a run uses if `-e PROFILE=<name>` isn't passed. Defaults to
+// `load`, not `smoke`, for this script specifically because it has a
+// graduated load profile and is uploaded to Grafana Cloud k6 as a scheduled
+// LoadTest resource (see infra/k6_load_tests.py) — Cloud has no way to pass
+// `-e PROFILE=...` at trigger time, so whatever this resolves to with no env
+// var set is what a scheduled cloud run always executes. CI's smoke workflow
+// and any local smoke check must pass `-e PROFILE=smoke` explicitly; it is no
+// longer the no-flags default for this script.
+const DEFAULT_PROFILE = "load";
+
+// Resolved once here rather than read as `__ENV.PROFILE === "load"` inline in
+// default() below — must agree with what resolveProfile picks for `options`,
+// including DEFAULT_PROFILE's fallback when PROFILE is unset, or the two
+// would silently disagree once no env var is passed.
+const isLoadProfile = (__ENV.PROFILE || DEFAULT_PROFILE) === "load";
+
 // A VU ("virtual user") is one simulated concurrent user — it runs a script's
 // default-exported function in a loop for `duration`. PROFILES below (VUs/
 // duration differ per route, and a `load` profile is added once that route's
 // load test is scoped) is picked via `-e PROFILE=<name>` (defaulting to
-// `smoke`).
+// DEFAULT_PROFILE).
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
 //
 // `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
@@ -30,7 +46,7 @@ function resolveProfile(
   cloudName: string,
   profiles: Record<string, object>,
 ): object {
-  const profile = profiles[__ENV.PROFILE || "smoke"] as
+  const profile = profiles[__ENV.PROFILE || DEFAULT_PROFILE] as
     | Record<string, unknown>
     | undefined;
   if (!profile) return profile as unknown as object;
@@ -253,8 +269,6 @@ export const options = resolveProfile(
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const isLoadProfile = __ENV.PROFILE === "load";
-
   // Smoke mode sweeps all combinations to check correctness; load mode
   // repeats the single most structurally complex real shape (the nested
   // or-in-and) to find a capacity ceiling for it, per FUS-358's scope — the
