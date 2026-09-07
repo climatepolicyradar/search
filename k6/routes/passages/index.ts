@@ -12,12 +12,9 @@ const searchQueries = new SharedArray("search-queries", function () {
   return JSON.parse(open("./fixtures/search-queries.json"));
 });
 
-type TDocumentResult = { id?: unknown; title?: unknown };
-type TSearchResponse = { results?: TDocumentResult[] };
+type TPassageResult = { text_block_id?: unknown; document_id?: unknown };
+type TSearchResponse = { results?: TPassageResult[] };
 
-// TODO: FUS-357: add a "load" profile here once load-test parameters (VU ramp
-// stages, thresholds) are agreed, using the worst-case combination (filters +
-// both `fields` values together). Select it with `-e PROFILE=load`.
 const PROFILES = {
   smoke: {
     vus: 5,
@@ -32,13 +29,16 @@ const PROFILES = {
 
 // k6 requires `options` to be a named export — this is how it reads VU/
 // duration config for the run, not a convention we chose.
-export const options = resolveProfile("documents: base query", PROFILES);
+export const options = resolveProfile("passages: base query", PROFILES);
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
   const query = searchQueries[Math.floor(Math.random() * searchQueries.length)];
+  // No order_by param: defaults to `idx asc` (reading order, not relevance)
+  // per the OpenAPI schema — this is the base case's actual default
+  // behaviour, distinct from /documents defaulting to `relevance desc`.
   const res = http.get(
-    `${BASE_URL}/documents?query=${encodeURIComponent(query)}`,
+    `${BASE_URL}/passages?query=${encodeURIComponent(query)}`,
   );
 
   // check() records pass/fail per assertion without stopping the iteration
@@ -51,14 +51,15 @@ export default function () {
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
-    "results have id and title": (response: Response) => {
+    "results have text_block_id and document_id": (response: Response) => {
       const body = response.json() as TSearchResponse;
       const results = body?.results ?? [];
       return (
         results.length > 0 &&
         results.every(
           (result) =>
-            typeof result?.id === "string" && typeof result?.title === "string",
+            typeof result?.text_block_id === "string" &&
+            typeof result?.document_id === "string",
         )
       );
     },
