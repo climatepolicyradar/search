@@ -2404,6 +2404,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pulumiverse-grafana"
+version = "2.39.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "parver" },
+    { name = "pulumi" },
+    { name = "semver" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/eb/0b/caa04b325835057804730b783dfa30891ec24aa56357312c08d8934a9189/pulumiverse_grafana-2.39.1.tar.gz", hash = "sha256:1de6e9c1308405c2ac2ab6f0f292f28b4fe5989c44913b09fbd3df546a92df4d", size = 526164, upload-time = "2026-08-26T07:57:59.252Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/9d/86cb36942b668ca6f832ca575e2680725c33cbeeb274f51576d99afa902c/pulumiverse_grafana-2.39.1-py3-none-any.whl", hash = "sha256:bea144f913265a8b7f50a892d9afacf6894911843f7d3483ef4ccfbf020726fc", size = 778767, upload-time = "2026-08-26T07:57:57.891Z" },
+]
+
+[[package]]
 name = "py-key-value-aio"
 version = "0.4.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3266,6 +3280,7 @@ dev = [
     { name = "pulumi-docker" },
     { name = "pulumi-docker-build" },
     { name = "pulumi-pulumiservice" },
+    { name = "pulumiverse-grafana" },
     { name = "pytest" },
 ]
 research = [
@@ -3315,6 +3330,7 @@ dev = [
     { name = "pulumi-docker", specifier = ">=5.2.0,<6.0.0" },
     { name = "pulumi-docker-build", specifier = ">=0.0.22,<1.0.0" },
     { name = "pulumi-pulumiservice", specifier = ">=1.3.0" },
+    { name = "pulumiverse-grafana", specifier = ">=2.39.1,<3.0.0" },
     { name = "pytest", specifier = ">=9.1.1" },
 ]
 research = [{ name = "snowflake-connector-python", specifier = ">=4.7.3" }]
