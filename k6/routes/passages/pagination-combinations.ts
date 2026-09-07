@@ -2,7 +2,40 @@ import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
 
-import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
+// __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
+// Defaults to production so `k6 run` works out of the box with no setup.
+// https://grafana.com/docs/k6/latest/using-k6/k6-options/environment-variables/
+const BASE_URL = __ENV.BASE_URL || "https://api.climatepolicyradar.org/search";
+
+// Per-iteration pause each VU takes between requests (`sleep(SLEEP_SECONDS)`
+// at the end of this script's default function). Configurable so the request
+// rate can be dialled without touching VU count — e.g. `-e SLEEP_SECONDS=0.1`
+// to push a heavier load, or a larger value to space requests out. Defaults
+// to 1s of simulated think time, the standard smoke/load-test pacing.
+const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
+
+// A VU ("virtual user") is one simulated concurrent user — it runs a script's
+// default-exported function in a loop for `duration`. PROFILES below (VUs/
+// duration differ per route, and a `load` profile is added once that route's
+// load test is scoped) is picked via `-e PROFILE=<name>` (defaulting to
+// `smoke`).
+// https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
+//
+// `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
+// to group this script's runs. Without it, Cloud falls back to the script's
+// own filename — multiple routes named `index.ts` (the base-query convention,
+// see k6/README.md's Layout section) then collide under one indistinguishable
+// "index.ts" name in the project's runs list.
+function resolveProfile(
+  cloudName: string,
+  profiles: Record<string, object>,
+): object {
+  const profile = profiles[__ENV.PROFILE || "smoke"] as
+    | Record<string, unknown>
+    | undefined;
+  if (!profile) return profile as unknown as object;
+  return { ...profile, cloud: { name: cloudName } };
+}
 
 // SharedArray shares this data once across all VUs instead of every VU
 // holding its own copy in memory.
@@ -136,6 +169,5 @@ export default function () {
 
   // Paces iterations so VUs don't hammer the endpoint back-to-back with
   // zero delay — standard for smoke/load tests, mimics real user think time.
-  // Tunable via `-e SLEEP_SECONDS=<n>` (see config.ts).
   sleep(SLEEP_SECONDS);
 }
