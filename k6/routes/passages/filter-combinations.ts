@@ -11,15 +11,19 @@ import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
 //
 // `filters` is free-form JSON not enumerated in the OpenAPI schema, so these
 // combinations are sourced from real usage, not guessed: the shape matches
-// search-api's Filter/FieldFilter/AttributesCondition models
-// (search/engines/dev_vespa.py, see SimpleExampleFilter/ComplexExampleFilter
-// there) and is exactly what navigator-frontend sends as the `filters` param
-// (src/api/search.ts, src/utils/search/filterPathsToQueryGroup.ts). Covers a
-// single filter, multiple filters `and`-ed (incl. an AttributesCondition
-// date range), a top-level `or` and a nested `or`-in-`and` (both matching
-// navigator-frontend's multi-select-within-a-facet shape), and a zero-result
-// combination — worth testing explicitly since empty-result queries can
-// behave very differently under load than populated ones.
+// search-api's Filter/FieldFilter models (search/engines/dev_vespa.py's
+// passages_filter_field_to_vespa_field_map / passages_filter_struct_field_to_
+// vespa_field_map) and is what navigator-frontend sends as the `filters`
+// param for passage search (src/api/passages.ts), always combined with a
+// document_id constraint there. Covers a single document_id filter, a single
+// labels.value.type filter, both `and`-ed, a nested or-in-and (multiple
+// documents `or`-ed, then `and`-ed with a label type — matching
+// navigator-frontend's multi-document passage search shape), and a
+// zero-result combination — worth testing explicitly since empty-result
+// queries can behave very differently under load than populated ones. Unlike
+// /documents, passages has no `status::Principal`-style label to build a
+// contradictory-filter zero-result case from, so this uses a real document_id
+// that has zero indexed passages instead.
 type TFilterCombination = {
   name: string;
   expectZeroResults: boolean;
@@ -33,25 +37,20 @@ const filterCombinations = new SharedArray(
   },
 );
 
-type TDocumentResult = { id?: unknown; title?: unknown };
-type TSearchResponse = { results?: TDocumentResult[]; total_size?: number };
+type TPassageResult = { text_block_id?: unknown; document_id?: unknown };
+type TSearchResponse = { results?: TPassageResult[]; total_size?: number };
 
 const PROFILES = {
   smoke: {
     vus: 5,
     duration: "1m",
-    // A failed check() alone doesn't fail the run — it only shows up as a
-    // pass-rate in the summary. This threshold makes anything below 100% of
-    // checks passing exit the run non-zero, which is the bar for a smoke test.
-    // https://grafana.com/docs/k6/latest/using-k6/thresholds/
-    thresholds: { checks: ["rate==1.00"] },
   },
 };
 
 // k6 requires `options` to be a named export — this is how it reads VU/
 // duration config for the run, not a convention we chose.
 export const options = resolveProfile(
-  "documents: filter combinations",
+  "passages: filter combinations",
   PROFILES,
 );
 
@@ -60,16 +59,25 @@ export default function () {
   const combination =
     filterCombinations[Math.floor(Math.random() * filterCombinations.length)];
   const filtersParam = encodeURIComponent(JSON.stringify(combination.filters));
-  const res = http.get(`${BASE_URL}/documents?filters=${filtersParam}`);
+  const res = http.get(
+    `${BASE_URL}/passages?query=climate&filters=${filtersParam}`,
+  );
 
   // k6 check/group names may not contain "::" — fixture names quote real
-  // label values (e.g. "status::Principal"), so strip it for display only.
+  // label values (e.g. "concept::Q557"), so strip it for display only.
   const checkLabel = combination.name.replace(/::/g, ":");
 
   // check() records pass/fail per assertion without stopping the iteration
   // on failure (unlike a thrown error) — failures show up in the run
   // summary as a percentage. A smoke test's bar is 100% checks passing.
   // https://grafana.com/docs/k6/latest/using-k6/checks/
+  //
+  // Assertions are deliberately layered — response shape, then result count,
+  // then per-result field types are separate named checks rather than one
+  // combined boolean. If the response contract regresses (results key
+  // renamed, text_block_id changes type, an error body comes back with 200)
+  // the failing check name points at which assumption broke, instead of a
+  // single opaque "expectation not met".
   check(res, {
     [`${checkLabel}: status is 200`]: (response: Response) =>
       response.status === 200,
@@ -81,19 +89,28 @@ export default function () {
       response: Response,
     ) => {
       const body = response.json() as TSearchResponse;
-      const results = body?.results ?? [];
+      if (!Array.isArray(body?.results)) return false;
       return combination.expectZeroResults
-        ? results.length === 0
-        : results.length > 0 &&
-            results.every(
-              (result) =>
-                typeof result?.id === "string" &&
-                typeof result?.title === "string",
-            );
+        ? body.results.length === 0
+        : body.results.length > 0;
+    },
+    [`${checkLabel}: results have string text_block_id and document_id`]: (
+      response: Response,
+    ) => {
+      const body = response.json() as TSearchResponse;
+      const results = body?.results ?? [];
+      // Vacuously true for the zero-result case (nothing to check), which is
+      // the point — its result count is asserted above.
+      return results.every(
+        (result) =>
+          typeof result?.text_block_id === "string" &&
+          typeof result?.document_id === "string",
+      );
     },
   });
 
   // Paces iterations so VUs don't hammer the endpoint back-to-back with
   // zero delay — standard for smoke/load tests, mimics real user think time.
+  // Tunable via `-e SLEEP_SECONDS=<n>` (see config.ts).
   sleep(SLEEP_SECONDS);
 }

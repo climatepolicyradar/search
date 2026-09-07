@@ -48,8 +48,10 @@ k6/
           document-ids.json    # real, pre-verified document_ids
     passages/
       index.ts                # GET /search/passages (base query)
+      filter-combinations.ts  # GET /search/passages?filters=
       fixtures/
-        search-queries.json    # realistic free-text search terms
+        search-queries.json      # realistic free-text search terms
+        filter-combinations.json # real filters shapes, see note below
 ```
 
 Every file in a route directory tests that one route — co-locating them means
@@ -72,6 +74,13 @@ Override with `BASE_URL`:
 
 ```bash
 BASE_URL=https://staging.example.com/search k6 run routes/documents/index.ts
+```
+
+Every script pauses `SLEEP_SECONDS` (default `1`) between requests per VU. Lower
+it to raise the request rate without changing VU count:
+
+```bash
+SLEEP_SECONDS=0.1 k6 run routes/documents/index.ts
 ```
 
 ## Smoke vs. load: one file, one `PROFILE`
