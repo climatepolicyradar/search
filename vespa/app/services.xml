@@ -18,23 +18,6 @@
             <config name="com.yahoo.language.lucene.lucene-analysis">
                 <configDir>lucene-linguistics</configDir>
                 <analysis>
-                    <!-- title_analysis: stem but keep all tokens (no stop words) -->
-                    <item key="profile=title_analysis;language=en">
-                        <tokenizer>
-                            <name>standard</name>
-                        </tokenizer>
-                        <tokenFilters>
-                            <item>
-                                <name>lowercase</name>
-                            </item>
-                            <item>
-                                <name>snowballPorter</name>
-                                <conf>
-                                    <item key="language">English</item>
-                                </conf>
-                            </item>
-                        </tokenFilters>
-                    </item>
                     <!-- title_index_analysis: passage_analysis plus acronym+ordinal
                          splitting.
 

@@ -1,6 +1,7 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -31,11 +32,18 @@ logger = get_logger(__name__)
 
 
 class EnvSettings(Settings):
-    model_config = SettingsConfigDict(env_file=".env", extra="allow")
+    model_config = SettingsConfigDict(
+        env_file=str(Path(__file__).parent / ".env"), extra="allow"
+    )
 
 
 # @see: https://github.com/pydantic/pydantic-settings/issues/201
 settings = EnvSettings()  # pyright: ignore[reportCallIssue]
+logger.info(
+    "Search settings resolved: vespa_endpoint=%s vespa_dev_instance_name=%s",
+    settings.vespa_endpoint,
+    settings.vespa_dev_instance_name,
+)
 
 
 router = APIRouter(prefix="/search")

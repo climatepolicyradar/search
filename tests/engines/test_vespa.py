@@ -8,10 +8,12 @@ from hypothesis import given
 from vespa.io import VespaQueryResponse
 
 from search.engines import Pagination
+from search.engines.dev_vespa import FieldFilter, Filter
 from search.engines.vespa import (
     ExactVespaPassageSearchEngine,
-    HybridVespaPassageSearchEngine,
     VespaLabelSearchEngine,
+    VespaQueryError,
+    _build_passage_filter_yql,
 )
 from tests.common_strategies import (
     search_limit_strategy,
@@ -28,16 +30,6 @@ def exact_vespa_passage_engine():
     :return: ExactVespaPassageSearchEngine instance
     """
     return ExactVespaPassageSearchEngine()
-
-
-@pytest.fixture
-def hybrid_vespa_passage_engine():
-    """
-    Create a HybridVespaPassageSearchEngine instance for testing.
-
-    :return: HybridVespaPassageSearchEngine instance
-    """
-    return HybridVespaPassageSearchEngine()
 
 
 @pytest.fixture
@@ -99,37 +91,164 @@ def test_exact_request(terms, limit, offset):
     """Test exact request returns the expected fields."""
 
     engine = ExactVespaPassageSearchEngine()
-    request = engine._build_request(terms, Pagination(page_size=limit, page_token=offset + 1), None)
+    request = engine._build_request(
+        terms, Pagination(page_size=limit, page_token=offset + 1), None
+    )
 
     assert isinstance(request, dict)
     assert "yql" in request
-    assert "query_string" in request
     assert "ranking.softtimeout.factor" in request
     assert "ranking.profile" in request
     assert "summary" in request
 
-    assert request["query_string"] == terms
     assert request["ranking.profile"] == "exact_not_stemmed"
 
+    if terms:
+        assert request["query_string"] == terms
+        assert "text_block_not_stemmed" in request["yql"]
+    else:
+        # An empty query must not reach a term operator: Vespa rejects it with
+        # "The word of a word item cannot be empty".
+        assert "query_string" not in request
+        assert request["yql"].endswith("where true")
 
-@given(
-    terms=search_terms_strategy,
-    limit=search_limit_strategy.filter(lambda x: x is not None),
-    offset=search_offset_strategy,
+
+DOCUMENT_ID = "CCLW.document.i00007398.n0000"
+
+
+def _topic(wikibase_id: str) -> FieldFilter:
+    """A topic condition as `search.testcase` builds it."""
+    return FieldFilter(
+        field="labels.value.id", op="contains", value=f"concept::{wikibase_id}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("filter_group", "expected"),
+    [
+        # A `concept::` label id becomes a bare wikibase id on `concepts.id`.
+        (
+            Filter(op="and", filters=[_topic("Q1829")]),
+            'concepts.id contains "Q1829"',
+        ),
+        # ANDed topics need no `sameElement`: each may match a different element
+        # of the `concepts` array, which is what "carries both concepts" means.
+        (
+            Filter(op="and", filters=[_topic("Q567"), _topic("Q1651")]),
+            '(concepts.id contains "Q567" and concepts.id contains "Q1651")',
+        ),
+        (
+            Filter(op="or", filters=[_topic("Q567"), _topic("Q1651")]),
+            '(concepts.id contains "Q567" or concepts.id contains "Q1651")',
+        ),
+        # `document_id` is `document_import_id` on this schema.
+        (
+            Filter(
+                op="and",
+                filters=[
+                    FieldFilter(field="document_id", op="contains", value=DOCUMENT_ID)
+                ],
+            ),
+            f'document_import_id contains "{DOCUMENT_ID}"',
+        ),
+        (
+            Filter(
+                op="and",
+                filters=[
+                    FieldFilter(
+                        field="document_id", op="not_contains", value=DOCUMENT_ID
+                    )
+                ],
+            ),
+            f'!(document_import_id contains "{DOCUMENT_ID}")',
+        ),
+        # Nested groups, as `TestCase.filters_json_string` produces for topics.
+        (
+            Filter(
+                op="and",
+                filters=[
+                    Filter(op="or", filters=[_topic("Q567")]),
+                    FieldFilter(field="document_id", op="contains", value=DOCUMENT_ID),
+                ],
+            ),
+            f'(concepts.id contains "Q567" and document_import_id contains "{DOCUMENT_ID}")',
+        ),
+    ],
 )
-def test_hybrid_request(terms, limit, offset):
-    """Test hybrid request returns the expected fields."""
+def test_passage_filter_yql(filter_group: Filter, expected: str) -> None:
+    """Filters are translated into `document_passage` YQL."""
+    assert _build_passage_filter_yql(filter_group) == expected
 
-    engine = HybridVespaPassageSearchEngine()
-    request = engine._build_request(terms, Pagination(page_size=limit, page_token=offset + 1), None)
 
-    assert isinstance(request, dict)
-    assert "yql" in request
-    assert "query_string" in request
-    assert request["query_string"] == terms
-    assert request["ranking.profile"] == "hybrid"
-    assert "userInput(@query_string)" in request["yql"]
-    assert "nearestNeighbor" in request["yql"]
+@pytest.mark.parametrize(
+    "filter_group",
+    [
+        # Corpus filters share the topic field but use an `agent::` prefix, and
+        # `document_passage` has no provider field to map them onto.
+        Filter(
+            op="or",
+            filters=[
+                FieldFilter(
+                    field="labels.value.id",
+                    op="contains",
+                    value="agent::Green Climate Fund",
+                )
+            ],
+        ),
+        # `principal_id` has no equivalent on `document_passage` either.
+        Filter(
+            op="and",
+            filters=[
+                FieldFilter(field="principal_id", op="contains", value="principal-1")
+            ],
+        ),
+    ],
+)
+def test_unsupported_passage_filter_raises(filter_group: Filter) -> None:
+    """
+    Unmappable filters raise rather than being dropped.
+
+    A dropped filter would search the whole corpus and return results that still
+    look valid.
+    """
+    with pytest.raises(VespaQueryError):
+        _build_passage_filter_yql(filter_group)
+
+
+def test_exact_request_combines_filters_and_terms() -> None:
+    """Filters are applied alongside the search term."""
+    engine = ExactVespaPassageSearchEngine()
+    filters = Filter(
+        op="and",
+        filters=[
+            _topic("Q1829"),
+            FieldFilter(field="document_id", op="contains", value=DOCUMENT_ID),
+        ],
+    ).model_dump_json()
+
+    request = engine._build_request(
+        "flooding", Pagination(page_size=5, page_token=1), filters
+    )
+
+    assert request["yql"] == (
+        "select * from sources document_passage where "
+        "(text_block_not_stemmed contains ({stem: false}@query_string)) and "
+        f'(concepts.id contains "Q1829" and document_import_id contains "{DOCUMENT_ID}")'
+    )
+    assert request["query_string"] == "flooding"
+
+
+def test_exact_request_filters_only() -> None:
+    """A topic-only test case searches on its filters alone."""
+    engine = ExactVespaPassageSearchEngine()
+    filters = Filter(op="and", filters=[_topic("Q1829")]).model_dump_json()
+
+    request = engine._build_request("", Pagination(page_size=5, page_token=1), filters)
+
+    assert request["yql"] == (
+        'select * from sources document_passage where concepts.id contains "Q1829"'
+    )
+    assert "query_string" not in request
 
 
 def test_parse_vespa_passage_response(

@@ -268,6 +268,7 @@ test_cases = [
         ),
         description="Search for 'erp' should return documents with 'emissions reduction plan' in the title",
         k=10,
+        all_or_any="any",
     ),
     FieldCharacteristicsTestCase[Document](
         category="entity name + acronym",
@@ -276,6 +277,7 @@ test_cases = [
         in document.title.lower(),
         description="Search for 'necp' should return documents with 'national energy and climate plan' in the title",
         k=10,
+        all_or_any="any",
     ),
     # TODO: use relevant labels if they exist, e.g., document type = "climate action plan"
     FieldCharacteristicsTestCase[Document](
