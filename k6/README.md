@@ -76,6 +76,13 @@ Override with `BASE_URL`:
 BASE_URL=https://staging.example.com/search k6 run routes/documents/index.ts
 ```
 
+Every script pauses `SLEEP_SECONDS` (default `1`) between requests per VU. Lower
+it to raise the request rate without changing VU count:
+
+```bash
+SLEEP_SECONDS=0.1 k6 run routes/documents/index.ts
+```
+
 ## Smoke vs. load: one file, one `PROFILE`
 
 Each script exports a `PROFILES` map and picks one via `-e PROFILE=<name>`

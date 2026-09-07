@@ -2,7 +2,7 @@ import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
 
-import { BASE_URL, resolveProfile } from "../../config.ts";
+import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
 
 // SharedArray loads this JSON file once and shares it across all VUs
 // (see below), instead of every VU parsing its own copy in memory.
@@ -95,5 +95,5 @@ export default function () {
 
   // Paces iterations so VUs don't hammer the endpoint back-to-back with
   // zero delay — standard for smoke/load tests, mimics real user think time.
-  sleep(1);
+  sleep(SLEEP_SECONDS);
 }

@@ -4,6 +4,13 @@
 export const BASE_URL =
   __ENV.BASE_URL || "https://api.climatepolicyradar.org/search";
 
+// Per-iteration pause each VU takes between requests (`sleep(SLEEP_SECONDS)`
+// at the end of every script's default function). Configurable so the request
+// rate can be dialled without touching VU count — e.g. `-e SLEEP_SECONDS=0.1`
+// to push a heavier load, or a larger value to space requests out. Defaults
+// to 1s of simulated think time, the standard smoke/load-test pacing.
+export const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
+
 // A VU ("virtual user") is one simulated concurrent user — it runs a script's
 // default-exported function in a loop for `duration`. Each script defines its
 // own PROFILES map (VUs/duration differ per route, and a `load` profile is
