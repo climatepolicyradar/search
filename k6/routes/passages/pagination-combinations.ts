@@ -2,7 +2,7 @@ import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
 
-import { BASE_URL, resolveProfile } from "../../config.ts";
+import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
 
 // SharedArray loads this JSON file once and shares it across all VUs
 // (see below), instead of every VU parsing its own copy in memory.
@@ -61,23 +61,38 @@ export default function () {
   // on failure (unlike a thrown error) — failures show up in the run
   // summary as a percentage. A smoke test's bar is 100% checks passing.
   // https://grafana.com/docs/k6/latest/using-k6/checks/
+  //
+  // Assertions are deliberately layered — response shape, then the page-size
+  // count, then per-result field types are separate named checks rather than
+  // one combined boolean. If the response contract regresses (results key
+  // renamed, text_block_id changes type, an error body comes back with 200)
+  // the failing check name points at which assumption broke, instead of a
+  // single opaque "expectation not met".
   check(res, {
     [`${combination.name}: status is 200`]: (response: Response) =>
       response.status === 200,
+    [`${combination.name}: response has results array`]: (
+      response: Response,
+    ) => {
+      const body = response.json() as TSearchResponse;
+      return Array.isArray(body?.results);
+    },
     [`${combination.name}: returns exactly page_size results`]: (
       response: Response,
     ) => {
       const body = response.json() as TSearchResponse;
-      const results = body?.results ?? [];
-      return (
-        results.length === combination.pageSize &&
-        results.every(
+      return (body?.results ?? []).length === combination.pageSize;
+    },
+    [`${combination.name}: results have string text_block_id and document_id`]:
+      (response: Response) => {
+        const body = response.json() as TSearchResponse;
+        const results = body?.results ?? [];
+        return results.every(
           (result) =>
             typeof result?.text_block_id === "string" &&
             typeof result?.document_id === "string",
-        )
-      );
-    },
+        );
+      },
   });
 
   if (combination.verifyOffsetAdvances) {
@@ -103,5 +118,6 @@ export default function () {
 
   // Paces iterations so VUs don't hammer the endpoint back-to-back with
   // zero delay — standard for smoke/load tests, mimics real user think time.
-  sleep(1);
+  // Tunable via `-e SLEEP_SECONDS=<n>` (see config.ts).
+  sleep(SLEEP_SECONDS);
 }
