@@ -502,15 +502,8 @@ test_cases = [
 def relevance_tests_principal_documents():
     """Run relevance tests for documents"""
 
-    # Both profiles run side by side so the report shows them against the same
-    # cases. `nativerank` is the pre-FUS-326 behaviour, kept deployed as the
-    # comparison baseline; `bm25` is the IDF-aware title ranking and is what the
-    # engine defaults to. They are distinguished in the report by `engine.id`,
-    # which folds in `parameters` (and so `ranking_profile`).
     engines = [
-        DevVespaPrincipalDocumentSearchEngine(
-            settings=settings, debug=True, ranking_profile="bm25"
-        ),
+        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
         BM25TitleVespaDocumentSearchEngine(),
     ]
 
