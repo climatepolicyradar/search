@@ -14,6 +14,8 @@ from search.testcase import (
     RecallTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
+    any_words_in_string,
+    phrase_in_string,
 )
 
 test_cases = [
@@ -155,9 +157,11 @@ test_cases = [
     FieldCharacteristicsTestCase[Document](
         category="entity name",
         search_terms="nz",
-        characteristics_test=lambda document: any(
-            term in document.title.lower() for term in ["nz", "new zealand", "net zero"]
-        ),
+        characteristics_test=lambda document: any_words_in_string(
+            ["nz"], document.title
+        )
+        or phrase_in_string("new zealand", document.title)
+        or phrase_in_string("net zero", document.title),
         description="Search for 'nz' should return documents with 'nz', 'new zealand', or 'net zero' in the title",
         k=10,
     ),
