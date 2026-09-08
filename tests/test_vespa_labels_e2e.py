@@ -424,10 +424,7 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
 
 @pytest.mark.parametrize("query", ["turkiye", "Türkiye"], ids=["unaccented", "accented"])
 def test_linguistics_geography_accent_folding(vespa_app: Vespa, query: str):
-    """
-    Accented geography names must be findable by both spellings of a query.
-
-    """
+    """Accented geography names must be findable by both spellings of a query."""
     doc_turkiye = DocumentFactory.build(
         title="xyzzygeoaccenttest turkiye document",
         description="A climate policy document",
