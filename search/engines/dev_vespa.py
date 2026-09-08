@@ -499,7 +499,7 @@ def _ranking_overrides_for_document_order_by(
     Translate ``order_by`` clauses into Vespa ranking request fields.
 
     Only the first clause is applied (multilevel sorts can be added later).
-    ``relevance`` keeps default ``nativerank`` ordering (no ``ranking.sorting``).
+    ``relevance`` keeps the engine's configured rank profile (no ``ranking.sorting``).
 
     :param order_by: Parsed ``<field> <direction>`` clauses (public JSON paths
         such as ``attributes.published_date`` and ``title``, plus ``relevance``)
@@ -577,7 +577,7 @@ def _ranking_overrides_for_passage_order_by(
     Translate ``order_by`` clauses into Vespa ranking request fields.
 
     Only the first clause is applied (multilevel sorts can be added later).
-    ``relevance`` keeps default ``nativerank`` ordering (no ``ranking.sorting``).
+    ``relevance`` keeps the engine's configured rank profile (no ``ranking.sorting``).
 
     :param order_by: Parsed ``<field> <direction>`` clauses (``idx``
         plus ``relevance``)

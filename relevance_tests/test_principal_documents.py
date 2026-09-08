@@ -14,6 +14,8 @@ from search.testcase import (
     RecallTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
+    any_words_in_string,
+    phrase_in_string,
 )
 
 test_cases = [
@@ -155,9 +157,11 @@ test_cases = [
     FieldCharacteristicsTestCase[Document](
         category="entity name",
         search_terms="nz",
-        characteristics_test=lambda document: any(
-            term in document.title.lower() for term in ["nz", "new zealand", "net zero"]
-        ),
+        characteristics_test=lambda document: any_words_in_string(
+            ["nz"], document.title
+        )
+        or phrase_in_string("new zealand", document.title)
+        or phrase_in_string("net zero", document.title),
         description="Search for 'nz' should return documents with 'nz', 'new zealand', or 'net zero' in the title",
         k=10,
     ),
@@ -304,13 +308,12 @@ test_cases = [
         ],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
-    # TODO: this search returns a lot of uganda climate change laws, but not the climate change act specified as result number 1
-    # The results returned are: Uganda: National climate change policy; Uganda National Climate Change Act 2021; Uganda National Climate Change Communication Strategy (UNCCCS) 2017...
     PrecisionTestCase[Document](
         category="document name",
         search_terms="climate change law uganda",
         expected_result_ids=[
-            "CCLW.family.10180.0",
+            "CCLW.family.10180.0",  # National Climate Change Act 2021
+            "CPR.family.i00002330.n0000",  # Uganda National Climate Change Act 2021
         ],
         description="Searching for a title plus geography should return the correct document even when the geography is not in the title",
     ),
@@ -503,15 +506,8 @@ test_cases = [
 def relevance_tests_principal_documents():
     """Run relevance tests for documents"""
 
-    # Both profiles run side by side so the report shows them against the same
-    # cases. `nativerank` is the pre-FUS-326 behaviour, kept deployed as the
-    # comparison baseline; `bm25` is the IDF-aware title ranking and is what the
-    # engine defaults to. They are distinguished in the report by `engine.id`,
-    # which folds in `parameters` (and so `ranking_profile`).
     engines = [
-        DevVespaPrincipalDocumentSearchEngine(
-            settings=settings, debug=True, ranking_profile="bm25"
-        ),
+        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
         BM25TitleVespaDocumentSearchEngine(),
     ]
 
