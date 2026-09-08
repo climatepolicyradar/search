@@ -2,7 +2,7 @@ import re
 from collections import Counter
 from typing import TypedDict
 
-from flow import vespa_feeder
+from flow import feed_task_runner, vespa_feeder
 from passages_derived_data import (
     is_page_header_or_footer,
     looks_like_demoted_section,
@@ -105,7 +105,9 @@ def derive_passage_type_flags(record: dict) -> dict:
     pages = fields.get("pages", {}).get("assign") or []
     page_numbers = [page["number"] for page in pages]
 
-    fields["looks_like_short_heading"] = {"assign": looks_like_short_heading(content, content_type)}
+    fields["looks_like_short_heading"] = {
+        "assign": looks_like_short_heading(content, content_type)
+    }
     fields["looks_like_table_of_contents"] = {
         "assign": looks_like_table_of_contents(content, page_numbers)
     }
@@ -183,9 +185,17 @@ def derive_heading_text(record: dict) -> dict:
     return record
 
 
+# max_workers=8 rather than the 4 the other feeders use: data-lake export files
+# are ~100x smaller than the old materializer's (~2-2.5k records/~16MB chunks),
+# so disk isn't the binding constraint here, and 8 x _DEFAULT_CONNECTIONS=2 is
+# the 16 connections Vespa's feedapi-handler can take. This flow submits ~5.9k
+# tasks in one burst, so it is the one that actually depends on the cap being
+# on the task runner - see the submit loop in flow.py's vespa_feeder for what
+# happens without it.
 @flow(
     name="search-vespa-feeder-passages",
     description="Feed passages JSONL from the data-lake Snowflake export into Vespa, deriving document_ref per record",
+    task_runner=feed_task_runner(max_workers=8),
     log_prints=True,
     on_completion=[SlackNotify.on_success],
     on_failure=[SlackNotify.on_failure],
@@ -193,11 +203,8 @@ def derive_heading_text(record: dict) -> dict:
     on_cancellation=[SlackNotify.on_cancellation],
 )
 def passages_feeder_flow() -> State | None:
-    # Data-lake export files are ~100x smaller than the old materializer's -
-    # see flow.py's _DEFAULT_MAX_CONCURRENT_DOWNLOADS for why 8 is safe here.
     return vespa_feeder(
         s3_bucket="cpr-prod-snowflake-data-export",
         s3_key="production/published/pipeline_data_in_vespa_passage_updates_v1/latest",
         derive_data_from_source=derive_passage_data,
-        max_concurrent_downloads=8,
     )

@@ -22,15 +22,19 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 import boto3
 import orjson
 from mypy_boto3_s3 import S3Client
 from opentelemetry.trace import StatusCode
 from prefect.artifacts import create_markdown_artifact
+from prefect.cache_policies import NO_CACHE
 from prefect.client.schemas.objects import State
+from prefect.futures import PrefectFuture
 from prefect.runtime import deployment, flow_run
 from prefect.states import Failed
+from prefect.task_runners import TaskRunner, ThreadPoolTaskRunner
 from pydantic import BaseModel, ConfigDict, Field
 from telemetry import feeder_metrics, set_feed_stats, shutdown, tracer
 
@@ -38,38 +42,36 @@ from prefect import get_run_logger, task
 
 logger = logging.getLogger(__name__)
 
-# download_and_feed downloads a file just before feeding it rather than
-# downloading every file upfront, so at most max_concurrent_downloads files
-# are ever resident on disk at once - with the old materializer's passages
-# files (up to 200k records each), downloading them all upfront filled the
-# ECS task's disk (No space left on device) long before feeding even started.
-# _DEFAULT_MAX_CONCURRENT_DOWNLOADS is that disk-safety default; flows reading
-# from sources with much smaller files (e.g. the data-lake export's ~2-2.5k
-# record/~16MB chunks via Snowflake's own default COPY INTO split, ~100x
-# smaller than the old materializer's) can pass a higher
-# max_concurrent_downloads to vespa_feeder(), since disk isn't the binding
-# constraint for them - see passages_flow.py's passages_feeder_flow_from_snowflake/
-# passages_feeder_flow_with_derived_data, which do this.
-#
-# Each concurrent download also becomes a concurrent `vespa feed` subprocess,
-# so this doubles as a cap on `vespa feed` subprocesses - and since each
-# subprocess opens its own `--connections N` pool (see vespa_feed), total
-# concurrent connections to Vespa is max_concurrent_downloads * N, not N.
-# Tune both together rather than assuming --connections alone controls load.
-# At N=2 connections/subprocess, 8 concurrent downloads -> 16 connections,
-# matching feedapi-handler's total cluster capacity (8 threads/node x 2 nodes)
-# when it's otherwise idle - don't raise a flow's value past that without
-# checking for other concurrent load on Vespa first (the regular daily feed
-# cron, docproc, etc.).
-_DEFAULT_MAX_CONCURRENT_DOWNLOADS = 4
-
 # Per-subprocess connection pool size (see the `--connections` comment in
-# vespa_feed). Paired with _DEFAULT_MAX_CONCURRENT_DOWNLOADS above: at the
-# defaults, total concurrent connections to Vespa is
-# _DEFAULT_MAX_CONCURRENT_DOWNLOADS * _DEFAULT_CONNECTIONS. Benchmarking
-# (8x2 vs 4x4, same total connection budget) found 8x2 ~15% faster, so tune
-# both together rather than either in isolation.
+# vespa_feed). Paired with the flow's own ThreadPoolTaskRunner(max_workers=N)
+# - see the submit loop in vespa_feeder: total concurrent connections to Vespa
+# is that max_workers * _DEFAULT_CONNECTIONS. Benchmarking (8x2 vs 4x4, same
+# total connection budget) found 8x2 ~15% faster, so tune both together rather
+# than either in isolation.
 _DEFAULT_CONNECTIONS = 2
+
+
+def feed_task_runner(max_workers: int) -> TaskRunner[PrefectFuture[Any]]:
+    """
+    Build the bounded task runner every feeder flow must pass to `@flow`.
+
+    See the submit loop in `vespa_feeder` for what `max_workers` bounds and why
+    the cap has to live on the task runner.
+
+    The cast is unavoidable, not a papered-over mistake: `TaskRunner` is
+    `Generic[F]` and invariant, `ThreadPoolTaskRunner` subclasses
+    `TaskRunner[PrefectConcurrentFuture[R]]`, and `@flow` declares
+    `task_runner: TaskRunner[PrefectFuture[Any]] | None` - so under invariance
+    no spelling of Prefect's own default task runner satisfies Prefect's own
+    parameter, and pyright rejects all of them. Prefect hits this too and casts
+    identically (see `Flow.__init__` in prefect/flows.py). Doing it once here
+    keeps the five call sites clean instead of needing two `pyright: ignore`s
+    each.
+    """
+    return cast(
+        TaskRunner[PrefectFuture[Any]], ThreadPoolTaskRunner(max_workers=max_workers)
+    )
+
 
 # None means "no limit" - feed every file list_s3_keys discovers. This knob
 # exists for benchmarking/smoke-testing against a subset of a source without
@@ -322,45 +324,53 @@ def list_s3_keys(bucket: str, key: str) -> list[str]:
     return keys
 
 
-@task
+# cache_policy=NO_CACHE
+# These tasks feed straight to Vespa and are idempotent per-document; there is
+# nothing to cache.
+# derive_data_from_source is a function, which
+# Prefect's default cache policy can neither JSON nor pickle-serialise into a
+# cache key. It logged a ~20-line HashError traceback per task run - ~5.9k of
+# them per passages run, ~118k lines of pure noise - onto the same log pipeline
+# whose backpressure wedges the flow (see the submit loop in vespa_feeder).
+@task(cache_policy=NO_CACHE)
 def download_and_feed(
     bucket: str,
     obj_key: str,
     endpoint: str,
     application: str,
-    download_disk_semaphore: threading.Semaphore,
     derive_data_from_source: Callable[[dict], dict] | None = None,
     connections: int = _DEFAULT_CONNECTIONS,
     feed_timeout_seconds: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS,
 ) -> FeedResult:
-    # See _DEFAULT_MAX_CONCURRENT_DOWNLOADS above for why this is gated per-file.
+    # Concurrency (and with it the cap on files resident on disk at once) is
+    # enforced by the flow's ThreadPoolTaskRunner(max_workers=N), not here -
+    # see the submit loop in vespa_feeder.
     run_logger = get_run_logger()
-    with download_disk_semaphore:
-        start_time = time.perf_counter()
-        try:
-            with tracer.start_as_current_span("download_from_s3") as span:
-                span.set_attribute("s3.bucket", bucket)
-                span.set_attribute("s3.key", obj_key)
-                feed_path = _download_one(bucket, obj_key, run_logger)
-                span.set_attribute("s3.downloaded_bytes", feed_path.stat().st_size)
-        finally:
-            feeder_metrics.record_task_duration(
-                "download_from_s3",
-                time.perf_counter() - start_time,
-                deployment.name or "local",
-            )
-
-        feed_path = derive_data.fn(
-            feed_path=feed_path, derive_data_from_source=derive_data_from_source
+    start_time = time.perf_counter()
+    try:
+        with tracer.start_as_current_span("download_from_s3") as span:
+            span.set_attribute("s3.bucket", bucket)
+            span.set_attribute("s3.key", obj_key)
+            feed_path = _download_one(bucket, obj_key, run_logger)
+            span.set_attribute("s3.downloaded_bytes", feed_path.stat().st_size)
+    finally:
+        feeder_metrics.record_task_duration(
+            "download_from_s3",
+            time.perf_counter() - start_time,
+            deployment.name or "local",
         )
 
-        return vespa_feed.fn(
-            feed_path=feed_path,
-            endpoint=endpoint,
-            application=application,
-            connections=connections,
-            feed_timeout_seconds=feed_timeout_seconds,
-        )
+    feed_path = derive_data.fn(
+        feed_path=feed_path, derive_data_from_source=derive_data_from_source
+    )
+
+    return vespa_feed.fn(
+        feed_path=feed_path,
+        endpoint=endpoint,
+        application=application,
+        connections=connections,
+        feed_timeout_seconds=feed_timeout_seconds,
+    )
 
 
 @task
@@ -392,9 +402,9 @@ def vespa_feed(
             input_record_count = sum(1 for line in feed_path.open() if line.strip())
             span.set_attribute("feed.input_record_count", input_record_count)
 
-            # The download/disk semaphore is acquired by the caller,
-            # download_and_feed, spanning both the download and the feed -
-            # not re-acquired here since threading.Semaphore isn't reentrant.
+            # No concurrency gate here: this runs inside download_and_feed,
+            # whose task run already holds one of the flow task runner's
+            # max_workers slots for both the download and the feed.
             run_logger.info(
                 "Feeding %s to %s (application: %s, records: %d)",
                 feed_path,
@@ -407,10 +417,11 @@ def vespa_feed(
             # --inflight=0 matches the vespa CLI's own default, so it's
             # documented here rather than relying on defaults that could
             # silently change. This lets vespa feed manage its own connection
-            # pool and inflight backpressure within each subprocess. Note this
-            # is per-subprocess: with max_concurrent_downloads concurrent
-            # subprocesses each opening --connections N, total concurrent
-            # connections to Vespa is up to N x max_concurrent_downloads, not N.
+            # pool and inflight backpressure within each subprocess.
+            # Note:
+            # - --connections N is per-subprocess
+            # - there can be ThreadPoolTaskRunner(max_workers=M) subprocesses
+            # - total concurrent connections to Vespa is up to N x M, not N.
             subprocess_wall_clock_start = time.perf_counter()
             process = subprocess.Popen(
                 [
@@ -641,14 +652,12 @@ def vespa_feeder(
     s3_bucket: str,
     s3_key: str,
     derive_data_from_source: Callable[[dict], dict] | None = None,
-    max_concurrent_downloads: int = _DEFAULT_MAX_CONCURRENT_DOWNLOADS,
     max_files: int | None = _DEFAULT_MAX_FILES,
     connections: int = _DEFAULT_CONNECTIONS,
     feed_timeout_seconds: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS,
 ) -> State | None:
     run_logger = get_run_logger()
     _register_sigterm_handler()
-    download_disk_semaphore = threading.Semaphore(max_concurrent_downloads)
 
     deployment_name = deployment.name or "local"
     flow_run_id = flow_run.id or "unknown"
@@ -704,13 +713,31 @@ def vespa_feeder(
                 obj_keys = obj_keys[:max_files]
 
             download_and_feed_start = time.perf_counter()
+            # obj_keys is a list of **all** S3 keys to be processed.
+            # For example
+            # - passages bucket can have ~5.9k files
+            # - documents bucket can have ~1.2k files
+            # This method submits 1 task per key, which is capped by the flow's
+            # ThreadPoolTaskRunner(max_workers=N) to N concurrent tasks.
+            #
+            # From 2026-08-27 that burst of state-transition events broke the
+            # nightly passages feed: the Prefect Cloud websocket dropped
+            # ("keepalive ping failed"), the log/event worker wedged, and the
+            # next run_logger call blocked forever - no error, no terminal
+            # state, runs stuck in Running for days until cancelled by hand.
+            #
+            # N also caps files on disk (download_and_feed downloads each file
+            # just before feeding it) and concurrent `vespa feed` subprocesses,
+            # each opening its own --connections pool - so Vespa sees
+            # N * _DEFAULT_CONNECTIONS connections. 8x2=16 fills
+            # feedapi-handler's idle capacity (8 threads/node x 2 nodes); check
+            # for other load on Vespa before going higher than 8.
             futures = [
                 download_and_feed.submit(
                     bucket=s3_bucket,
                     obj_key=obj_key,
                     endpoint=endpoint,
                     application=application,
-                    download_disk_semaphore=download_disk_semaphore,
                     derive_data_from_source=derive_data_from_source,
                     connections=connections,
                     feed_timeout_seconds=feed_timeout_seconds,
