@@ -422,6 +422,60 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
     )
 
 
+@pytest.mark.parametrize("query", ["turkiye", "Türkiye"], ids=["unaccented", "accented"])
+def test_linguistics_geography_accent_folding(vespa_app: Vespa, query: str):
+    """Accented geography names must be findable by both spellings of a query."""
+    doc_turkiye = DocumentFactory.build(
+        title="xyzzygeoaccenttest turkiye document",
+        description="A climate policy document",
+        labels=[
+            DocumentLabelRelationship(
+                type="geography",
+                value=Label(id="turkiye", value="Türkiye", type="geography", labels=[]),
+                timestamp=None,
+            )
+        ],
+    )
+    doc_other = DocumentFactory.build(
+        title="xyzzygeoaccenttest unrelated document",
+        description="An unrelated environmental policy document",
+        labels=[
+            DocumentLabelRelationship(
+                type="geography",
+                value=Label(id="france", value="France", type="geography", labels=[]),
+                timestamp=None,
+            )
+        ],
+    )
+    _feed_document(vespa_app, doc_turkiye)
+    _feed_document(vespa_app, doc_other)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+    result_ids = {doc.id for doc in results}
+
+    assert doc_turkiye.id in result_ids, (
+        f"Expected doc with geography 'Türkiye' to match query {query!r}, "
+        f"got ids: {result_ids}"
+    )
+    assert doc_other.id not in result_ids, (
+        f"Doc with geography 'France' should NOT match {query!r}, got ids: {result_ids}"
+    )
+
+    debug = engine.last_debug_info[0]
+    tokens = _flatten_tokens(debug.get("geographies_tokens"))
+    assert "türkiye" not in tokens and "türkiy" not in tokens, (
+        f"Expected the accented token to be folded to ASCII, got tokens: {tokens}"
+    )
+    assert debug["summaryfeatures"]["geographies_score"] == 1.0, (
+        f"Expected geographies_score of 1.0, got: {debug['summaryfeatures']}"
+    )
+
+
 # endregion Label linguistics
 
 # region Labels schema

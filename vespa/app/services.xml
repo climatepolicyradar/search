@@ -214,6 +214,9 @@
                                 <name>lowercase</name>
                             </item>
                             <item>
+                                <name>asciiFolding</name> <!-- for geo names with accents-->
+                            </item>
+                            <item>
                                 <name>porterStem</name>
                             </item>
                         </tokenFilters>
@@ -226,6 +229,10 @@
                         <tokenFilters>
                             <item>
                                 <name>lowercase</name>
+                            </item>
+                            <!-- explicitly declaring asciiFolding at query time, even though accents are already implicitly folded -->
+                            <item>
+                                <name>asciiFolding</name>
                             </item>
                             <item>
                                 <name>synonymGraph</name>
