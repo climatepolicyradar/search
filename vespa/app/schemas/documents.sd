@@ -1,7 +1,10 @@
 schema documents {
     document documents {
         field version type string {}
-        field id type string {}
+        field id type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
         field title type string {
             indexing: index | summary
             index: enable-bm25

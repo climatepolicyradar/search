@@ -151,6 +151,24 @@ def _feed_document_without_title(app: Vespa, document: Document) -> None:
     r.raise_for_status()
 
 
+def _feed_document_with_id(app: Vespa, document: Document) -> None:
+    """
+    Feed a document with the ``id`` field populated.
+
+    ``_source_document_to_vespa_update`` does not assign ``id`` - the identifier
+    lives only in the Vespa document id - so filtering on ``id`` needs it set
+    explicitly here.
+    """
+    op = _source_document_to_vespa_update(document)
+    fields = {**op.get("fields", {}), "id": {"assign": document.id}}
+    r = req.put(
+        f"{app.end_point}/document/v1/documents/documents/docid/{document.id}",
+        json={**op, "fields": fields, "create": True},  # type: ignore[arg-type]
+        timeout=5,
+    )
+    r.raise_for_status()
+
+
 def _ids(filter_: Filter) -> set[str]:
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     docs = engine.search(
@@ -397,6 +415,39 @@ def test_field_filter_attribute(
     ids = _ids(f)
     assert (doc_matching.id in ids) == match_in
     assert (doc_non_matching.id in ids) == non_match_in
+
+
+def test_field_filter_id_selects_exact_documents(vespa_app: Vespa):
+    """An OR of `id` conditions fetches a known set of documents in one query."""
+    expected_ids = [
+        "UNFCCC.non-party.283.0",
+        "UNFCCC.non-party.284.0",
+        "UNFCCC.non-party.285.0",
+        "UNFCCC.non-party.286.0",
+        "UNFCCC.non-party.287.0",
+        "UNFCCC.non-party.288.0",
+        "UNFCCC.non-party.289.0",
+        "UNFCCC.non-party.290.0",
+    ]
+    unexpected_ids = "UNFCCC.non-party.291.0"
+    for doc_id in (*expected_ids, unexpected_ids):
+        _feed_document_with_id(
+            vespa_app, DocumentFactory.build(id=doc_id, title=doc_id, labels=[])
+        )
+
+    f = Filter(
+        op="and",
+        filters=[
+            Filter(
+                op="or",
+                filters=[
+                    FieldFilter(field="id", op="contains", value=doc_id)
+                    for doc_id in expected_ids
+                ],
+            )
+        ],
+    )
+    assert _ids(f) == set(expected_ids)
 
 
 # endregion Attributes
