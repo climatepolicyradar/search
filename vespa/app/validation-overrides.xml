@@ -1,7 +1,7 @@
 <validation-overrides>
     <!-- these are all set to allow for user testing to allow for any hotfix deploys -->
     <allow until="2026-09-10">certificate-removal</allow>
-    <allow until="2026-09-10">indexing-change</allow>
+    <allow until="2026-09-24">indexing-change</allow>
     <allow until="2026-09-10">content-cluster-removal</allow>
     <allow until="2026-09-10">field-type-change</allow>
 </validation-overrides>
