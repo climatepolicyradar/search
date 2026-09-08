@@ -733,6 +733,46 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25"
 
 
+def get_labels_from_vespa_response(
+    source: dict[str, Any],
+    fields: dict[str, Any],
+) -> list[LabelRelationship]:
+    """
+    Build a document's labels from a Vespa response.
+
+    `labels` is a concatenation of document_source.labels and concepts.
+    """
+    labels: list[LabelRelationship] = []
+    for label in source.get("labels", []):
+        labels.append(
+            LabelRelationship(
+                type=label.get("type", MISSING_PLACEHOLDER),
+                value=DataInLabel(
+                    id=label.get("value").get("id", MISSING_PLACEHOLDER),
+                    value=label.get("value").get("value", MISSING_PLACEHOLDER),
+                    type=label.get("value").get("type", MISSING_PLACEHOLDER),
+                ),
+                timestamp=label.get("timestamp"),
+            )
+        )
+
+    for concept in fields.get("concepts", []):
+        labels.append(
+            LabelRelationship(
+                type="concept",
+                value=DataInLabel(
+                    id=concept.get("id", MISSING_PLACEHOLDER),
+                    type="concept",
+                    value=concept.get("value", MISSING_PLACEHOLDER),
+                ),
+                passages_id=concept.get("passages_id", MISSING_PLACEHOLDER),
+                count=concept.get("count", MISSING_PLACEHOLDER),
+            )
+        )
+
+    return labels
+
+
 class DevVespaInstanceAddIn:
     """Surfaces the personal dev instance name (from settings) onto the engine id/config."""
 
@@ -885,33 +925,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                     hit.get("id"),
                 )
                 continue
-            labels: list[LabelRelationship] = []
-            for label in source.get("labels", []):
-                labels.append(
-                    LabelRelationship(
-                        type=label.get("type", MISSING_PLACEHOLDER),
-                        value=DataInLabel(
-                            id=label.get("value").get("id", MISSING_PLACEHOLDER),
-                            value=label.get("value").get("value", MISSING_PLACEHOLDER),
-                            type=label.get("value").get("type", MISSING_PLACEHOLDER),
-                        ),
-                        timestamp=label.get("timestamp"),
-                    )
-                )
-
-            for concept in fields.get("concepts", []):
-                labels.append(
-                    LabelRelationship(
-                        type="concept",
-                        value=DataInLabel(
-                            id=concept.get("id", MISSING_PLACEHOLDER),
-                            type="concept",
-                            value=concept.get("value", MISSING_PLACEHOLDER),
-                        ),
-                        passages_id=concept.get("passages_id", MISSING_PLACEHOLDER),
-                        count=concept.get("count", MISSING_PLACEHOLDER),
-                    )
-                )
+            labels = get_labels_from_vespa_response(source, fields)
 
             document_relationships = TypeAdapter(
                 list[DocumentRelationship]
@@ -1010,11 +1024,17 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 f"Vespa returned status {response.status_code}: {body_preview}"
             )
 
-        document_source = response.json().get("fields", {}).get("document_source")
+        fields = response.json().get("fields", {})
+        document_source = fields.get("document_source")
         if not document_source:
             return None
 
-        return Document.model_validate_json(document_source)
+        # Rendered the same way as a search hit: concepts are fed onto the Vespa
+        # document as a partial update, so they only exist in `fields`.
+        source = json.loads(document_source)
+        document = Document.model_validate(source)
+        document.labels = get_labels_from_vespa_response(source, fields)
+        return document
 
     @staticmethod
     def parse_label_type_id_value(s: str) -> tuple[str, str, str]:
