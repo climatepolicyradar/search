@@ -169,6 +169,22 @@ schema documents {
         indexing: input title | attribute
     }
 
+    # Title and geography names in one index field, so that query coverage
+    # across both is accounted for by fieldMatch(title_geo).completeness. This
+    # lets a country's own law outrank projects that merely name the country 
+    # in their titles. See rank-profile bm25-title-geo.
+    field title_geo type string {
+        indexing: input title . " " . (input geographies | join " ") | index
+        index: enable-bm25
+        stemming: multiple
+        linguistics {
+            profile {
+                index: title_index_analysis
+                search: passage_analysis
+            }
+        }
+    }
+
     field labels_value type array<string> {
         indexing: input labels | for_each { get_field value } | index | summary
         stemming: none
@@ -247,7 +263,7 @@ schema documents {
     }
 
     fieldset default {
-        fields: title, description, passages_text
+        fields: title, description, passages_text, title_geo
     }
 
     fieldset geographies {
@@ -313,6 +329,19 @@ schema documents {
             expression: title_score() + description_score() + passages_score() + geographies_score() + identifiers_score() + topic_score()
         }
         summary-features: title_score() description_score() passages_score() geographies_score() bm25(title) fieldMatch(title).completeness fieldMatch(title).queryCompleteness fieldMatch(title).fieldCompleteness fieldMatch(title).significance nativeProximity(title) identifiers_score() topic_score()
+    }
+
+    # Scores the combined title+geographies field instead of title alone, so a
+    # query naming a country and a document type is credited for covering both
+    # from whichever field supplies them. See FUS-326.
+    rank-profile bm25-title-geo inherits bm25 {
+        function title_score () {
+            expression: query(title_weight) * fieldMatch(title_geo).completeness * bm25(title_geo) + query(title_proximity_weight) * nativeProximity(title_geo)
+        }
+        first-phase {
+            expression: title_score() + description_score() + passages_score() + geographies_score() + identifiers_score() + topic_score()
+        }
+        summary-features: title_score() description_score() passages_score() geographies_score() bm25(title_geo) fieldMatch(title_geo).completeness fieldMatch(title_geo).queryCompleteness fieldMatch(title_geo).fieldCompleteness nativeProximity(title_geo) identifiers_score() topic_score()
     }
 
     rank-profile label-boosted inherits nativerank {
