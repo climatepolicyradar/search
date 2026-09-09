@@ -2,11 +2,43 @@ import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
 
-import { BASE_URL, SLEEP_SECONDS, resolveProfile } from "../../config.ts";
+// __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
+// Defaults to production so `k6 run` works out of the box with no setup.
+// https://grafana.com/docs/k6/latest/using-k6/k6-options/environment-variables/
+const BASE_URL = __ENV.BASE_URL || "https://api.climatepolicyradar.org/search";
 
-// SharedArray loads this JSON file once and shares it across all VUs
-// (see below), instead of every VU parsing its own copy in memory.
-// Required for any array data read in k6's init context.
+// Per-iteration pause each VU takes between requests (`sleep(SLEEP_SECONDS)`
+// at the end of this script's default function). Configurable so the request
+// rate can be dialled without touching VU count — e.g. `-e SLEEP_SECONDS=0.1`
+// to push a heavier load, or a larger value to space requests out. Defaults
+// to 1s of simulated think time, the standard smoke/load-test pacing.
+const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
+
+// A VU ("virtual user") is one simulated concurrent user — it runs a script's
+// default-exported function in a loop for `duration`. PROFILES below (VUs/
+// duration differ per route, and a `load` profile is added once that route's
+// load test is scoped) is picked via `-e PROFILE=<name>` (defaulting to
+// `smoke`).
+// https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
+//
+// `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
+// to group this script's runs. Without it, Cloud falls back to the script's
+// own filename — multiple routes named `index.ts` (the base-query convention,
+// see k6/README.md's Layout section) then collide under one indistinguishable
+// "index.ts" name in the project's runs list.
+function resolveProfile(
+  cloudName: string,
+  profiles: Record<string, object>,
+): object {
+  const profile = profiles[__ENV.PROFILE || "smoke"] as
+    | Record<string, unknown>
+    | undefined;
+  if (!profile) return profile as unknown as object;
+  return { ...profile, cloud: { name: cloudName } };
+}
+
+// SharedArray shares this data once across all VUs instead of every VU
+// holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
 // `filters` is free-form JSON not enumerated in the OpenAPI schema, so these
@@ -29,7 +61,114 @@ type TFilterCombination = {
 const filterCombinations = new SharedArray(
   "filter-combinations",
   function (): TFilterCombination[] {
-    return JSON.parse(open("./fixtures/filter-combinations.json"));
+    return [
+      {
+        name: "single filter: category label",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "category::Report",
+            },
+          ],
+        },
+      },
+      {
+        name: "combined filters: category + status + published_date range (and)",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "category::Report",
+            },
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "status::Principal",
+            },
+            {
+              field: "attributes.published_date",
+              key: "published_date",
+              op: "gte",
+              value: "2015-01-01T00:00:00.000Z",
+            },
+          ],
+        },
+      },
+      {
+        name: "combined filters: category Law or Policy (or)",
+        expectZeroResults: false,
+        filters: {
+          op: "or",
+          filters: [
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "category::Law",
+            },
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "category::Policy",
+            },
+          ],
+        },
+      },
+      {
+        name: "combined filters: (category Law or Policy) and status Principal (nested or-in-and)",
+        expectZeroResults: false,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              op: "or",
+              filters: [
+                {
+                  field: "labels.value.id",
+                  op: "contains",
+                  value: "category::Law",
+                },
+                {
+                  field: "labels.value.id",
+                  op: "contains",
+                  value: "category::Policy",
+                },
+              ],
+            },
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "status::Principal",
+            },
+          ],
+        },
+      },
+      {
+        name: "zero-result combination: status filter contradicted by a nonexistent status label",
+        expectZeroResults: true,
+        filters: {
+          op: "and",
+          filters: [
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "status::Principal",
+            },
+            {
+              field: "labels.value.id",
+              op: "contains",
+              value: "status::NonExistentStatusValue",
+            },
+          ],
+        },
+      },
+    ];
   },
 );
 

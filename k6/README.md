@@ -25,8 +25,7 @@ relative to here, not the repo root.
 
 One directory per search-api route under `routes/`, mirroring the route's URL
 path. Each route directory holds one file per test concern (named after what it
-tests, not "smoke"/"load") plus its own `fixtures/`. The base case for a route
-is `index.ts`:
+tests, not "smoke"/"load"). The base case for a route is `index.ts`:
 
 ```text
 k6/
@@ -38,24 +37,13 @@ k6/
       order-by-combinations.ts # GET /search/documents?order_by=
       fields-combinations.ts  # GET /search/documents?fields=
       pagination-combinations.ts # GET /search/documents?page_token/page_size
-      fixtures/
-        search-queries.json        # realistic free-text search terms
-        order-by-combinations.json # all sortable field/direction combinations
-        filter-combinations.json   # real filters shapes, see note below
       {document_id}/
         index.ts               # GET /search/documents/{document_id}
-        fixtures/
-          document-ids.json    # real, pre-verified document_ids
     passages/
       index.ts                # GET /search/passages (base query)
       filter-combinations.ts  # GET /search/passages?filters=
       order-by-combinations.ts # GET /search/passages?order_by=
       pagination-combinations.ts # GET /search/passages?page_token/page_size
-      fixtures/
-        search-queries.json        # realistic free-text search terms
-        filter-combinations.json   # real filters shapes, see note below
-        order-by-combinations.json # all sortable field/direction combinations
-        pagination-combinations.json # page_token/page_size combinations
 ```
 
 Every file in a route directory tests that one route — co-locating them means
@@ -63,6 +51,17 @@ you can see all the ways a route is exercised in one place, and the directory
 structure traces back directly to the FastAPI route tree. Splitting further by
 test concern (rather than one file per route) keeps each file small,
 single-purpose, and runnable in isolation.
+
+Each script's fixture data (search queries, filter/order-by/pagination
+combinations) is inlined directly in the file as a plain array/object literal
+passed to `SharedArray`, rather than a sibling `fixtures/*.json` file read via
+`open()`. This is required, not just a style choice: Grafana Cloud k6's
+scheduled Load Test resource (see infra/k6_load_tests.py) uploads a script as a
+single flat file with no access to sibling files — `open()` is a k6-runtime disk
+read that only works when the whole repo is checked out (a real `k6 run`/CI
+invocation), and fails outright on a Cloud-uploaded script. Every script needs
+to be self-contained to be eligible for Cloud upload, whether or not it
+currently has a graduated load profile.
 
 ## Running
 
