@@ -28,8 +28,8 @@ method).
 
 1. **Get a real traffic baseline.** `just baseline` (in `k6/tests/breakpoint/`)
    reads CloudWatch ALB `RequestCount` for the live traffic load balancer and
-   reports median/p95/peak-minute RPS. This anchors the load ladder in reality
-   rather than an arbitrary starting point.
+   reports median/p95/peak-minute RPS. This anchors the breakpoint ladder in
+   reality rather than an arbitrary starting point.
 
 2. **Run a capacity ladder with `constant-arrival-rate`, not `ramping-vus`.** A
    VU-driven test self-throttles: as latency rises each VU completes fewer

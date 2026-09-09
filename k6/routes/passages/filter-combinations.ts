@@ -228,7 +228,7 @@ const PROFILES = {
     // Thresholds: 2000ms is a loose tripwire above measured healthy
     // capacity, not a fitted SLO. Derived using the method in
     // k6/docs/load-threshold-methodology.md; see
-    // k6/docs/results/2026-09-09-load-threshold-baseline.md for the
+    // k6/docs/results/2026-09-09-breakpoint-test-baseline.md for the
     // measurements this value is based on. Re-derive (new dated results
     // file, method doc unchanged) rather than editing the number here from
     // memory — the underlying capacity is expected to move as

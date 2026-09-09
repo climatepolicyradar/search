@@ -78,7 +78,7 @@ lags.
 ## Step 6 — Write up the dated results file
 
 Copy `results-template.md` (in this skill's directory) to
-`k6/docs/results/{{YYYY-MM-DD}}-load-threshold-baseline.md` and fill it in from
+`k6/docs/results/{{YYYY-MM-DD}}-breakpoint-test-baseline.md` and fill it in from
 the k6 summary + AWS metrics. Do not put numbers anywhere except this dated file
 — see Known Limitations.
 

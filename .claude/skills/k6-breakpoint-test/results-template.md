@@ -1,4 +1,4 @@
-# Load threshold baseline — {{DATE}}
+# Breakpoint test baseline — {{DATE}}
 
 Results of applying [the methodology](../load-threshold-methodology.md).
 Referenced by the `load` profile thresholds in {{LIST_OF_AFFECTED_ROUTE_FILES}}.
