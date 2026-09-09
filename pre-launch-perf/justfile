@@ -1,0 +1,61 @@
+# Pre-launch load test for search-api.
+#
+# Run from this directory: `just -f justfile <recipe>` or `cd pre-launch-perf && just <recipe>`.
+# Mirrors the api/ and vespa/ per-directory justfile convention so the repo-root
+# justfile does not have to change.
+
+set dotenv-load := true
+set dotenv-path := "../.env"
+
+# The `default` profile has no credentials; only `production` is logged in.
+export AWS_PROFILE := env_var_or_default("AWS_PROFILE", "production")
+
+# The AWS-managed Express Gateway ALB carries only an `AmazonECSManaged` tag --
+# no cluster or service tag -- so it cannot be discovered by tag. Identified
+# empirically by which ALB saw the dry-run traffic. See README finding 6.
+SEARCH_API_ALB := "app/ecs-express-gateway-alb-b0a18abd/460db4bc905aacb6"
+
+default:
+    @just --list
+
+# Check we can read everything we need BEFORE burning a run window on it.
+check:
+    @echo "--- Vespa container metrics ---"
+    uv run python metrics_vespa.py --once > /dev/null && echo "OK"
+    @echo "--- AWS identity ---"
+    aws sts get-caller-identity --output text --query Arn
+    @echo "--- k6 types ---"
+    npx tsc --noEmit && echo "OK"
+
+# Peak/p95/median-minute RPS of live traffic, from ALB RequestCount.
+baseline:
+    uv run python baseline.py
+
+# Poll Vespa container-node metrics into results/vespa.jsonl until interrupted.
+watch-vespa:
+    uv run python metrics_vespa.py --out results/vespa.jsonl --interval 10
+
+# Step ladder: `just run 1 "1,2,4,8"` -> 1,2,4,8 rps. CACHE_MODE=bust default.
+run baseline_rps steps="1,1.5,2,3,5" cache_mode="bust":
+    mkdir -p results
+    k6 run \
+        -e BASELINE_RPS={{ baseline_rps }} \
+        -e STEPS={{ steps }} \
+        -e CACHE_MODE={{ cache_mode }} \
+        --out json=results/run.json \
+        --summary-export=results/summary.json \
+        load.ts
+
+# 60s harness smoke at trivial load, plus a BASE_URL guard check.
+dry-run:
+    mkdir -p results
+    k6 run -e BASELINE_RPS=4 -e STEPS=1 -e STEP_DURATION_S=60 load.ts
+    @echo "--- guard check (expected to fail) ---"
+    ! k6 run -e BASELINE_RPS=1 -e STEPS=1 -e BASE_URL=https://example.com load.ts 2>/dev/null
+
+# ECS + ALB + Vespa metrics for a window. UTC ISO8601; wait ~2min after a run.
+aws-metrics start end:
+    uv run python metrics_aws.py \
+        --start {{ start }} --end {{ end }} \
+        --load-balancer {{ SEARCH_API_ALB }} \
+        --out results/aws.json
