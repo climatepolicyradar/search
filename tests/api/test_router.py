@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from search.data_in_models import Document
-from search.engines import VespaError
+from search.engines import ListResponse, VespaError
 
 
 @pytest.fixture
@@ -51,6 +51,55 @@ def test_get_document_returns_503_on_vespa_error(document_client) -> None:
     response = client.get("/search/documents/doc-1")
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+
+
+def test_aggregations_are_omitted_unless_requested(document_client) -> None:
+    """
+    `aggregations.labels` is part of the read mask, not a freebie.
+
+    The grouping is `max(5000)` over two grouping fields and dominates the
+    response size, so a caller that does not ask for it must not pay for the
+    query or receive the payload.
+    """
+    client, mock_engine = document_client
+    mock_engine.search.return_value = ListResponse(
+        results=[], total_size=0, next_page_token=None
+    )
+
+    response = client.get("/search/documents", params={"query": "toxic"})
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["aggregations"] is None
+    mock_engine.aggregations.assert_not_called()
+
+
+def test_aggregations_are_returned_when_requested(document_client) -> None:
+    client, mock_engine = document_client
+    mock_engine.search.return_value = ListResponse(
+        results=[], total_size=0, next_page_token=None
+    )
+    # An empty aggregation set is a legitimate result, and must still be
+    # reported as `[]` rather than collapsing back into "not requested".
+    mock_engine.aggregations.return_value = []
+
+    response = client.get(
+        "/search/documents",
+        params={"query": "toxic", "fields": "aggregations.labels"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["aggregations"] == {"labels": []}
+    mock_engine.aggregations.assert_called_once()
+
+
+def test_an_unknown_field_is_rejected(document_client) -> None:
+    client, _ = document_client
+
+    response = client.get(
+        "/search/documents", params={"query": "toxic", "fields": "not.a.field"}
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_get_labels_taxonomy_returns_non_empty_list() -> None:

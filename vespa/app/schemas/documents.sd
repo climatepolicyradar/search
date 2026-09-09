@@ -133,6 +133,7 @@ schema documents {
         }
 
         struct passage {
+            field id type string {}
             field text_block_id type string {}
             field language type string {}
             field type type string {}
