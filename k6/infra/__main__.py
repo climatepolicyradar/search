@@ -1,4 +1,5 @@
-"""Grafana Cloud k6 projects, load tests, and schedules for search-api.
+"""
+Grafana Cloud k6 projects, load tests, and schedules for search-api.
 
 Split into its own Pulumi project (separate from `search/infra`) so that
 updating a k6 script only ever runs a `pulumi up` scoped to these resources —
