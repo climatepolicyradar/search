@@ -48,8 +48,9 @@ logger.info(
 
 router = APIRouter(prefix="/search")
 
-
+AggregationField = Literal["aggregations.labels"]
 FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
+Fields = AggregationField | FacetField
 
 
 @router.get("/documents/{document_id}", response_model=ItemResponse[Document])
@@ -70,9 +71,7 @@ def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     filters_json_string: str | None = Query(None, alias="filters"),
     # @see: https://google.aip.dev/157#read-masks-as-a-request-field
-    # Currently this is only facet fields, but might start to include
-    # results and other fields
-    fields: list[FacetField] | None = Query(None),
+    fields: list[Fields] | None = Query(None),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(documents_order_by),
     debug: bool = False,
@@ -92,13 +91,29 @@ def read_documents(
     )
 
     normalised_filters = normalise_filters(filters_json_string)
-    requested_facet_fields = fields or []
+    requested_fields = set(fields or [])
 
     engine = DevVespaDocumentSearchEngine(
         settings=settings, debug=debug, bolding=bolding
     )
+    aggregation_engines = {
+        "aggregations.labels": engine.aggregations,
+    }
+    facet_engines = {
+        "facets.labels.value.type": engine.labels_value_type_facets,
+        "facets.labels.type": engine.labels_type_facets,
+    }
+    # Iterate the dispatch maps rather than `requested_fields` so the order is
+    # deterministic and an unrecognised field cannot reach a lookup.
+    requested_aggregation_fields = [
+        field for field in aggregation_engines if field in requested_fields
+    ]
+    requested_facet_fields = [
+        field for field in facet_engines if field in requested_fields
+    ]
     try:
-        with ThreadPoolExecutor(max_workers=2 + len(requested_facet_fields)) as pool:
+        workers = 1 + len(requested_aggregation_fields) + len(requested_facet_fields)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             f_search = pool.submit(
                 engine.search,
                 query=query,
@@ -106,24 +121,27 @@ def read_documents(
                 order_by=order_by,
                 filters_json_string=normalised_filters,
             )
-            f_aggregations = pool.submit(
-                engine.aggregations,
-                query=query,
-                filters_json_string=normalised_filters,
-            )
+            f_aggregations = {
+                field: pool.submit(
+                    aggregation_engines[field],
+                    query=query,
+                    filters_json_string=normalised_filters,
+                )
+                for field in requested_aggregation_fields
+            }
             f_facets = {
                 field: pool.submit(
-                    {
-                        "facets.labels.value.type": engine.labels_value_type_facets,
-                        "facets.labels.type": engine.labels_type_facets,
-                    }[field],
+                    facet_engines[field],
                     query=query,
                     filters_json_string=normalised_filters,
                 )
                 for field in requested_facet_fields
             }
         results = f_search.result()
-        labels_aggregations = f_aggregations.result()
+        aggregations_data = {
+            field.removeprefix("aggregations."): future.result()
+            for field, future in f_aggregations.items()
+        }
         facets_data = {
             field.removeprefix("facets."): future.result()
             for field, future in f_facets.items()
@@ -158,7 +176,11 @@ def read_documents(
         previous_page=None,
         results=results.results,
         debug_info=engine.last_debug_info if debug else None,
-        aggregations=Aggregations(labels=labels_aggregations),
+        aggregations=(
+            Aggregations.model_validate(aggregations_data)
+            if aggregations_data
+            else None
+        ),
         facets=Facets.model_validate(facets_data) if facets_data else None,
     )
 

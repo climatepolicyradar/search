@@ -81,7 +81,12 @@ def test_search_documents_returns_503_when_only_aggregations_fail(
     )
     document_engine.aggregations.side_effect = VespaError("Vespa is down")
 
-    _assert_unavailable(client.get("/search/documents", params={"query": "toxic"}))
+    _assert_unavailable(
+        client.get(
+            "/search/documents",
+            params={"query": "toxic", "fields": "aggregations.labels"},
+        )
+    )
 
 
 def test_search_documents_returns_503_when_only_facets_fail(
@@ -157,7 +162,6 @@ def test_a_200_is_still_logged_as_a_success(client, document_engine, caplog) -> 
     document_engine.search.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
-    document_engine.aggregations.return_value = []
 
     with caplog.at_level(logging.INFO, logger="api.main"):
         response = client.get("/search/documents", params={"query": "toxic"})
@@ -176,7 +180,6 @@ def test_no_matches_is_still_a_200(client, document_engine) -> None:
     document_engine.search.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
-    document_engine.aggregations.return_value = []
 
     response = client.get("/search/documents", params={"query": "no-such-thing"})
 
