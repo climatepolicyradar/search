@@ -640,7 +640,7 @@ elif stack != "review":
                 # max has been set to 8 because:
                 #
                 # peaks we're seeing in traffic
-                # tasks = peak origin rps ÷ rps/task
+                # tasks = peak origin requests/sec ÷ (requests/sec)/task
                 #     = 22.6 ÷ 3.5  ≈  6.5 → 8 with headroom
                 #
                 # upstream vespa max = concurrent searches ÷ (queries/s per task × query latency)
