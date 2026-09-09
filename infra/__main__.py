@@ -619,7 +619,7 @@ elif stack != "review":
                 ),
                 ExpressGatewayServicePrimaryContainerEnvironmentArgs(
                     name="ENV",
-                    value="production" if stack == "production" else "staging",
+                    value=stack,
                 ),
             ],
             secrets=[
