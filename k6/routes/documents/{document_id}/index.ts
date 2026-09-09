@@ -109,16 +109,18 @@ const PROFILES = {
         ],
       },
     },
-    // Thresholds: p95 < 2s is the "existing 2s p95 line on the vespa-search
-    // dashboard" the monitoring RFC names
-    // (https://app.notion.com/p/3c79109609a48195972fd340c03d1508) — but that RFC
-    // explicitly defers formalising it as a real SLO ("Deferred, not rejected —
-    // no baseline data yet"), so treat this as a provisional, not agreed, target
-    // until that decision lands. http_req_failed aborts the run early on a
-    // failure spike rather than burning the full ramp on a route that's already
-    // broken.
+    // Thresholds: 2000ms is a loose tripwire above measured healthy
+    // capacity, not a fitted SLO. Derived using the method in
+    // k6/docs/load-threshold-methodology.md; see
+    // k6/docs/results/2026-09-09-load-threshold-baseline.md for the
+    // measurements this value is based on. Re-derive (new dated results
+    // file, method doc unchanged) rather than editing the number here from
+    // memory — the underlying capacity is expected to move as
+    // infrastructure changes, per that results file's caveats.
+    // http_req_failed aborts the run early on a failure spike rather than
+    // burning the full ramp on a route that's already broken.
     thresholds: {
-      // PROVISIONAL — see comment above. Not an agreed SLO.
+      // Loose tripwire, not a tight SLO — see comment above.
       http_req_duration: ["p(95)<2000"],
       http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
     },
@@ -136,7 +138,14 @@ export const options = resolveProfile(
 export default function () {
   const documentId =
     documentIds[Math.floor(Math.random() * documentIds.length)];
-  const res = http.get(`${BASE_URL}/documents/${documentId}`);
+  // Only 4 document IDs exist here, so without a cache-buster CloudFront
+  // absorbs almost all repeat traffic in load mode and this measures the
+  // edge, not origin (see pre-launch-perf/README.md finding 0). Smoke mode
+  // is testing correctness at trivial concurrency, not capacity, so it's
+  // left cacheable on purpose.
+  const cacheBuster =
+    __ENV.PROFILE === "load" ? `?_cb=${__VU}-${__ITER}-${Date.now()}` : "";
+  const res = http.get(`${BASE_URL}/documents/${documentId}${cacheBuster}`);
 
   // check() records pass/fail per assertion without stopping the iteration
   // on failure (unlike a thrown error) — failures show up in the run

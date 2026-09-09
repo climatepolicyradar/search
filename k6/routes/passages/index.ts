@@ -116,19 +116,18 @@ const PROFILES = {
         ],
       },
     },
-    // Thresholds: p95 < 2s is the "existing 2s p95 line on the vespa-search
-    // dashboard" the monitoring RFC names
-    // (https://app.notion.com/p/3c79109609a48195972fd340c03d1508) — but that RFC
-    // explicitly defers formalising it as a real SLO ("Deferred, not rejected —
-    // no baseline data yet", still Open as of writing), so treat this as a
-    // provisional, not agreed, target until that decision lands. Reused as-is
-    // from documents' graduated thresholds (FUS-356/FUS-357) — the RFC figure
-    // is a route-agnostic dashboard line, not per-route, so there's no
-    // separate number to reference yet. http_req_failed aborts the run early
-    // on a failure spike rather than burning the full ramp on a route that's
-    // already broken.
+    // Thresholds: 2000ms is a loose tripwire above measured healthy
+    // capacity, not a fitted SLO. Derived using the method in
+    // k6/docs/load-threshold-methodology.md; see
+    // k6/docs/results/2026-09-09-load-threshold-baseline.md for the
+    // measurements this value is based on. Re-derive (new dated results
+    // file, method doc unchanged) rather than editing the number here from
+    // memory — the underlying capacity is expected to move as
+    // infrastructure changes, per that results file's caveats.
+    // http_req_failed aborts the run early on a failure spike rather than
+    // burning the full ramp on a route that's already broken.
     thresholds: {
-      // PROVISIONAL — see comment above. Not an agreed SLO.
+      // Loose tripwire, not a tight SLO — see comment above.
       http_req_duration: ["p(95)<2000"],
       http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
     },
@@ -145,8 +144,16 @@ export default function () {
   // No order_by param: defaults to `idx asc` (reading order, not relevance)
   // per the OpenAPI schema — this is the base case's actual default
   // behaviour, distinct from /documents defaulting to `relevance desc`.
+  //
+  // Only 5 search terms exist here, so without a cache-buster CloudFront
+  // absorbs almost all repeat traffic in load mode and this measures the
+  // edge, not origin (see pre-launch-perf/README.md finding 0). Smoke mode
+  // is testing correctness at trivial concurrency, not capacity, so it's
+  // left cacheable on purpose.
+  const cacheBuster =
+    __ENV.PROFILE === "load" ? `&_cb=${__VU}-${__ITER}-${Date.now()}` : "";
   const res = http.get(
-    `${BASE_URL}/passages?query=${encodeURIComponent(query)}`,
+    `${BASE_URL}/passages?query=${encodeURIComponent(query)}${cacheBuster}`,
   );
 
   // check() records pass/fail per assertion without stopping the iteration
