@@ -730,7 +730,7 @@ documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = 
 
 _DEFAULT_TOPIC_WEIGHT = 1.0
 
-_DEFAULT_DOCUMENT_RANK_PROFILE = "bm25"
+_DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
 
 class DevVespaInstanceAddIn:
@@ -782,8 +782,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             summary, returning plain title/description without ``<hi>`` tags.
             Ignored when ``debug=True``.
         :param ranking_profile: Vespa rank profile to score with. Defaults to
-            ``bm25``; pass ``nativerank`` to compare against the previous
-            behaviour.
+            ``bm25-title-geo``.
         :param topic_weight: How much a filtered-for topic's mention counts
             contribute to relevance. ``0.0`` switches topic ranking off.
         """
