@@ -23,7 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run-test: ${{ steps.filter.outputs.run-test }}
-      run-pulumi-up: ${{ steps.filter.outputs.run-pulumi-up }}
+      run-search-pulumi-up: ${{ steps.filter.outputs.run-search-pulumi-up }}
+      run-k6-pulumi-up: ${{ steps.filter.outputs.run-k6-pulumi-up }}
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
       run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
       run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
@@ -43,8 +44,10 @@ jobs:
               - 'vespa/**'
               - 'uv.lock'
               - pyproject.toml
-            run-pulumi-up:
+            run-search-pulumi-up:
               - 'infra/**'
+            run-k6-pulumi-up:
+              - 'k6/infra/**'
             run-deploy:
               - 'api/**'
               - 'search/**'
@@ -153,10 +156,26 @@ jobs:
     needs: [changes, test]
     if: needs.changes.outputs.run-vespa-feeder-deploy == 'true'
 
-  pulumi-up:
+  search-pulumi-up:
     uses: ./.github/workflows/pulumi_up.yml
     secrets: inherit
     needs: [changes]
-    if: needs.changes.outputs.run-pulumi-up == 'true'
+    if: needs.changes.outputs.run-search-pulumi-up == 'true'
     with:
       environment: production
+      working-directory: ./infra
+      stack: climatepolicyradar/search
+      aws-role: search-production-github-actions
+
+  k6-pulumi-up:
+    uses: ./.github/workflows/pulumi_up.yml
+    secrets: inherit
+    needs: [changes]
+    if: needs.changes.outputs.run-k6-pulumi-up == 'true'
+    with:
+      environment: production
+      working-directory: ./k6/infra
+      stack: climatepolicyradar/search-k6
+      # No AWS resources here (Grafana Cloud only) - skip the AWS credentials
+      # step entirely rather than requiring an unused IAM role.
+      aws-role: ""
