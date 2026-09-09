@@ -1007,6 +1007,27 @@ def test_get_returns_document_by_id(vespa_app: Vespa):
     assert result.id == doc.id
 
 
+def test_get_renders_concepts_as_labels(vespa_app: Vespa):
+    """
+    ``get`` renders a document like a search hit, concepts included.
+
+    Concepts are fed as a partial update, so they only exist as a Vespa field —
+    never in the stored ``document_source``.
+    """
+    doc = DocumentFactory.build(title="Climate Policy", labels=[])
+    _feed_document(vespa_app, doc)
+    _feed_concept_counts(vespa_app, doc, {_TOPIC_ID: 7})
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    result = engine.get(doc.id)
+
+    assert result is not None
+    concepts = [label for label in result.labels if label.type == "concept"]
+    assert [(c.value.id, c.value.value, c.count) for c in concepts] == [
+        (_TOPIC_ID, "Q1343", 7)
+    ]
+
+
 def test_get_returns_none_for_missing_id():
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.get("does-not-exist")

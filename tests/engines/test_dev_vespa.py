@@ -1,4 +1,6 @@
-from unittest.mock import patch
+import json
+from http import HTTPStatus
+from unittest.mock import Mock, patch
 
 import pytest
 from pydantic import AnyHttpUrl
@@ -683,3 +685,59 @@ def test_passage_search_engine_omits_topic_inputs_under_a_sort_override() -> Non
     assert request_body["ranking.profile"] == "unranked"
     assert "input.query(topic_q)" not in request_body
     assert "input.query(topic_weight)" not in request_body
+
+
+def test_document_get_renders_labels_and_concepts() -> None:
+    """`get` renders a document like a search hit with labels with concepts."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    document_source = json.dumps(
+        {
+            "id": "doc-0",
+            "title": "Climate Policy",
+            "labels": [
+                {
+                    "type": "has_geography",
+                    "value": {
+                        "id": "geography::USA",
+                        "type": "geography",
+                        "value": "United States of America",
+                    },
+                }
+            ],
+            "documents": [],
+        }
+    )
+    # Concepts are fed as a partial update, so they are only ever in `fields`.
+    response = Mock(status_code=HTTPStatus.OK)
+    response.json.return_value = {
+        "fields": {
+            "document_source": document_source,
+            "concepts": [
+                {
+                    "id": "concept::Q1343",
+                    "type": "concept",
+                    "value": "climate finance",
+                    "count": 42,
+                    "passages_id": "passages-0",
+                }
+            ],
+        }
+    }
+
+    with patch.object(dev_vespa.requests, "get", return_value=response):
+        document = engine.get("doc-0")
+
+    assert document is not None
+    source_label, concept_label = document.labels
+    assert source_label.type == "has_geography"
+    assert source_label.value.id == "geography::USA"
+    assert concept_label.type == "concept"
+    assert concept_label.value.id == "concept::Q1343"
+    assert concept_label.value.value == "climate finance"
+    assert concept_label.count == 42
+    assert concept_label.passages_id == "passages-0"
