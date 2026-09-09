@@ -8,7 +8,9 @@ the 2026-09-14 search launch. Referenced by the `load` profile thresholds in
 
 Run against production (`api.climatepolicyradar.org/search`) using
 `pre-launch-perf/` from PR
-[climatepolicyradar/search#525](https://github.com/climatepolicyradar/search/pull/525).
+[climatepolicyradar/search#525](https://github.com/climatepolicyradar/search/pull/525)
+— that directory was later moved to `k6/tests/breakpoint/`; this note reflects
+its location at the time this run happened, not where the harness lives now.
 
 ## Traffic baseline (`just baseline`)
 

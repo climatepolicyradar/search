@@ -16,9 +16,9 @@ method).
 
 ## Prerequisites
 
-- `pre-launch-perf/` in this repo (the standalone capacity-testing harness — see
-  its own README for setup). It is intentionally not wired into `k6/`, so it can
-  be run without affecting the routine test suite.
+- `k6/tests/breakpoint/` (the standalone capacity-testing harness — see its own
+  README for setup). It is intentionally not wired into `k6/routes/` or
+  `k6/infra/`, so it can be run without affecting the routine smoke/load suite.
 - Production AWS credentials (`aws login`, profile `production`), for CloudWatch
   and the live traffic baseline.
 - `VESPA_ENDPOINT` / `VESPA_READ_TOKEN`, if also diagnosing _why_ a breakpoint
@@ -26,7 +26,7 @@ method).
 
 ## Method
 
-1. **Get a real traffic baseline.** `just baseline` (in `pre-launch-perf/`)
+1. **Get a real traffic baseline.** `just baseline` (in `k6/tests/breakpoint/`)
    reads CloudWatch ALB `RequestCount` for the live traffic load balancer and
    reports median/p95/peak-minute RPS. This anchors the load ladder in reality
    rather than an arbitrary starting point.
@@ -35,7 +35,7 @@ method).
    VU-driven test self-throttles: as latency rises each VU completes fewer
    iterations, so offered load falls right when the system is struggling, which
    hides the failure curve. Arrival-rate holds offered RPS regardless of
-   response time, so the cliff is actually visible. `pre-launch-perf`'s
+   response time, so the cliff is actually visible. `k6/tests/breakpoint/`'s
    `load.ts` does this, stepping through multipliers of the baseline
    (`just run <baseline_rps> "<steps>"`).
 
@@ -60,7 +60,7 @@ method).
    timeout, not a real measured response time — treat it as "at least 60s or
    hung", not a precise number).
 
-5. **Corroborate with server-side metrics**, via `pre-launch-perf`'s
+5. **Corroborate with server-side metrics**, via `k6/tests/breakpoint/`'s
    `metrics_aws.py` for the same time window (ECS task count, CPU, ALB
    `TargetResponseTime`) and optionally `metrics_vespa.py` if Vespa is a
    suspect. This distinguishes an autoscaling/CPU-bound failure from a

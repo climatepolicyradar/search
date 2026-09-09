@@ -147,7 +147,7 @@ export default function () {
   //
   // Only 5 search terms exist here, so without a cache-buster CloudFront
   // absorbs almost all repeat traffic in load mode and this measures the
-  // edge, not origin (see pre-launch-perf/README.md finding 0). Smoke mode
+  // edge, not origin (see k6/tests/breakpoint/README.md finding 0). Smoke mode
   // is testing correctness at trivial concurrency, not capacity, so it's
   // left cacheable on purpose.
   const cacheBuster =

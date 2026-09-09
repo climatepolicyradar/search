@@ -233,7 +233,7 @@ export default function () {
   // Load mode always requests the same fixed fields+filters combination, so
   // with only 5 possible `query` values the full URL has just 5 distinct
   // forms — CloudFront serves almost every request after the first 5 as a
-  // hit, measuring the edge, not origin (see pre-launch-perf/README.md
+  // hit, measuring the edge, not origin (see k6/tests/breakpoint/README.md
   // finding 0; confirmed directly by re-running this route's shape with and
   // without a cache-buster: 108ms p95 uncached vs 8.76s p95 cache-busted at
   // the same 10 VUs). Smoke mode sweeps combinations testing correctness,

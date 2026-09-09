@@ -266,7 +266,7 @@ export default function () {
   // Load mode always requests the same fixed filter combination, so without
   // a cache-buster it's a single, entirely static URL — CloudFront serves
   // almost every request after the first as a hit, measuring the edge, not
-  // origin (see pre-launch-perf/README.md finding 0). Smoke mode sweeps many
+  // origin (see k6/tests/breakpoint/README.md finding 0). Smoke mode sweeps many
   // combinations testing correctness, not capacity, so it's left cacheable.
   const cacheBuster = isLoadProfile
     ? `&_cb=${__VU}-${__ITER}-${Date.now()}`

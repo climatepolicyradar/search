@@ -1,11 +1,11 @@
 # Pre-launch load test for search-api.
 #
-# Run from this directory: `just -f justfile <recipe>` or `cd pre-launch-perf && just <recipe>`.
+# Run from this directory: `just -f justfile <recipe>` or `cd k6/tests/breakpoint && just <recipe>`.
 # Mirrors the api/ and vespa/ per-directory justfile convention so the repo-root
 # justfile does not have to change.
 
 set dotenv-load := true
-set dotenv-path := "../.env"
+set dotenv-path := "../../../.env"
 
 # The `default` profile has no credentials; only `production` is logged in.
 export AWS_PROFILE := env_var_or_default("AWS_PROFILE", "production")

@@ -4,9 +4,9 @@ Results of applying [the methodology](../load-threshold-methodology.md).
 Referenced by the `load` profile thresholds in {{LIST_OF_AFFECTED_ROUTE_FILES}}.
 
 Run against production (`api.climatepolicyradar.org/search`) using
-`pre-launch-perf/` from
-[climatepolicyradar/search#525](https://github.com/climatepolicyradar/search/pull/525)
-(or its current equivalent, if `pre-launch-perf/` has moved or been renamed).
+`k6/tests/breakpoint/` (originally landed as `pre-launch-perf/` in
+[climatepolicyradar/search#525](https://github.com/climatepolicyradar/search/pull/525),
+moved under `k6/` afterwards — check it hasn't moved again since).
 
 ## Traffic baseline (`just baseline`)
 

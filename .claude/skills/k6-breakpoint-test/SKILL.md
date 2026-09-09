@@ -3,16 +3,16 @@ name: k6-breakpoint-test
 description:
   Use when asked to run a breakpoint/capacity load test against search-api, find
   real numbers for k6 load thresholds, or refresh k6/docs/results/ — covers
-  running pre-launch-perf's constant-arrival-rate ladder, cross-checking with
-  AWS metrics, and proposing k6/routes/** threshold changes
+  running k6/tests/breakpoint/'s constant-arrival-rate ladder, cross-checking
+  with AWS metrics, and proposing k6/routes/** threshold changes
 ---
 
 # k6 Breakpoint Test Workflow
 
 ## Overview
 
-Runs `pre-launch-perf/`'s arrival-rate ladder against production search-api to
-find the real healthy/collapse boundary, corroborates it with AWS metrics,
+Runs `k6/tests/breakpoint/`'s arrival-rate ladder against production search-api
+to find the real healthy/collapse boundary, corroborates it with AWS metrics,
 writes up a dated results file from the template, and proposes (never silently
 applies) threshold changes to `k6/routes/**`.
 
@@ -34,7 +34,7 @@ will deliberately push it past its breaking point. Before running anything:
 ## Step 2 — Prerequisites check
 
 ```bash
-cd pre-launch-perf
+cd k6/tests/breakpoint
 just check   # Vespa access, AWS identity, k6 type-check
 ```
 
