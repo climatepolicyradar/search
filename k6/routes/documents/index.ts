@@ -14,25 +14,19 @@ const BASE_URL = __ENV.BASE_URL || "https://api.climatepolicyradar.org/search";
 // to 1s of simulated think time, the standard smoke/load-test pacing.
 const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
 
-// A VU ("virtual user") is one simulated concurrent user — it runs a script's
-// default-exported function in a loop for `duration`. PROFILES below (VUs/
-// duration differ per route, and a `load` profile is added once that route's
-// load test is scoped) is picked via `-e PROFILE=<name>`. With no env var
-// set, defaults to `load` if PROFILES has one, else whichever profile is
-// listed first (`smoke`, by convention — see PROFILES below). Defaulting to
-// `load` when available matters for scripts uploaded to Grafana Cloud k6 as a
-// scheduled LoadTest resource (see infra/k6_load_tests.py) — Cloud has no way
-// to pass `-e PROFILE=...` at trigger time, so whatever this resolves to with
-// no env var set is what a scheduled cloud run always executes. CI's smoke
-// workflow and any local smoke check must pass `-e PROFILE=smoke` explicitly
-// once a script has a load profile; it is no longer the no-flags default.
+// A VU ("virtual user") is one simulated concurrent user.
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
 //
+// With no `-e PROFILE=<name>`, prefers `load` (falling back to whichever
+// profile is listed first) because Grafana Cloud k6's scheduled LoadTest
+// resource (see infra/k6_load_tests.py) can't pass that flag — whatever this
+// resolves to unset is what a scheduled cloud run executes. Pass
+// `-e PROFILE=smoke` explicitly for a smoke check.
+//
 // `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
-// to group this script's runs. Without it, Cloud falls back to the script's
-// own filename — multiple routes named `index.ts` (the base-query convention,
-// see k6/README.md's Layout section) then collide under one indistinguishable
-// "index.ts" name in the project's runs list.
+// to group this script's runs — without it, Cloud falls back to the script's
+// filename, and multiple routes named `index.ts` collide under one
+// indistinguishable name in the project's runs list.
 function resolveProfile(
   cloudName: string,
   profiles: Record<string, object>,
