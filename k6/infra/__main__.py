@@ -9,19 +9,14 @@ queued up in that stack at the same time.
 
 Manages two k6 Cloud projects per `k6/routes/<resource>/` group:
 
-- `SMOKE: search-api <resource>` — CI's smoke workflow already reported here
-  before this module existed; these three were imported into Pulumi state
-  once (see git history) and are declared here so `pulumi up` doesn't try to
-  delete them, not because anything in this file creates or schedules runs
-  against them.
-- `LOAD: search-api <resource>` — created by this module, one per resource
-  that has a graduated `load` profile (`LOAD_TESTS`), each holding a
-  `LoadTest` + recurring `Schedule` so load tests run from Grafana Cloud's own
-  scheduler instead of a GitHub Actions job.
+- `SMOKE: search-api <resource>` — CI's smoke workflow report here
+- `LOAD: search-api <resource>` — Load tests report here, run on a
+  schedule or manually in the Grafana web UI instead of GitHub Actions
+  so sustained load does not consume GitHub runner minutes.
 
-Kept separate rather than sharing one project per resource because Grafana
-Cloud k6 has no per-test/per-schedule way to set `PROFILE` at cloud-run time
-(only an org-wide environment variables setting, too coarse to tell one
+Kept separate rather than sharing one Grafana project per resource because
+Grafana Cloud k6 has no per-test/schedule way to set `PROFILE` at cloud-run 
+time (only an org-wide env var setting, too coarse to tell one
 script's smoke run from its own load run) — mixing both test types into one
 project would mean unrelated run shapes sitting in the same history with no
 way to tell which is which. See each script's `resolveProfile` — it prefers
@@ -29,7 +24,7 @@ way to tell which is which. See each script's `resolveProfile` — it prefers
 a cloud-triggered run, so the script's own default has to already be right.
 
 `LOAD_TESTS` is the single place to add a route once its load profile lands
-(see FUS-338 and siblings) — everything else here is generic over that list.
+ — everything else here is generic over that list.
 """
 
 from dataclasses import dataclass
@@ -56,11 +51,10 @@ class LoadTestSpec:
     script_path: str  # relative to k6/, e.g. "routes/documents/{document_id}/index.ts"
     name: str  # human-friendly load test name in Grafana Cloud
     cron: str  # 5-field cron expression, evaluated in UTC
-    starts: str  # RFC3339 timestamp; fixed rather than computed at apply time
-    # so re-running `pulumi up` doesn't perpetually diff the schedule's start
+    starts: str  # RFC3339 timestamp; fixed rather than computed at apply time, so re-running `pulumi up` doesn't perpetually diff the schedule's start
 
 
-# One entry per route whose `load` profile has graduated (FUS-338/357/358) —
+# One entry per route whose `load` profile has graduated —
 # each becomes one scheduled Grafana Cloud k6 load test, and implicitly, one
 # `LOAD:` project for its resource (unlike SMOKE_RESOURCES above, a resource
 # only gets a LOAD project once it actually has a graduated load test).
