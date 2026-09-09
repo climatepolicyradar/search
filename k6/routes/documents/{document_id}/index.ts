@@ -145,7 +145,14 @@ export const options = resolveProfile(
 export default function () {
   const documentId =
     documentIds[Math.floor(Math.random() * documentIds.length)];
-  const res = http.get(`${BASE_URL}/documents/${documentId}`);
+  // Only 4 document IDs exist here, so without a cache-buster CloudFront
+  // absorbs almost all repeat traffic in load mode and this measures the
+  // edge, not origin (see k6/tests/breakpoint/README.md finding 0). Smoke
+  // mode is testing correctness at trivial concurrency, not capacity, so
+  // it's left cacheable on purpose.
+  const cacheBuster =
+    __ENV.PROFILE === "load" ? `?_cb=${__VU}-${__ITER}-${Date.now()}` : "";
+  const res = http.get(`${BASE_URL}/documents/${documentId}${cacheBuster}`);
 
   // check() records pass/fail per assertion without stopping the iteration
   // on failure (unlike a thrown error) — failures show up in the run

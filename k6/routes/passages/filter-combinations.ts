@@ -277,8 +277,17 @@ export default function () {
     ? filterCombinations.find((c) => c.name.includes("nested or-in-and"))!
     : filterCombinations[Math.floor(Math.random() * filterCombinations.length)];
   const filtersParam = encodeURIComponent(JSON.stringify(combination.filters));
+  // Load mode always requests the same fixed filter combination, so without
+  // a cache-buster it's a single, entirely static URL — CloudFront serves
+  // almost every request after the first as a hit, measuring the edge, not
+  // origin (see k6/tests/breakpoint/README.md finding 0). Smoke mode sweeps
+  // many combinations testing correctness, not capacity, so it's left
+  // cacheable.
+  const cacheBuster = isLoadProfile
+    ? `&_cb=${__VU}-${__ITER}-${Date.now()}`
+    : "";
   const res = http.get(
-    `${BASE_URL}/passages?query=climate&filters=${filtersParam}`,
+    `${BASE_URL}/passages?query=climate&filters=${filtersParam}${cacheBuster}`,
   );
 
   // k6 check/group names may not contain "::" — fixture names quote real
