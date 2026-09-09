@@ -644,7 +644,7 @@ elif stack != "review":
                 #     = 22.6 ÷ 3.5  ≈  6.5 → 8 with headroom
                 #
                 # upstream vespa max = concurrent searches ÷ (queries/s per task × query latency)
-                #     = 40 ÷ (8.6 × 0.364)  ≈  12.8 tasks → below 8 so shouldn't overrload Vespa
+                #     = 40 ÷ (8.6 × 0.364)  ≈  12.8 tasks → below 8 so shouldn't overload Vespa
                 max_task_count=8,
             ),
         ],
