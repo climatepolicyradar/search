@@ -1,10 +1,12 @@
 // Stepped load test for search-api, to find the level at which it breaks
 // before the 2026-09-14 launch.
 //
-// Deliberately self-contained: it does NOT import from ../k6/config.ts, so
-// nothing under k6/ has to change and this can't break when that file does.
-// Request shapes are copied from the k6/routes/**/fixtures/ files, which are
-// already known to return 200s against production.
+// Deliberately self-contained: it does NOT import from ../../routes/ or
+// ../../infra/, so this can't break when those change, and changes here
+// can't break the routine smoke/load suite. Request shapes are copied from
+// the k6/routes/** route files (their inline SharedArray fixtures and
+// filter/query literals), which are already known to return 200s against
+// production.
 //
 // Run:
 //   k6 run -e BASELINE_RPS=<peak-minute rps from baseline.py> load.ts
@@ -119,8 +121,10 @@ STEPS.forEach((multiplier, stepIndex) => {
     // constant-arrival-rate needs an integer `rate`, so a sub-1-rps target
     // has to be expressed by stretching timeUnit instead: 1 per 4s rather
     // than 0.25 per 1s. Without this the per-route floor was 1 rps, i.e. 4 rps
-    // total across the four routes -- already past the observed ~4 rps cliff,
-    // so the ladder could not describe the healthy region at all.
+    // total across the four routes -- already inside the collapse zone
+    // measured since (healthy up to ~3rps, collapsed by ~6rps; see
+    // k6/docs/results/ for the current baseline) -- so the ladder could not
+    // describe the healthy region at all.
     const target = BASELINE_RPS * multiplier * route.weight;
     const rate = target >= 1 ? Math.round(target) : 1;
     const timeUnit = target >= 1 ? "1s" : `${Math.round(1 / target)}s`;
@@ -181,7 +185,8 @@ export const options = {
 
 // --- Request data -----------------------------------------------------------
 
-// Copied from k6/routes/{documents,passages}/fixtures/search-queries.json.
+// Copied from the searchQueries SharedArray in k6/routes/documents/index.ts
+// and k6/routes/passages/index.ts (both route files inline the same terms).
 //
 // Caveat worth knowing when reading the results: 5 distinct terms keep their
 // posting lists (and, for /passages, its from-disk debug-summary) in the
@@ -197,8 +202,8 @@ const QUERIES = [
   "flood risk",
 ];
 
-// From k6/routes/documents/{document_id}/fixtures/document-ids.json — real,
-// pre-verified IDs.
+// From the documentIds SharedArray in
+// k6/routes/documents/{document_id}/index.ts — real, pre-verified IDs.
 const DOCUMENT_IDS = [
   "CPR.document.i00006774.n0000",
   "Sabin.document.12835.14111",
@@ -207,9 +212,9 @@ const DOCUMENT_IDS = [
 ];
 
 // The "combined filters: category + status + published_date range (and)" shape
-// from k6/routes/documents/fixtures/filter-combinations.json. Two label types
-// in the filter is what drives the disjunctive-facet fan-out when combined
-// with ?fields= below.
+// from k6/routes/documents/filter-combinations.ts. Two label types in the
+// filter is what drives the disjunctive-facet fan-out when combined with
+// ?fields= below.
 const DOCUMENT_FILTERS = JSON.stringify({
   op: "and",
   filters: [
@@ -225,8 +230,8 @@ const DOCUMENT_FILTERS = JSON.stringify({
 });
 
 // The "nested or-in-and" shape from
-// k6/routes/passages/fixtures/filter-combinations.json — its most structurally
-// complex real combination.
+// k6/routes/passages/filter-combinations.ts — its most structurally complex
+// real combination.
 const PASSAGE_FILTERS = JSON.stringify({
   op: "and",
   filters: [
