@@ -184,18 +184,19 @@ const PROFILES = {
         ],
       },
     },
-    // Thresholds: 2000ms is a loose tripwire above measured healthy
-    // capacity, not a fitted SLO. Derived using the method in
-    // k6/docs/load-threshold-methodology.md; see
-    // k6/docs/results/2026-09-09-breakpoint-test-baseline.md for the
-    // measurements this value is based on. Re-derive (new dated results
-    // file, method doc unchanged) rather than editing the number here from
-    // memory — the underlying capacity is expected to move as
-    // infrastructure changes, per that results file's caveats.
+    // Thresholds: p95 < 2s is the "existing 2s p95 line on the vespa-search
+    // dashboard" the monitoring RFC names
+    // (https://app.notion.com/p/3c79109609a48195972fd340c03d1508) — but that RFC
+    // explicitly defers formalising it as a real SLO ("Deferred, not rejected —
+    // no baseline data yet"), so treat this as a provisional, not agreed,
+    // target until that decision lands. Reused as-is from {document_id}'s
+    // graduated threshold (FUS-356) even though this route does more work per
+    // request — the RFC figure is a route-agnostic dashboard line, not
+    // per-route, so there's no separate number to reference yet.
     // http_req_failed aborts the run early on a failure spike rather than
     // burning the full ramp on a route that's already broken.
     thresholds: {
-      // Loose tripwire, not a tight SLO — see comment above.
+      // PROVISIONAL — see comment above. Not an agreed SLO.
       http_req_duration: ["p(95)<2000"],
       http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
     },
@@ -230,19 +231,8 @@ export default function () {
   const filtersQuery = isLoadProfile
     ? `&filters=${encodeURIComponent(JSON.stringify(worstCaseFilters))}`
     : "";
-  // Load mode always requests the same fixed fields+filters combination, so
-  // with only 5 possible `query` values the full URL has just 5 distinct
-  // forms — CloudFront serves almost every request after the first 5 as a
-  // hit, measuring the edge, not origin (see k6/tests/breakpoint/README.md
-  // finding 0; confirmed directly by re-running this route's shape with and
-  // without a cache-buster: 108ms p95 uncached vs 8.76s p95 cache-busted at
-  // the same 10 VUs). Smoke mode sweeps combinations testing correctness,
-  // not capacity, so it's left cacheable.
-  const cacheBuster = isLoadProfile
-    ? `&_cb=${__VU}-${__ITER}-${Date.now()}`
-    : "";
   const res = http.get(
-    `${BASE_URL}/documents?query=${encodeURIComponent(query)}${fieldsQuery ? `&${fieldsQuery}` : ""}${filtersQuery}${cacheBuster}`,
+    `${BASE_URL}/documents?query=${encodeURIComponent(query)}${fieldsQuery ? `&${fieldsQuery}` : ""}${filtersQuery}`,
   );
 
   // check() records pass/fail per assertion without stopping the iteration
