@@ -118,16 +118,22 @@ const PROFILES = {
         ],
       },
     },
-    // Thresholds: p95 < 2s is the "existing 2s p95 line on the vespa-search
-    // dashboard" the monitoring RFC names
-    // (https://app.notion.com/p/3c79109609a48195972fd340c03d1508) — but that RFC
-    // explicitly defers formalising it as a real SLO ("Deferred, not rejected —
-    // no baseline data yet"), so treat this as a provisional, not agreed, target
-    // until that decision lands. http_req_failed aborts the run early on a
-    // failure spike rather than burning the full ramp on a route that's already
-    // broken.
+    // Thresholds: 2000ms is a loose tripwire above measured healthy
+    // capacity, not a fitted SLO. Derived using the method in
+    // k6/docs/load-threshold-methodology.md; see
+    // k6/docs/results/2026-09-09-breakpoint-test-baseline.md for the
+    // measurements this value is based on — three same-day production
+    // runs put the healthy region's p95 at 860ms-1.85s (this route's own
+    // p95 was 960ms-977ms) and the collapse point (a hard cliff, not
+    // gradual) at ~6rps offered load, so 2000ms has real headroom on both
+    // sides. Re-derive (new dated results file, method doc unchanged)
+    // rather than editing the number here from memory — the underlying
+    // capacity is expected to move as infrastructure changes, per that
+    // results file's caveats.
+    // http_req_failed aborts the run early on a failure spike rather than
+    // burning the full ramp on a route that's already broken.
     thresholds: {
-      // PROVISIONAL — see comment above. Not an agreed SLO.
+      // Loose tripwire, not a tight SLO — see comment above.
       http_req_duration: ["p(95)<2000"],
       http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
     },
