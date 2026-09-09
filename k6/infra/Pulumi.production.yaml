@@ -1,0 +1,4 @@
+config:
+  search-k6:k6_cloud_stack_id: "482413"
+  search-k6:k6_cloud_token:
+    secure: AAABAE30mjY31uqLVH2SvsCGb0XVQ6aV2zW0MUk1Tw0/jiIX/NxLndK1L1R3AMrustV0U0Nko53q9Hx3Jrad+3CwQb7tuNbfent+CgE5vCuMumPRazy7OOh0semWsUN4

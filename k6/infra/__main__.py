@@ -1,10 +1,15 @@
-"""
-Grafana Cloud k6 projects, load tests, and schedules for search-api.
+"""Grafana Cloud k6 projects, load tests, and schedules for search-api.
+
+Split into its own Pulumi project (separate from `search/infra`) so that
+updating a k6 script only ever runs a `pulumi up` scoped to these resources —
+not the full search-api stack (AppRunner, ECS, S3, IAM, Vespa config), which
+would otherwise risk rolling in whatever else happens to have drifted or been
+queued up in that stack at the same time.
 
 Manages two k6 Cloud projects per `k6/routes/<resource>/` group:
 
 - `SMOKE: search-api <resource>` — CI's smoke workflow already reported here
-  before this module existed; these three were imported into this Pulumi stack
+  before this module existed; these three were imported into Pulumi state
   once (see git history) and are declared here so `pulumi up` doesn't try to
   delete them, not because anything in this file creates or schedules runs
   against them.
@@ -18,23 +23,25 @@ Cloud k6 has no per-test/per-schedule way to set `PROFILE` at cloud-run time
 (only an org-wide environment variables setting, too coarse to tell one
 script's smoke run from its own load run) — mixing both test types into one
 project would mean unrelated run shapes sitting in the same history with no
-way to tell which is which. See `k6/config.ts`'s `resolveProfile` — its
-default is `load`, not `smoke`, for the same reason: nothing can pass
-`-e PROFILE=load` to a cloud-triggered run, so the script's own default has to
-already be right.
+way to tell which is which. See each script's `resolveProfile` — it prefers
+`load` over `smoke` for the same reason: nothing can pass `-e PROFILE=load` to
+a cloud-triggered run, so the script's own default has to already be right.
 
 `LOAD_TESTS` is the single place to add a route once its load profile lands
 (see FUS-338 and siblings) — everything else here is generic over that list.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import pulumi
 from pulumiverse_grafana import Provider, k6
 
-from search.config import REPO_ROOT_DIR
-
-K6_DIR = REPO_ROOT_DIR / "k6"
+# This file lives at <repo>/k6/infra/__main__.py — the k6 scripts it uploads
+# live at <repo>/k6/routes/. Computed relative to this file rather than via
+# the `search` package's REPO_ROOT_DIR helper, since this is a standalone
+# Pulumi project with no dependency on the main search Python package.
+K6_DIR = Path(__file__).resolve().parent.parent
 
 # Already exists in Grafana and imported into this stack — see module docstring.
 SMOKE_RESOURCES = ["documents", "passages", "labels"]
@@ -60,12 +67,6 @@ class LoadTestSpec:
 # `name` matches each script's own `options.cloud.name` (the string passed to
 # resolveProfile) so a run started from this schedule groups under the same
 # name a manual/CI run of the same script would use.
-#
-# None of these have been run before — manually or via CI — as of writing.
-# Do not merge/apply this until each has had at least one manually-triggered,
-# supervised run confirming its ramp/thresholds behave as expected against
-# production (see k6/README.md's Scheduled load tests section for the
-# `k6 run -e PROFILE=load ...` commands).
 #
 # `cron` is a single weekly slot per script, deliberately staggered so no two
 # of these ~25min, 50-VU ramps overlap — each one already exercises search-api
@@ -110,6 +111,8 @@ def create_k6_load_test_resources(
     smoke_projects = {
         resource: k6.Project(
             f"k6-project-{resource}",
+            # Matches each project's existing Grafana name exactly (set by hand
+            # when these were created for the CI smoke tests, see k6/README.md).
             name=f"SMOKE: search-api {resource}",
             opts=pulumi.ResourceOptions(provider=provider),
         )
@@ -146,3 +149,12 @@ def create_k6_load_test_resources(
         )
 
     return {**smoke_projects, **load_projects}
+
+
+config = pulumi.Config()
+grafana_provider = Provider(
+    "grafana",
+    k6_access_token=config.get_secret("k6_cloud_token"),
+    stack_id=config.get_int("k6_cloud_stack_id"),
+)
+create_k6_load_test_resources(grafana_provider)
