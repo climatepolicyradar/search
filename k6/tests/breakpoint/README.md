@@ -3,9 +3,10 @@
 Load test for `search-api` ahead of the 2026-09-14 launch: find the RPS at which
 it breaks, and turn that into ECS and Vespa provisioning values.
 
-Self-contained on purpose — nothing here imports from `k6/routes/` or
-`k6/infra/`, and no live code is modified. `baseline.py` is the one exception:
-it imports `search.grafana` for credential resolution only.
+Self-contained on purpose — nothing here imports from
+`k6/tests/smoke-load/routes/` or `k6/infra/`, and no live code is modified.
+`baseline.py` is the one exception: it imports `search.grafana` for credential
+resolution only.
 
 ```bash
 just check                 # prove we can read everything, before burning a window

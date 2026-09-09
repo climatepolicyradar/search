@@ -4,7 +4,8 @@ description:
   Use when asked to run a breakpoint/capacity load test against search-api, find
   real numbers for k6 load thresholds, or refresh k6/docs/results/ — covers
   running k6/tests/breakpoint/'s constant-arrival-rate ladder, cross-checking
-  with AWS metrics, and proposing k6/routes/** threshold changes
+  with AWS metrics, and proposing k6/tests/smoke-load/routes/** threshold
+  changes
 ---
 
 # k6 Breakpoint Test Workflow
@@ -14,7 +15,7 @@ description:
 Runs `k6/tests/breakpoint/`'s arrival-rate ladder against production search-api
 to find the real healthy/collapse boundary, corroborates it with AWS metrics,
 writes up a dated results file from the template, and proposes (never silently
-applies) threshold changes to `k6/routes/**`.
+applies) threshold changes to `k6/tests/smoke-load/routes/**`.
 
 **REQUIRED READING FIRST:** `k6/docs/load-threshold-methodology.md` — this skill
 is the executable version of that method. If the two disagree, the methodology
@@ -84,13 +85,13 @@ the k6 summary + AWS metrics. Do not put numbers anywhere except this dated file
 
 ## Step 7 — Propose threshold changes; do not auto-apply
 
-For each `k6/routes/**` file with a `load` profile, compare its current
-`http_req_duration: ["p(95)<Nms"]` against this run's measured healthy-ceiling /
-collapse-point boundary. Write the proposal into the results file's "Threshold
-changes proposed" section, then separately show the user a diff of any file
-you'd change. **Wait for explicit confirmation before editing any `k6/routes/**`
-file\*\* — this applies even if the measured cliff looks close to what's already
-there. Never auto-apply.
+For each `k6/tests/smoke-load/routes/**` file with a `load` profile, compare its
+current `http_req_duration: ["p(95)<Nms"]` against this run's measured
+healthy-ceiling / collapse-point boundary. Write the proposal into the results
+file's "Threshold changes proposed" section, then separately show the user a
+diff of any file you'd change. **Wait for explicit confirmation before editing
+any `k6/tests/smoke-load/routes/**` file\*\* — this applies even if the measured
+cliff looks close to what's already there. Never auto-apply.
 
 If a threshold value itself changes (not just the comment/citation), also update
 the citation comment in that file to point at the new dated results file.
@@ -116,14 +117,15 @@ the citation comment in that file to point at the new dated results file.
   exactly 60 seconds — treat it as "at least 60s or hung."
 - **CloudFront caches search responses on the full query string.** Any route
   cycling through a small, fixed set of query/filter/ID values (as
-  `k6/routes/**`'s `load` profiles do — as few as 1 to 5 distinct values) will
-  be served almost entirely by the edge after the first hit unless every request
-  carries a unique cache-busting parameter. Verified directly: the same request
-  shape and VU count measured 108ms p95 uncached vs 8.76s p95 cache-busted — an
-  ~80x difference from caching alone. Before trusting _any_ `k6/routes/**`
-  `load` profile result, confirm its default function still cache-busts (`_cb`
-  param present when `PROFILE=load`); if a new route/file is added without one,
-  its "load test" numbers will describe CloudFront, not search-api.
+  `k6/tests/smoke-load/routes/**`'s `load` profiles do — as few as 1 to 5
+  distinct values) will be served almost entirely by the edge after the first
+  hit unless every request carries a unique cache-busting parameter. Verified
+  directly: the same request shape and VU count measured 108ms p95 uncached vs
+  8.76s p95 cache-busted — an ~80x difference from caching alone. Before
+  trusting _any_ `k6/tests/smoke-load/routes/**` `load` profile result, confirm
+  its default function still cache-busts (`_cb` param present when
+  `PROFILE=load`); if a new route/file is added without one, its "load test"
+  numbers will describe CloudFront, not search-api.
 - **Zero `http_req_failed` does not mean healthy.** A route can report 0% errors
   while still being unusable (e.g. p95 of 8-9 seconds) — `0% http_req_failed`
   only means nothing hit a hard failure/timeout, not that latency was

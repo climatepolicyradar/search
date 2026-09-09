@@ -7,7 +7,7 @@ not the full search-api stack (AppRunner, ECS, S3, IAM, Vespa config), which
 would otherwise risk rolling in whatever else happens to have drifted or been
 queued up in that stack at the same time.
 
-Manages two k6 Cloud projects per `k6/routes/<resource>/` group:
+Manages two k6 Cloud projects per `k6/tests/smoke-load/routes/<resource>/` group:
 
 - `SMOKE: search-api <resource>` — CI's smoke workflow report here
 - `LOAD: search-api <resource>` — Load tests report here, run on a
@@ -34,9 +34,10 @@ import pulumi
 from pulumiverse_grafana import Provider, k6
 
 # This file lives at <repo>/k6/infra/__main__.py — the k6 scripts it uploads
-# live at <repo>/k6/routes/. Computed relative to this file rather than via
-# the `search` package's REPO_ROOT_DIR helper, since this is a standalone
-# Pulumi project with no dependency on the main search Python package.
+# live at <repo>/k6/tests/smoke-load/routes/. Computed relative to this file
+# rather than via the `search` package's REPO_ROOT_DIR helper, since this is
+# a standalone Pulumi project with no dependency on the main search Python
+# package.
 K6_DIR = Path(__file__).resolve().parent.parent
 
 # Already exists in Grafana and imported into this stack — see module docstring.
@@ -47,8 +48,8 @@ SMOKE_RESOURCES = ["documents", "passages", "labels"]
 class LoadTestSpec:
     """One route's graduated load test."""
 
-    resource: str  # k6/routes/<resource>/ group, also the LOAD project name
-    script_path: str  # relative to k6/, e.g. "routes/documents/{document_id}/index.ts"
+    resource: str  # k6/tests/smoke-load/routes/<resource>/ group, also the LOAD project name
+    script_path: str  # relative to k6/, e.g. "tests/smoke-load/routes/documents/{document_id}/index.ts"
     name: str  # human-friendly load test name in Grafana Cloud
     cron: str  # 5-field cron expression, evaluated in UTC
     starts: str  # RFC3339 timestamp; fixed rather than computed at apply time, so re-running `pulumi up` doesn't perpetually diff the schedule's start
@@ -70,28 +71,28 @@ class LoadTestSpec:
 LOAD_TESTS: list[LoadTestSpec] = [
     LoadTestSpec(
         resource="documents",
-        script_path="routes/documents/{document_id}/index.ts",
+        script_path="tests/smoke-load/routes/documents/{document_id}/index.ts",
         name="documents/{document_id}: base query",
         cron="0 3 * * 1",  # Monday 03:00 UTC
         starts="2026-09-14T03:00:00Z",
     ),
     LoadTestSpec(
         resource="documents",
-        script_path="routes/documents/fields-combinations.ts",
+        script_path="tests/smoke-load/routes/documents/fields-combinations.ts",
         name="documents: fields combinations",
         cron="0 4 * * 1",  # Monday 04:00 UTC
         starts="2026-09-14T04:00:00Z",
     ),
     LoadTestSpec(
         resource="passages",
-        script_path="routes/passages/index.ts",
+        script_path="tests/smoke-load/routes/passages/index.ts",
         name="passages: base query",
         cron="0 3 * * 2",  # Tuesday 03:00 UTC
         starts="2026-09-15T03:00:00Z",
     ),
     LoadTestSpec(
         resource="passages",
-        script_path="routes/passages/filter-combinations.ts",
+        script_path="tests/smoke-load/routes/passages/filter-combinations.ts",
         name="passages: filter combinations",
         cron="0 4 * * 2",  # Tuesday 04:00 UTC
         starts="2026-09-15T04:00:00Z",
