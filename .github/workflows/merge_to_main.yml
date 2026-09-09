@@ -47,7 +47,7 @@ jobs:
             run-search-pulumi-up:
               - 'infra/**'
             run-k6-pulumi-up:
-              - 'k6/infra/**'
+              - 'k6/**'
             run-deploy:
               - 'api/**'
               - 'search/**'

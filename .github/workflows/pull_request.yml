@@ -39,7 +39,7 @@ jobs:
             run-search-pulumi-preview:
               - 'infra/**'
             run-k6-pulumi-preview:
-              - 'k6/infra/**'
+              - 'k6/**'
 
   lint:
     permissions:
