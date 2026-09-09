@@ -1,0 +1,9 @@
+{
+  "name": "breakpoint",
+  "private": true,
+  "description": "Pre-launch load test for search-api. Self-contained: does not share config or deps with ../smoke-load.",
+  "devDependencies": {
+    "@types/k6": "^2.2.0",
+    "typescript": "^6.0.3"
+  }
+}
