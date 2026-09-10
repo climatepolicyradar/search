@@ -16,7 +16,8 @@ jobs:
       run-test: ${{ steps.filter.outputs.run-test }}
       run-test-vespa-feeder: ${{ steps.filter.outputs.run-test-vespa-feeder }}
       run-check-scripts-structure: ${{ steps.filter.outputs.run-check-scripts-structure }}
-      run-pulumi-preview: ${{ steps.filter.outputs.run-pulumi-preview }}
+      run-search-pulumi-preview: ${{ steps.filter.outputs.run-search-pulumi-preview }}
+      run-k6-pulumi-preview: ${{ steps.filter.outputs.run-k6-pulumi-preview }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -35,8 +36,10 @@ jobs:
               - 'vespa-feeder/**'
             run-check-scripts-structure:
               - 'scripts/**'
-            run-pulumi-preview:
+            run-search-pulumi-preview:
               - 'infra/**'
+            run-k6-pulumi-preview:
+              - 'k6/**'
 
   lint:
     permissions:
@@ -130,11 +133,11 @@ jobs:
       - if: needs.changes.outputs.run-test-vespa-feeder == 'true'
         run: just test
 
-  pulumi-preview:
+  search-pulumi-preview:
     runs-on: ubuntu-latest
-    name: Pulumi Preview
+    name: Pulumi Preview (search)
     needs: [changes]
-    if: needs.changes.outputs.run-pulumi-preview == 'true'
+    if: needs.changes.outputs.run-search-pulumi-preview == 'true'
     strategy:
       matrix:
         environment: [production]
@@ -157,6 +160,28 @@ jobs:
         # we reset the aws:profile as the above uses AWS env variables set in the `aws-actions/configure-aws-credentials@v5` step
         run: |
           pulumi preview --stack climatepolicyradar/search/${{ matrix.environment }} --suppress-outputs --config aws:profile=
+
+  k6-pulumi-preview:
+    runs-on: ubuntu-latest
+    name: Pulumi Preview (k6)
+    needs: [changes]
+    if: needs.changes.outputs.run-k6-pulumi-preview == 'true'
+    strategy:
+      matrix:
+        environment: [production]
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v7
+      # No AWS resources here (Grafana Cloud only) - no credentials step needed.
+      - uses: astral-sh/setup-uv@v7
+      - uses: extractions/setup-just@v4
+      - run: just install
+      - uses: pulumi/actions@v7
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - working-directory: ./k6/infra
+        run: pulumi preview --stack climatepolicyradar/search-k6/${{ matrix.environment }} --suppress-outputs
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 

@@ -1,0 +1,6 @@
+name: search-k6
+description: Grafana Cloud k6 projects, load tests, and schedules for search-api
+runtime:
+  name: python
+  options:
+    toolchain: uv

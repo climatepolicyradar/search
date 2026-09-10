@@ -12,12 +12,48 @@ on:
           - staging
         default: production
         required: true
+      working-directory:
+        description: Directory containing the Pulumi project to deploy
+        type: string
+        default: ./infra
+        required: true
+      stack:
+        description: Pulumi stack to deploy (org/project/stack)
+        type: string
+        default: climatepolicyradar/search
+        required: true
+      aws-role:
+        description: >-
+          IAM role name to assume for this project's deploy (e.g.
+          search-production-github-actions). Leave empty for a project with no
+          AWS resources (e.g. k6/infra, which only touches Grafana Cloud) — the
+          AWS credentials step is skipped entirely.
+        type: string
+        default: search-production-github-actions
+        required: false
   workflow_call:
     inputs:
       environment:
         description: Pulumi stack environment to deploy
         type: string
         required: true
+      working-directory:
+        description: Directory containing the Pulumi project to deploy
+        type: string
+        default: ./infra
+        required: false
+      stack:
+        description: Pulumi stack to deploy (org/project/stack)
+        type: string
+        default: climatepolicyradar/search
+        required: false
+      aws-role:
+        description: >-
+          IAM role name to assume for this project's deploy. Leave empty for a
+          project with no AWS resources — the AWS credentials step is skipped.
+        type: string
+        default: search-production-github-actions
+        required: false
 
 permissions:
   contents: write
@@ -30,9 +66,10 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v7
-      - uses: aws-actions/configure-aws-credentials@v6
+      - if: inputs.aws-role != ''
+        uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ inputs.environment }}-github-actions
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ inputs.aws-role }}
           role-session-name: GitHub_Pulumi_up_${{ inputs.environment }}
           aws-region: eu-west-1
           # checkov:skip=CKV_GHA_7: this is a deploy workflow, not a build; the environment input selects the target stack and does not affect a build artifact
@@ -44,7 +81,7 @@ jobs:
       - uses: pulumi/actions@v7
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - working-directory: ./infra
-        run: pulumi up --stack climatepolicyradar/search/${{ inputs.environment }} --yes --skip-preview
+      - working-directory: ${{ inputs.working-directory }}
+        run: pulumi up --stack ${{ inputs.stack }}/${{ inputs.environment }} --yes --skip-preview
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

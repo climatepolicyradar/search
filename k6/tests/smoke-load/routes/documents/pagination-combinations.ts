@@ -17,8 +17,15 @@ const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
 // A VU ("virtual user") is one simulated concurrent user — it runs a script's
 // default-exported function in a loop for `duration`. PROFILES below (VUs/
 // duration differ per route, and a `load` profile is added once that route's
-// load test is scoped) is picked via `-e PROFILE=<name>` (defaulting to
-// `smoke`).
+// load test is scoped) is picked via `-e PROFILE=<name>`. With no env var
+// set, defaults to `load` if PROFILES has one, else whichever profile is
+// listed first (`smoke`, by convention — see PROFILES below). Defaulting to
+// `load` when available matters for scripts uploaded to Grafana Cloud k6 as a
+// scheduled LoadTest resource (see infra/k6_load_tests.py) — Cloud has no way
+// to pass `-e PROFILE=...` at trigger time, so whatever this resolves to with
+// no env var set is what a scheduled cloud run always executes. CI's smoke
+// workflow and any local smoke check must pass `-e PROFILE=smoke` explicitly
+// once a script has a load profile; it is no longer the no-flags default.
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
 //
 // `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
@@ -30,7 +37,9 @@ function resolveProfile(
   cloudName: string,
   profiles: Record<string, object>,
 ): object {
-  const profile = profiles[__ENV.PROFILE || "smoke"] as
+  const defaultProfileName =
+    "load" in profiles ? "load" : Object.keys(profiles)[0];
+  const profile = profiles[__ENV.PROFILE || defaultProfileName] as
     | Record<string, unknown>
     | undefined;
   if (!profile) return profile as unknown as object;
@@ -40,22 +49,49 @@ function resolveProfile(
 // SharedArray shares this data once across all VUs instead of every VU
 // holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
-const searchQueries = new SharedArray("search-queries", function () {
-  return [
-    "climate adaptation",
-    "deforestation",
-    "carbon pricing",
-    "renewable energy",
-    "flood risk",
-  ];
-});
+//
+// `page_token` is a 1-based page number; search-api computes Vespa's offset
+// as `(page_token - 1) * page_size` (search/engines/dev_vespa.py). Covers
+// the first page (default), a deep page (offset 490 — tests the cost of
+// Vespa skipping over ranked results internally), and a large `page_size`.
+// The fixed `query=climate` result set (~17k documents at time of writing)
+// is large enough that all three cases return full pages.
+type TPaginationCombination = {
+  name: string;
+  pageToken: number;
+  pageSize: number;
+  verifyOffsetAdvances: boolean;
+};
+
+const paginationCombinations = new SharedArray(
+  "pagination-combinations",
+  function (): TPaginationCombination[] {
+    return [
+      {
+        name: "first page (default)",
+        pageToken: 1,
+        pageSize: 10,
+        verifyOffsetAdvances: false,
+      },
+      {
+        name: "deep page (tests offset cost)",
+        pageToken: 50,
+        pageSize: 10,
+        verifyOffsetAdvances: true,
+      },
+      {
+        name: "large page_size",
+        pageToken: 1,
+        pageSize: 100,
+        verifyOffsetAdvances: false,
+      },
+    ];
+  },
+);
 
 type TDocumentResult = { id?: unknown; title?: unknown };
 type TSearchResponse = { results?: TDocumentResult[] };
 
-// TODO: FUS-357: add a "load" profile here once load-test parameters (VU ramp
-// stages, thresholds) are agreed, using the worst-case combination (filters +
-// both `fields` values together). Select it with `-e PROFILE=load`.
 const PROFILES = {
   smoke: {
     vus: 5,
@@ -70,13 +106,19 @@ const PROFILES = {
 
 // k6 requires `options` to be a named export — this is how it reads VU/
 // duration config for the run, not a convention we chose.
-export const options = resolveProfile("documents: base query", PROFILES);
+export const options = resolveProfile(
+  "documents: pagination combinations",
+  PROFILES,
+);
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const query = searchQueries[Math.floor(Math.random() * searchQueries.length)];
+  const combination =
+    paginationCombinations[
+      Math.floor(Math.random() * paginationCombinations.length)
+    ];
   const res = http.get(
-    `${BASE_URL}/documents?query=${encodeURIComponent(query)}`,
+    `${BASE_URL}/documents?query=climate&page_token=${combination.pageToken}&page_size=${combination.pageSize}`,
   );
 
   // check() records pass/fail per assertion without stopping the iteration
@@ -84,16 +126,15 @@ export default function () {
   // summary as a percentage. A smoke test's bar is 100% checks passing.
   // https://grafana.com/docs/k6/latest/using-k6/checks/
   check(res, {
-    "status is 200": (response: Response) => response.status === 200,
-    "response has results array": (response: Response) => {
-      const body = response.json() as TSearchResponse;
-      return Array.isArray(body?.results);
-    },
-    "results have id and title": (response: Response) => {
+    [`${combination.name}: status is 200`]: (response: Response) =>
+      response.status === 200,
+    [`${combination.name}: returns exactly page_size results`]: (
+      response: Response,
+    ) => {
       const body = response.json() as TSearchResponse;
       const results = body?.results ?? [];
       return (
-        results.length > 0 &&
+        results.length === combination.pageSize &&
         results.every(
           (result) =>
             typeof result?.id === "string" && typeof result?.title === "string",
@@ -101,6 +142,23 @@ export default function () {
       );
     },
   });
+
+  if (combination.verifyOffsetAdvances) {
+    // Proves the offset is actually taking effect, not silently ignored:
+    // a deep page must return different documents than page 1.
+    const firstPageRes = http.get(
+      `${BASE_URL}/documents?query=climate&page_token=1&page_size=${combination.pageSize}`,
+    );
+    check(firstPageRes, {
+      [`${combination.name}: differs from page 1`]: () => {
+        const deepPageBody = res.json() as TSearchResponse;
+        const firstPageBody = firstPageRes.json() as TSearchResponse;
+        const deepPageIds = (deepPageBody?.results ?? []).map((r) => r.id);
+        const firstPageIds = (firstPageBody?.results ?? []).map((r) => r.id);
+        return JSON.stringify(deepPageIds) !== JSON.stringify(firstPageIds);
+      },
+    });
+  }
 
   // Paces iterations so VUs don't hammer the endpoint back-to-back with
   // zero delay — standard for smoke/load tests, mimics real user think time.
