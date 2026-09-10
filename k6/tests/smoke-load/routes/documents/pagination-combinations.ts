@@ -1,6 +1,7 @@
 import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
+import tempo from "k6/experimental/tracing";
 
 // __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
 // Defaults to production so `k6 run` works out of the box with no setup.
@@ -111,6 +112,18 @@ export const options = resolveProfile(
   PROFILES,
 );
 
+// Distributed tracing: attaches a W3C `traceparent` header to every HTTP
+// request from this point forward and tags each request's trace_id in the
+// output metadata, so Grafana Cloud k6 can correlate this run's requests
+// with server-side spans in Grafana Cloud Traces (Tempo). This is the
+// k6-x-tempo feature the Cloud Insights recommendations flagged for this
+// test. Requires search-api's OTel setup to extract the incoming
+// traceparent header for the trace to actually correlate — see
+// https://grafana.com/docs/k6/latest/javascript-api/jslib/http-instrumentation-tempo
+tempo.instrumentHTTP({
+  propagator: "w3c",
+});
+
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
   const combination =
@@ -119,6 +132,17 @@ export default function () {
     ];
   const res = http.get(
     `${BASE_URL}/documents?query=climate&page_token=${combination.pageToken}&page_size=${combination.pageSize}`,
+    {
+      // Group by the fixed combination name instead of letting k6 default
+      // `name`/`url` to the full dynamic query string — per-request
+      // page_token/page_size values were producing a high-cardinality set of
+      // unique values across http_reqs, http_req_waiting, and
+      // http_req_tls_handshaking (flagged by Cloud Insights' Metric Tags
+      // audit). This collapses all requests sharing a pagination combination
+      // into one series per combination.
+      // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
+      tags: { name: `documents:${combination.name}` },
+    },
   );
 
   // check() records pass/fail per assertion without stopping the iteration
@@ -148,6 +172,7 @@ export default function () {
     // a deep page must return different documents than page 1.
     const firstPageRes = http.get(
       `${BASE_URL}/documents?query=climate&page_token=1&page_size=${combination.pageSize}`,
+      { tags: { name: "documents:first page (default)" } },
     );
     check(firstPageRes, {
       [`${combination.name}: differs from page 1`]: () => {

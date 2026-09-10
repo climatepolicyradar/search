@@ -1,6 +1,7 @@
 import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
+import tempo from "k6/experimental/tracing";
 
 // __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
 // Defaults to production so `k6 run` works out of the box with no setup.
@@ -142,6 +143,18 @@ export const options = resolveProfile(
   PROFILES,
 );
 
+// Distributed tracing: attaches a W3C `traceparent` header to every HTTP
+// request from this point forward and tags each request's trace_id in the
+// output metadata, so Grafana Cloud k6 can correlate this run's requests
+// with server-side spans in Grafana Cloud Traces (Tempo). This is the
+// k6-x-tempo feature the Cloud Insights recommendations flagged for this
+// test. Requires search-api's OTel setup to extract the incoming
+// traceparent header for the trace to actually correlate — see
+// https://grafana.com/docs/k6/latest/javascript-api/jslib/http-instrumentation-tempo
+tempo.instrumentHTTP({
+  propagator: "w3c",
+});
+
 function isSorted(
   results: TPassageResult[],
   direction: "asc" | "desc",
@@ -165,6 +178,16 @@ export default function () {
     orderByCombinations[Math.floor(Math.random() * orderByCombinations.length)];
   const res = http.get(
     `${BASE_URL}/passages?query=climate&filters=${FIXED_FILTERS}&order_by=${encodeURIComponent(combination.orderBy)}`,
+    {
+      // Group by the fixed order_by value instead of letting k6 default
+      // `name`/`url` to the full dynamic query string — per-request order_by
+      // text was producing a high-cardinality set of unique values across
+      // http_reqs, http_req_waiting, and http_req_tls_handshaking (flagged by
+      // Cloud Insights' Metric Tags audit). This collapses all requests
+      // sharing an order_by value into one series per combination.
+      // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
+      tags: { name: `passages:order_by:${combination.orderBy}` },
+    },
   );
 
   // check() records pass/fail per assertion without stopping the iteration
