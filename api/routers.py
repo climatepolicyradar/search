@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from pydantic_settings import SettingsConfigDict
 
 from api.labels_taxonomy import labels_taxonomy
@@ -51,6 +52,18 @@ router = APIRouter(prefix="/search")
 AggregationField = Literal["aggregations.labels"]
 FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
 Fields = AggregationField | FacetField
+
+LLMS_TXT_PATH = Path(__file__).parent / "llms.txt"
+
+
+@router.get("/llms.txt", response_class=PlainTextResponse)
+def read_llms_txt() -> str:
+    """
+    Serve the llms.txt spec that tells an agent how to query this API.
+
+    @see: https://llmstxt.org
+    """
+    return LLMS_TXT_PATH.read_text(encoding="utf-8")
 
 
 @router.get("/documents/{document_id}", response_model=ItemResponse[Document])

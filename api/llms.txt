@@ -1,0 +1,274 @@
+# Climate Policy Radar
+
+> An open database of the world's climate law, policy, litigation, climate
+> finance and UN Convention submissions, with full text, expert concept
+> labelling and provenance. Maintained by Climate Policy Radar CIC, a
+> non-profit.
+
+Use this API when you need the *primary source text* of national climate laws,
+policies, NDCs, court cases or fund documents — not summaries of them. Coverage
+is global and multilingual; documents are stored in their original language with
+English translations of matching passages available.
+
+## Data model
+
+Understanding these four concepts is necessary to query the API well.
+
+- **Document** — one published item (a law, a policy, a court filing, an NDC).
+  Has `id`, `title`, `description`, an `attributes` bag of metadata, and
+  relationships to other documents.
+- **Document relationships** — documents are connected to each other via
+  `documents[].value`. The edge of those nodes is described by `documents[].type`.
+- **Passage** — a text block within a document, produced by the PDF/HTML layout
+  parser. Carries `text`, `language`, page numbers and bounding-box coordinates
+  so a match can be located precisely on the page. `idx` gives reading order.
+  Passages are the right granularity for evidence and citation; documents are
+  the right granularity for "does this country have X".
+- **Label** (also called **Concept**, and marketed as **Topics**) — an
+  expert-curated concept such as "adaptation finance" or "just transition".
+  A Label is *not* a keyword: it packages `alternative_labels` (synonyms),
+  `subconcept_labels` (narrower terms), `negative_labels` (exclusions) and
+  regional variations. Searching by Label rather than by string is how you avoid
+  missing "increasing climate resilience" when you searched "climate adaptation".
+  There are 100+ Labels. Prefer Label filtering over keyword queries for recall.
+
+## Querying
+
+Every path below is relative to `https://api.climatepolicyradar.org`, so
+`/search/documents` is `https://api.climatepolicyradar.org/search/documents`.
+No authentication — see Limits and etiquette.
+
+- `GET /search/documents` — search and filter documents.
+- `GET /search/documents/{document_id}` — retrieve one document.
+- `GET /search/passages` — search passage text. Defaults to `idx asc` (reading
+  order); pass `order_by=relevance desc` for best-match-first.
+- `GET /search/labels` — look up available Labels/Topics by name or type.
+- `GET /search/labels-taxonomy` — the Label hierarchy.
+
+Shared parameters: `query`, `filters`, `order_by`, `page_token`, `page_size`.
+
+`query` runs exclusively on lexical search.
+
+`GET /search/openapi.json` is the machine-readable contract for all of the
+above — exact response shapes, enum values and parameter types. Read it when
+you need the precise schema of a response; read this file for how the pieces
+fit together and which query to reach for. The two are complementary, and the
+OpenAPI schema is generated from the running service, so where they disagree
+it is right about shapes and this file is right about meaning. Browsable docs
+are at `/search/docs`.
+
+### `filters`
+
+`filters` takes a URL-encoded JSON *filter tree*. The top level is always a
+group:
+
+```json
+{"op": "and", "filters": [ ...conditions or nested groups... ]}
+```
+
+`op` is `and` or `or`; members are either further groups (nesting is
+unlimited) or conditions. There is no top-level `not` — negate the individual
+condition instead. A filter is ANDed with `query` rather than replacing it, and
+the same filter is applied to any `aggregations`/`facets` you request
+alongside the results.
+
+**Field conditions** match an indexed field:
+
+```json
+{"field": "labels.value.id", "op": "contains", "value": "geography::USA"}
+```
+
+`op` is `contains` or `not_contains`; `value` is a string, number or boolean.
+`contains` is index matching, not substring matching.
+
+**Attribute conditions** match one key inside a document's `attributes` bag,
+and are the only way to use an ordering operator:
+
+```json
+{"field": "attributes_double", "key": "project_cost_usd", "op": "gte", "value": 1000000}
+```
+
+`field` names the typed map to look in — `attributes_string`,
+`attributes_double`, `attributes_boolean`, `attributes_identifiers`, or the
+special-cased `attributes.published_date`. `op` is `eq`, `not_eq`, `lt`, `lte`,
+`gt` or `gte`; the four ordering operators are numeric- and date-only and are
+rejected on `attributes_string`.
+
+`{"field": "attributes.<key>", "op": "contains", "value": ...}` is a shorthand
+field condition for the same lookup: the JSON type of `value` picks the map
+(string → `attributes_string`, number → `attributes_double`, boolean →
+`attributes_boolean`). It cannot reach `attributes_identifiers` and cannot
+express a range; use the long form for those.
+
+### Filterable fields
+
+`/documents`
+
+- `labels.value.id` — a Label id, always `{type}::{name}`: `geography::USA`,
+  `category::Law`, `topic::Adaptation`, `concept::Q1343`.
+- `labels.value.value` — the Label's display string, e.g. `Romania`.
+- `labels.type` — the *relationship* between document and Label, not the
+  Label's own type.
+- `id`, `title`, `description`, `geographies` — indexed document fields.
+- `attributes.*` — as above.
+
+`/passages`
+
+- `document_id`, `principal_id`.
+- `labels.value.id`, `labels.value.value`, `labels.value.type`.
+
+`/labels`
+
+- `labels.type`, `labels.value.id`, `labels.value.value`, `labels.value.type` —
+  these filter a Label's relationships to *other* Labels, which is how you walk
+  the taxonomy.
+
+Field names outside these lists are passed to the index unchanged rather than
+rejected at the boundary, so a typo surfaces as a backend error and not a
+`400`. Malformed filter JSON, an unrecognised `op`, and a non-ISO-8601
+`published_date` are all `400`.
+
+### Same-element matching on passages and labels
+
+On `/passages` and `/labels`, `labels` is an array of structs, and `labels.*`
+conditions ANDed *inside one group* must all be satisfied by the **same** array
+element. Two different ids ANDed in one group therefore match nothing. To
+require two different Labels on the same passage, give each its own group:
+
+```json
+{"op": "and", "filters": [
+  {"op": "and", "filters": [
+    {"field": "labels.value.id", "op": "contains", "value": "concept::Q1343"}]},
+  {"op": "and", "filters": [
+    {"field": "labels.value.id", "op": "contains", "value": "concept::Q7987"}]}]}
+```
+
+Same-element matching is what you want when the conditions describe one Label:
+`labels.type` and `labels.value.id` in a single group pin the relationship and
+its target together. `/documents` does no array-struct filtering, so its label
+conditions are always independent of one another.
+
+### Worked examples
+
+Documents for a geography — URL-encode the JSON in a real request:
+
+```
+GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"geography::USA"}]}
+```
+
+Documents published in a closed date range. `published_date` is stored as a
+Unix timestamp; ISO-8601 strings are converted at the boundary, and `key` must
+be `published_date`:
+
+```json
+{"op": "and", "filters": [
+  {"field": "attributes.published_date", "key": "published_date",
+   "op": "gte", "value": "2019-01-01T00:00:00Z"},
+  {"field": "attributes.published_date", "key": "published_date",
+   "op": "lte", "value": "2023-12-31T23:59:59Z"}]}
+```
+
+A Label query using all three combinators — US laws or policies, excluding one
+concept:
+
+```json
+{"op": "and", "filters": [
+  {"op": "or", "filters": [
+    {"field": "labels.value.id", "op": "contains", "value": "category::Law"},
+    {"field": "labels.value.id", "op": "contains", "value": "category::Policy"}]},
+  {"field": "labels.value.id", "op": "contains", "value": "geography::USA"},
+  {"field": "labels.value.id", "op": "not_contains", "value": "concept::Q1343"}]}
+```
+
+Filtering `/documents` by a `concept::` Label also affects ranking: when you
+order by `relevance`, matching documents are reordered by how often they
+mention that concept, so the most substantive treatment comes first. An
+explicit `order_by` on any other field disables that reordering, and
+`not_contains` never contributes to it — excluding a concept must not boost it.
+
+`order_by` takes comma-separated `<field> <direction>` clauses (AIP-132).
+Documents support `relevance`, `attributes.published_date`, `title`. Passages
+support `relevance`, `idx`.
+
+### Dates
+
+`published_date` is the only date-typed key in `attributes`. It arrives as an
+ISO-8601 string and is stored twice: verbatim in `attributes_string`, and as
+epoch seconds in a scalar field that backs both date comparison and date sort.
+
+Compare against it with the long-form attribute condition, which targets the
+scalar:
+
+```json
+{"field": "attributes.published_date", "key": "published_date",
+ "op": "gte", "value": "2019-01-01T00:00:00Z"}
+```
+
+`key` must be `published_date`. `value` is either an ISO-8601 string —
+converted to epoch seconds at the boundary, with a non-ISO string rejected as a
+`400` — or an epoch-seconds integer, which is passed through untouched. Always
+include `Z` or an explicit offset: a naive datetime is resolved against the
+server's local timezone rather than UTC.
+
+The `{"field": "attributes.published_date", "op": "contains", ...}` shorthand
+does something different, and quietly. `contains` is not an attribute-condition
+operator, so the condition parses as a field condition and string-matches the
+stored ISO text in `attributes_string`. It cannot express a range, and it will
+miss a date written with a different offset or precision to the stored one. Use
+the long form for anything involving dates.
+
+Undated documents — no `published_date`, or one that failed to parse at feed
+time — have no scalar value at all. They are excluded by every date filter, and
+sorted last by `order_by=attributes.published_date` in both directions. Only
+the first `order_by` clause is applied.
+
+The rest of the `attributes` bag varies by corpus and is not enumerated here.
+
+## Recommended query strategy
+
+1. Resolve the user's concept to a Label via `/search/labels` before searching.
+   Free-text queries under-recall badly on this corpus because the same policy
+   idea is phrased differently across jurisdictions and languages.
+2. Use `/search/documents` with Label filters to establish *which* documents are
+   relevant, then `/search/passages` to extract quotable evidence.
+3. Check `documents[].type` relationships before asserting that a law is current.
+4. Cite the document `id` and passage page number; both are stable.
+
+## Limits and etiquette
+
+No authentication. There is no API key and no auth header — every endpoint is
+open, and any origin may call it. Please be proportionate with request volume:
+this is a non-profit's infrastructure, and the bulk dataset below is the right
+tool for anything resembling a full crawl.
+
+**Paginate on the request, not the response.** `page_token` (1-based) and
+`page_size` work as offset and limit. The `page`, `page_size`, `total_pages`,
+`next_page` and `previous_page` fields *in the response* are not yet
+implemented: they are always `0` or `null` whatever the result set. Do not
+iterate by following `next_page` — you will read the first page and conclude
+you have everything. Instead increment `page_token` yourself, and stop when a
+page returns fewer than `page_size` results or when you have covered
+`total_size`, which is the one pagination field that carries a real value.
+
+The API enforces no `page_size` ceiling of its own. The effective limits are
+the index's — 50,001 hits, 500,000 offset — and a 5-second query timeout;
+exceeding any of them surfaces as a `503`. Note that the timeout degrades
+rather than fails: a query that runs out of budget returns whatever it had
+found so far, with a `200`, so results under heavy load can be incomplete
+without saying so.
+
+The corpus is rebuilt daily. Documents, passages and Labels are all
+re-materialised and fed overnight, so expect the index to be at most a day
+behind the upstream sources.
+
+## Other access
+
+- Bulk dataset: https://huggingface.co/datasets/ClimatePolicyRadar/all-document-text-data
+- Loading and analysis examples: https://github.com/ClimatePolicyRadar/open-data
+- Human-facing search: https://app.climatepolicyradar.org/search
+- Terms of use, including commercial-use terms: contact partners@climatepolicyradar.org
+
+## Citation
+
+Climate Policy Radar & Grantham Research Institute. Retrieved from
+app.climatepolicyradar.org. Licensed CC-BY 4.0 — attribution required.
