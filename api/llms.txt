@@ -63,74 +63,23 @@ are at `/search/docs`.
 
 ### `filters`
 
-`filters` takes a URL-encoded JSON *filter tree*. The top level is always a
-group:
+`filters` is a URL-encoded JSON filter tree, ANDed with `query` and applied to
+any `aggregations`/`facets` requested alongside the results.
 
-```json
-{"op": "and", "filters": [ ...conditions or nested groups... ]}
-```
+For the format — operators, the typed attribute maps, and the field names each
+endpoint recognises — read the `filters` parameter description in
+`GET /search/openapi.json`. It is generated from the types that parse the
+filter, so it cannot drift; this file deliberately does not restate it. The
+worked examples below show the shape.
 
-`op` is `and` or `or`; members are either further groups (nesting is
-unlimited) or conditions. There is no top-level `not` — negate the individual
-condition instead. A filter is ANDed with `query` rather than replacing it, and
-the same filter is applied to any `aggregations`/`facets` you request
-alongside the results.
+Three things the schema cannot tell you:
 
-**Field conditions** match an indexed field:
-
-```json
-{"field": "labels.value.id", "op": "contains", "value": "geography::USA"}
-```
-
-`op` is `contains` or `not_contains`; `value` is a string, number or boolean.
-`contains` is index matching, not substring matching.
-
-**Attribute conditions** match one key inside a document's `attributes` bag,
-and are the only way to use an ordering operator:
-
-```json
-{"field": "attributes_double", "key": "project_cost_usd", "op": "gte", "value": 1000000}
-```
-
-`field` names the typed map to look in — `attributes_string`,
-`attributes_double`, `attributes_boolean`, `attributes_identifiers`, or the
-special-cased `attributes.published_date`. `op` is `eq`, `not_eq`, `lt`, `lte`,
-`gt` or `gte`; the four ordering operators are numeric- and date-only and are
-rejected on `attributes_string`.
-
-`{"field": "attributes.<key>", "op": "contains", "value": ...}` is a shorthand
-field condition for the same lookup: the JSON type of `value` picks the map
-(string → `attributes_string`, number → `attributes_double`, boolean →
-`attributes_boolean`). It cannot reach `attributes_identifiers` and cannot
-express a range; use the long form for those.
-
-### Filterable fields
-
-`/documents`
-
-- `labels.value.id` — a Label id, always `{type}::{name}`: `geography::USA`,
-  `category::Law`, `topic::Adaptation`, `concept::Q1343`.
-- `labels.value.value` — the Label's display string, e.g. `Romania`.
-- `labels.type` — the *relationship* between document and Label, not the
-  Label's own type.
-- `id`, `title`, `description`, `geographies` — indexed document fields.
-- `attributes.*` — as above.
-
-`/passages`
-
-- `document_id`, `principal_id`.
-- `labels.value.id`, `labels.value.value`, `labels.value.type`.
-
-`/labels`
-
-- `labels.type`, `labels.value.id`, `labels.value.value`, `labels.value.type` —
-  these filter a Label's relationships to *other* Labels, which is how you walk
-  the taxonomy.
-
-Field names outside these lists are passed to the index unchanged rather than
-rejected at the boundary, so a typo surfaces as a backend error and not a
-`400`. Malformed filter JSON, an unrecognised `op`, and a non-ISO-8601
-`published_date` are all `400`.
+- `contains` is index matching, not substring matching.
+- A Label id is always `{type}::{name}`: `geography::USA`, `category::Law`,
+  `topic::Adaptation`, `concept::Q1343`.
+- An unrecognised field name is passed to the index rather than rejected,
+  which is also the only way to reach an unaliased field — `id`, `title`,
+  `description` and `geographies` on `/documents`.
 
 ### Same-element matching on passages and labels
 
