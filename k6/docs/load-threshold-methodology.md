@@ -6,19 +6,20 @@ dashboard line.
 
 ## Why this exists
 
-The `load` profile thresholds in `k6/routes/**` used to cite a "2s p95 line on
-the vespa-search dashboard" from the Fusion monitoring RFC — but that RFC
-explicitly deferred formalising it as a real SLO, so the number was a guess, not
-a measurement. This doc is the repeatable method for replacing that guess with
-something backed by evidence, without baking specific numbers into code comments
-(see `k6/docs/results/` for dated results from past runs — this file only covers
-method).
+The `load` profile thresholds in `k6/tests/smoke-load/routes/**` used to cite a
+"2s p95 line on the vespa-search dashboard" from the Fusion monitoring RFC — but
+that RFC explicitly deferred formalising it as a real SLO, so the number was a
+guess, not a measurement. This doc is the repeatable method for replacing that
+guess with something backed by evidence, without baking specific numbers into
+code comments (see `k6/docs/results/` for dated results from past runs — this
+file only covers method).
 
 ## Prerequisites
 
 - `k6/tests/breakpoint/` (the standalone capacity-testing harness — see its own
-  README for setup). It is intentionally not wired into `k6/routes/` or
-  `k6/infra/`, so it can be run without affecting the routine smoke/load suite.
+  README for setup). It is intentionally not wired into
+  `k6/tests/smoke-load/routes/` or `k6/infra/`, so it can be run without
+  affecting the routine smoke/load suite.
 - Production AWS credentials (`aws login`, profile `production`), for CloudWatch
   and the live traffic baseline.
 - `VESPA_ENDPOINT` / `VESPA_READ_TOKEN`, if also diagnosing _why_ a breakpoint
@@ -77,9 +78,10 @@ method).
 
 7. **Record the results in a new dated file** under `k6/docs/results/` (method
    only lives here; numbers live there) and reference that file, not inline
-   numbers, from the `load` profile's threshold comment in `k6/routes/**`. This
-   keeps the code comment stable as thresholds are re-derived over time, rather
-   than needing an edit every time a number is refreshed.
+   numbers, from the `load` profile's threshold comment in
+   `k6/tests/smoke-load/routes/**`. This keeps the code comment stable as
+   thresholds are re-derived over time, rather than needing an edit every time a
+   number is refreshed.
 
 ## When to re-run this
 

@@ -17,8 +17,15 @@ const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
 // A VU ("virtual user") is one simulated concurrent user — it runs a script's
 // default-exported function in a loop for `duration`. PROFILES below (VUs/
 // duration differ per route, and a `load` profile is added once that route's
-// load test is scoped) is picked via `-e PROFILE=<name>` (defaulting to
-// `smoke`).
+// load test is scoped) is picked via `-e PROFILE=<name>`. With no env var
+// set, defaults to `load` if PROFILES has one, else whichever profile is
+// listed first (`smoke`, by convention — see PROFILES below). Defaulting to
+// `load` when available matters for scripts uploaded to Grafana Cloud k6 as a
+// scheduled LoadTest resource (see infra/k6_load_tests.py) — Cloud has no way
+// to pass `-e PROFILE=...` at trigger time, so whatever this resolves to with
+// no env var set is what a scheduled cloud run always executes. CI's smoke
+// workflow and any local smoke check must pass `-e PROFILE=smoke` explicitly
+// once a script has a load profile; it is no longer the no-flags default.
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
 //
 // `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
@@ -30,12 +37,20 @@ function resolveProfile(
   cloudName: string,
   profiles: Record<string, object>,
 ): object {
-  const profile = profiles[__ENV.PROFILE || "smoke"] as
+  const defaultProfileName =
+    "load" in profiles ? "load" : Object.keys(profiles)[0];
+  const profile = profiles[__ENV.PROFILE || defaultProfileName] as
     | Record<string, unknown>
     | undefined;
   if (!profile) return profile as unknown as object;
   return { ...profile, cloud: { name: cloudName } };
 }
+
+// Resolved the same way resolveProfile picks a default above — a script whose
+// default() branches on load vs. smoke (e.g. picking one worst-case fixture
+// vs. sweeping all of them) must agree with what `options` resolved to, or
+// the two would silently disagree once no env var is passed.
+const isLoadProfile = (__ENV.PROFILE || "load") === "load";
 
 // SharedArray shares this data once across all VUs instead of every VU
 // holding its own copy in memory.
@@ -225,19 +240,22 @@ const PROFILES = {
         ],
       },
     },
-    // Thresholds: p95 < 2s is the "existing 2s p95 line on the vespa-search
-    // dashboard" the monitoring RFC names
-    // (https://app.notion.com/p/3c79109609a48195972fd340c03d1508) — but that RFC
-    // explicitly defers formalising it as a real SLO ("Deferred, not rejected —
-    // no baseline data yet", still Open as of writing), so treat this as a
-    // provisional, not agreed, target until that decision lands. Reused as-is
-    // from documents' graduated thresholds (FUS-356/FUS-357) — the RFC figure
-    // is a route-agnostic dashboard line, not per-route, so there's no
-    // separate number to reference yet. http_req_failed aborts the run early
-    // on a failure spike rather than burning the full ramp on a route that's
-    // already broken.
+    // Thresholds: 2000ms is a loose tripwire above measured healthy
+    // capacity, not a fitted SLO. Derived using the method in
+    // k6/docs/load-threshold-methodology.md; see
+    // k6/docs/results/2026-09-09-breakpoint-test-baseline.md for the
+    // measurements this value is based on — three same-day production
+    // runs put the healthy region's p95 at 860ms-1.85s (passages' own p95
+    // was 957ms-1.77s) and the collapse point (a hard cliff, not gradual)
+    // at ~6rps offered load, so 2000ms has real headroom on both sides.
+    // Re-derive (new dated results file, method doc unchanged) rather
+    // than editing the number here from memory — the underlying capacity
+    // is expected to move as infrastructure changes, per that results
+    // file's caveats. http_req_failed aborts the run early on a failure
+    // spike rather than burning the full ramp on a route that's already
+    // broken.
     thresholds: {
-      // PROVISIONAL — see comment above. Not an agreed SLO.
+      // Loose tripwire, not a tight SLO — see comment above.
       http_req_duration: ["p(95)<2000"],
       http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
     },
@@ -253,8 +271,6 @@ export const options = resolveProfile(
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const isLoadProfile = __ENV.PROFILE === "load";
-
   // Smoke mode sweeps all combinations to check correctness; load mode
   // repeats the single most structurally complex real shape (the nested
   // or-in-and) to find a capacity ceiling for it, per FUS-358's scope — the
@@ -264,8 +280,17 @@ export default function () {
     ? filterCombinations.find((c) => c.name.includes("nested or-in-and"))!
     : filterCombinations[Math.floor(Math.random() * filterCombinations.length)];
   const filtersParam = encodeURIComponent(JSON.stringify(combination.filters));
+  // Load mode always requests the same fixed filter combination, so without
+  // a cache-buster it's a single, entirely static URL — CloudFront serves
+  // almost every request after the first as a hit, measuring the edge, not
+  // origin (see k6/tests/breakpoint/README.md finding 0). Smoke mode sweeps
+  // many combinations testing correctness, not capacity, so it's left
+  // cacheable.
+  const cacheBuster = isLoadProfile
+    ? `&_cb=${__VU}-${__ITER}-${Date.now()}`
+    : "";
   const res = http.get(
-    `${BASE_URL}/passages?query=climate&filters=${filtersParam}`,
+    `${BASE_URL}/passages?query=climate&filters=${filtersParam}${cacheBuster}`,
   );
 
   // k6 check/group names may not contain "::" — fixture names quote real

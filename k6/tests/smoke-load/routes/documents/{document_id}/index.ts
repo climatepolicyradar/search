@@ -17,8 +17,15 @@ const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
 // A VU ("virtual user") is one simulated concurrent user — it runs a script's
 // default-exported function in a loop for `duration`. PROFILES below (VUs/
 // duration differ per route, and a `load` profile is added once that route's
-// load test is scoped) is picked via `-e PROFILE=<name>` (defaulting to
-// `smoke`).
+// load test is scoped) is picked via `-e PROFILE=<name>`. With no env var
+// set, defaults to `load` if PROFILES has one, else whichever profile is
+// listed first (`smoke`, by convention — see PROFILES below). Defaulting to
+// `load` when available matters for scripts uploaded to Grafana Cloud k6 as a
+// scheduled LoadTest resource (see infra/k6_load_tests.py) — Cloud has no way
+// to pass `-e PROFILE=...` at trigger time, so whatever this resolves to with
+// no env var set is what a scheduled cloud run always executes. CI's smoke
+// workflow and any local smoke check must pass `-e PROFILE=smoke` explicitly
+// once a script has a load profile; it is no longer the no-flags default.
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
 //
 // `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
@@ -30,7 +37,9 @@ function resolveProfile(
   cloudName: string,
   profiles: Record<string, object>,
 ): object {
-  const profile = profiles[__ENV.PROFILE || "smoke"] as
+  const defaultProfileName =
+    "load" in profiles ? "load" : Object.keys(profiles)[0];
+  const profile = profiles[__ENV.PROFILE || defaultProfileName] as
     | Record<string, unknown>
     | undefined;
   if (!profile) return profile as unknown as object;
@@ -40,18 +49,16 @@ function resolveProfile(
 // SharedArray shares this data once across all VUs instead of every VU
 // holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
-const searchQueries = new SharedArray("search-queries", function () {
+const documentIds = new SharedArray("document-ids", function () {
   return [
-    "climate adaptation",
-    "deforestation",
-    "carbon pricing",
-    "renewable energy",
-    "flood risk",
+    "CPR.document.i00006774.n0000",
+    "Sabin.document.12835.14111",
+    "UNFCCC.document.i00002090.n0000",
+    "Sabin.document.3703.5490",
   ];
 });
 
-type TPassageResult = { text_block_id?: unknown; document_id?: unknown };
-type TSearchResponse = { results?: TPassageResult[] };
+type TDocumentResponse = { data?: { id?: string; title?: unknown } };
 
 const PROFILES = {
   smoke: {
@@ -77,23 +84,18 @@ const PROFILES = {
     // single task and never observe a scale-out.
     //
     // Phase 1 (sustained ceiling): a slow 2m climb into each of 10/25/50
-    // VUs, holding 6m at each — long enough to sustain CPU above the 70%
-    // target and let task count settle — so a capacity cliff shows up tied
-    // to a specific, autoscaled-for VU count rather than an artefact of the
-    // ramp outrunning ECS.
+    // VUs (this route is the cheapest document route — single-doc fetch by
+    // path param, no Vespa fan-out — so this is a starting point, not a
+    // pre-validated ceiling), holding 6m at each — long enough to sustain
+    // CPU above the 70% target and let task count settle — so a capacity
+    // cliff shows up tied to a specific, autoscaled-for VU count rather than
+    // an artefact of the ramp outrunning ECS.
     //
     // Phase 2 (spike reactivity): ramp back to a near-zero baseline, hold
     // long enough for ECS to have scaled in again, then jump straight to 50
     // VUs in 15s. This isolates "how fast can it react to a sudden spike"
     // against a known low-scale starting point, rather than measuring a
     // spike on top of whatever task count phase 1 left behind.
-    //
-    // /search/passages is a single Vespa query with a 5s timeout
-    // (search/engines/dev_vespa.py:1363) — no fan-out, unlike
-    // /documents?fields=, so this profile doesn't need a worst-case-
-    // combination fixed request the way fields-combinations.ts does;
-    // sweeping the smoke test's query fixture is representative enough on
-    // its own.
     scenarios: {
       rampingLoad: {
         executor: "ramping-vus",
@@ -116,19 +118,22 @@ const PROFILES = {
         ],
       },
     },
-    // Thresholds: p95 < 2s is the "existing 2s p95 line on the vespa-search
-    // dashboard" the monitoring RFC names
-    // (https://app.notion.com/p/3c79109609a48195972fd340c03d1508) — but that RFC
-    // explicitly defers formalising it as a real SLO ("Deferred, not rejected —
-    // no baseline data yet", still Open as of writing), so treat this as a
-    // provisional, not agreed, target until that decision lands. Reused as-is
-    // from documents' graduated thresholds (FUS-356/FUS-357) — the RFC figure
-    // is a route-agnostic dashboard line, not per-route, so there's no
-    // separate number to reference yet. http_req_failed aborts the run early
-    // on a failure spike rather than burning the full ramp on a route that's
-    // already broken.
+    // Thresholds: 2000ms is a loose tripwire above measured healthy
+    // capacity, not a fitted SLO. Derived using the method in
+    // k6/docs/load-threshold-methodology.md; see
+    // k6/docs/results/2026-09-09-breakpoint-test-baseline.md for the
+    // measurements this value is based on — three same-day production
+    // runs put the healthy region's p95 at 860ms-1.85s (this route's own
+    // p95 was 960ms-977ms) and the collapse point (a hard cliff, not
+    // gradual) at ~6rps offered load, so 2000ms has real headroom on both
+    // sides. Re-derive (new dated results file, method doc unchanged)
+    // rather than editing the number here from memory — the underlying
+    // capacity is expected to move as infrastructure changes, per that
+    // results file's caveats.
+    // http_req_failed aborts the run early on a failure spike rather than
+    // burning the full ramp on a route that's already broken.
     thresholds: {
-      // PROVISIONAL — see comment above. Not an agreed SLO.
+      // Loose tripwire, not a tight SLO — see comment above.
       http_req_duration: ["p(95)<2000"],
       http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
     },
@@ -137,17 +142,23 @@ const PROFILES = {
 
 // k6 requires `options` to be a named export — this is how it reads VU/
 // duration config for the run, not a convention we chose.
-export const options = resolveProfile("passages: base query", PROFILES);
+export const options = resolveProfile(
+  "documents/{document_id}: base query",
+  PROFILES,
+);
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const query = searchQueries[Math.floor(Math.random() * searchQueries.length)];
-  // No order_by param: defaults to `idx asc` (reading order, not relevance)
-  // per the OpenAPI schema — this is the base case's actual default
-  // behaviour, distinct from /documents defaulting to `relevance desc`.
-  const res = http.get(
-    `${BASE_URL}/passages?query=${encodeURIComponent(query)}`,
-  );
+  const documentId =
+    documentIds[Math.floor(Math.random() * documentIds.length)];
+  // Only 4 document IDs exist here, so without a cache-buster CloudFront
+  // absorbs almost all repeat traffic in load mode and this measures the
+  // edge, not origin (see k6/tests/breakpoint/README.md finding 0). Smoke
+  // mode is testing correctness at trivial concurrency, not capacity, so
+  // it's left cacheable on purpose.
+  const cacheBuster =
+    __ENV.PROFILE === "load" ? `?_cb=${__VU}-${__ITER}-${Date.now()}` : "";
+  const res = http.get(`${BASE_URL}/documents/${documentId}${cacheBuster}`);
 
   // check() records pass/fail per assertion without stopping the iteration
   // on failure (unlike a thrown error) — failures show up in the run
@@ -155,20 +166,14 @@ export default function () {
   // https://grafana.com/docs/k6/latest/using-k6/checks/
   check(res, {
     "status is 200": (response: Response) => response.status === 200,
-    "response has results array": (response: Response) => {
-      const body = response.json() as TSearchResponse;
-      return Array.isArray(body?.results);
+    "response has matching data.id": (response: Response) => {
+      const body = response.json() as TDocumentResponse;
+      return body?.data?.id === documentId;
     },
-    "results have text_block_id and document_id": (response: Response) => {
-      const body = response.json() as TSearchResponse;
-      const results = body?.results ?? [];
+    "response has data.title": (response: Response) => {
+      const body = response.json() as TDocumentResponse;
       return (
-        results.length > 0 &&
-        results.every(
-          (result) =>
-            typeof result?.text_block_id === "string" &&
-            typeof result?.document_id === "string",
-        )
+        typeof body?.data?.title === "string" && body.data.title.length > 0
       );
     },
   });

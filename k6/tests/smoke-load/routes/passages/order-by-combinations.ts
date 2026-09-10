@@ -17,8 +17,15 @@ const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
 // A VU ("virtual user") is one simulated concurrent user — it runs a script's
 // default-exported function in a loop for `duration`. PROFILES below (VUs/
 // duration differ per route, and a `load` profile is added once that route's
-// load test is scoped) is picked via `-e PROFILE=<name>` (defaulting to
-// `smoke`).
+// load test is scoped) is picked via `-e PROFILE=<name>`. With no env var
+// set, defaults to `load` if PROFILES has one, else whichever profile is
+// listed first (`smoke`, by convention — see PROFILES below). Defaulting to
+// `load` when available matters for scripts uploaded to Grafana Cloud k6 as a
+// scheduled LoadTest resource (see infra/k6_load_tests.py) — Cloud has no way
+// to pass `-e PROFILE=...` at trigger time, so whatever this resolves to with
+// no env var set is what a scheduled cloud run always executes. CI's smoke
+// workflow and any local smoke check must pass `-e PROFILE=smoke` explicitly
+// once a script has a load profile; it is no longer the no-flags default.
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
 //
 // `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
@@ -30,7 +37,9 @@ function resolveProfile(
   cloudName: string,
   profiles: Record<string, object>,
 ): object {
-  const profile = profiles[__ENV.PROFILE || "smoke"] as
+  const defaultProfileName =
+    "load" in profiles ? "load" : Object.keys(profiles)[0];
+  const profile = profiles[__ENV.PROFILE || defaultProfileName] as
     | Record<string, unknown>
     | undefined;
   if (!profile) return profile as unknown as object;

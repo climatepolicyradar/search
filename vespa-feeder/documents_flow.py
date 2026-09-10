@@ -36,6 +36,38 @@ def _principal_id_from_document_source(document_source: dict) -> str | None:
     return matches[0].get("value", {}).get("id")
 
 
+def derive_id_if_missing(record: dict) -> dict:
+    """
+    Use the `id` from the vespa update, or, if that is missing use the `id` from the `document_source` field.
+
+    This is a temporary workaround while we wait for an upstream feed change
+    @see: https://github.com/climatepolicyradar/data-lake/pull/539
+    TODO: https://linear.app/climate-policy-radar/issue/FUS-440/remove-derive-id-if-missing-from-documents-flow
+    """
+    if "id" in record.get("fields", {}):
+        return record
+
+    document_source_raw = (
+        record.get("fields", {}).get("document_source", {}).get("assign")
+    )
+    if document_source_raw is None:
+        return record
+
+    document_source = orjson.loads(document_source_raw)
+    document_id = document_source.get("id")
+    if document_id is not None:
+        record["fields"]["id"] = {"assign": document_id}
+    return record
+
+
+def derive_document_data(record: dict) -> dict:
+    """Apply all passages derivers to a record, in sequence."""
+    record = derive_principal_id(record)
+    record = derive_id_if_missing(record)
+
+    return record
+
+
 def derive_principal_id(record: dict) -> dict:
     """Set `principal_id` on a documents update record, derived from its own `document_source`."""
     document_source_raw = (
@@ -67,7 +99,7 @@ def documents_feeder_flow() -> State | None:
     return vespa_feeder(
         s3_bucket="cpr-prod-snowflake-data-export",
         s3_key="production/published/pipeline_data_in_vespa_documents_updates_v1/latest",
-        derive_data_from_source=derive_principal_id,
+        derive_data_from_source=derive_document_data,
     )
 
 

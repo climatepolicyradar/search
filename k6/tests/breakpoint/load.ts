@@ -1,12 +1,12 @@
 // Stepped load test for search-api, to find the level at which it breaks
 // before the 2026-09-14 launch.
 //
-// Deliberately self-contained: it does NOT import from ../../routes/ or
-// ../../infra/, so this can't break when those change, and changes here
-// can't break the routine smoke/load suite. Request shapes are copied from
-// the k6/routes/** route files (their inline SharedArray fixtures and
-// filter/query literals), which are already known to return 200s against
-// production.
+// Deliberately self-contained: it does NOT import from
+// ../smoke-load/routes/ or ../../infra/, so this can't break when those
+// change, and changes here can't break the routine smoke/load suite.
+// Request shapes are copied from the k6/tests/smoke-load/routes/** route
+// files (their inline SharedArray fixtures and filter/query literals),
+// which are already known to return 200s against production.
 //
 // Run:
 //   k6 run -e BASELINE_RPS=<peak-minute rps from baseline.py> load.ts
@@ -88,7 +88,7 @@ const STEPS = (__ENV.STEPS ?? "1,1.5,2,3,5")
 // task registering healthy behind the load balancer both take a few minutes,
 // so a shorter hold measures spike reactivity rather than sustained capacity
 // and can complete the whole test on a single task. Same reasoning as the
-// comment in k6/routes/passages/index.ts.
+// comment in k6/tests/smoke-load/routes/passages/index.ts.
 const STEP_DURATION_S = Number(__ENV.STEP_DURATION_S ?? 300);
 const GRACEFUL_STOP_S = 30;
 
@@ -185,8 +185,10 @@ export const options = {
 
 // --- Request data -----------------------------------------------------------
 
-// Copied from the searchQueries SharedArray in k6/routes/documents/index.ts
-// and k6/routes/passages/index.ts (both route files inline the same terms).
+// Copied from the searchQueries SharedArray in
+// k6/tests/smoke-load/routes/documents/index.ts and
+// k6/tests/smoke-load/routes/passages/index.ts (both route files inline
+// the same terms).
 //
 // Caveat worth knowing when reading the results: 5 distinct terms keep their
 // posting lists (and, for /passages, its from-disk debug-summary) in the
@@ -203,7 +205,8 @@ const QUERIES = [
 ];
 
 // From the documentIds SharedArray in
-// k6/routes/documents/{document_id}/index.ts — real, pre-verified IDs.
+// k6/tests/smoke-load/routes/documents/{document_id}/index.ts — real,
+// pre-verified IDs.
 const DOCUMENT_IDS = [
   "CPR.document.i00006774.n0000",
   "Sabin.document.12835.14111",
@@ -211,10 +214,10 @@ const DOCUMENT_IDS = [
   "Sabin.document.3703.5490",
 ];
 
-// The "combined filters: category + status + published_date range (and)" shape
-// from k6/routes/documents/filter-combinations.ts. Two label types in the
-// filter is what drives the disjunctive-facet fan-out when combined with
-// ?fields= below.
+// The "combined filters: category + status + published_date range (and)"
+// shape from k6/tests/smoke-load/routes/documents/filter-combinations.ts.
+// Two label types in the filter is what drives the disjunctive-facet
+// fan-out when combined with ?fields= below.
 const DOCUMENT_FILTERS = JSON.stringify({
   op: "and",
   filters: [
@@ -230,8 +233,8 @@ const DOCUMENT_FILTERS = JSON.stringify({
 });
 
 // The "nested or-in-and" shape from
-// k6/routes/passages/filter-combinations.ts — its most structurally complex
-// real combination.
+// k6/tests/smoke-load/routes/passages/filter-combinations.ts — its most
+// structurally complex real combination.
 const PASSAGE_FILTERS = JSON.stringify({
   op: "and",
   filters: [

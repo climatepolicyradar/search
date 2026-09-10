@@ -134,6 +134,9 @@ schema documents {
 
         struct passage {
             field id type string {}
+            # we store the document ID for principal documents 
+            # if this is null, this is not a Principal
+            field document_id type string {}
             field text_block_id type string {}
             field language type string {}
             field type type string {}

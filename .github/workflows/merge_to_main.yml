@@ -23,11 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run-test: ${{ steps.filter.outputs.run-test }}
-      run-pulumi-up: ${{ steps.filter.outputs.run-pulumi-up }}
+      run-search-pulumi-up: ${{ steps.filter.outputs.run-search-pulumi-up }}
+      run-k6-pulumi-up: ${{ steps.filter.outputs.run-k6-pulumi-up }}
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
       run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
       run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
       run-vespa-feeder-deploy: ${{ steps.filter.outputs.run-vespa-feeder-deploy }}
+      run-k6-smoke-tests: ${{ steps.filter.outputs.run-k6-smoke-tests }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -42,8 +44,10 @@ jobs:
               - 'vespa/**'
               - 'uv.lock'
               - pyproject.toml
-            run-pulumi-up:
+            run-search-pulumi-up:
               - 'infra/**'
+            run-k6-pulumi-up:
+              - 'k6/**'
             run-deploy:
               - 'api/**'
               - 'search/**'
@@ -59,6 +63,10 @@ jobs:
               - 'search/vespa/**'
             run-vespa-feeder-deploy:
               - 'vespa-feeder/**'
+            run-k6-smoke-tests:
+              - 'api/**'
+              - 'search/**'
+              - 'k6/**'
 
   lint:
     permissions:
@@ -120,8 +128,15 @@ jobs:
   k6-smoke-tests:
     permissions: read-all
     uses: ./.github/workflows/k6_smoke_tests.yml
-    needs: [deploy-api]
-    if: needs.deploy-api.result == 'success'
+    needs: [changes, deploy-api]
+    # always() so this still runs when deploy-api is skipped (e.g. only
+    # k6/** changed, no api/search change to redeploy) — deploy-api's
+    # result is then 'skipped', not 'success', which needs.deploy-api.result
+    # == 'success' alone would treat as a reason not to run.
+    if: |
+      always() &&
+      needs.changes.outputs.run-k6-smoke-tests == 'true' &&
+      needs.deploy-api.result != 'failure'
 
   deploy-prefect:
     uses: ./.github/workflows/prefect_deploy.yml
@@ -141,10 +156,26 @@ jobs:
     needs: [changes, test]
     if: needs.changes.outputs.run-vespa-feeder-deploy == 'true'
 
-  pulumi-up:
+  search-pulumi-up:
     uses: ./.github/workflows/pulumi_up.yml
     secrets: inherit
     needs: [changes]
-    if: needs.changes.outputs.run-pulumi-up == 'true'
+    if: needs.changes.outputs.run-search-pulumi-up == 'true'
     with:
       environment: production
+      working-directory: ./infra
+      stack: climatepolicyradar/search
+      aws-role: search-production-github-actions
+
+  k6-pulumi-up:
+    uses: ./.github/workflows/pulumi_up.yml
+    secrets: inherit
+    needs: [changes]
+    if: needs.changes.outputs.run-k6-pulumi-up == 'true'
+    with:
+      environment: production
+      working-directory: ./k6/infra
+      stack: climatepolicyradar/search-k6
+      # No AWS resources here (Grafana Cloud only) - skip the AWS credentials
+      # step entirely rather than requiring an unused IAM role.
+      aws-role: ""
