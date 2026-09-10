@@ -8,8 +8,10 @@ declare module "k6/experimental/tracing" {
     propagator: "w3c" | "b3";
   }
 
-  function instrumentHTTP(options: InstrumentHTTPOptions): void;
+  interface Tracing {
+    instrumentHTTP(options: InstrumentHTTPOptions): void;
+  }
 
-  const _default: { instrumentHTTP: typeof instrumentHTTP };
-  export default _default;
+  const tracing: Tracing;
+  export default tracing;
 }
