@@ -116,7 +116,12 @@ if is_review_stack:
                     name="BUCKET_NAME", value="cpr-production-search"
                 ),
                 ExpressGatewayServicePrimaryContainerEnvironmentArgs(
-                    name="ENV", value=stack
+                    name="ENV",
+                    value="production"
+                    if stack == "production"
+                    else "review"
+                    if is_review_stack
+                    else "development",
                 ),
             ],
             secrets=[
