@@ -765,7 +765,7 @@ def get_labels_from_vespa_response(
                     type="concept",
                     value=concept.get("value", MISSING_PLACEHOLDER),
                 ),
-                passages_id=concept.get("passages_id", MISSING_PLACEHOLDER),
+                passages_id=None,
                 count=concept.get("count", MISSING_PLACEHOLDER),
             )
         )
