@@ -48,7 +48,10 @@ No authentication — see Limits and etiquette.
 
 Shared parameters: `query`, `filters`, `order_by`, `page_token`, `page_size`.
 
-`query` runs exclusively on lexical search.
+`query` runs exclusively on lexical search, ranked with `BM25`.
+
+- `/documents` — rank profile in [documents.sd](https://github.com/climatepolicyradar/search/blob/main/vespa/app/schemas/documents.sd)
+- `/passages` — rank profile in [passages.sd](https://github.com/climatepolicyradar/search/blob/main/vespa/app/schemas/passages.sd)
 
 `GET /search/openapi.json` is the machine-readable contract for all of the
 above — exact response shapes, enum values and parameter types. Read it when

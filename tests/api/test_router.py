@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
+from api.main import API_TITLE, API_VERSION, app
 from search.data_in_models import Document
 from search.engines import ListResponse, VespaError
 
@@ -137,8 +137,8 @@ def test_root_keeps_the_keys_the_health_check_reads() -> None:
 
     body = client.get("/").json()
 
-    assert body["name"] == "Climate Policy Radar Search API"
-    assert body["version"] == "0.1.0"
+    assert body["name"] == API_TITLE
+    assert body["version"] == API_VERSION
 
 
 def test_get_llms_txt_serves_the_spec_as_plain_text() -> None:
