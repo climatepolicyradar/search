@@ -634,8 +634,18 @@ elif stack != "review":
             ExpressGatewayServiceScalingTargetArgs(
                 auto_scaling_metric="AVERAGE_CPU",
                 auto_scaling_target_value=70,
-                min_task_count=1,
-                max_task_count=4,
+                # We are using 3 to ensure that the service is running warm in small spikes
+                # as scaling from 1-3 takes ~3-7 minutes, which is not quick enough.
+                min_task_count=3,
+                # max has been set to 8 because:
+                #
+                # peaks we're seeing in traffic
+                # tasks = peak origin requests/sec ÷ (requests/sec)/task
+                #     = 22.6 ÷ 3.5  ≈  6.5 → 8 with headroom
+                #
+                # upstream vespa max = concurrent searches ÷ (queries/s per task × query latency)
+                #     = 40 ÷ (8.6 × 0.364)  ≈  12.8 tasks → below 8 so shouldn't overload Vespa
+                max_task_count=8,
             ),
         ],
     )
