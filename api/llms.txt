@@ -31,6 +31,7 @@ Understanding these four concepts is necessary to query the API well.
   regional variations. Searching by Label rather than by string is how you avoid
   missing "increasing climate resilience" when you searched "climate adaptation".
   There are 100+ Labels. Prefer Label filtering over keyword queries for recall.
+  Label filtering can also affect `Document` and `Passage` ranking.
 
 ## Querying
 
