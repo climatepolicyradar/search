@@ -1,6 +1,7 @@
 import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
+import tempo from "k6/experimental/tracing";
 
 // __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
 // Defaults to production so `k6 run` works out of the box with no setup.
@@ -147,6 +148,18 @@ export const options = resolveProfile(
   PROFILES,
 );
 
+// Distributed tracing: attaches a W3C `traceparent` header to every HTTP
+// request from this point forward and tags each request's trace_id in the
+// output metadata, so Grafana Cloud k6 can correlate this run's requests
+// with server-side spans in Grafana Cloud Traces (Tempo). This is the
+// k6-x-tempo feature the Cloud Insights recommendations flagged for this
+// test. Requires search-api's OTel setup to extract the incoming
+// traceparent header for the trace to actually correlate — see
+// https://grafana.com/docs/k6/latest/javascript-api/jslib/http-instrumentation-tempo
+tempo.instrumentHTTP({
+  propagator: "w3c",
+});
+
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
   const documentId =
@@ -158,7 +171,17 @@ export default function () {
   // it's left cacheable on purpose.
   const cacheBuster =
     __ENV.PROFILE === "load" ? `?_cb=${__VU}-${__ITER}-${Date.now()}` : "";
-  const res = http.get(`${BASE_URL}/documents/${documentId}${cacheBuster}`);
+  const res = http.get(`${BASE_URL}/documents/${documentId}${cacheBuster}`, {
+    // Group by a fixed name instead of letting k6 default `name`/`url` to
+    // the full dynamic path + cache-buster — per-request document_id and
+    // cache-buster values were producing a high-cardinality set of unique
+    // values across http_reqs, http_req_waiting, and
+    // http_req_tls_handshaking (flagged by Cloud Insights' Metric Tags
+    // audit). This collapses all requests for this route into one series
+    // regardless of which document ID or cache-buster value was used.
+    // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
+    tags: { name: "documents/{document_id}:base query" },
+  });
 
   // check() records pass/fail per assertion without stopping the iteration
   // on failure (unlike a thrown error) — failures show up in the run

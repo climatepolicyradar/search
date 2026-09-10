@@ -15,6 +15,7 @@
 
 import http from "k6/http";
 import { check } from "k6";
+import tempo from "k6/experimental/tracing";
 
 // --- Target -----------------------------------------------------------------
 
@@ -183,6 +184,18 @@ export const options = {
   summaryTrendStats: ["avg", "min", "med", "p(95)", "p(99)", "max"],
 };
 
+// Distributed tracing: attaches a W3C `traceparent` header to every HTTP
+// request from this point forward and tags each request's trace_id in the
+// output metadata, so Grafana Cloud k6 can correlate this run's requests
+// with server-side spans in Grafana Cloud Traces (Tempo). This is the
+// k6-x-tempo feature the Cloud Insights recommendations flagged for this
+// test. Requires search-api's OTel setup to extract the incoming
+// traceparent header for the trace to actually correlate — see
+// https://grafana.com/docs/k6/latest/javascript-api/jslib/http-instrumentation-tempo
+tempo.instrumentHTTP({
+  propagator: "w3c",
+});
+
 // --- Request data -----------------------------------------------------------
 
 // Copied from the searchQueries SharedArray in
@@ -285,6 +298,17 @@ export function documents(): void {
       : "";
   const res = http.get(
     `${BASE_URL}/documents?query=${query}&${fields}${filters}&page_size=10${cacheBuster()}`,
+    {
+      // Group by a fixed name instead of letting k6 default `name`/`url` to
+      // the full dynamic query string, filters JSON, and cache-buster — that
+      // was producing a high-cardinality set of unique values across
+      // http_reqs, http_req_waiting, and http_req_tls_handshaking (flagged by
+      // Cloud Insights' Metric Tags audit). This collapses all documents-route
+      // requests into one series regardless of query term, filters, or
+      // cache-buster value.
+      // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
+      tags: { name: "documents" },
+    },
   );
   check(res, { "documents 200": (r) => r.status === 200 });
 }
@@ -299,6 +323,10 @@ export function passages(): void {
       : "";
   const res = http.get(
     `${BASE_URL}/passages?query=${query}${filters}&page_size=10${cacheBuster()}`,
+    {
+      // Group by a fixed name — see the `documents` scenario above for why.
+      tags: { name: "passages" },
+    },
   );
   check(res, { "passages 200": (r) => r.status === 200 });
 }
@@ -311,6 +339,10 @@ export function labels(): void {
   const prefix = pick(QUERIES).slice(0, 4);
   const res = http.get(
     `${BASE_URL}/labels?query=${encodeURIComponent(prefix)}&page_size=10${cacheBuster()}`,
+    {
+      // Group by a fixed name — see the `documents` scenario above for why.
+      tags: { name: "labels" },
+    },
   );
   check(res, { "labels 200": (r) => r.status === 200 });
 }
@@ -321,6 +353,9 @@ export function labels(): void {
 export function documentById(): void {
   // No query string of its own, so the buster leads with `?` rather than `&`.
   const buster = cacheBuster().replace(/^&/, "?");
-  const res = http.get(`${BASE_URL}/documents/${pick(DOCUMENT_IDS)}${buster}`);
+  const res = http.get(`${BASE_URL}/documents/${pick(DOCUMENT_IDS)}${buster}`, {
+    // Group by a fixed name — see the `documents` scenario above for why.
+    tags: { name: "document_by_id" },
+  });
   check(res, { "document_by_id 200": (r) => r.status === 200 });
 }
