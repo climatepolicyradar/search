@@ -740,4 +740,4 @@ def test_document_get_renders_labels_and_concepts() -> None:
     assert concept_label.value.id == "concept::Q1343"
     assert concept_label.value.value == "climate finance"
     assert concept_label.count == 42
-    assert concept_label.passages_id == "passages-0"
+    assert concept_label.passages_id is None
