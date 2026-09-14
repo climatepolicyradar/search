@@ -1,14 +1,24 @@
+import json
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, get_args
 
 from fastapi import HTTPException, Query, status
+from pydantic import BaseModel
 
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DOCUMENT_SORT_API_FIELDS,
     PASSAGE_SORT_API_FIELDS,
+    ArrayStructField,
     AttributesCondition,
+    FieldFilter,
     Filter,
+    documents_filter_field_to_vespa_field_map,
+    documents_filter_struct_field_to_vespa_field_map,
+    labels_filter_field_to_vespa_field_map,
+    labels_filter_struct_field_to_vespa_field_map,
+    passages_filter_field_to_vespa_field_map,
+    passages_filter_struct_field_to_vespa_field_map,
 )
 
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
@@ -29,6 +39,65 @@ PASSAGES_ORDER_BY_DESCRIPTION = (
     "Defaults to `idx asc` when omitted. "
     "Examples: `idx asc` (default; reading order), `relevance desc` "
     "(best matches first)."
+)
+
+
+def _literal_options(model: type[BaseModel], field_name: str) -> str:
+    """
+    Render a model field's ``Literal`` options as a JSON alternation.
+
+    Read off the model rather than retyped, so the published grammar tracks
+    the types. Parsing ``filters`` as a model instead of a raw JSON string
+    would put all of this in the generated component schema and make this
+    function deletable.
+
+    :param model: Model owning the field
+    :type model: type[BaseModel]
+    :param field_name: Field whose annotation is a ``Literal``
+    :type field_name: str
+    :return: Options joined with ``|``, each JSON-quoted
+    :rtype: str
+    """
+    options = get_args(model.model_fields[field_name].annotation)
+    return "|".join(json.dumps(option) for option in options)
+
+
+FILTERS_GRAMMAR_DESCRIPTION = (
+    "URL-encoded JSON filter tree, ANDed with `query`. Groups nest freely. "
+    f'Group: {{"op": {_literal_options(Filter, "op")}, '
+    '"filters": [<group>|<condition>]}. '
+    f'Field condition: {{"field": <name>, "op": {_literal_options(FieldFilter, "op")}, '
+    '"value": <string|number|boolean>}. '
+    f'Attribute condition: {{"field": {_literal_options(AttributesCondition, "field")}, '
+    f'"key": <string>, "op": {_literal_options(AttributesCondition, "op")}, '
+    '"value": <string|number|boolean>}. '
+)
+
+
+def _filters_description(
+    field_map: dict[str, list[str]],
+    struct_map: dict[str, ArrayStructField],
+) -> str:
+    """Build a `filters` description for one endpoint's filterable fields."""
+    aliased = ", ".join(f"`{name}`" for name in sorted({*field_map, *struct_map}))
+    return (
+        f"{FILTERS_GRAMMAR_DESCRIPTION}"
+        f"Recognised field names: {aliased}. Any other name is passed to the "
+        "index unchanged. Semantics and worked examples: /search/llms.txt"
+    )
+
+
+DOCUMENTS_FILTERS_DESCRIPTION = _filters_description(
+    documents_filter_field_to_vespa_field_map,
+    documents_filter_struct_field_to_vespa_field_map,
+)
+PASSAGES_FILTERS_DESCRIPTION = _filters_description(
+    passages_filter_field_to_vespa_field_map,
+    passages_filter_struct_field_to_vespa_field_map,
+)
+LABELS_FILTERS_DESCRIPTION = _filters_description(
+    labels_filter_field_to_vespa_field_map,
+    labels_filter_struct_field_to_vespa_field_map,
 )
 
 

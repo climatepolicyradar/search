@@ -54,11 +54,19 @@ metrics_service = MetricsService(otel_config)
 search_metrics = SearchMetrics(metrics_service)
 
 
+API_TITLE = "Climate Policy Radar Search API"
+API_VERSION = "1.0.0"
+API_DESCRIPTION = (
+    "Full-text search across the world's climate laws, policies, litigation "
+    "and finance documents — down to the exact passage, filterable by "
+    "expert-curated concept."
+)
+
 logger.debug("🚀 Starting FastAPI application")
 app = FastAPI(
-    title="Climate Policy Radar Search API",
-    description="API for searching climate policy documents, passages, and labels",
-    version="0.1.0",
+    title=API_TITLE,
+    description=API_DESCRIPTION,
+    version=API_VERSION,
     lifespan=lifespan,
     docs_url="/search/docs",
     redoc_url="/search/redoc",
@@ -153,11 +161,52 @@ async def log_request_lifecycle(request: Request, call_next):
 
 @app.get("/")
 @router.get("")
-async def root():
-    """Root endpoint with API information."""
+async def root(request: Request):
+    """Root endpoint: API information as schema.org JSON-LD."""
+    base = str(request.base_url).rstrip("/")
     return {
-        "name": "Climate Policy Radar Search API",
-        "version": "0.1.0",
+        "@context": "https://schema.org",
+        "@type": "WebAPI",
+        "name": API_TITLE,
+        "version": API_VERSION,
+        "description": API_DESCRIPTION,
+        "url": f"{base}{router.prefix}",
+        "documentation": [
+            {
+                "@type": "CreativeWork",
+                "name": "llms.txt",
+                "description": (
+                    "How to query this API, written for LLMs and agents: the "
+                    "data model, the filter grammar, sorting and freshness."
+                ),
+                "url": str(request.url_for("read_llms_txt")),
+                "encodingFormat": "text/plain",
+            },
+            {
+                "@type": "CreativeWork",
+                "name": "OpenAPI schema",
+                "description": (
+                    "Machine-readable contract: response shapes, enum values "
+                    "and parameter types."
+                ),
+                "url": f"{base}{app.openapi_url}",
+                "encodingFormat": "application/json",
+            },
+        ],
+        "provider": {
+            "@type": "Organization",
+            "name": "Climate Policy Radar CIC",
+            "url": "https://climatepolicyradar.org",
+        },
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+                "@type": "EntryPoint",
+                "urlTemplate": f"{base}{router.prefix}/documents?query={{query}}",
+                "contentType": "application/json",
+            },
+            "query-input": "required name=query",
+        },
     }
 
 

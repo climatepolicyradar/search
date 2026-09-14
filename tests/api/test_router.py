@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
+from api.main import API_TITLE, API_VERSION, app
 from search.data_in_models import Document
 from search.engines import ListResponse, VespaError
 
@@ -111,3 +111,41 @@ def test_get_labels_taxonomy_returns_non_empty_list() -> None:
     body = response.json()
     assert body["total_size"] > 0
     assert len(body["results"]) > 0
+
+
+def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
+    """The root response is how an agent with no prior knowledge finds the docs."""
+    client = TestClient(app)
+
+    body = client.get("/").json()
+
+    assert body["@context"] == "https://schema.org"
+    assert body["@type"] == "WebAPI"
+    documentation = {doc["name"]: doc["url"] for doc in body["documentation"]}
+    assert documentation["llms.txt"].endswith("/search/llms.txt")
+    assert documentation["OpenAPI schema"].endswith("/search/openapi.json")
+
+
+def test_root_keeps_the_keys_the_health_check_reads() -> None:
+    """
+    `/` doubles as the App Runner health check, so `name` and `version` stay.
+
+    Adding JSON-LD around them is additive; dropping them would fail the
+    deployment somewhere no test in this file would notice.
+    """
+    client = TestClient(app)
+
+    body = client.get("/").json()
+
+    assert body["name"] == API_TITLE
+    assert body["version"] == API_VERSION
+
+
+def test_get_llms_txt_serves_the_spec_as_plain_text() -> None:
+    client = TestClient(app)
+
+    response = client.get("/search/llms.txt")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.headers["content-type"].startswith("text/plain")
+    assert response.text.startswith("# Climate Policy Radar")

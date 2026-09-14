@@ -2,14 +2,18 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from pydantic_settings import SettingsConfigDict
 
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.utils import (
+    DOCUMENTS_FILTERS_DESCRIPTION,
+    LABELS_FILTERS_DESCRIPTION,
+    PASSAGES_FILTERS_DESCRIPTION,
     documents_order_by,
     normalise_filters,
     order_by,
@@ -52,8 +56,38 @@ AggregationField = Literal["aggregations.labels"]
 FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
 Fields = AggregationField | FacetField
 
+LLMS_TXT_PATH = Path(__file__).parent / "llms.txt"
 
-@router.get("/documents/{document_id}", response_model=ItemResponse[Document])
+_VESPA_UNAVAILABLE_RESPONSE: dict[int | str, dict[str, Any]] = {
+    HTTPStatus.SERVICE_UNAVAILABLE: {
+        "description": ("Vespa is unavailable, or rejected the query.")
+    }
+}
+SEARCH_RESPONSES: dict[int | str, dict[str, Any]] = {
+    HTTPStatus.BAD_REQUEST: {"description": ("Malformed `filters` JSON")},
+    **_VESPA_UNAVAILABLE_RESPONSE,
+}
+ITEM_RESPONSES: dict[int | str, dict[str, Any]] = {
+    HTTPStatus.NOT_FOUND: {"description": "Document not found."},
+    **_VESPA_UNAVAILABLE_RESPONSE,
+}
+
+
+@router.get("/llms.txt", response_class=PlainTextResponse)
+def read_llms_txt() -> str:
+    """
+    Serve the llms.txt spec that tells an agent how to query this API.
+
+    @see: https://llmstxt.org
+    """
+    return LLMS_TXT_PATH.read_text(encoding="utf-8")
+
+
+@router.get(
+    "/documents/{document_id}",
+    response_model=ItemResponse[Document],
+    responses=ITEM_RESPONSES,
+)
 def read_document(document_id: str):
     engine = DevVespaDocumentSearchEngine(settings=settings)
     # `VespaError` deliberately propagates: `api.main.handle_vespa_error` turns
@@ -66,10 +100,16 @@ def read_document(document_id: str):
     return ItemResponse(data=result)
 
 
-@router.get("/documents", response_model=SearchResponse[Document])
+@router.get(
+    "/documents",
+    response_model=SearchResponse[Document],
+    responses=SEARCH_RESPONSES,
+)
 def read_documents(
     query: str | None = Query(None, description="What are you looking for?"),
-    filters_json_string: str | None = Query(None, alias="filters"),
+    filters_json_string: str | None = Query(
+        None, alias="filters", description=DOCUMENTS_FILTERS_DESCRIPTION
+    ),
     # @see: https://google.aip.dev/157#read-masks-as-a-request-field
     fields: list[Fields] | None = Query(None),
     pagination: Pagination = Depends(pagination),
@@ -185,10 +225,16 @@ def read_documents(
     )
 
 
-@router.get("/labels", response_model=SearchResponse[DataInLabel])
+@router.get(
+    "/labels",
+    response_model=SearchResponse[DataInLabel],
+    responses=SEARCH_RESPONSES,
+)
 def read_labels(
     query: str | None = Query(None, description="What are you looking for?"),
-    filters_json_string: str | None = Query(None, alias="filters"),
+    filters_json_string: str | None = Query(
+        None, alias="filters", description=LABELS_FILTERS_DESCRIPTION
+    ),
     type: str | None = None,
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(order_by),
@@ -269,10 +315,16 @@ def read_labels_taxonomy():
     )
 
 
-@router.get("/passages", response_model=SearchResponse[Passage])
+@router.get(
+    "/passages",
+    response_model=SearchResponse[Passage],
+    responses=SEARCH_RESPONSES,
+)
 def read_passages(
     query: str | None = Query(None, description="What are you looking for?"),
-    filters_json_string: str | None = Query(None, alias="filters"),
+    filters_json_string: str | None = Query(
+        None, alias="filters", description=PASSAGES_FILTERS_DESCRIPTION
+    ),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(passages_order_by),
 ):
