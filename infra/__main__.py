@@ -674,16 +674,10 @@ elif stack != "review":
                 # boundary at ~6rps (healthy) / ~9rps (collapsing) across 3 tasks
                 # — roughly 2rps/task healthy, 3rps/task collapsing. This is a
                 # request-count target (not a percentage, unlike the CPU policy
-                # above) — target below the healthy line so this scales out
-                # before CPU saturates, not after.
-                #
-                # ExpressGatewayServiceScalingTargetArgs types this field as
-                # plain int, but AWS's real API accepts a Double here for
-                # ALBRequestCountPerTarget (confirmed against AWS's
-                # Application Auto Scaling API reference) — the component's
-                # Python binding is just stricter than the underlying AWS
-                # contract. Rounding would erode the safety margin.
-                auto_scaling_target_value=1.5,  # type: ignore[arg-type]
+                # above) — ideally set below the healthy line so this scales
+                # out before CPU saturates, not after. Revisit this value if 
+                # that turns out to be too late in practice.
+                auto_scaling_target_value=2,
                 min_task_count=3,
                 max_task_count=8,
             ),
