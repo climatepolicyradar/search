@@ -299,15 +299,19 @@ export function documents(): void {
   const res = http.get(
     `${BASE_URL}/documents?query=${query}&${fields}${filters}&page_size=10${cacheBuster()}`,
     {
-      // Group by a fixed name instead of letting k6 default `name`/`url` to
-      // the full dynamic query string, filters JSON, and cache-buster — that
-      // was producing a high-cardinality set of unique values across
-      // http_reqs, http_req_waiting, and http_req_tls_handshaking (flagged by
-      // Cloud Insights' Metric Tags audit). This collapses all documents-route
-      // requests into one series regardless of query term, filters, or
-      // cache-buster value.
+      // Group by route path + the relevant query param *names* (never
+      // values) instead of letting k6 default `name`/`url` to the full
+      // dynamic query string, filters JSON, and cache-buster — that was
+      // producing a high-cardinality set of unique values across http_reqs,
+      // http_req_waiting, and http_req_tls_handshaking (flagged by Cloud
+      // Insights' Metric Tags audit). Naming convention across this suite:
+      // `{path}?{param_names}`, param names only (the cache-buster isn't a
+      // real request param, so it's excluded; `fields` is always sent here,
+      // `filters` only sometimes, so both are listed) — see k6/README.md's
+      // Layout section. Distinct from the `route` tag set below, which
+      // exists for the step-by-step breakdown, not cardinality control.
       // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
-      tags: { name: "documents" },
+      tags: { name: "documents?query,fields,filters,page_size" },
     },
   );
   check(res, { "documents 200": (r) => r.status === 200 });
@@ -324,8 +328,10 @@ export function passages(): void {
   const res = http.get(
     `${BASE_URL}/passages?query=${query}${filters}&page_size=10${cacheBuster()}`,
     {
-      // Group by a fixed name — see the `documents` scenario above for why.
-      tags: { name: "passages" },
+      // Group by path + param names — see the `documents` scenario above
+      // for why. `filters` is only sometimes sent, but is listed since it's
+      // one of this route's real request params.
+      tags: { name: "passages?query,filters,page_size" },
     },
   );
   check(res, { "passages 200": (r) => r.status === 200 });
@@ -340,8 +346,9 @@ export function labels(): void {
   const res = http.get(
     `${BASE_URL}/labels?query=${encodeURIComponent(prefix)}&page_size=10${cacheBuster()}`,
     {
-      // Group by a fixed name — see the `documents` scenario above for why.
-      tags: { name: "labels" },
+      // Group by path + param names — see the `documents` scenario above
+      // for why.
+      tags: { name: "labels?query,page_size" },
     },
   );
   check(res, { "labels 200": (r) => r.status === 200 });
@@ -354,8 +361,12 @@ export function documentById(): void {
   // No query string of its own, so the buster leads with `?` rather than `&`.
   const buster = cacheBuster().replace(/^&/, "?");
   const res = http.get(`${BASE_URL}/documents/${pick(DOCUMENT_IDS)}${buster}`, {
-    // Group by a fixed name — see the `documents` scenario above for why.
-    tags: { name: "document_by_id" },
+    // Group by the route path itself, mirroring its own URL structure with
+    // the path param name in place of a value (no query params to list) —
+    // same convention as the `documents/{document_id}: base query` smoke/load
+    // route (k6/tests/smoke-load/routes/documents/{document_id}/index.ts).
+    // See the `documents` scenario above for the cardinality rationale.
+    tags: { name: "documents/{document_id}" },
   });
   check(res, { "document_by_id 200": (r) => r.status === 200 });
 }

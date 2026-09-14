@@ -152,13 +152,14 @@ const PROFILES = {
 // duration config for the run, not a convention we chose.
 export const options = resolveProfile("passages: base query", PROFILES);
 
-// Distributed tracing: attaches a W3C `traceparent` header to every HTTP
-// request from this point forward and tags each request's trace_id in the
-// output metadata, so Grafana Cloud k6 can correlate this run's requests
-// with server-side spans in Grafana Cloud Traces (Tempo). This is the
-// k6-x-tempo feature the Cloud Insights recommendations flagged for this
-// test. Requires search-api's OTel setup to extract the incoming
-// traceparent header for the trace to actually correlate — see
+// Distributed tracing: attaches a W3C `traceparent` header — the format
+// OTel's default propagator reads — to every HTTP request from this point
+// forward and tags each request's trace_id in the output metadata, so
+// Grafana Cloud k6 can correlate this run's requests with server-side spans
+// in Grafana Cloud Traces (Tempo). This is the k6-x-tempo feature the Cloud
+// Insights recommendations flagged for this test. Requires search-api's
+// OTel setup to extract the incoming traceparent header for the trace to
+// actually correlate — see
 // https://grafana.com/docs/k6/latest/javascript-api/jslib/http-instrumentation-tempo
 tempo.instrumentHTTP({
   propagator: "w3c",
@@ -181,16 +182,17 @@ export default function () {
   const res = http.get(
     `${BASE_URL}/passages?query=${encodeURIComponent(query)}${cacheBuster}`,
     {
-      // Group by a fixed name instead of letting k6 default `name`/`url` to
-      // the full dynamic query string plus load-mode cache buster —
-      // per-request query text and cache-buster values were producing a
-      // high-cardinality set of unique values across http_reqs,
-      // http_req_waiting, and http_req_tls_handshaking (flagged by Cloud
-      // Insights' Metric Tags audit). This collapses all requests for this
-      // route into one series regardless of search term, profile, or
-      // cache-buster value.
+      // Group by route path + the relevant query param *names* (never
+      // values) instead of letting k6 default `name`/`url` to the full
+      // dynamic query string plus load-mode cache buster — per-request
+      // query text and cache-buster values were producing a high-cardinality
+      // set of unique values across http_reqs, http_req_waiting, and
+      // http_req_tls_handshaking (flagged by Cloud Insights' Metric Tags
+      // audit). Naming convention across this suite: `{path}?{param_names}`,
+      // param names only (the cache-buster isn't a real request param, so
+      // it's excluded) — see k6/README.md's Layout section.
       // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
-      tags: { name: "passages:base query" },
+      tags: { name: "passages?query" },
     },
   );
 
