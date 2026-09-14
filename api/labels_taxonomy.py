@@ -10,6 +10,10 @@ from search.data_in_models import (
     LabelRelationship,
 )
 
+# region themes
+climate = Label(type="domain", id="domain::Climate", value="Climate", labels=[])
+nature = Label(type="domain", id="domain::Nature", value="Nature", labels=[])
+
 # region corporate disclosure
 corporate_discloser = Label(
     type="category",
@@ -443,6 +447,8 @@ national_drought_plan = Label(
 
 
 labels_taxonomy = [
+    climate,
+    nature,
     corporate_discloser,
     corporate_voluntary_report,
     corporate_voluntary_filing,
