@@ -639,6 +639,18 @@ elif stack != "review":
         health_check_path="/",
         cpu="1024",
         memory="2048",
+        # Two target-tracking policies on the same min/max: AWS Application Auto
+        # Scaling combines them by always acting on whichever policy wants more
+        # capacity for scale-out and whichever wants less for scale-in, so
+        # stacking these is safe and each can trigger a scale-out independently.
+        #
+        # REQUEST_COUNT_PER_TARGET is the primary/faster-reacting signal here:
+        # CPU-only scaling reacted too slowly during pre-launch testing (see 
+        # k6/docs/results/2026-09-10-breakpoint-test-baseline.md)
+        # — CPU pinned at ~100% for ~25 minutes before task count moved, because
+        # target-tracking only scales once the metric has already saturated.
+        # Request count reacts to arriving traffic directly, ahead of CPU
+        # saturation, so it should trigger scale-out earlier.
         scaling_targets=[
             ExpressGatewayServiceScalingTargetArgs(
                 auto_scaling_metric="AVERAGE_CPU",
@@ -654,6 +666,18 @@ elif stack != "review":
                 #
                 # upstream vespa max = concurrent searches ÷ (queries/s per task × query latency)
                 #     = 40 ÷ (8.6 × 0.364)  ≈  12.8 tasks → below 8 so shouldn't overload Vespa
+                max_task_count=8,
+            ),
+            ExpressGatewayServiceScalingTargetArgs(
+                auto_scaling_metric="REQUEST_COUNT_PER_TARGET",
+                # 2026-09-10 breakpoint baseline measured the healthy/collapse
+                # boundary at ~6rps (healthy) / ~9rps (collapsing) across 3 tasks
+                # — roughly 2rps/task healthy, 3rps/task collapsing. This is a
+                # request-count target (not a percentage, unlike the CPU policy
+                # above) — target below the healthy line so this scales out
+                # before CPU saturates, not after.
+                auto_scaling_target_value=1.5,
+                min_task_count=3,
                 max_task_count=8,
             ),
         ],
