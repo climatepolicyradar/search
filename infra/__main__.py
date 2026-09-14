@@ -639,22 +639,24 @@ elif stack != "review":
         health_check_path="/",
         cpu="1024",
         memory="2048",
-        # Two target-tracking policies on the same min/max: AWS Application Auto
-        # Scaling combines them by always acting on whichever policy wants more
-        # capacity for scale-out and whichever wants less for scale-in, so
-        # stacking these is safe and each can trigger a scale-out independently.
-        #
-        # REQUEST_COUNT_PER_TARGET is the primary/faster-reacting signal here:
-        # CPU-only scaling reacted too slowly during pre-launch testing (see 
-        # k6/docs/results/2026-09-10-breakpoint-test-baseline.md)
-        # — CPU pinned at ~100% for ~25 minutes before task count moved, because
-        # target-tracking only scales once the metric has already saturated.
-        # Request count reacts to arriving traffic directly, ahead of CPU
-        # saturation, so it should trigger scale-out earlier.
         scaling_targets=[
             ExpressGatewayServiceScalingTargetArgs(
                 auto_scaling_metric="AVERAGE_CPU",
-                auto_scaling_target_value=70,
+                # Lowered from 70 per
+                # k6/docs/results/2026-09-10-breakpoint-test-baseline.md:
+                # that run found CPU climbing sharply from 54% to 88-98%
+                # within ~6 minutes (10:07-10:13 BST) while RunningTaskCount
+                # stayed flat at the min=3 floor until 10:19 — by which point
+                # p95 was already 27-29s and the run aborted a minute later.
+                # A 70% target left too little runway between "target
+                # crossed" and "already saturated" for target-tracking's
+                # reaction lag to keep up. 50 sits comfortably above the
+                # ~2-24% CPU observed at healthy load (up to ~6rps) so it
+                # shouldn't trigger on baseline noise, while giving scale-out
+                # more lead time before the climb into the 88-98% collapse
+                # band. Re-derive against a fresh breakpoint run if traffic
+                # patterns change materially.
+                auto_scaling_target_value=50,
                 # We are using 3 to ensure that the service is running warm in small spikes
                 # as scaling from 1-3 takes ~3-7 minutes, which is not quick enough.
                 min_task_count=3,
@@ -666,19 +668,6 @@ elif stack != "review":
                 #
                 # upstream vespa max = concurrent searches ÷ (queries/s per task × query latency)
                 #     = 40 ÷ (8.6 × 0.364)  ≈  12.8 tasks → below 8 so shouldn't overload Vespa
-                max_task_count=8,
-            ),
-            ExpressGatewayServiceScalingTargetArgs(
-                auto_scaling_metric="REQUEST_COUNT_PER_TARGET",
-                # 2026-09-10 breakpoint baseline measured the healthy/collapse
-                # boundary at ~6rps (healthy) / ~9rps (collapsing) across 3 tasks
-                # — roughly 2rps/task healthy, 3rps/task collapsing. This is a
-                # request-count target (not a percentage, unlike the CPU policy
-                # above) — ideally set below the healthy line so this scales
-                # out before CPU saturates, not after. Revisit this value if 
-                # that turns out to be too late in practice.
-                auto_scaling_target_value=2,
-                min_task_count=3,
                 max_task_count=8,
             ),
         ],
