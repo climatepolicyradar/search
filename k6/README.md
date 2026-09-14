@@ -132,6 +132,27 @@ script without one silently falls back to k6's own defaults (1 VU, 1 iteration)
 rather than erroring, since `resolveProfile` returns `undefined` for an unknown
 profile name (the cloud name is only merged in when a profile is found).
 
+## Metric tag naming: `name`
+
+Every `http.get` call passes an explicit `tags: { name: ... }`. Without it, k6
+defaults `name`/`url` to the request's full literal URL, and a dynamic query
+string, `filters` JSON, or cache-buster then produces one distinct series per
+request — flagged by Grafana Cloud Insights' Metric Tags audit as a cardinality
+problem on `http_reqs`, `http_req_waiting`, and `http_req_tls_handshaking`.
+
+Convention: **`{path}?{param_names}`** — the route path, then a comma-separated
+list of the query param _names_ actually sent (never their values), e.g.
+`documents?query,filters`, `passages?query,order_by`. A route with no query
+string (the `{document_id}` routes) uses just the path, with the path param name
+left in place of a value: `documents/{document_id}`. Param names only, because a
+param's set of names is fixed and small; its set of values is exactly the thing
+that was ballooning cardinality in the first place.
+
+This applies uniformly across `tests/smoke-load/routes/**` and
+`tests/breakpoint/load.ts` — the latter's per-scenario `route`/`step` tags (used
+for `thresholds` breakdown) are a separate, deliberately low-cardinality tag and
+aren't affected by this convention.
+
 ## CI
 
 The [`k6 smoke tests`](../.github/workflows/k6_smoke_tests.yml) workflow runs
