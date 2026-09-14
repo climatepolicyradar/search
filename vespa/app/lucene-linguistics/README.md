@@ -50,13 +50,27 @@ redeploy.
 
 Synonym expansion is handled in two different ways depending on the field:
 
-- **Geography** synonyms use Lucene's `synonymGraph` filter, configured in
-  `en/geo-synonyms.txt`. This is necessary because geography queries use
+- **Geography** aliases are resolved in Python, in `GEOGRAPHY_ALIASES` /
+  `_resolve_geography_aliases` (`search/engines/dev_vespa.py`). To add a country
+  alias, edit that table — there is no geography synonym file any more.
+
+  They are not Lucene synonyms, and cannot be, because neither side of Vespa's
+  linguistics can express them (FUS-423):
+  - **Query time** — Vespa's query parser splits the query into independent
+    terms _before_ the field analyzer runs, so `synonymGraph` is handed "ivory"
+    and "coast" one at a time and a multi-word rule can never match. Single-word
+    rules (`turkey ⇒ turkiye`) did work here, which is why this went unnoticed.
+  - **Index time** — Vespa keeps only one token per position, so the
+    alternatives `synonymGraph` emits are silently dropped. Verified against a
+    local Vespa: with `czechia ⇒ czechia, czech republic` on the index profile,
+    the field indexed `republic` (a new position) but not `czech` (same position
+    as `czechia`). `flattenGraph` makes no difference.
+
+  Semantic rules are also unavailable, for a third reason: geography queries use
   field-scoped `userInput` (e.g.
-  `{defaultIndex: "geographies"}userInput(@query)`), which labels query tokens
-  with a field name. Vespa's semantic rules only match unlabeled tokens, so they
-  can't be used here. TODO: investigate whether this is affecting multi-word
-  geography queries.
+  `{defaultIndex: "geographies"}userInput(@geo_query)`), which labels query
+  tokens with a field name, and semantic rules only match unlabeled tokens.
+
 - **Everything else** (title acronyms, `phaseout`, etc.) uses Vespa
   [semantic rules](https://docs.vespa.ai/en/linguistics/query-rewriting.html)
   defined in `vespa/app/rules/`. There are two rulebases:
