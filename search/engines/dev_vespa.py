@@ -974,6 +974,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 # NOTE: these are all fields that are stored as type summary in the index.
                 # This is because overriding the default summary in the schema adds fields
                 # to it, rather than redefining the schema from scratch.
+                # `passages` and `passages_text` are excluded as well: they carry a
+                # document's full passage payload (~2MB per hit), which is enough to 
+                # exhaust memory over a relevance run.
+                # The matched passages are already on the `Document` above.
                 _STANDARD_FIELDS = {
                     "document_source",
                     "sddocname",
@@ -982,6 +986,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                     "title",
                     "description",
                     "labels",
+                    "passages",
+                    "passages_text",
                 }
                 hit_debug = {
                     k: v for k, v in fields.items() if k not in _STANDARD_FIELDS
