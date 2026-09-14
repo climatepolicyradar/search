@@ -676,7 +676,15 @@ elif stack != "review":
                 # request-count target (not a percentage, unlike the CPU policy
                 # above) — target below the healthy line so this scales out
                 # before CPU saturates, not after.
-                auto_scaling_target_value=1.5,
+                #
+                # ExpressGatewayServiceScalingTargetArgs types this field as
+                # plain int, but AWS's real API accepts a Double here for
+                # ALBRequestCountPerTarget (confirmed against AWS's
+                # Application Auto Scaling API reference) — the component's
+                # Python binding is just stricter than the underlying AWS
+                # contract. 1.5 is the deliberate value (below the healthy
+                # line); rounding to 2 would erode the safety margin.
+                auto_scaling_target_value=1.5,  # type: ignore[arg-type]
                 min_task_count=3,
                 max_task_count=8,
             ),
