@@ -148,6 +148,15 @@ schema passages {
     # hop without denormalising per-passage.
     import field principal_document_ref.title_attribute as principal_title {}
 
+    field content_not_stemmed type string {
+        indexing: input content | index
+        index: enable-bm25
+        stemming: none
+        linguistics {
+            profile: exact_analysis
+        }
+    }
+
     fieldset default {
         fields: content
     }
@@ -164,7 +173,7 @@ schema passages {
         }
 
         function text_score() {
-            expression: nativeRank(content) + nativeProximity(content)
+            expression: nativeRank(content) + nativeProximity(content) + nativeRank(content_not_stemmed)
         }
         function short_headings_penalty() {
             expression: query(short_heading_weight) * attribute(looks_like_short_heading)
@@ -201,7 +210,7 @@ schema passages {
         }
 
         function text_score() {
-            expression: bm25(content)
+            expression: bm25(content) + bm25(content_not_stemmed)
         }
         function proximity_boost() {
             expression: 1 + query(prox_weight) * nativeProximity(content)
@@ -241,6 +250,10 @@ schema passages {
         summary heading_text {}
         summary text_tokens {
             source: content
+            tokens
+        }
+        summary content_not_stemmed_tokens {
+            source: content_not_stemmed
             tokens
         }
         from-disk
