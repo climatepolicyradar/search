@@ -41,6 +41,36 @@ def test_read_passages_with_query_only(passages_client) -> None:
     assert kwargs["filters_json_string"] is None
 
 
+def test_read_passages_does_not_bold_by_default(passages_client) -> None:
+    """Without `bolding`, the engine is asked for unbolded text."""
+    client, mock_engine = passages_client
+    mock_engine.search.return_value = ListResponse(
+        results=[_passage()], total_size=1, next_page_token=None
+    )
+
+    response = client.get("/search/passages", params={"query": "toxic"})
+
+    assert response.status_code == HTTPStatus.OK
+    _, kwargs = mock_engine.search.call_args
+    assert kwargs["bolding"] is False
+
+
+def test_read_passages_forwards_bolding(passages_client) -> None:
+    """`bolding=true` is forwarded to the engine."""
+    client, mock_engine = passages_client
+    mock_engine.search.return_value = ListResponse(
+        results=[_passage()], total_size=1, next_page_token=None
+    )
+
+    response = client.get(
+        "/search/passages", params={"query": "toxic", "bolding": "true"}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    _, kwargs = mock_engine.search.call_args
+    assert kwargs["bolding"] is True
+
+
 def test_read_passages_with_document_id_filter(passages_client) -> None:
     """A ``document_id`` filter is normalised and forwarded to the engine."""
     client, mock_engine = passages_client

@@ -1415,6 +1415,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         pagination: Pagination,
         order_by: list[OrderBy],
         filters_json_string: str | None = None,
+        bolding: bool = False,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
         if query:
@@ -1464,6 +1465,11 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         if topic_ids and not sort_overrides:
             request_body["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
             request_body["input.query(topic_weight)"] = self.topic_weight
+
+        # `passage.content` is `bolding: on` in the schema, so Vespa bolds by default -
+        # it has to be turned off explicitly.
+        if not bolding:
+            request_body["presentation.bolding"] = "false"
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",

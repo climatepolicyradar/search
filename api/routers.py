@@ -327,13 +327,15 @@ def read_passages(
     ),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(passages_order_by),
+    bolding: bool = False,
 ):
     logger.info(
-        "Searching passages (query=%r, page_token=%s, page_size=%s, "
+        "Searching passages (query=%r, page_token=%s, page_size=%s, bolding=%s, "
         "filters_present=%s)",
         query,
         pagination.page_token,
         pagination.page_size,
+        bolding,
         bool(filters_json_string),
     )
 
@@ -346,6 +348,7 @@ def read_passages(
             pagination=pagination,
             order_by=order_by,
             filters_json_string=normalised_filters,
+            bolding=bolding,
         )
     except Exception:
         logger.exception(

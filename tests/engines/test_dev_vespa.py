@@ -201,6 +201,53 @@ def test_passage_search_engine_order_by_wins_over_debug_mode_ranking_profile() -
     assert request_body["ranking.sorting"] == "+missing(idx,last)"
 
 
+def test_passage_search_engine_disables_bolding_by_default() -> None:
+    """`content` is `bolding: on` in the schema, so it's turned off per-request."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    fake_response = {"root": {"children": []}}
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value=fake_response
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["presentation.bolding"] == "false"
+
+
+def test_passage_search_engine_leaves_bolding_on_when_requested() -> None:
+    """`bolding=True` leaves Vespa's default bolding in place."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    fake_response = {"root": {"children": []}}
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value=fake_response
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+            bolding=True,
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert "presentation.bolding" not in request_body
+
+
 def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages_schema() -> (
     None
 ):
