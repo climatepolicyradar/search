@@ -823,6 +823,15 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 # None leaves the rank profile's own default in place.
 _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
 
+# How many candidates weakAnd keeps before the rank profile runs. weakAnd picks them 
+# with an idf over the `default` fieldset - which includes `passages_text` – so long 
+# PDFs with many passage hits can crowd out a short exact title match and that document 
+# is then never scored at all. 
+# Vespa's own default is max(hits, 100), i.e. 100 for a 10-result page. 
+# Per content node, so the same value gives different totals in prod (2 nodes) and 
+# locally (1). See FUS-475.
+_DEFAULT_DOCUMENT_TARGET_HITS = 100
+
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
 
@@ -905,6 +914,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
         passages_breadth_weight: float | None = _DEFAULT_PASSAGES_BREADTH_WEIGHT,
+        target_hits: int = _DEFAULT_DOCUMENT_TARGET_HITS,
     ) -> None:
         """
         Initialise the search engine.
@@ -923,6 +933,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             contributes to relevance. ``None`` leaves the profile's own default
             (0.1); ``0.0`` switches passage-breadth ranking off. Ignored by
             profiles that do not declare the input.
+        :param target_hits: How many candidates weakAnd keeps before ranking.
+            Raising it stops a strong title match being pruned before the rank
+            profile ever sees it, at the cost of matching more broadly. See
+            :data:`_DEFAULT_DOCUMENT_TARGET_HITS`.
         """
         self.debug = debug
         self.bolding = bolding
@@ -931,6 +945,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
         self.passages_breadth_weight = passages_breadth_weight
+        self.target_hits = target_hits
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -939,19 +954,29 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
             "passages_breadth_weight": self.passages_breadth_weight,
+            "target_hits": self.target_hits,
         }
 
-    _userQuery: str = (
-        " and (userQuery() "
-        # As geographies and title_synonyms use different Lucene analyzers
-        # to the default fieldset, they're referenced explicitly in the query
-        # so they can be searched.
-        # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
-        # `geo_query` is `query` with geography aliases resolved to the canonical
-        # names carried by the field - see _resolve_geography_aliases.
-        ' or ({defaultIndex: "geographies"}userInput(@geo_query))'
-        ' or ({defaultIndex: "identifiers"}userInput(@query)))'
-    )
+    @property
+    def _userQuery(self) -> str:
+        """
+        The text-matching half of the YQL, carrying the weakAnd retrieval depth.
+
+        `userInput(@query)` rather than `userQuery()` because `targetHits` only
+        binds to the former. Both build a weakAnd over the `default` fieldset and are 
+        otherwise equivalent here.
+        """
+        return (
+            f" and (({{targetHits:{self.target_hits}}}userInput(@query)) "
+            # As geographies and title_synonyms use different Lucene analyzers
+            # to the default fieldset, they're referenced explicitly in the query
+            # so they can be searched.
+            # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
+            # `geo_query` is `query` with geography aliases resolved to the canonical
+            # names carried by the field - see _resolve_geography_aliases.
+            ' or ({defaultIndex: "geographies"}userInput(@geo_query))'
+            ' or ({defaultIndex: "identifiers"}userInput(@query)))'
+        )
 
     def search(
         self,
