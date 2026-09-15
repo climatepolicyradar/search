@@ -10,7 +10,7 @@ from search.engines.dev_vespa import (
     passages_filter_struct_field_to_vespa_field_map,
 )
 from search.label import Label
-from search.testcase import RelativeOrderTestCase
+from search.testcase import RelativeOrderTestCase, SearchComparisonTestCase
 
 
 class StubLabelSearchEngine(SearchEngine[Label]):
@@ -68,10 +68,10 @@ def test_relative_order_passes_when_higher_result_ranks_above_lower(
 ):
     test_case = _test_case()
 
-    passed, results = test_case.run_against(StubLabelSearchEngine(result_ids))
+    outcome = test_case.run_against(StubLabelSearchEngine(result_ids))
 
-    assert passed == expected_passed
-    assert [result.id for result in results] == result_ids
+    assert outcome.passed == expected_passed
+    assert [result.id for result in outcome.results] == result_ids
 
 
 def test_topics_or_matches_any_topic() -> None:
@@ -126,3 +126,66 @@ def test_relative_order_rejects_identical_result_ids():
             higher_result_id="a",
             lower_result_id="a",
         )
+
+
+class StubComparisonSearchEngine(SearchEngine[Label]):
+    """A search engine returning different labels per query, keyed by query text."""
+
+    model_class = Label
+
+    def __init__(self, results_by_query: dict[str, list[str]]):
+        self.results_by_query = results_by_query
+
+    def search(
+        self,
+        query: str,
+        pagination: Pagination,
+        order_by: list[OrderBy],  # noqa: ARG002
+        filters_json_string: str | None,  # noqa: ARG002
+    ) -> ListResponse[Label]:
+        """Return the labels stubbed for this query."""
+        results = [
+            Label(id=result_id) for result_id in self.results_by_query.get(query, [])
+        ]
+        return ListResponse(
+            results=results[: pagination.page_size],
+            total_size=len(results),
+            next_page_token=None,
+        )
+
+    def count(self, query: str) -> int:  # noqa: ARG002
+        """Unused by this test case."""
+        return 0
+
+
+def test_search_comparison_stores_both_arms() -> None:
+    """
+    Both queries' results are kept.
+
+    Storing only the first arm made a low overlap impossible to diagnose from
+    the report: the stored results looked healthy whatever the second query did.
+    """
+    test_case = SearchComparisonTestCase[Label](
+        search_terms="phaseout",
+        search_terms_to_compare="phase out",
+        description="'phaseout' and 'phase out' should return the same results",
+        minimum_overlap=1.0,
+        k=2,
+    )
+    engine = StubComparisonSearchEngine(
+        {"phaseout": ["a", "b"], "phase out": ["a", "c"]}
+    )
+
+    outcome = test_case.run_against(engine)
+
+    assert outcome.passed is False
+    assert [r.id for r in outcome.results] == ["a", "b"]
+    assert outcome.comparison_results is not None
+    assert [r.id for r in outcome.comparison_results] == ["a", "c"]
+
+
+def test_a_test_case_with_one_query_stores_no_comparison_arm() -> None:
+    """The counterpart: nothing to render for a single-query test case."""
+    outcome = _test_case().run_against(StubLabelSearchEngine(["a", "b"]))
+
+    assert outcome.comparison_results is None

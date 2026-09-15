@@ -136,7 +136,7 @@ _TEMPLATE = """<!DOCTYPE html>
         {% endif %}
 
         {% if t.results %}
-          <div class="results-heading">Search results</div>
+          <div class="results-heading">{{ t.results_heading }}</div>
           {% for r in t.results %}
             <div class="result">
               <div class="result-main">
@@ -160,6 +160,25 @@ _TEMPLATE = """<!DOCTYPE html>
           {% endfor %}
         {% else %}
           <div class="empty-results">No results returned.</div>
+        {% endif %}
+
+        {% if t.comparison_results is not none %}
+          <div class="results-heading">{{ t.comparison_results_heading }}</div>
+          {% for r in t.comparison_results %}
+            <div class="result">
+              <div class="result-main">
+                <div class="result-header">
+                  <span class="rank">#{{ loop.index }}</span>
+                  <span class="title">{{ r.title }}</span>
+                  <span class="id">{{ r.id }}</span>
+                </div>
+                {% if r.description %}<div class="result-desc">{{ r.description }}</div>{% endif %}
+                {% if r.attributes %}<div class="result-attrs">{{ r.attributes }}</div>{% endif %}
+              </div>
+            </div>
+          {% else %}
+            <div class="empty-results">No results returned.</div>
+          {% endfor %}
         {% endif %}
       </div>
     </details>
@@ -267,8 +286,8 @@ def _render_test_entry(test_result) -> dict:
     )
 
     # SearchComparisonTestCase runs two queries — debug info captured after the
-    # call belongs to the *second* query while search_results are from the
-    # *first*, so we don't align them.
+    # call belongs to the *second* query while the first arm's results are shown
+    # above it, so we don't align them.
     note = ""
     debug_info = test_result.debug_info
     if tc.name == "SearchComparisonTestCase":
@@ -279,8 +298,34 @@ def _render_test_entry(test_result) -> dict:
         )
         debug_info = None
 
-    results_rendered = []
-    for i, doc in enumerate(test_result.search_results):
+    comparison_results = test_result.comparison_search_results
+    comparison_terms = getattr(tc, "search_terms_to_compare", "")
+    return {
+        "test_name": tc.name,
+        "search_terms": tc.search_terms,
+        "description": tc.description,
+        "passed": test_result.passed,
+        "diagnosis": diagnosis,
+        "note": note,
+        "results_heading": (
+            f"Search results — '{tc.search_terms}'"
+            if comparison_results is not None
+            else "Search results"
+        ),
+        "results": _render_results(test_result.search_results, debug_info),
+        "comparison_results_heading": f"Comparison results — '{comparison_terms}'",
+        "comparison_results": (
+            None
+            if comparison_results is None
+            else _render_results(comparison_results, None)
+        ),
+    }
+
+
+def _render_results(documents: list, debug_info: list | None) -> list[dict]:
+    """Project search results, and their debug info if aligned, for the template."""
+    rendered = []
+    for i, doc in enumerate(documents):
         hit_debug = debug_info[i] if debug_info and i < len(debug_info) else None
         scores: list[tuple[str, str]] = []
         relevance_str = "—"
@@ -290,7 +335,7 @@ def _render_test_entry(test_result) -> dict:
                 scores.append((feature, _format_score(sf.get(feature))))
             relevance_str = _format_score(hit_debug.get("relevance"))
 
-        results_rendered.append(
+        rendered.append(
             {
                 "id": getattr(doc, "id", ""),
                 "title": getattr(doc, "title", "") or "",
@@ -300,13 +345,4 @@ def _render_test_entry(test_result) -> dict:
                 "relevance": relevance_str,
             }
         )
-
-    return {
-        "test_name": tc.name,
-        "search_terms": tc.search_terms,
-        "description": tc.description,
-        "passed": test_result.passed,
-        "diagnosis": diagnosis,
-        "note": note,
-        "results": results_rendered,
-    }
+    return rendered

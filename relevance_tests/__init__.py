@@ -16,7 +16,7 @@ from search.identifiers import Identifier, generate_id
 from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
-from search.testcase import TestCase
+from search.testcase import TestCase, TestCaseOutcome
 
 logger = get_logger(__name__)
 T = TypeVar("T", bound=BaseModel)
@@ -32,6 +32,7 @@ class TestResult(BaseModel, Generic[T]):
     passed: bool
     search_engine_id: str
     search_results: list[T]
+    comparison_search_results: list[T] | None = None
     debug_info: list[dict[str, Any]] | None = None
 
 
@@ -229,21 +230,22 @@ def run_tests_for_engine(
 
     for test_case in test_cases:
         logger.info(f"Running test case: {test_case.name}: {test_case.search_terms}")
+        outcome: TestCaseOutcome | None
         try:
-            test_passed, search_results = test_case.run_against(engine)
+            outcome = test_case.run_against(engine)
         except Exception as e:
             logger.info(f"Test case {test_case} failed with exception", exc_info=e)
-            test_passed = False
-            search_results = []
+            outcome = None
 
         raw_debug_info = getattr(engine, "last_debug_info", None)
         debug_info = copy.deepcopy(raw_debug_info) if raw_debug_info else None
 
         test_result = TestResult(
             test_case=test_case,
-            passed=test_passed,
+            passed=outcome.passed if outcome else False,
             search_engine_id=engine.id,
-            search_results=search_results,
+            search_results=outcome.results if outcome else [],
+            comparison_search_results=outcome.comparison_results if outcome else None,
             debug_info=debug_info,
         )
         engine_test_results.append(test_result)
