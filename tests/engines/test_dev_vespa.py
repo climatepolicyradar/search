@@ -738,3 +738,55 @@ def test_document_get_renders_labels_and_concepts() -> None:
     assert concept_label.value.value == "climate finance"
     assert concept_label.count == 42
     assert concept_label.passages_id is None
+
+
+def _document_search_yql(engine: DevVespaDocumentSearchEngine) -> str:
+    """Run a text search against a mocked Vespa and return the YQL it sent."""
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="electric arc furnace",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    return mock_execute.call_args.kwargs["request_body"]["yql"]
+
+
+def test_document_search_engine_sends_default_target_hits() -> None:
+    """
+    Retrieval depth is stated in the YQL rather than left to Vespa's default.
+
+    `totalTargetHits` binds to `userInput()` only - on `userQuery()` it parses
+    and is then silently ignored - so the clause must not fall back to
+    `userQuery()`. It is cluster-wide, unlike the per-node `targetHits`.
+    """
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    yql = _document_search_yql(engine)
+
+    assert "{totalTargetHits:2000}userInput(@query)" in yql
+    assert "userQuery()" not in yql
+    assert engine.parameters["total_target_hits"] == 2000
+
+
+def test_document_search_engine_forwards_target_hits() -> None:
+    """`total_target_hits` overrides how many candidates weakAnd keeps."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings, total_target_hits=200)
+
+    yql = _document_search_yql(engine)
+
+    assert "{totalTargetHits:200}userInput(@query)" in yql
+    # The geography and identifier arms are untouched by the change.
+    assert '{defaultIndex: "geographies"}userInput(@geo_query)' in yql
+    assert '{defaultIndex: "identifiers"}userInput(@query)' in yql
+    assert engine.parameters["total_target_hits"] == 200
