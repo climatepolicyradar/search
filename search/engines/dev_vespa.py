@@ -730,6 +730,9 @@ documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = 
 
 _DEFAULT_TOPIC_WEIGHT = 1.0
 
+# None leaves the rank profile's own default in place.
+_DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
+
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
 
@@ -811,6 +814,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         bolding: bool = False,
         ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
+        passages_breadth_weight: float | None = _DEFAULT_PASSAGES_BREADTH_WEIGHT,
     ) -> None:
         """
         Initialise the search engine.
@@ -825,6 +829,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             ``bm25-title-geo``.
         :param topic_weight: How much a filtered-for topic's mention counts
             contribute to relevance. ``0.0`` switches topic ranking off.
+        :param passages_breadth_weight: How much the number of matching passages
+            contributes to relevance. ``None`` leaves the profile's own default
+            (0.1); ``0.0`` switches passage-breadth ranking off. Ignored by
+            profiles that do not declare the input.
         """
         self.debug = debug
         self.bolding = bolding
@@ -832,6 +840,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.settings = settings
         self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
+        self.passages_breadth_weight = passages_breadth_weight
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -839,6 +848,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         return {
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
+            "passages_breadth_weight": self.passages_breadth_weight,
         }
 
     _userQuery: str = (
@@ -896,6 +906,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         if topic_ids and not sort_overrides:
             request_body["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
             request_body["input.query(topic_weight)"] = self.topic_weight
+
+        if self.passages_breadth_weight is not None and not sort_overrides:
+            request_body["input.query(passages_breadth_weight)"] = (
+                self.passages_breadth_weight
+            )
 
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
