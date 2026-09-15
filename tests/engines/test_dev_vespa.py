@@ -769,23 +769,23 @@ def test_document_search_engine_sends_default_target_hits() -> None:
 
     yql = _document_search_yql(engine)
 
-    assert "{targetHits:100}userInput(@query)" in yql
+    assert "{targetHits:1000}userInput(@query)" in yql
     assert "userQuery()" not in yql
-    assert engine.parameters["target_hits"] == 100
+    assert engine.parameters["target_hits"] == 1000
 
 
 def test_document_search_engine_forwards_target_hits() -> None:
-    """`target_hits` raises how many candidates weakAnd keeps before ranking."""
+    """`target_hits` overrides how many candidates weakAnd keeps before ranking."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, target_hits=1000)
+    engine = DevVespaDocumentSearchEngine(settings=settings, target_hits=100)
 
     yql = _document_search_yql(engine)
 
-    assert "{targetHits:1000}userInput(@query)" in yql
+    assert "{targetHits:100}userInput(@query)" in yql
     # The geography and identifier arms are untouched by the change.
     assert '{defaultIndex: "geographies"}userInput(@geo_query)' in yql
     assert '{defaultIndex: "identifiers"}userInput(@query)' in yql
-    assert engine.parameters["target_hits"] == 1000
+    assert engine.parameters["target_hits"] == 100

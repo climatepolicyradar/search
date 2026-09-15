@@ -519,6 +519,12 @@ def relevance_tests_principal_documents():
 
     engines = [
         DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
+        # The shallower retrieval we used to run at, to A/B against - at this depth
+        # weakAnd prunes strong title matches before the rank profile ever scores
+        # them. See FUS-475.
+        DevVespaPrincipalDocumentSearchEngine(
+            settings=settings, debug=True, target_hits=100
+        ),
         BM25TitleVespaDocumentSearchEngine(),
     ]
 

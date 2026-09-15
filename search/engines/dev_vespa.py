@@ -827,10 +827,14 @@ _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
 # with an idf over the `default` fieldset - which includes `passages_text` – so long 
 # PDFs with many passage hits can crowd out a short exact title match and that document 
 # is then never scored at all. 
-# Vespa's own default is max(hits, 100), i.e. 100 for a 10-result page. 
-# Per content node, so the same value gives different totals in prod (2 nodes) and 
+# Vespa's own default is max(hits, 100), which ties retrieval depth to the page
+# size - so a page_size=500 search matched 5872 documents where the facet query
+# for the same terms, running at hits=0, matched 1801. Results and facet counts
+# were describing different candidate sets, and `total_count` moved with the
+# requested page size. Pinning it here decouples the two.
+# Per content node, so the same value gives different totals in prod (2 nodes) and
 # locally (1). See FUS-475.
-_DEFAULT_DOCUMENT_TARGET_HITS = 100
+_DEFAULT_DOCUMENT_TARGET_HITS = 1000
 
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
