@@ -140,7 +140,7 @@ class WandbSession:
 
         metrics_by_category_table = pd.DataFrame(
             [{**metrics[cat], "category": cat} for cat in categories]
-        )[["category", "passed", "failed", "total", "pass_rate"]]
+        )[["category", "passed", "failed", "errored", "total", "pass_rate"]]
 
         test_results_table = pd.DataFrame(
             [
@@ -149,7 +149,8 @@ class WandbSession:
                     "category": r.test_case.category or "uncategorized",
                     "search_terms": r.test_case.search_terms,
                     "description": r.test_case.description,
-                    "passed": r.passed,
+                    "status": r.status,
+                    "error": r.error or "",
                     "search_engine_id": str(r.search_engine_id),
                     "num_results": len(r.search_results),
                 }

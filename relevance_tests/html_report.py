@@ -4,6 +4,9 @@ from typing import Any
 
 from jinja2 import Environment, select_autoescape
 
+BADGE_CLASS = {"passed": "pass", "failed": "fail", "errored": "error"}
+BADGE_LABEL = {"passed": "PASS", "failed": "FAIL", "errored": "ERRORED"}
+
 SCORE_FEATURES = [
     "title_score",
     "description_score",
@@ -24,6 +27,8 @@ _TEMPLATE = """<!DOCTYPE html>
     --pass-bg: #e8f5ec;
     --fail: #b3261e;
     --fail-bg: #fde8e6;
+    --error: #7c4a00;
+    --error-bg: #fff8e1;
     --muted: #6b7280;
     --border: #e5e7eb;
     --bg: #fafafa;
@@ -56,12 +61,17 @@ _TEMPLATE = """<!DOCTYPE html>
            text-transform: uppercase; letter-spacing: 0.04em; }
   .badge.pass { background: var(--pass-bg); color: var(--pass); }
   .badge.fail { background: var(--fail-bg); color: var(--fail); }
+  .badge.error { background: var(--error-bg); color: var(--error); }
   .test-body { padding: 0 1rem 1rem 1rem; }
   .test-meta { color: var(--muted); font-size: 0.9rem; margin: 0.25rem 0 0.75rem 0; }
   .query { font-family: var(--mono); background: #f3f4f6; padding: 0.15rem 0.4rem; border-radius: 3px; }
   .diagnosis { background: var(--fail-bg); border-left: 3px solid var(--fail); padding: 0.6rem 0.8rem;
                margin: 0.5rem 0 1rem 0; font-family: var(--mono); font-size: 0.85rem;
                white-space: pre-wrap; }
+  .error-detail { background: var(--error-bg); border-left: 3px solid #d97706; padding: 0.6rem 0.8rem;
+               margin: 0.5rem 0 1rem 0; font-family: var(--mono); font-size: 0.85rem;
+               white-space: pre-wrap; color: var(--error); }
+  .footnote { color: var(--muted); font-size: 0.8rem; margin-top: 0.6rem; }
   .note { background: #fff8e1; border-left: 3px solid #d97706; padding: 0.5rem 0.8rem;
           margin: 0.5rem 0; font-size: 0.85rem; color: #7c4a00; }
   .results-heading { font-size: 0.8rem; font-weight: 600; color: var(--muted);
@@ -102,30 +112,36 @@ _TEMPLATE = """<!DOCTYPE html>
 <div class="summary">
   <table>
     <thead>
-      <tr><th>Category</th><th>Passed</th><th>Failed</th><th>Total</th><th>Pass rate</th></tr>
+      <tr><th>Category</th><th>Passed</th><th>Failed</th><th>Errored</th><th>Total</th><th>Pass rate</th></tr>
     </thead>
     <tbody>
       {% for row in summary_rows %}
-        <tr><td>{{ row.category }}</td><td>{{ row.passed }}</td><td>{{ row.failed }}</td><td>{{ row.total }}</td><td>{{ row.pass_rate }}</td></tr>
+        <tr><td>{{ row.category }}</td><td>{{ row.passed }}</td><td>{{ row.failed }}</td><td>{{ row.errored }}</td><td>{{ row.total }}</td><td>{{ row.pass_rate }}</td></tr>
       {% endfor %}
       <tr class="total">
-        <td>TOTAL</td><td>{{ overall.passed }}</td><td>{{ overall.failed }}</td><td>{{ overall.total }}</td><td>{{ overall.pass_rate }}</td>
+        <td>TOTAL</td><td>{{ overall.passed }}</td><td>{{ overall.failed }}</td><td>{{ overall.errored }}</td><td>{{ overall.total }}</td><td>{{ overall.pass_rate }}</td>
       </tr>
     </tbody>
   </table>
+  <div class="footnote">Pass rate excludes errored cases: a case that could not be
+  evaluated carries no verdict about ranking.</div>
 </div>
 
 {% for category, tests in tests_by_category %}
   <h2>{{ category }} <span style="color: var(--muted); font-weight: normal; font-size: 0.9rem;">({{ tests|length }} tests)</span></h2>
   {% for t in tests %}
-    <details class="test"{% if not t.passed %} open{% endif %}>
+    <details class="test"{% if t.status != "passed" %} open{% endif %}>
       <summary>
-        <span class="badge {{ 'pass' if t.passed else 'fail' }}">{{ 'PASS' if t.passed else 'FAIL' }}</span>
+        <span class="badge {{ BADGE_CLASS[t.status] }}">{{ BADGE_LABEL[t.status] }}</span>
         <span>{{ t.test_name }}</span>
         <span class="query">{{ t.search_terms }}</span>
       </summary>
       <div class="test-body">
         <div class="test-meta">{{ t.description }}</div>
+
+        {% if t.error %}
+          <div class="error-detail">Not evaluated - {{ t.error }}</div>
+        {% endif %}
 
         {% if t.diagnosis %}
           <div class="diagnosis">{{ t.diagnosis }}</div>
@@ -158,7 +174,7 @@ _TEMPLATE = """<!DOCTYPE html>
               {% endif %}
             </div>
           {% endfor %}
-        {% else %}
+        {% elif t.status != "errored" %}
           <div class="empty-results">No results returned.</div>
         {% endif %}
 
@@ -228,26 +244,28 @@ def render_test_results_html(
     summary_rows = []
     for category in sorted(k for k in metrics.keys() if k not in excluded_keys):
         cat = metrics[category]
-        pass_rate = f"{(cat['pass_rate'] * 100):.1f}%" if cat["total"] else "N/A"
+        evaluated = cat["total"] - cat["errored"]  # pyright: ignore[reportOperatorIssue]
+        pass_rate = f"{(cat['pass_rate'] * 100):.1f}%" if evaluated else "N/A"
         summary_rows.append(
             {
                 "category": category,
                 "passed": cat["passed"],
                 "failed": cat["failed"],
+                "errored": cat["errored"],
                 "total": cat["total"],
                 "pass_rate": pass_rate,
             }
         )
 
     overall_metrics = metrics["overall"]
+    overall_evaluated = overall_metrics["total"] - overall_metrics["errored"]  # pyright: ignore[reportOperatorIssue]
     overall_pass_rate = (
-        f"{(overall_metrics['pass_rate'] * 100):.1f}%"
-        if overall_metrics["total"]
-        else "N/A"
+        f"{(overall_metrics['pass_rate'] * 100):.1f}%" if overall_evaluated else "N/A"
     )
     overall = {
         "passed": overall_metrics["passed"],
         "failed": overall_metrics["failed"],
+        "errored": overall_metrics["errored"],
         "total": overall_metrics["total"],
         "pass_rate": overall_pass_rate,
     }
@@ -261,8 +279,12 @@ def render_test_results_html(
     tests_by_category: list[tuple[str, list[dict]]] = []
     for category in sorted(by_category.keys()):
         rendered = []
-        # Failed tests first so domain experts see them immediately.
-        sorted_results = sorted(by_category[category], key=lambda r: r.passed)
+        # Failed tests first so domain experts see them immediately; errored
+        # cases next, since they need acting on but say nothing about ranking.
+        sorted_results = sorted(
+            by_category[category],
+            key=lambda r: {"failed": 0, "errored": 1, "passed": 2}[r.status],
+        )
         for tr in sorted_results:
             rendered.append(_render_test_entry(tr))
         tests_by_category.append((category, rendered))
@@ -270,6 +292,8 @@ def render_test_results_html(
     env = Environment(autoescape=select_autoescape(["html", "xml"]))
     template = env.from_string(_TEMPLATE)
     return template.render(
+        BADGE_CLASS=BADGE_CLASS,
+        BADGE_LABEL=BADGE_LABEL,
         engine_name=engine_name,
         test_run_id=test_run_id,
         summary_rows=summary_rows,
@@ -281,8 +305,12 @@ def render_test_results_html(
 def _render_test_entry(test_result) -> dict:
     """Project a TestResult into the dict shape consumed by the template."""
     tc = test_result.test_case
+    # An errored case is not diagnosed: its empty result set was produced by a
+    # failed request, so it says nothing about how anything ranked.
     diagnosis = (
-        "" if test_result.passed else (tc.diagnose(test_result.search_results) or "")
+        tc.diagnose(test_result.search_results) or ""
+        if test_result.status == "failed"
+        else ""
     )
 
     # SearchComparisonTestCase runs two queries — debug info captured after the
@@ -304,7 +332,8 @@ def _render_test_entry(test_result) -> dict:
         "test_name": tc.name,
         "search_terms": tc.search_terms,
         "description": tc.description,
-        "passed": test_result.passed,
+        "status": test_result.status,
+        "error": test_result.error,
         "diagnosis": diagnosis,
         "note": note,
         "results_heading": (
