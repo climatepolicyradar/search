@@ -60,11 +60,69 @@ def derive_id_if_missing(record: dict) -> dict:
     return record
 
 
+_CONCEPT_ID_PREFIX = "concept::"
+
+
+def _prefix_concept_id(raw_id: str) -> str:
+    """Give a bare wikibase id the `concept::` prefix stored in `concepts.id`."""
+    return (
+        raw_id
+        if raw_id.startswith(_CONCEPT_ID_PREFIX)
+        else f"{_CONCEPT_ID_PREFIX}{raw_id}"
+    )
+
+
+def derive_concepts_from_labels(record: dict) -> dict:
+    """
+    Rebuild `concepts` and `concept_counts` from the record's v2 `labels` edges.
+
+    The data-lake export's `concepts`/`concept_counts` columns are built from a
+    stale v1 source and over-tag documents (notably principals) with concepts
+    their current v2 passages no longer carry - so a topic filter surfaces and
+    ranks a document whose slide-out has no matching passages. The export's `labels`
+    concept edges are the v2-consistent signal (they match Snowflake
+    `DOCUMENTS.concept_ids`), so both fields are derived from them here.
+
+    `labels` concept edges are already one-per-concept with a mention `count`,
+    and their ids are bare wikibase ids, so they are prefixed to match how
+    `concepts.id` / the `concept_counts` tensor key are stored.
+
+    A record with no `labels` field is a partial update that does not touch
+    labels; it is left alone rather than having its concepts wiped.
+    """
+    fields = record.get("fields", {})
+    if "labels" not in fields:
+        return record
+
+    concept_labels = [
+        label
+        for label in fields.get("labels", {}).get("assign", [])
+        if label.get("type") == "concept"
+    ]
+
+    concepts = [
+        {
+            "id": _prefix_concept_id(label["id"]),
+            "type": "concept",
+            "value": label["value"],
+            "count": label["count"],
+            "passages_id": label.get("passages_id"),
+        }
+        for label in concept_labels
+    ]
+
+    fields["concepts"] = {"assign": concepts}
+    fields["concept_counts"] = {
+        "assign": {concept["id"]: concept["count"] for concept in concepts}
+    }
+    return record
+
+
 def derive_document_data(record: dict) -> dict:
-    """Apply all passages derivers to a record, in sequence."""
+    """Apply all documents derivers to a record, in sequence."""
     record = derive_principal_id(record)
     record = derive_id_if_missing(record)
-
+    record = derive_concepts_from_labels(record)
     return record
 
 
