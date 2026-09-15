@@ -87,6 +87,9 @@ def _strip_quotes(query: str) -> str:
 # the `geographies` field. Resolved in Python, before the query reaches Vespa.
 #
 # These used to be Lucene synonym rules (lucene-linguistics/en/geo-synonyms.txt).
+# When updating these you will need to make sure you update
+# `lucene-linguistics/en/geo-synonyms.txt`
+# @related: LUCENE_LINGUISTICS_GEOS
 # Neither side of Vespa's linguistics can express them:
 #   - at query time, Vespa's query parser splits the query into independent terms
 #     *before* the field analyzer runs, so `synonymGraph` sees "ivory" and "coast"
