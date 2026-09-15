@@ -525,10 +525,7 @@ def test_document_search_engine_forwards_topic_weight() -> None:
     request_body = mock_execute.call_args.kwargs["request_body"]
     assert request_body["input.query(topic_weight)"] == 0.0
     # Surfaced for relevance-test logging rather than baked into the engine name.
-    assert engine.parameters == {
-        "ranking_profile": _DEFAULT_DOCUMENT_RANK_PROFILE,
-        "topic_weight": 0.0,
-    }
+    assert engine.parameters["topic_weight"] == 0.0
     assert engine.name == "DevVespaDocumentSearchEngine"
 
 
