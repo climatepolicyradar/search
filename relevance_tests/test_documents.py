@@ -109,6 +109,29 @@ test_cases = [
         ],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Energy Policy Act 2005 (Energy Bill))",
     ),
+    # Multi-word geography aliases (FUS-423)
+    FieldCharacteristicsTestCase[Document](
+        category="document name + geography",
+        search_terms="ivory coast",
+        characteristics_test=lambda document: any(
+            relationship.type == "geography"
+            and any_words_in_string(["ivoire"], relationship.value.value)
+            for relationship in document.labels
+        ),
+        description="Searching for 'ivory coast' should return documents tagged with the canonical geography Cote d'Ivoire",
+        k=5,
+    ),
+    FieldCharacteristicsTestCase[Document](
+        category="document name + geography",
+        search_terms="czech republic",
+        characteristics_test=lambda document: any(
+            relationship.type == "geography"
+            and any_words_in_string(["czechia"], relationship.value.value)
+            for relationship in document.labels
+        ),
+        description="Searching for 'czech republic' should return documents tagged with the canonical geography Czechia",
+        k=5,
+    ),
     FieldCharacteristicsTestCase[Document](
         category="document type",
         search_terms="adaptation strategy",
