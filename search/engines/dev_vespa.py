@@ -19,6 +19,7 @@ For now we just use `requests` which yields the same results.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
