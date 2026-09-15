@@ -1,7 +1,7 @@
 import http, { type Response } from "k6/http";
 import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
-import tempo from "k6/experimental/tracing";
+import tempo from "https://jslib.k6.io/http-instrumentation-tempo/1.0.1/index.js";
 
 // __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
 // Defaults to production so `k6 run` works out of the box with no setup.
