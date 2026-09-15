@@ -7,6 +7,7 @@ so every failure mode of :func:`_execute_vespa_query` must raise
 :class:`VespaError`, and no caller may catch it to return an empty result.
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -242,3 +243,41 @@ def test_document_search_still_returns_an_empty_list_for_no_matches(settings) ->
 
 
 # endregion Callers must not swallow VespaError
+
+# region Degraded coverage
+
+
+def test_a_degraded_response_is_warned_about(caplog) -> None:
+    """A partial answer is usable, so it warns - it does not raise."""
+    body = {
+        "root": {
+            "coverage": {"coverage": 42, "documents": 1000, "degraded": {"timeout": True}},
+            "children": [],
+        }
+    }
+    post_fn = MagicMock(return_value=_response(200, json_value=body))
+
+    with caplog.at_level(logging.WARNING):
+        assert _execute(post_fn) == body
+
+    assert "degraded" in caplog.text
+    assert "test.context" in caplog.text
+
+
+def test_a_full_coverage_response_is_not_warned_about(caplog) -> None:
+    """The counterpart: a complete answer is silent."""
+    body = {
+        "root": {
+            "coverage": {"coverage": 100, "documents": 1000, "degraded": {"timeout": False}},
+            "children": [],
+        }
+    }
+    post_fn = MagicMock(return_value=_response(200, json_value=body))
+
+    with caplog.at_level(logging.WARNING):
+        _execute(post_fn)
+
+    assert "degraded" not in caplog.text
+
+
+# endregion Degraded coverage

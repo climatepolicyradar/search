@@ -723,6 +723,38 @@ def _get_total_count(response: dict[str, Any]) -> int | None:
     return response.get("root", {}).get("fields", {}).get("totalCount")
 
 
+def _warn_if_degraded(response_json: dict[str, Any], request_context: str) -> None:
+    """
+    Warn when Vespa answered from less than the whole corpus.
+
+    A query that exhausts its budget, or whose content nodes did not all answer,
+    comes back as a 200 carrying partial results. That is a valid response - it is
+    not an error and must not be raised - but the hits are drawn from a subset of
+    the corpus, so ranking comparisons built on it are not comparable with a full
+    one. WARNING because the caller still gets a usable answer.
+    """
+    coverage = response_json.get("root", {}).get("coverage") or {}
+    # Vespa reports every degradation reason it knows about, most of them false.
+    reasons = {
+        reason: value
+        for reason, value in (coverage.get("degraded") or {}).items()
+        if value
+    }
+    covered_percent = coverage.get("coverage")
+    incomplete = isinstance(covered_percent, (int, float)) and covered_percent < 100
+    if not reasons and not incomplete:
+        return
+
+    logger.warning(
+        "Vespa returned a degraded result [%s] (coverage=%s%%, documents=%s, "
+        "degraded=%s)",
+        request_context,
+        covered_percent,
+        coverage.get("documents"),
+        reasons or None,
+    )
+
+
 def _execute_vespa_query(
     *,
     endpoint: str,
@@ -799,6 +831,8 @@ def _execute_vespa_query(
     except ValueError as exc:
         logger.exception("Error: Vespa returned invalid JSON [%s]", request_context)
         raise VespaError(f"Vespa returned invalid JSON [{request_context}]") from exc
+
+    _warn_if_degraded(response_json, request_context)
 
     hit_count = len(response_json.get("root", {}).get("children", []) or [])
     logger.info(
