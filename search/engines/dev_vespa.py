@@ -831,10 +831,8 @@ _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
 # size - so a page_size=500 search matched 5872 documents where the facet query
 # for the same terms, running at hits=0, matched 1801. Results and facet counts
 # were describing different candidate sets, and `total_count` moved with the
-# requested page size. Pinning it here decouples the two.
-# Per content node, so the same value gives different totals in prod (2 nodes) and
-# locally (1). See FUS-475.
-_DEFAULT_DOCUMENT_TARGET_HITS = 1000
+# requested page size. Pinning it here decouples the two. See FUS-475.
+_DEFAULT_DOCUMENT_TOTAL_TARGET_HITS = 2000
 
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
@@ -918,7 +916,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
         passages_breadth_weight: float | None = _DEFAULT_PASSAGES_BREADTH_WEIGHT,
-        target_hits: int = _DEFAULT_DOCUMENT_TARGET_HITS,
+        total_target_hits: int = _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
     ) -> None:
         """
         Initialise the search engine.
@@ -937,10 +935,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             contributes to relevance. ``None`` leaves the profile's own default
             (0.1); ``0.0`` switches passage-breadth ranking off. Ignored by
             profiles that do not declare the input.
-        :param target_hits: How many candidates weakAnd keeps before ranking.
+        :param total_target_hits: How many candidates weakAnd keeps before
+            ranking, across the whole content cluster.
             Raising it stops a strong title match being pruned before the rank
             profile ever sees it, at the cost of matching more broadly. See
-            :data:`_DEFAULT_DOCUMENT_TARGET_HITS`.
+            :data:`_DEFAULT_DOCUMENT_TOTAL_TARGET_HITS`.
         """
         self.debug = debug
         self.bolding = bolding
@@ -949,7 +948,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
         self.passages_breadth_weight = passages_breadth_weight
-        self.target_hits = target_hits
+        self.total_target_hits = total_target_hits
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -958,7 +957,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
             "passages_breadth_weight": self.passages_breadth_weight,
-            "target_hits": self.target_hits,
+            "total_target_hits": self.total_target_hits,
         }
 
     @property
@@ -966,12 +965,12 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         """
         The text-matching half of the YQL, carrying the weakAnd retrieval depth.
 
-        `userInput(@query)` rather than `userQuery()` because `targetHits` only
-        binds to the former. Both build a weakAnd over the `default` fieldset and are 
-        otherwise equivalent here.
+        `userInput(@query)` rather than `userQuery()` because `totalTargetHits`
+        only binds to the former. Both build a weakAnd over the `default` fieldset
+        and are otherwise equivalent here.
         """
         return (
-            f" and (({{targetHits:{self.target_hits}}}userInput(@query)) "
+            f" and (({{totalTargetHits:{self.total_target_hits}}}userInput(@query)) "
             # As geographies and title_synonyms use different Lucene analyzers
             # to the default fieldset, they're referenced explicitly in the query
             # so they can be searched.
