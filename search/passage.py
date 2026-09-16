@@ -47,6 +47,60 @@ class PassageLabelRelationship(BaseModel):
     timestamps: list[str] = Field(default_factory=list)
 
 
+_HI_OPEN = "<hi>"
+_HI_CLOSE = "</hi>"
+
+
+class Bolding(BaseModel):
+    """A span of a passage's text that Vespa matched against the query."""
+
+    start_index: int
+    end_index: int
+    labelled_text: str
+
+
+class BoldedText(BaseModel):
+    """Text stripped of Vespa's `<hi>` tags, with the spans they marked."""
+
+    text: str  # the text stripped of <hi> tags
+    boldings: list[Bolding]
+
+
+def _bolding_to_labels(bolded_text: str) -> BoldedText:
+    """
+    Convert Vespa's `<hi>` tags to the stripped text plus a list of Boldings.
+
+    Indices relate the text with the tags stripped out as this is the text
+    the client is sent - so `labelled_text == text[start_index:end_index]`.
+    """
+    boldings: list[Bolding] = []
+    current_index = 0
+    tag_characters_removed = 0
+    while True:
+        start_tag_index = bolded_text.find(_HI_OPEN, current_index)
+        if start_tag_index == -1:
+            break
+        end_tag_index = bolded_text.find(_HI_CLOSE, start_tag_index)
+        if end_tag_index == -1:
+            break
+        labelled_text = bolded_text[start_tag_index + len(_HI_OPEN) : end_tag_index]
+        start_index = start_tag_index - tag_characters_removed
+        boldings.append(
+            Bolding(
+                start_index=start_index,
+                end_index=start_index + len(labelled_text),
+                labelled_text=labelled_text,
+            )
+        )
+        tag_characters_removed += len(_HI_OPEN) + len(_HI_CLOSE)
+        current_index = end_tag_index + len(_HI_CLOSE)
+
+    return BoldedText(
+        text=bolded_text.replace(_HI_OPEN, "").replace(_HI_CLOSE, ""),
+        boldings=boldings,
+    )
+
+
 class Passage(BaseModel):
     """Base class for a passage"""
 
@@ -64,6 +118,7 @@ class Passage(BaseModel):
     pages: list[int] = Field(default_factory=list)
     pages_with_bounding_boxes: list[PageWithBoundingBoxes] = Field(default_factory=list)
     labels: list[PassageLabelRelationship] = Field(default_factory=list)
+    boldings: list[Bolding] = Field(default_factory=list)
     heading_id: str | None = Field(default=None)
     heading_text: str | None = Field(default=None)
     document_id: str = Field(default="")
@@ -82,13 +137,27 @@ class Passage(BaseModel):
         return self.text_block_id
 
     @classmethod
-    def from_vespa_passage(cls, vespa_passage: VespaPassage) -> "Passage":
-        """Build the client-facing `Passage` from a canonical `VespaPassage`."""
+    def from_vespa_passage(
+        cls, vespa_passage: VespaPassage, bolding: bool = False
+    ) -> "Passage":
+        """
+        Build the client-facing `Passage` from a canonical `VespaPassage`.
+
+        :param bolding: Whether the query asked Vespa to bold matched terms. When
+            it did, `content` arrives wrapped in `<hi>` tags; `text` is the content
+            with those tags stripped and `boldings` carries the spans they marked.
+        """
         data = vespa_passage.model_dump()
+        bolded = (
+            _bolding_to_labels(data["content"])
+            if bolding
+            else BoldedText(text=data["content"], boldings=[])
+        )
         return cls(
             text_block_id=data["id"],
             idx=data["idx"],
-            text=data["content"],
+            text=bolded.text,
+            boldings=bolded.boldings,
             language=data["language"],
             type=data["content_type"],
             type_confidence=data["type_confidence"],
@@ -120,6 +189,7 @@ class Passage(BaseModel):
             principal_id=data["principal_id"],
             tokens=vespa_passage.tokens,
         )
+
 
 _MONTH = r"Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
 # 'December 31, 2024' or '31 December 2024' - a calendar date, not a citation year.
@@ -179,7 +249,9 @@ _DENSITY_MIN_WORDS = 60
 _FOOTNOTE_MARKER = re.compile(r"^\(?\[?\d{1,4}\]?\)?[.)]?\s+")
 # A full URL or DOI token, not just the keyword `_SOURCE_LOCATOR` triggers on - used to measure
 # how much text is left once a short passage's own locator is stripped out of it.
-_FULL_LOCATOR_TOKEN = re.compile(r"(?:https?|ftp)://\S+|www\.\S+|doi:\s*\S+", re.IGNORECASE)
+_FULL_LOCATOR_TOKEN = re.compile(
+    r"(?:https?|ftp)://\S+|www\.\S+|doi:\s*\S+", re.IGNORECASE
+)
 # Below this many leftover words, a short passage carrying a source locator is essentially JUST
 # the locator (a bare 'Available at: <url>' footnote) - sufficient on its own, since these carry
 # no author-initial or citation-year at all and could never otherwise reach two signals.
@@ -242,7 +314,9 @@ def looks_like_reference_list(passage: Passage) -> bool:
         return len(pattern.findall(text)) / len(words) * 100
 
     if len(words) >= _DENSITY_MIN_WORDS:
-        reads_as_prose = per_100_words(_FUNCTION_WORD) > _PROSE_FUNCTION_WORDS_PER_100_WORDS
+        reads_as_prose = (
+            per_100_words(_FUNCTION_WORD) > _PROSE_FUNCTION_WORDS_PER_100_WORDS
+        )
         is_contact_block = per_100_words(_CONTACT_DETAIL) >= _CONTACTS_PER_100_WORDS
         if reads_as_prose or is_contact_block:
             return False
@@ -622,8 +696,8 @@ def looks_like_short_heading(passage: Passage) -> bool:
         return False
 
     if passage.type == "sectionHeading":
-            return True
-    
+        return True
+
     letters = [char for char in text if char.isalpha()]
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
 
@@ -671,12 +745,12 @@ def looks_like_demoted_section(
     leading section numbering is discounted.
 
     Complements `looks_like_reference_list`, which reads the passage's own text and
-    so misses prose that sits in a bibliography e.g. under '10.8 BIBLIOGRAPHIC 
-    REFERENCES', "Understanding the health status of ecosystems is crucial for 
+    so misses prose that sits in a bibliography e.g. under '10.8 BIBLIOGRAPHIC
+    REFERENCES', "Understanding the health status of ecosystems is crucial for
     high-level decision-making..." fires no citation signal at all.
 
-    A passage of type sectionHeading, title, or pageHeader is judged on its own text, because `heading_id` on 
-    such a passage points at its heading, never at itself e.g. the passage 'References' 
+    A passage of type sectionHeading, title, or pageHeader is judged on its own text, because `heading_id` on
+    such a passage points at its heading, never at itself e.g. the passage 'References'
     has heading_text 'Annex VI: Common reporting tables'.
     """
     heading = (
@@ -707,13 +781,13 @@ _ANSWER_TOKENS = (
 def looks_like_questionnaire(passage: Passage) -> bool:
     """
     True if the passage is a form or questionnaire rather than substantive text.
- 
+
     Example (CCLW.document.i00007398.n0000):
         "Is the intervention financed partly or entirely by protein crop
         subsidies (maximum 2% in total) in accordance with Article 96(3) of the
         Strategic Plan Regulation? Tak No If the intervention is aimed at mixed
         crops of legumes and grasses: ..."
- 
+
     Requires a question followed by a checkbox-style answer token. An earlier
     version also fired on question *density*, which turned out to detect
     mojibake rather than forms: in GEF.document.10298.n0000 a passage with no
@@ -726,4 +800,3 @@ def looks_like_questionnaire(passage: Passage) -> bool:
     if "?" not in text:
         return False
     return any(token in text.lower() for token in _ANSWER_TOKENS)
- 
