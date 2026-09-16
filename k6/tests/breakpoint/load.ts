@@ -311,7 +311,15 @@ export function documents(): void {
       // Layout section. Distinct from the `route` tag set below, which
       // exists for the step-by-step breakdown, not cardinality control.
       // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
-      tags: { name: "documents?query,fields,filters,page_size" },
+      //
+      // `url` is a separate k6-builtin tag that `name` does NOT override —
+      // it still defaults to the literal request URL (cache-buster and all)
+      // unless set explicitly here too, which was the actual source of the
+      // reported cardinality.
+      tags: {
+        name: "documents?query,fields,filters,page_size",
+        url: "documents?query,fields,filters,page_size",
+      },
     },
   );
   check(res, { "documents 200": (r) => r.status === 200 });
@@ -330,8 +338,12 @@ export function passages(): void {
     {
       // Group by path + param names — see the `documents` scenario above
       // for why. `filters` is only sometimes sent, but is listed since it's
-      // one of this route's real request params.
-      tags: { name: "passages?query,filters,page_size" },
+      // one of this route's real request params. `url` overridden too — see
+      // the `documents` scenario above for why `name` alone isn't enough.
+      tags: {
+        name: "passages?query,filters,page_size",
+        url: "passages?query,filters,page_size",
+      },
     },
   );
   check(res, { "passages 200": (r) => r.status === 200 });
@@ -347,8 +359,9 @@ export function labels(): void {
     `${BASE_URL}/labels?query=${encodeURIComponent(prefix)}&page_size=10${cacheBuster()}`,
     {
       // Group by path + param names — see the `documents` scenario above
-      // for why.
-      tags: { name: "labels?query,page_size" },
+      // for why. `url` overridden too — see the `documents` scenario above
+      // for why `name` alone isn't enough.
+      tags: { name: "labels?query,page_size", url: "labels?query,page_size" },
     },
   );
   check(res, { "labels 200": (r) => r.status === 200 });
@@ -365,8 +378,10 @@ export function documentById(): void {
     // the path param name in place of a value (no query params to list) —
     // same convention as the `documents/{document_id}: base query` smoke/load
     // route (k6/tests/smoke-load/routes/documents/{document_id}/index.ts).
-    // See the `documents` scenario above for the cardinality rationale.
-    tags: { name: "documents/{document_id}" },
+    // See the `documents` scenario above for the cardinality rationale. `url`
+    // overridden too — see the `documents` scenario above for why `name`
+    // alone isn't enough.
+    tags: { name: "documents/{document_id}", url: "documents/{document_id}" },
   });
   check(res, { "document_by_id 200": (r) => r.status === 200 });
 }
