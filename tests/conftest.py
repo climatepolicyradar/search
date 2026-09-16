@@ -184,7 +184,7 @@ def simple_test_result(simple_test_case, test_labels):
 
     return TestResult(
         test_case=simple_test_case,
-        passed=True,
+        status="passed",
         search_engine_id=engine_id,
         search_results=test_labels[:3],  # Use first 3 labels
     )

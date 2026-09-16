@@ -47,6 +47,20 @@ def _build_topic_filter(topics: list[str], topics_or: bool) -> Filter | None:
     )
 
 
+class TestCaseOutcome(BaseModel, Generic[TModel]):
+    """
+    What running one test case against an engine produced.
+
+    ``comparison_results`` is the second arm of a test case that issues two
+    queries. Storing it means a low overlap can be diagnosed from the report
+    rather than by re-running the query.
+    """
+
+    passed: bool
+    results: list[TModel]
+    comparison_results: list[TModel] | None = None
+
+
 class TestCase(BaseModel, ABC, Generic[TModel]):
     """A test case"""
 
@@ -115,7 +129,7 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
         return ""
 
     @abstractmethod
-    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
         """Run the test case against the given engine."""
 
         raise NotImplementedError
@@ -142,7 +156,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
         default=False,
     )
 
-    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
         """Run the test case against the given engine."""
 
         search_results = engine.search(
@@ -160,7 +174,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
         else:
             passed = sorted(self.expected_result_ids) == sorted(result_ids_limited)
 
-        return passed, search_results.results
+        return TestCaseOutcome(passed=passed, results=search_results.results)
 
     def diagnose(self, search_results: list[TModel]) -> str:
         """
@@ -295,7 +309,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
 
         return "\n".join(lines)
 
-    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
         """Run the test case against the given engine."""
 
         search_results = engine.search(
@@ -320,7 +334,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
         failed = expected_ids_not_in_response or forbidden_ids_in_response
         passed = not failed
 
-        return passed, search_results.results
+        return TestCaseOutcome(passed=passed, results=search_results.results)
 
     @computed_field
     @property
@@ -395,7 +409,7 @@ class RelativeOrderTestCase(TestCase[TModel], Generic[TModel]):
 
         return "\n".join(lines)
 
-    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
         """Run the test case against the given engine."""
 
         search_results = engine.search(
@@ -418,7 +432,7 @@ class RelativeOrderTestCase(TestCase[TModel], Generic[TModel]):
                 self.lower_result_id
             )
 
-        return passed, results
+        return TestCaseOutcome(passed=passed, results=results)
 
     @computed_field
     @property
@@ -489,7 +503,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
 
         return "\n".join(lines)
 
-    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
         """Run the test case against the given engine."""
 
         search_results = engine.search(
@@ -512,7 +526,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
         if self.assert_results:
             passed = passed and (len(results) > 0)
 
-        return passed, results
+        return TestCaseOutcome(passed=passed, results=results)
 
     @computed_field
     @property
@@ -576,7 +590,8 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
         Return diagnostic info for a search comparison test failure.
 
         :param search_results: The search results from the first query.
-            The second query's results are not available for diagnosis.
+            The second query's results are rendered separately by the report,
+            from ``TestCaseOutcome.comparison_results``.
         :returns: A string showing comparison metadata and the first
             query's result IDs.
         """
@@ -586,11 +601,12 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
             f"  Required overlap: {self.minimum_overlap:.0%} of top {self.k} "
             f"(strict_order={self.strict_order})",
             f"  Results for '{self.search_terms}': {result_ids_1}",
-            "  (Second query results not stored; re-run to inspect)",
+            f"  (Results for '{self.search_terms_to_compare}' are listed "
+            "separately in the report)",
         ]
         return "\n".join(lines)
 
-    def run_against(self, engine: SearchEngine) -> tuple[bool, list[TModel]]:
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
         """Run the test case against the given engine."""
 
         filters_json_string = self.filters_json_string()
@@ -629,7 +645,11 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
         overlap_proportion = overlap_count / comparable if comparable > 0 else 0
         passed = overlap_proportion >= self.minimum_overlap
 
-        return passed, search_results_1.results
+        return TestCaseOutcome(
+            passed=passed,
+            results=search_results_1.results,
+            comparison_results=search_results_2.results,
+        )
 
     @computed_field
     @property
