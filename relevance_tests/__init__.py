@@ -35,16 +35,17 @@ class TestResult(BaseModel, Generic[T]):
     debug_info: list[dict[str, Any]] | None = None
 
 
-def serialise_pydantic_list_as_jsonl[T: BaseModel](models: Sequence[T]) -> str:
-    return "\n".join(model.model_dump_json() for model in models)
-
-
 def save_test_results_as_jsonl(test_results: list[TestResult], file_path: Path) -> None:
     """Save test results to a JSONL file"""
 
-    jsonl_results = serialise_pydantic_list_as_jsonl(test_results)
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text(jsonl_results)
+    # Written a result at a time: results carrying debug info are large, and holding
+    # the whole serialised file in memory as one string has OOM-killed runs.
+    with file_path.open("w") as file:
+        for i, test_result in enumerate(test_results):
+            if i:
+                file.write("\n")
+            file.write(test_result.model_dump_json())
     logger.info(f"Saved test results to {file_path}")
 
 

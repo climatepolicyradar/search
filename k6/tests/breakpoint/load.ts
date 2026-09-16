@@ -15,7 +15,7 @@
 
 import http from "k6/http";
 import { check } from "k6";
-import tempo from "k6/experimental/tracing";
+import tempo from "https://jslib.k6.io/http-instrumentation-tempo/1.0.1/index.js";
 
 // --- Target -----------------------------------------------------------------
 

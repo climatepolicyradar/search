@@ -59,13 +59,51 @@ def test_document_sort_ranking_string_puts_missing_values_last(
     assert _document_sort_ranking_string(field, direction) == expected
 
 
-def test_document_search_engine_reads_pages_from_embedded_passage_struct() -> None:
-    """The embedded documents.passages struct's pages field lands on Passage.pages."""
+def _document_engine(**kwargs) -> DevVespaDocumentSearchEngine:
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    return DevVespaDocumentSearchEngine(settings=settings, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("engine_kwargs", "expected_summary"),
+    [
+        ({}, "search"),
+        ({"bolding": True}, "search-with-passages"),
+        ({"debug": True}, "debug-summary"),
+        ({"debug": True, "bolding": True}, "debug-summary"),
+    ],
+)
+def test_document_search_never_requests_the_default_summary(
+    engine_kwargs: dict, expected_summary: str
+) -> None:
+    """Every search hit summary must be one of the summaries with trimmed fields."""
+    engine = _document_engine(**engine_kwargs)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="needle",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["presentation.summary"] == expected_summary
+
+
+def test_document_search_engine_builds_passages_from_matched_passages_text() -> None:
+    """
+    Test that each returned element becomes a text-only `Passage` on the document.
+    
+    With `matched-elements-only` on `passages_text`, Vespa returns only the
+    passages that matched, and the `passages` struct is not in the summary at
+    all.
+    """
+    engine = _document_engine(bolding=True)
 
     fake_response = {
         "root": {
@@ -76,19 +114,10 @@ def test_document_search_engine_reads_pages_from_embedded_passage_struct() -> No
                         "document_source": (
                             '{"id": "doc-0", "labels": [], "documents": []}'
                         ),
-                        "passages": [
-                            {
-                                "text_block_id": "block-0",
-                                "idx": 0,
-                                "language": "en",
-                                "type": "Text",
-                                "type_confidence": 1.0,
-                                "page_number": 3,
-                                "pages": [3, 4],
-                                "heading_id": None,
-                            }
+                        "passages_text": [
+                            "<hi>needle</hi> in a haystack",
+                            "another <hi>needle</hi>",
                         ],
-                        "passages_text": ["<hi>needle</hi> in a haystack"],
                     },
                 }
             ]
@@ -102,7 +131,12 @@ def test_document_search_engine_reads_pages_from_embedded_passage_struct() -> No
             order_by=[],
         )
 
-    assert result.results[0].passages[0].pages == [3, 4]
+    passages = result.results[0].passages
+    assert [p.text for p in passages] == [
+        "<hi>needle</hi> in a haystack",
+        "another <hi>needle</hi>",
+    ]
+    assert all(p.document_id == "doc-0" for p in passages)
 
 
 def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> None:
@@ -525,10 +559,7 @@ def test_document_search_engine_forwards_topic_weight() -> None:
     request_body = mock_execute.call_args.kwargs["request_body"]
     assert request_body["input.query(topic_weight)"] == 0.0
     # Surfaced for relevance-test logging rather than baked into the engine name.
-    assert engine.parameters == {
-        "ranking_profile": _DEFAULT_DOCUMENT_RANK_PROFILE,
-        "topic_weight": 0.0,
-    }
+    assert engine.parameters["topic_weight"] == 0.0
     assert engine.name == "DevVespaDocumentSearchEngine"
 
 
@@ -818,3 +849,55 @@ def test_document_search_engine_quoted_query_builds_exact_phrase() -> None:
     assert "userQuery()" not in yql
     assert request_body["exact_phrase_0"] == "just transition"
     assert "query" not in request_body
+
+
+def _document_search_yql(engine: DevVespaDocumentSearchEngine) -> str:
+    """Run a text search against a mocked Vespa and return the YQL it sent."""
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="electric arc furnace",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    return mock_execute.call_args.kwargs["request_body"]["yql"]
+
+
+def test_document_search_engine_sends_default_target_hits() -> None:
+    """
+    Retrieval depth is stated in the YQL rather than left to Vespa's default.
+
+    `totalTargetHits` binds to `userInput()` only - on `userQuery()` it parses
+    and is then silently ignored - so the clause must not fall back to
+    `userQuery()`. It is cluster-wide, unlike the per-node `targetHits`.
+    """
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    yql = _document_search_yql(engine)
+
+    assert "{totalTargetHits:2000}userInput(@query)" in yql
+    assert "userQuery()" not in yql
+    assert engine.parameters["total_target_hits"] == 2000
+
+
+def test_document_search_engine_forwards_target_hits() -> None:
+    """`total_target_hits` overrides how many candidates weakAnd keeps."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings, total_target_hits=200)
+
+    yql = _document_search_yql(engine)
+
+    assert "{totalTargetHits:200}userInput(@query)" in yql
+    # The geography and identifier arms are untouched by the change.
+    assert '{defaultIndex: "geographies"}userInput(@geo_query)' in yql
+    assert '{defaultIndex: "identifiers"}userInput(@query)' in yql
+    assert engine.parameters["total_target_hits"] == 200

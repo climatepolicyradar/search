@@ -251,6 +251,7 @@ schema documents {
             profile: passage_analysis
         }
         bolding: on
+        summary: matched-elements-only
     }
 
     field title_not_stemmed type string {
@@ -364,14 +365,57 @@ schema documents {
     # Scores the combined title+geographies field instead of title alone, so a
     # query naming a country and a document type is credited for covering both
     # from whichever field supplies them. See FUS-326.
+    #
+    # Also scores passage *breadth* - how many of the document's passages matched,
+    # not just how well the best ones did.
+    #
+    # passages_score() is kept alongside rather than replaced. The two are
+    # complementary: nativeRank answers "how well did the best bits match",
+    # breadth answers "how much of the document matched".
+    #
+    # Set query(passages_breadth_weight) to 0.0 to turn breadth off - that
+    # restores the pre-FUS-457 behaviour of this profile exactly, which is how it
+    # is A/B'd in relevance_tests/test_principal_documents.py.
     rank-profile bm25-title-geo inherits bm25 {
+        # Calibrated by sweeping against the document relevance suite on the dev
+        # instance.
+        inputs {
+            query(passages_breadth_weight) double: 0.1
+        }
+
+        # elementSimilarity scores each element of a multi-valued index field
+        # separately, then aggregates. Its built-in output is max(), i.e. the single
+        # best passage - no use here - so we declare our own summing outputs. The
+        # aggregator runs over MATCHED elements only, so a 4169-passage report with
+        # 9 matches scores 9, not 9/4169: deliberately breadth, not density.
+        #
+        #   q = fraction of the query's terms found in that element
+        #   w = element weight, which is 1 for every element of an array<string>
+        #
+        # So matchCount is the number of matching passages, and coverageSum 
+        # is that count with each passage discounted by query coverage.
+        # They are identical for a single-term query. Neither uses corpus
+        # statistics, so scores are reproducible on a small synthetic index.
+        rank-properties {
+            elementSimilarity(passages_text).output.coverageSum: "sum(q)"
+            elementSimilarity(passages_text).output.matchCount: "sum(w)"
+        }
+
         function title_score () {
             expression: query(title_weight) * fieldMatch(title_geo).completeness * bm25(title_geo) + query(title_proximity_weight) * nativeProximity(title_geo)
         }
-        first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + identifiers_score() + topic_score() + exact_phrase_score()
+                # log(1 + x) damping, consistent with topic_score() above. This means a long
+        # report with many mentions can't run away with the top of the list - 
+        # tenfold more matches is worth roughly twice the score, not ten times.
+        function passages_breadth_score() {
+            expression: query(passages_breadth_weight) * log(1 + elementSimilarity(passages_text).coverageSum)
         }
-        summary-features: title_score() description_score() passages_score() geographies_score() bm25(title_geo) fieldMatch(title_geo).completeness fieldMatch(title_geo).queryCompleteness fieldMatch(title_geo).fieldCompleteness nativeProximity(title_geo) identifiers_score() topic_score()
+        first-phase {
+            expression: title_score() + description_score() + passages_score() + passages_breadth_score() + geographies_score() + identifiers_score() + topic_score() + exact_phrase_score()
+        }
+        # matchCount is carried as a diagnostic only: if coverageSum misbehaves,
+        # switching the expression above to it is a one-word change.
+        summary-features: title_score() description_score() passages_score() passages_breadth_score() geographies_score() bm25(title_geo) fieldMatch(title_geo).completeness fieldMatch(title_geo).queryCompleteness fieldMatch(title_geo).fieldCompleteness nativeProximity(title_geo) identifiers_score() topic_score() elementSimilarity(passages_text).coverageSum elementSimilarity(passages_text).matchCount
     }
 
     rank-profile label-boosted inherits nativerank {
@@ -398,7 +442,27 @@ schema documents {
     document-summary default {
     }
 
-    document-summary debug-summary inherits default {
+    # Search hits. Everything `DevVespaDocumentSearchEngine.search` reads, and
+    # nothing of the passage payload.
+    document-summary search {
+        summary id {}
+        summary title {}
+        summary description {}
+        summary labels {}
+        summary concepts {}
+        summary document_source {}
+        summary attributes_published_date {}
+        summary principal_id {}
+    }
+
+    # Search hits plus only the passages that matched the query, bolded. Used
+    # when the caller asks for bolding. The `passages` struct (ids, pages,
+    # headings) is not included: no consumer reads it on a search hit.
+    document-summary search-with-passages inherits search {
+        summary passages_text {}
+    }
+
+    document-summary debug-summary inherits search-with-passages {
         summary title_tokens {
             source: title
             tokens

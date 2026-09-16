@@ -16,6 +16,7 @@ schema passages {
             linguistics {
                 profile: passage_analysis
             }
+            bolding: on
         }
         field looks_like_short_heading type bool {
             indexing: attribute | summary

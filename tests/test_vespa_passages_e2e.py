@@ -288,6 +288,34 @@ def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
     assert "$100" in matched.text
 
 
+def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
+    """
+    `bolding=True` wraps matched query terms in `<hi>` tags; the default does not.
+
+    Passage search always requests the `debug-summary` summary class, which
+    declares `summary content {}` explicitly, so this pins that the field's
+    `bolding: on` reaches that class and is not silently dropped.
+    """
+    principal = DocumentFactory.build(id="principal-bold", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-bold", "The carbon budget for crude emissions."),
+        document_id="principal-bold",
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    pagination = Pagination(page_token=1, page_size=10)
+
+    bolded = engine.search(
+        query="carbon", pagination=pagination, order_by=[], bolding=True
+    )
+    plain = engine.search(query="carbon", pagination=pagination, order_by=[])
+
+    assert bolded.results[0].text == "The <hi>carbon</hi> budget for crude emissions."
+    assert plain.results[0].text == "The carbon budget for crude emissions."
+
+
 def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: Vespa):
     """
     A passage's principal_title resolves via principal_document_ref.

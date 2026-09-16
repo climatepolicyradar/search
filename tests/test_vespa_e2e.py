@@ -1181,3 +1181,102 @@ def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa)
     assert "doc-plain" in ids, f"unquoted queries must still stem, got: {ids}"
 
 # endregion
+
+
+# region Search summaries (FUS-479)
+def _feed_passages(app: Vespa, document_id: str, texts: list[str]) -> None:
+    """Assign `passages` to an already-fed document, as the passages feed does."""
+    passages = [
+        {
+            "text_block_id": f"{document_id}-{i}",
+            "language": "en",
+            "type": "Text",
+            "type_confidence": 1.0,
+            "page_number": i,
+            "pages": [i],
+            "text": text,
+            "heading_id": None,
+        }
+        for i, text in enumerate(texts)
+    ]
+    r = req.put(
+        f"{app.end_point}/document/v1/documents/documents/docid/{document_id}",
+        json={"fields": {"passages": {"assign": passages}}},
+        timeout=5,
+    )
+    r.raise_for_status()
+
+
+def _raw_hit_fields(app: Vespa, query: str, summary: str) -> dict[str, Any]:
+    """The first hit's raw summary fields, bypassing the engine's parsing."""
+    r = req.post(
+        f"{app.end_point}/search/",
+        json={
+            "yql": "select * from sources documents where userQuery()",
+            "query": query,
+            "hits": 1,
+            "presentation.summary": summary,
+        },
+        timeout=5,
+    )
+    r.raise_for_status()
+    return r.json()["root"]["children"][0]["fields"]
+
+
+_PASSAGES = [
+    "The flood defence budget.",
+    "Nothing to see here.",
+    "Another flood warning.",
+]
+
+
+def _feed_document_with_passages(app: Vespa) -> Document:
+    document = DocumentFactory.build(
+        title="A report", description="About water", labels=[]
+    )
+    _feed_document(app, document)
+    _feed_passages(app, document.id, _PASSAGES)
+    return document
+
+
+def test_search_hits_carry_only_the_passages_that_matched(vespa_app: Vespa):
+    """`matched-elements-only` on `passages_text` should only return matched passages."""
+    _feed_document_with_passages(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
+    result = engine.search(
+        query="flood", pagination=Pagination(page_token=1, page_size=10), order_by=[]
+    )
+
+    assert [p.text for p in result.results[0].passages] == [
+        "The <hi>flood</hi> defence budget.",
+        "Another <hi>flood</hi> warning.",
+    ]
+
+
+def test_search_hits_without_bolding_carry_no_passages(vespa_app: Vespa):
+    """The API's default (`bolding=False`) never fetched a usable passage; now it fetches none."""
+    _feed_document_with_passages(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    result = engine.search(
+        query="flood", pagination=Pagination(page_token=1, page_size=10), order_by=[]
+    )
+
+    assert result.results[0].passages == []
+    fields = _raw_hit_fields(vespa_app, "flood", "search")
+    assert "passages" not in fields
+    assert "passages_text" not in fields
+
+
+def test_search_summaries_never_fetch_the_passages_struct(vespa_app: Vespa):
+    """The struct array is the larger half of the payload and is read by nobody."""
+    _feed_document_with_passages(vespa_app)
+
+    for summary in ("search-with-passages", "debug-summary"):
+        fields = _raw_hit_fields(vespa_app, "flood", summary)
+        assert "passages" not in fields, summary
+        assert len(fields["passages_text"]) == 2, summary
+
+
+# endregion Search summaries

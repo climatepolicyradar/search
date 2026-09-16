@@ -476,6 +476,70 @@ def test_linguistics_geography_accent_folding(vespa_app: Vespa, query: str):
     )
 
 
+
+@pytest.mark.parametrize(
+    ("query", "geography"),
+    [
+        ("ivory coast", "Côte d'Ivoire"),
+        ("czech republic", "Czechia"),
+        ("south korea", "Korea, Republic of"),
+        ("cape verde", "Cabo Verde"),
+    ],
+)
+def test_linguistics_geography_multi_word_alias(
+    vespa_app: Vespa, query: str, geography: str
+):
+    """
+    Multi-word geography aliases must resolve to the canonical name (FUS-423).
+
+    These cannot be handled by Lucene synonyms on either side of the index, so
+    they are resolved in Python before the query is sent - see
+    ``_resolve_geography_aliases``.
+    """
+    doc_geography = DocumentFactory.build(
+        title="xyzzygeomultiword matching document",
+        description="A climate policy document",
+        labels=[
+            DocumentLabelRelationship(
+                type="geography",
+                value=Label(
+                    id=geography.lower(), value=geography, type="geography", labels=[]
+                ),
+                timestamp=None,
+            )
+        ],
+    )
+    doc_other = DocumentFactory.build(
+        title="xyzzygeomultiword unrelated document",
+        description="An unrelated environmental policy document",
+        labels=[
+            DocumentLabelRelationship(
+                type="geography",
+                value=Label(id="france", value="France", type="geography", labels=[]),
+                timestamp=None,
+            )
+        ],
+    )
+    _feed_document(vespa_app, doc_geography)
+    _feed_document(vespa_app, doc_other)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+    result_ids = {doc.id for doc in results}
+
+    assert doc_geography.id in result_ids, (
+        f"Expected doc with geography {geography!r} to match {query!r}, "
+        f"got ids: {result_ids}"
+    )
+    assert doc_other.id not in result_ids, (
+        f"Doc with geography 'France' should NOT match {query!r}, got ids: {result_ids}"
+    )
+
+
 # endregion Label linguistics
 
 # region Labels schema

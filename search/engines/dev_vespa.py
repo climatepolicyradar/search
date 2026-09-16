@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -124,6 +125,94 @@ def _document_phrase_yql(count: int) -> str:
             f" or passages_text_not_stemmed contains ({{grammar.composite:'phrase'}}text({p})))"
         )
     return "".join(out)
+
+# Geography aliases, mapping what a user types to the canonical name carried by
+# the `geographies` field. Resolved in Python, before the query reaches Vespa.
+#
+# These used to be Lucene synonym rules (lucene-linguistics/en/geo-synonyms.txt).
+# When updating these you will need to make sure you update
+# `lucene-linguistics/en/geo-synonyms.txt`
+# @related: LUCENE_LINGUISTICS_GEOS
+# Neither side of Vespa's linguistics can express them:
+#   - at query time, Vespa's query parser splits the query into independent terms
+#     *before* the field analyzer runs, so `synonymGraph` sees "ivory" and "coast"
+#     one at a time and a multi-word rule can never match;
+#   - at index time, Vespa keeps only one token per position, so the alternatives
+#     `synonymGraph` emits are silently dropped (verified against a local Vespa:
+#     "czechia" expanded to "czech republic" indexed "republic" but not "czech").
+# See FUS-423.
+GEOGRAPHY_ALIASES = {
+    "uk": "united kingdom",
+    "us": "united states",
+    "usa": "united states",
+    "eu": "european union",
+    "nz": "new zealand",
+    "uae": "united arab emirates",
+    "brasil": "brazil",
+    "burma": "myanmar",
+    "holland": "netherlands",
+    "swaziland": "eswatini",
+    "turkey": "turkiye",
+    "south korea": "korea republic of",
+    "ivory coast": "cote d'ivoire",
+    "czech republic": "czechia",
+    "cape verde": "cabo verde",
+}
+
+_WORD_RE = re.compile(r"\w+")
+
+# Longest alias first, so "czech republic" is preferred over a bare "czech".
+_ALIASES_LONGEST_FIRST = sorted(
+    ((alias.split(), canonical) for alias, canonical in GEOGRAPHY_ALIASES.items()),
+    key=lambda entry: len(entry[0]),
+    reverse=True,
+)
+
+
+def _fold_accents(text: str) -> str:
+    """Strip combining marks, mirroring the asciiFolding filter in services.xml."""
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(character)
+    )
+
+
+def _resolve_geography_aliases(query: str) -> str:
+    """
+    Rewrite geography aliases in `query` to the canonical name, as a quoted phrase.
+
+    Matching is on whole words, so "us" does not fire inside "thus", and longest
+    alias first, so "czech republic" is not shadowed by a shorter alias. The query
+    is lowercased and accent-folded for matching only, mirroring what
+    `geo_analysis_search` does to the terms on the other side.
+
+    The canonical name is emitted double-quoted so `userInput` parses it as a
+    phrase. Without that, "uk" -> `united kingdom` would be two loose terms and a
+    document with geography "United States" would match on "united" alone.
+    """
+    words = list(_WORD_RE.finditer(query))
+    folded = [_fold_accents(word.group().lower()) for word in words]
+
+    resolved: list[str] = []
+    copied_to = 0
+    index = 0
+    while index < len(words):
+        for alias_words, canonical in _ALIASES_LONGEST_FIRST:
+            span = len(alias_words)
+            if folded[index : index + span] != alias_words:
+                continue
+            resolved.append(query[copied_to : words[index].start()])
+            resolved.append(f'"{canonical}"')
+            copied_to = words[index + span - 1].end()
+            index += span
+            break
+        else:
+            index += 1
+    resolved.append(query[copied_to:])
+
+    return "".join(resolved)
+
 
 # region Settings
 class Settings(BaseSettings):
@@ -774,6 +863,20 @@ documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = 
 
 _DEFAULT_TOPIC_WEIGHT = 1.0
 
+# None leaves the rank profile's own default in place.
+_DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
+
+# How many candidates weakAnd keeps before the rank profile runs. weakAnd picks them 
+# with an idf over the `default` fieldset - which includes `passages_text` – so long 
+# PDFs with many passage hits can crowd out a short exact title match and that document 
+# is then never scored at all. 
+# Vespa's own default is max(hits, 100), which ties retrieval depth to the page
+# size - so a page_size=500 search matched 5872 documents where the facet query
+# for the same terms, running at hits=0, matched 1801. Results and facet counts
+# were describing different candidate sets, and `total_count` moved with the
+# requested page size. Pinning it here decouples the two. See FUS-475.
+_DEFAULT_DOCUMENT_TOTAL_TARGET_HITS = 2000
+
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
 
@@ -855,6 +958,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         bolding: bool = False,
         ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
+        passages_breadth_weight: float | None = _DEFAULT_PASSAGES_BREADTH_WEIGHT,
+        total_target_hits: int = _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
     ) -> None:
         """
         Initialise the search engine.
@@ -862,13 +967,23 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         :param debug: When ``True``, request the ``debug-summary`` document
             summary from Vespa and store per-hit token information in
             :attr:`last_debug_info`.
-        :param bolding: When ``False``, request the ``no-bolding`` document
-            summary, returning plain title/description without ``<hi>`` tags.
-            Ignored when ``debug=True``.
+        :param bolding: When ``True``, matched terms are wrapped in ``<hi>``
+            tags and each hit carries the passages that matched the query
+            (``search-with-passages`` summary). When ``False``, hits carry no
+            passages at all (``search`` summary). Ignored when ``debug=True``.
         :param ranking_profile: Vespa rank profile to score with. Defaults to
             ``bm25-title-geo``.
         :param topic_weight: How much a filtered-for topic's mention counts
             contribute to relevance. ``0.0`` switches topic ranking off.
+        :param passages_breadth_weight: How much the number of matching passages
+            contributes to relevance. ``None`` leaves the profile's own default
+            (0.1); ``0.0`` switches passage-breadth ranking off. Ignored by
+            profiles that do not declare the input.
+        :param total_target_hits: How many candidates weakAnd keeps before
+            ranking, across the whole content cluster.
+            Raising it stops a strong title match being pruned before the rank
+            profile ever sees it, at the cost of matching more broadly. See
+            :data:`_DEFAULT_DOCUMENT_TOTAL_TARGET_HITS`.
         """
         self.debug = debug
         self.bolding = bolding
@@ -876,6 +991,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.settings = settings
         self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
+        self.passages_breadth_weight = passages_breadth_weight
+        self.total_target_hits = total_target_hits
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -883,17 +1000,30 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         return {
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
+            "passages_breadth_weight": self.passages_breadth_weight,
+            "total_target_hits": self.total_target_hits,
         }
 
-    _userQuery: str = (
-        " and (userQuery() "
-        # As geographies and title_synonyms use different Lucene analyzers
-        # to the default fieldset, they're referenced explicitly in the query
-        # so they can be searched.
-        # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
-        ' or ({defaultIndex: "geographies"}userInput(@query))'
-        ' or ({defaultIndex: "identifiers"}userInput(@query)))'
-    )
+    @property
+    def _userQuery(self) -> str:
+        """
+        The text-matching half of the YQL, carrying the weakAnd retrieval depth.
+
+        `userInput(@query)` rather than `userQuery()` because `totalTargetHits`
+        only binds to the former. Both build a weakAnd over the `default` fieldset
+        and are otherwise equivalent here.
+        """
+        return (
+            f" and (({{totalTargetHits:{self.total_target_hits}}}userInput(@query)) "
+            # As geographies and title_synonyms use different Lucene analyzers
+            # to the default fieldset, they're referenced explicitly in the query
+            # so they can be searched.
+            # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
+            # `geo_query` is `query` with geography aliases resolved to the canonical
+            # names carried by the field - see _resolve_geography_aliases.
+            ' or ({defaultIndex: "geographies"}userInput(@geo_query))'
+            ' or ({defaultIndex: "identifiers"}userInput(@query)))'
+        )
 
 
     def search(
@@ -940,7 +1070,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         request_body.update(sort_overrides)
 
         if free_text:
-            request_body["query"] = _normalize_currency_symbols(free_text)
+            normalized_free_text = _normalize_currency_symbols(free_text)
+            request_body["query"] = normalized_free_text
+            request_body["geo_query"] = _resolve_geography_aliases(normalized_free_text)
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = phrase
 
@@ -949,8 +1081,17 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
             request_body["input.query(topic_weight)"] = self.topic_weight
 
+        if self.passages_breadth_weight is not None and not sort_overrides:
+            request_body["input.query(passages_breadth_weight)"] = (
+                self.passages_breadth_weight
+            )
+
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
+        elif self.bolding:
+            request_body["presentation.summary"] = "search-with-passages"
+        else:
+            request_body["presentation.summary"] = "search"
         if not self.bolding:
             request_body["presentation.bolding"] = "false"
 
@@ -982,33 +1123,17 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 list[DocumentRelationship]
             ).validate_python(source.get("documents", []))
 
-            # `passages` and `passages_text` indices are aligned
-            # as `passages_text` is derived from `passages` in the schema.
-            # Vespa wraps matched terms with <hi>...</hi> on the bolded `passages_text` field.
-            # We use this to identify which `passages[i]` matched the query.
+            # `passages_text` is `matched-elements-only` in the search summaries,
+            # so every element Vespa returns is a passage that matched the query
+            # (bolded, when bolding is on). The `passages` struct - ids, pages,
+            # headings - is deliberately not fetched: it is the bulk of a hit's
+            # payload and no consumer reads it on a search hit. `/search/passages`
+            # is the route for passage metadata.
             document_id = source.get("id", MISSING_PLACEHOLDER)
-            passages_field = fields.get("passages", [])
-            passages_text = fields.get("passages_text", [])
-            passages: list[Passage] = []
-            for i, passage in enumerate(passages_field):
-                if i >= len(passages_text):
-                    break
-                bolded_text = passages_text[i]
-                if "<hi>" not in bolded_text:
-                    continue
-                passages.append(
-                    Passage(
-                        text_block_id=passage.get("text_block_id", ""),
-                        idx=passage.get("idx", 0),
-                        text=bolded_text,
-                        language=passage.get("language", ""),
-                        type=passage.get("type", ""),
-                        type_confidence=passage.get("type_confidence", 0.0),
-                        pages=passage.get("pages", []),
-                        heading_id=passage.get("heading_id"),
-                        document_id=document_id,
-                    )
-                )
+            passages = [
+                Passage(text=text, document_id=document_id)
+                for text in fields.get("passages_text", [])
+            ]
 
             documents.append(
                 Document(
@@ -1026,6 +1151,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 # NOTE: these are all fields that are stored as type summary in the index.
                 # This is because overriding the default summary in the schema adds fields
                 # to it, rather than redefining the schema from scratch.
+                # `passages_text` is excluded as well: the matched passages are
+                # already on the `Document` above, and repeating them in the debug
+                # payload can exhaust memory during relevance test runs.
                 _STANDARD_FIELDS = {
                     "document_source",
                     "sddocname",
@@ -1034,6 +1162,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                     "title",
                     "description",
                     "labels",
+                    "passages",
+                    "passages_text",
                 }
                 hit_debug = {
                     k: v for k, v in fields.items() if k not in _STANDARD_FIELDS
@@ -1161,6 +1291,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         }
         if free_text:
             request_body["query"] = free_text
+            request_body["geo_query"] = _resolve_geography_aliases(free_text)
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = phrase
         response = _execute_vespa_query(
@@ -1240,6 +1371,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         }
         if free_text:
             request_body["query"] = free_text
+            request_body["geo_query"] = _resolve_geography_aliases(free_text)
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = phrase
         response = _execute_vespa_query(
@@ -1475,6 +1607,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         pagination: Pagination,
         order_by: list[OrderBy],
         filters_json_string: str | None = None,
+        bolding: bool = False,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
 
@@ -1525,6 +1658,11 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         if topic_ids and not sort_overrides:
             request_body["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
             request_body["input.query(topic_weight)"] = self.topic_weight
+
+        # `passage.content` is `bolding: on` in the schema, so Vespa bolds by default -
+        # it has to be turned off explicitly.
+        if not bolding:
+            request_body["presentation.bolding"] = "false"
 
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
