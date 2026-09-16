@@ -46,7 +46,8 @@ SMOKE_RESOURCES = ["documents", "passages", "labels"]
 
 @dataclass(frozen=True)
 class LoadTestSpec:
-    """One route's graduated load test.
+    """
+    One route's graduated load test.
 
     :param resource: k6/tests/smoke-load/routes/<resource>/ group, also
         the LOAD project name
