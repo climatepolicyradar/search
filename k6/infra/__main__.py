@@ -25,6 +25,13 @@ a cloud-triggered run, so the script's own default has to already be right.
 
 `LOAD_TESTS` is the single place to add a route once its load profile lands
  — everything else here is generic over that list.
+
+Failure notifications cannot be provisioned here: the
+`pulumiverse_grafana.k6` provider's Project/LoadTest/Schedule resources
+do not expose notification/webhook/alert field (as of 2026-09-16), and
+k6 results live in Grafana Cloud k6's own datasource, not a
+Prometheus-compatible one Grafana's core alerting can query. We need to
+set up the notifications ourselves in the Grafana Cloud k6 UI. 
 """
 
 from dataclasses import dataclass
@@ -46,13 +53,30 @@ SMOKE_RESOURCES = ["documents", "passages", "labels"]
 
 @dataclass(frozen=True)
 class LoadTestSpec:
-    """One route's graduated load test."""
+    """
+    One route's graduated load test.
 
-    resource: str  # k6/tests/smoke-load/routes/<resource>/ group, also the LOAD project name
-    script_path: str  # relative to k6/, e.g. "tests/smoke-load/routes/documents/{document_id}/index.ts"
-    name: str  # human-friendly load test name in Grafana Cloud
-    cron: str  # 5-field cron expression, evaluated in UTC
-    starts: str  # RFC3339 timestamp; fixed rather than computed at apply time, so re-running `pulumi up` doesn't perpetually diff the schedule's start
+    :param resource: k6/tests/smoke-load/routes/<resource>/ group, also
+        the LOAD project name
+    :param script_path: relative to k6/, e.g.
+        "tests/smoke-load/routes/documents/{document_id}/index.ts"
+    :param name: human-friendly load test name in Grafana Cloud
+    :param cron: 5-field cron expression, evaluated in UTC; None =
+        provisioned but not scheduled
+        
+        `cron`/`starts` are optional so a spec can be provisioned
+        (uploaded as a Grafana Cloud k6 LoadTest, runnable manually or
+        from CI) without also being put on a recurring schedule 
+    :param starts: RFC3339 timestamp; fixed rather than computed at
+        apply time, so re-running `pulumi up` doesn't perpetually diff
+        the schedule's start
+    """
+
+    resource: str
+    script_path: str
+    name: str
+    cron: str | None = None
+    starts: str | None = None
 
 
 # One entry per route whose `load` profile has graduated —
@@ -80,6 +104,11 @@ LOAD_TESTS: list[LoadTestSpec] = [
         resource="documents",
         script_path="tests/smoke-load/routes/documents/fields-combinations.ts",
         name="documents: fields combinations",
+    ),
+    LoadTestSpec(
+        resource="documents",
+        script_path="tests/smoke-load/routes/documents/filter-combinations.ts",
+        name="documents: filter combinations",
         cron="0 4 * * 1",  # Monday 04:00 UTC
         starts="2026-09-14T04:00:00Z",
     ),
@@ -136,13 +165,14 @@ def create_k6_load_test_resources(
             opts=pulumi.ResourceOptions(provider=provider),
         )
 
-        k6.Schedule(
-            f"k6-schedule-{spec.resource}-{spec.name}",
-            load_test_id=load_test.id,
-            starts=spec.starts,
-            cron=k6.ScheduleCronArgs(schedule=spec.cron, timezone="UTC"),
-            opts=pulumi.ResourceOptions(provider=provider),
-        )
+        if spec.cron is not None:
+            k6.Schedule(
+                f"k6-schedule-{spec.resource}-{spec.name}",
+                load_test_id=load_test.id,
+                starts=spec.starts,
+                cron=k6.ScheduleCronArgs(schedule=spec.cron, timezone="UTC"),
+                opts=pulumi.ResourceOptions(provider=provider),
+            )
 
     return {**smoke_projects, **load_projects}
 

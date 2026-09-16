@@ -3,6 +3,11 @@ import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
 import tempo from "https://jslib.k6.io/http-instrumentation-tempo/1.0.1/index.js";
 
+// Provisioned in Grafana Cloud k6 but deliberately NOT run on a recurring
+// schedule as facets + aggregations aren't requested by the frontend
+// (2026-09-16) — so its numbers don't reflect production load and
+// shouldn't gate a release.
+//
 // __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
 // Defaults to production so `k6 run` works out of the box with no setup.
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/environment-variables/
@@ -57,17 +62,20 @@ const isLoadProfile = (__ENV.PROFILE || "load") === "load";
 // holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
-// `fields` is the parameter most directly responsible for /search/documents'
-// fan-out cost: each requested facet value triggers an extra concurrent
-// Vespa call (search/engines/dev_vespa.py's labels_value_type_facets /
-// labels_type_facets, confirmed via the production OpenAPI schema to be the
-// only two valid values). Covers no fields (baseline), each field alone, and
-// both together — the worst-case fan-out combination.
+// `fields` accepts three values total (api/routers.py:55-57): two
+// `facets.*` values (facet counts, e.g. for filter-option UIs) and
+// `aggregations.labels` (a separate computed dataset — its own concurrent
+// Vespa call, api/routers.py:139-141/164-169, not a facet). Per
+// #team-fusion (2026-09-16), the frontend currently requests none of the
+// three — this sweep covers no fields (baseline), each field alone, and all
+// three together (the true worst-case fan-out: 1 + len(fields) concurrent
+// Vespa calls, api/routers.py:155).
 type TFieldsCombination = {
   name: string;
   fields: string[];
   expectValueType: boolean;
   expectType: boolean;
+  expectAggregations: boolean;
 };
 
 const fieldsCombinations = new SharedArray(
@@ -79,24 +87,39 @@ const fieldsCombinations = new SharedArray(
         fields: [],
         expectValueType: false,
         expectType: false,
+        expectAggregations: false,
       },
       {
         name: "single field: facets.labels.value.type",
         fields: ["facets.labels.value.type"],
         expectValueType: true,
         expectType: false,
+        expectAggregations: false,
       },
       {
         name: "single field: facets.labels.type",
         fields: ["facets.labels.type"],
         expectValueType: false,
         expectType: true,
+        expectAggregations: false,
       },
       {
-        name: "both fields together (worst-case fan-out)",
-        fields: ["facets.labels.value.type", "facets.labels.type"],
+        name: "single field: aggregations.labels",
+        fields: ["aggregations.labels"],
+        expectValueType: false,
+        expectType: false,
+        expectAggregations: true,
+      },
+      {
+        name: "all fields together (worst-case fan-out)",
+        fields: [
+          "facets.labels.value.type",
+          "facets.labels.type",
+          "aggregations.labels",
+        ],
         expectValueType: true,
         expectType: true,
+        expectAggregations: true,
       },
     ];
   },
@@ -112,13 +135,13 @@ const searchQueries = new SharedArray("search-queries", function (): string[] {
   ];
 });
 
-// The load profile's fixed worst-case request: both `fields` values (the
-// fan-out-maximising combination above) plus a real `filters` shape reused
-// from filter-combinations.json's "combined filters" case, rather than the
-// smoke sweep's single-param variation — `fields` and `filters` are combined
-// independently by search-api (api/routers.py's read_documents), and load
-// testing should target the most expensive real request shape, not just the
-// most expensive single parameter.
+// The load profile's fixed worst-case request: all three `fields` values
+// (the fan-out-maximising combination above) plus a real `filters` shape
+// reused from filter-combinations.ts's "combined filters" case, rather than
+// the smoke sweep's single-param variation — `fields` and `filters` are
+// combined independently by search-api (api/routers.py's read_documents),
+// and load testing should target the most expensive real request shape, not
+// just the most expensive single parameter.
 const worstCaseFilters = {
   op: "and",
   filters: [
@@ -137,7 +160,11 @@ type TFacets = {
   "labels.value.type"?: unknown;
   "labels.type"?: unknown;
 };
-type TSearchResponse = { facets?: TFacets | null };
+type TAggregations = { labels?: unknown };
+type TSearchResponse = {
+  facets?: TFacets | null;
+  aggregations?: TAggregations | null;
+};
 
 const PROFILES = {
   smoke: {
@@ -163,15 +190,13 @@ const PROFILES = {
     // single task and never observe a scale-out.
     //
     // Phase 1 (sustained ceiling): a slow 2m climb into each of 10/25/50
-    // VUs, holding 6m at each — long enough to sustain CPU above the 70%
-    // target and let task count settle — so a capacity cliff shows up tied
-    // to a specific, autoscaled-for VU count rather than an artefact of the
-    // ramp outrunning ECS. This route is the expensive one — up to
-    // 2 + len(fields) concurrent Vespa calls per request
-    // (search/api/routers.py:64,
-    // search/engines/dev_vespa.py:782/1002/1165/1228) — so 50 VUs here is a
-    // meaningfully heavier load than the same VU count against the cheap
-    // single-doc route.
+    // VUs (this route is the expensive one — up to 1 + len(fields)
+    // concurrent Vespa calls per request, api/routers.py:155 — so 50 VUs
+    // here is a meaningfully heavier load than the same VU count against
+    // the cheap single-doc route), holding 6m at each — long enough to
+    // sustain CPU above the 70% target and let task count settle — so a
+    // capacity cliff shows up tied to a specific, autoscaled-for VU count
+    // rather than an artefact of the ramp outrunning ECS.
     //
     // Phase 2 (spike reactivity): ramp back to a near-zero baseline, hold
     // long enough for ECS to have scaled in again, then jump straight to 50
@@ -244,11 +269,13 @@ tempo.instrumentHTTP({
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
   // Smoke mode sweeps all combinations to check correctness; load mode
-  // repeats the single worst-case shape (filters + both fields) to find a
+  // repeats the single worst-case shape (filters + all fields) to find a
   // capacity ceiling for it, per FUS-357's scope — the two profiles are
   // testing different things, not just different volumes of the same thing.
   const combination = isLoadProfile
-    ? fieldsCombinations.find((c) => c.expectValueType && c.expectType)!
+    ? fieldsCombinations.find(
+        (c) => c.expectValueType && c.expectType && c.expectAggregations,
+      )!
     : fieldsCombinations[Math.floor(Math.random() * fieldsCombinations.length)];
 
   const query = searchQueries[Math.floor(Math.random() * searchQueries.length)];
@@ -317,7 +344,7 @@ export default function () {
       const facets = body?.facets ?? null;
 
       if (!combination.expectValueType && !combination.expectType) {
-        // No fields requested: facets is entirely absent.
+        // Neither facet field requested: facets is entirely absent.
         return facets === null;
       }
 
@@ -330,6 +357,20 @@ export default function () {
       return (
         hasValueType === combination.expectValueType &&
         hasType === combination.expectType
+      );
+    },
+    [`${combination.name}: aggregations match requested fields`]: (
+      response: Response,
+    ) => {
+      if (response.status !== 200) return false;
+      const body = response.json() as TSearchResponse;
+      const aggregations = body?.aggregations ?? null;
+
+      if (!combination.expectAggregations) {
+        return aggregations === null;
+      }
+      return (
+        aggregations?.labels !== null && aggregations?.labels !== undefined
       );
     },
   });
