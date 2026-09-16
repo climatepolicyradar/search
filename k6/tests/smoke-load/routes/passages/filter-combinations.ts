@@ -317,7 +317,14 @@ export default function () {
       // real request param, so it's excluded) — see k6/README.md's Layout
       // section.
       // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
-      tags: { name: "passages?query,filters" },
+      //
+      // `url` is a separate k6-builtin tag that `name` does NOT override —
+      // it still defaults to the literal request URL (cache-buster and all)
+      // unless set explicitly here too, which was the actual source of the
+      // reported cardinality. No extra breakdown tag is needed here: load
+      // mode always fixes `combination` to the single nested or-in-and case
+      // (see isLoadProfile above), so nothing else varies per request.
+      tags: { name: "passages?query,filters", url: "passages?query,filters" },
     },
   );
 
