@@ -25,6 +25,13 @@ a cloud-triggered run, so the script's own default has to already be right.
 
 `LOAD_TESTS` is the single place to add a route once its load profile lands
  — everything else here is generic over that list.
+
+Failure notifications cannot be provisioned here: the
+`pulumiverse_grafana.k6` provider's Project/LoadTest/Schedule resources
+do not expose notification/webhook/alert field (as of 2026-09-16), and
+k6 results live in Grafana Cloud k6's own datasource, not a
+Prometheus-compatible one Grafana's core alerting can query. We need to
+set up the notifications ourselves in the Grafana Cloud k6 UI. 
 """
 
 from dataclasses import dataclass
