@@ -3,6 +3,11 @@ import { check, sleep } from "k6";
 import { SharedArray } from "k6/data";
 import tempo from "https://jslib.k6.io/http-instrumentation-tempo/1.0.1/index.js";
 
+// Provisioned in Grafana Cloud k6 but deliberately NOT run on a recurring
+// schedule as facets + aggregations aren't requested by the frontend
+// (2026-09-16) — so its numbers don't reflect production load and
+// shouldn't gate a release.
+//
 // __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
 // Defaults to production so `k6 run` works out of the box with no setup.
 // https://grafana.com/docs/k6/latest/using-k6/k6-options/environment-variables/
