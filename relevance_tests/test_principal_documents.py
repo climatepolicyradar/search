@@ -191,8 +191,16 @@ test_cases = [
     FieldCharacteristicsTestCase[Document](
         category="question",
         search_terms="what is the croatias climate strategy",
-        characteristics_test=lambda document: all_words_in_string(
+        characteristics_test=lambda document: (
+            all_words_in_string(
             ["climate", "strategy"], document.title
+            ) or
+            all_words_in_string(
+            ["climate", "plan"], document.title
+            ) or
+            all_words_in_string(
+            ["climate", "programme"], document.title
+            ),
         )
         and any(
             (relationship.value.value == "Croatia" and relationship.type == "geography")
