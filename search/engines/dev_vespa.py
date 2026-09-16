@@ -924,9 +924,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         :param debug: When ``True``, request the ``debug-summary`` document
             summary from Vespa and store per-hit token information in
             :attr:`last_debug_info`.
-        :param bolding: When ``False``, request the ``no-bolding`` document
-            summary, returning plain title/description without ``<hi>`` tags.
-            Ignored when ``debug=True``.
+        :param bolding: When ``True``, matched terms are wrapped in ``<hi>``
+            tags and each hit carries the passages that matched the query
+            (``search-with-passages`` summary). When ``False``, hits carry no
+            passages at all (``search`` summary). Ignored when ``debug=True``.
         :param ranking_profile: Vespa rank profile to score with. Defaults to
             ``bm25-title-geo``.
         :param topic_weight: How much a filtered-for topic's mention counts
@@ -1041,6 +1042,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
+        elif self.bolding:
+            request_body["presentation.summary"] = "search-with-passages"
+        else:
+            request_body["presentation.summary"] = "search"
         if not self.bolding:
             request_body["presentation.bolding"] = "false"
 
@@ -1072,33 +1077,17 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 list[DocumentRelationship]
             ).validate_python(source.get("documents", []))
 
-            # `passages` and `passages_text` indices are aligned
-            # as `passages_text` is derived from `passages` in the schema.
-            # Vespa wraps matched terms with <hi>...</hi> on the bolded `passages_text` field.
-            # We use this to identify which `passages[i]` matched the query.
+            # `passages_text` is `matched-elements-only` in the search summaries,
+            # so every element Vespa returns is a passage that matched the query
+            # (bolded, when bolding is on). The `passages` struct - ids, pages,
+            # headings - is deliberately not fetched: it is the bulk of a hit's
+            # payload and no consumer reads it on a search hit. `/search/passages`
+            # is the route for passage metadata.
             document_id = source.get("id", MISSING_PLACEHOLDER)
-            passages_field = fields.get("passages", [])
-            passages_text = fields.get("passages_text", [])
-            passages: list[Passage] = []
-            for i, passage in enumerate(passages_field):
-                if i >= len(passages_text):
-                    break
-                bolded_text = passages_text[i]
-                if "<hi>" not in bolded_text:
-                    continue
-                passages.append(
-                    Passage(
-                        text_block_id=passage.get("text_block_id", ""),
-                        idx=passage.get("idx", 0),
-                        text=bolded_text,
-                        language=passage.get("language", ""),
-                        type=passage.get("type", ""),
-                        type_confidence=passage.get("type_confidence", 0.0),
-                        pages=passage.get("pages", []),
-                        heading_id=passage.get("heading_id"),
-                        document_id=document_id,
-                    )
-                )
+            passages = [
+                Passage(text=text, document_id=document_id)
+                for text in fields.get("passages_text", [])
+            ]
 
             documents.append(
                 Document(
@@ -1116,10 +1105,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 # NOTE: these are all fields that are stored as type summary in the index.
                 # This is because overriding the default summary in the schema adds fields
                 # to it, rather than redefining the schema from scratch.
-                # `passages` and `passages_text` are excluded as well: they carry a
-                # document's full passage payload (~2MB per hit), which is enough to 
-                # exhaust memory over a relevance run.
-                # The matched passages are already on the `Document` above.
+                # `passages_text` is excluded as well: the matched passages are
+                # already on the `Document` above, and repeating them in the debug
+                # payload can exhaust memory during relevance test runs.
                 _STANDARD_FIELDS = {
                     "document_source",
                     "sddocname",
