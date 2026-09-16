@@ -823,10 +823,10 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 # None leaves the rank profile's own default in place.
 _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
 
-# How many candidates weakAnd keeps before the rank profile runs. weakAnd picks them 
-# with an idf over the `default` fieldset - which includes `passages_text` – so long 
-# PDFs with many passage hits can crowd out a short exact title match and that document 
-# is then never scored at all. 
+# How many candidates weakAnd keeps before the rank profile runs. weakAnd picks them
+# with an idf over the `default` fieldset - which includes `passages_text` – so long
+# PDFs with many passage hits can crowd out a short exact title match and that document
+# is then never scored at all.
 # Vespa's own default is max(hits, 100), which ties retrieval depth to the page
 # size - so a page_size=500 search matched 5872 documents where the facet query
 # for the same terms, running at hits=0, matched 1801. Results and facet counts
@@ -1105,9 +1105,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 # NOTE: these are all fields that are stored as type summary in the index.
                 # This is because overriding the default summary in the schema adds fields
                 # to it, rather than redefining the schema from scratch.
-                # `passages_text` is excluded as well: the matched passages are
-                # already on the `Document` above, and repeating them in the debug
-                # payload can exhaust memory during relevance test runs.
+                # `passages` and `passages_text` are excluded as well: they carry a
+                # document's full passage payload (~2MB per hit), which is enough to
+                # exhaust memory over a relevance run.
+                # The matched passages are already on the `Document` above.
                 _STANDARD_FIELDS = {
                     "document_source",
                     "sddocname",
@@ -1621,7 +1622,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
             vespa_passage = VespaPassage.model_validate(fields)
-            passages.append(Passage.from_vespa_passage(vespa_passage))
+            passages.append(Passage.from_vespa_passage(vespa_passage, bolding=bolding))
             if self.debug:
                 debug_info.append(
                     {

@@ -65,7 +65,9 @@ _PROSE_TEXT = "The carbon budget for crude emissions is 1.2 GtCO2e in 2030."
 
 class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
     @classmethod
-    def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> DocumentLabelRelationship:
+    def build(
+        cls, factory_use_construct: bool = False, **kwargs: Any
+    ) -> DocumentLabelRelationship:
         kwargs.setdefault("timestamp", None)
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
 
@@ -74,7 +76,11 @@ class DocumentFactory(ModelFactory[Document]):
     @classmethod
     def build(cls, factory_use_construct: bool = False, **kwargs: Any) -> Document:
         if "labels" not in kwargs:
-            kwargs["labels"] = [DocumentLabelRelationshipFactory.build(factory_use_construct=factory_use_construct)]
+            kwargs["labels"] = [
+                DocumentLabelRelationshipFactory.build(
+                    factory_use_construct=factory_use_construct
+                )
+            ]
         if "documents" not in kwargs:
             kwargs["documents"] = []
         return super().build(factory_use_construct=factory_use_construct, **kwargs)
@@ -205,8 +211,11 @@ def _feed_passage_with_labels(
 def _principal_label() -> DocumentLabelRelationship:
     return DocumentLabelRelationship(
         type="status",
-        value=Label(id="status::Principal", type="status", value="Principal", labels=[]),
-        timestamp=None,)
+        value=Label(
+            id="status::Principal", type="status", value="Principal", labels=[]
+        ),
+        timestamp=None,
+    )
 
 
 def _text_block(
@@ -280,9 +289,7 @@ def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
     ids = [p.text_block_id for p in results.results]
 
     assert "tb-100" in ids, f"expected the $100 passage to match '$100', got: {ids}"
-    assert "tb-1000" not in ids, (
-        f"the $1000 passage must not match '$100', got: {ids}"
-    )
+    assert "tb-1000" not in ids, f"the $1000 passage must not match '$100', got: {ids}"
     # The stored/displayed text keeps the original symbol, not the mapped token.
     matched = next(p for p in results.results if p.text_block_id == "tb-100")
     assert "$100" in matched.text
@@ -290,11 +297,14 @@ def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
 
 def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
     """
-    `bolding=True` wraps matched query terms in `<hi>` tags; the default does not.
+    `bolding=True` reports matched query terms as `boldings`; the default does not.
 
     Passage search always requests the `debug-summary` summary class, which
     declares `summary content {}` explicitly, so this pins that the field's
     `bolding: on` reaches that class and is not silently dropped.
+
+    `text` is tag-free either way - Vespa's `<hi>` markup is stripped out and
+    carried as spans instead, so the client never has to parse it back out.
     """
     principal = DocumentFactory.build(id="principal-bold", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
@@ -312,8 +322,14 @@ def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
     )
     plain = engine.search(query="carbon", pagination=pagination, order_by=[])
 
-    assert bolded.results[0].text == "The <hi>carbon</hi> budget for crude emissions."
+    assert bolded.results[0].text == "The carbon budget for crude emissions."
+    assert [
+        (h.start_index, h.end_index, h.labelled_text)
+        for h in bolded.results[0].boldings
+    ] == [(4, 10, "carbon")]
+
     assert plain.results[0].text == "The carbon budget for crude emissions."
+    assert plain.results[0].boldings == []
 
 
 def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: Vespa):
@@ -371,7 +387,9 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
     Verifies (a) the bool fields deploy, (b) the materializer's derivations reach
     the index, and (c) a rank profile / YQL filter can read them.
     """
-    document = DocumentFactory.build(id="doc-1", title="Doc", labels=[_principal_label()])
+    document = DocumentFactory.build(
+        id="doc-1", title="Doc", labels=[_principal_label()]
+    )
     _feed_document(vespa_app, document)
     for block_id, text in (
         ("tb-heading", _HEADING_TEXT),
@@ -393,7 +411,7 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
             hit["fields"]["looks_like_short_heading"],
             hit["fields"]["looks_like_table_of_contents"],
             hit["fields"]["looks_like_reference_list"],
-            hit["fields"]["looks_like_demoted_section"]
+            hit["fields"]["looks_like_demoted_section"],
         )
         for hit in hits
     }
@@ -409,14 +427,24 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
 @pytest.mark.parametrize(
     ("case_id", "query", "text", "should_match"),
     [
-        ("ndc", "ndc test", "The nationally determined contribution was submitted in 2021.", True),
+        (
+            "ndc",
+            "ndc test",
+            "The nationally determined contribution was submitted in 2021.",
+            True,
+        ),
         (
             "nature-based-solution",
             "nature based solution test",
             "The nbs programme funded mangrove restoration.",
             True,
         ),
-        ("gga", "gga test", "Progress on the global goal on adaptation was reviewed.", True),
+        (
+            "gga",
+            "gga test",
+            "Progress on the global goal on adaptation was reviewed.",
+            True,
+        ),
         (
             "gga-out-of-order",
             "gga test",
@@ -425,14 +453,21 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
             "Progress on the global goal was reviewed against adaptation.",
             False,
         ),
-        ("evs", "evs test", "Subsidies for electric car purchases were extended.", True),
+        (
+            "evs",
+            "evs test",
+            "Subsidies for electric car purchases were extended.",
+            True,
+        ),
     ],
 )
 def test_passage_search_applies_rulebase_rewrites(
     vespa_app: Vespa, case_id: str, query: str, text: str, should_match: bool
 ):
     """Searching for a term with rewrites defined in passages.sr rules matches the expanded phrase(s), not just the literal query - and does not match text where the expanded phrase's words are out of order."""
-    principal = DocumentFactory.build(id=f"principal-{case_id}", labels=[_principal_label()])
+    principal = DocumentFactory.build(
+        id=f"principal-{case_id}", labels=[_principal_label()]
+    )
     _feed_document(vespa_app, principal)
     _feed_passage(
         vespa_app,
