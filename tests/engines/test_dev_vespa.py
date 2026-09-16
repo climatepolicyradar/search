@@ -71,7 +71,7 @@ def _document_engine(**kwargs) -> DevVespaDocumentSearchEngine:
     ("engine_kwargs", "expected_summary"),
     [
         ({}, "search"),
-        ({"bolding": True}, "search-with-passages"),
+        ({"bolding": True}, "search"),
         ({"debug": True}, "debug-summary"),
         ({"debug": True, "bolding": True}, "debug-summary"),
     ],
@@ -95,13 +95,13 @@ def test_document_search_never_requests_the_default_summary(
     assert request_body["presentation.summary"] == expected_summary
 
 
-def test_document_search_engine_builds_passages_from_matched_passages_text() -> None:
+def test_document_search_hits_carry_no_passages() -> None:
     """
-    Test that each returned element becomes a text-only `Passage` on the document.
-    
-    With `matched-elements-only` on `passages_text`, Vespa returns only the
-    passages that matched, and the `passages` struct is not in the summary at
-    all.
+    Search hits never carry passages, whatever Vespa returns.
+
+    `matched-elements-only` still returns every passage that matched, which for
+    numeric queries is thousands per document (~10MB a page). `/search/passages`
+    is the route for passages; document hits stay lean (FUS-479).
     """
     engine = _document_engine(bolding=True)
 
@@ -114,10 +114,7 @@ def test_document_search_engine_builds_passages_from_matched_passages_text() -> 
                         "document_source": (
                             '{"id": "doc-0", "labels": [], "documents": []}'
                         ),
-                        "passages_text": [
-                            "<hi>needle</hi> in a haystack",
-                            "another <hi>needle</hi>",
-                        ],
+                        "passages_text": ["<hi>needle</hi> in a haystack"],
                     },
                 }
             ]
@@ -131,12 +128,7 @@ def test_document_search_engine_builds_passages_from_matched_passages_text() -> 
             order_by=[],
         )
 
-    passages = result.results[0].passages
-    assert [p.text for p in passages] == [
-        "<hi>needle</hi> in a haystack",
-        "another <hi>needle</hi>",
-    ]
-    assert all(p.document_id == "doc-0" for p in passages)
+    assert result.results[0].passages == []
 
 
 def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> None:
@@ -611,6 +603,33 @@ def test_passage_search_engine_sends_ranking_profile_without_debug() -> None:
 
     request_body = mock_execute.call_args.kwargs["request_body"]
     assert request_body["ranking.profile"] == "bm25_multiplicative"
+
+
+@pytest.mark.parametrize(
+    ("debug", "expected_summary"),
+    [(False, "search"), (True, "debug-summary")],
+)
+def test_passage_search_engine_requests_the_search_summary_unless_debugging(
+    debug: bool, expected_summary: str
+) -> None:
+    """Live requests use the in-memory `search` summary; `debug=True` uses `debug-summary`."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["presentation.summary"] == expected_summary
 
 
 def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor() -> None:

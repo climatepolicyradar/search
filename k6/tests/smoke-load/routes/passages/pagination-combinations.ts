@@ -98,6 +98,11 @@ const PROFILES = {
   smoke: {
     vus: 5,
     duration: "1m",
+    // A failed check() alone doesn't fail the run — it only shows up as a
+    // pass-rate in the summary. This threshold makes anything below 100% of
+    // checks passing exit the run non-zero, which is the bar for a smoke test.
+    // https://grafana.com/docs/k6/latest/using-k6/thresholds/
+    thresholds: { checks: ["rate==1.00"] },
   },
 };
 
@@ -160,17 +165,20 @@ export default function () {
     [`${combination.name}: response has results array`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
     [`${combination.name}: returns exactly page_size results`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return (body?.results ?? []).length === combination.pageSize;
     },
     [`${combination.name}: results have string text_block_id and document_id`]:
       (response: Response) => {
+        if (response.status !== 200) return false;
         const body = response.json() as TSearchResponse;
         const results = body?.results ?? [];
         return results.every(

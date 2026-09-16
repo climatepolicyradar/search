@@ -157,6 +157,7 @@ export default function () {
     [`${combination.name}: returns exactly page_size results`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       const results = body?.results ?? [];
       return (

@@ -96,9 +96,19 @@ review.
 - `search/engines/` — engine methods raise `VespaError`
   (`search/engines/__init__.py`) and never return an empty result set for a
   failed query. See `_execute_vespa_query` in `search/engines/dev_vespa.py`.
+- `relevance_tests/` — the harness is a boundary too. It is the top of the call
+  stack for a batch job, so it catches, and `TestResult.status` is the tagged
+  result it translates into: `passed`, `failed`, or `errored`. A case that could
+  not be evaluated is `errored`, never `failed`, and leaves the pass-rate
+  denominator — scoring a Vespa timeout as a relevance failure under-reports the
+  pass rate and makes a blip look like a regression (FUS-479). The run is still
+  failed, with `RelevanceRunIncompleteError`, but only after the JSONL and HTML
+  reports are written: the operator needs a red run _and_ something to read.
 
 Covered by `tests/api/test_vespa_unavailable.py` (every route returns `503`,
 no-matches is still a `200`, and an error response is not logged as a success)
 and `tests/engines/test_dev_vespa_errors.py` (each failure mode raises, and no
-caller swallows it). If you add a route or an engine method that calls a
-dependency, add it there.
+caller swallows it, and the client socket timeout outlives Vespa's own query
+budget). `tests/test_relevance_tests.py` pins the harness side: an
+infrastructure failure is not counted as a relevance failure. If you add a route
+or an engine method that calls a dependency, add it there.

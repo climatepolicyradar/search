@@ -121,10 +121,12 @@ export default function () {
   check(res, {
     "status is 200": (response: Response) => response.status === 200,
     "response has results array": (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
     "results have id and title": (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       const results = body?.results ?? [];
       return (
