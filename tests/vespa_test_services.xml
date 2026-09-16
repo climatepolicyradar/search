@@ -143,6 +143,40 @@
                             </item>
                         </tokenFilters>
                     </item>
+                    <!-- exact_analysis: for quoted/exact-phrase matching. Same
+                         charFilters as passage_analysis (so "$100" -> dollar100 on
+                         both sides), lowercase only - NO stop-words, NO stemming. -->
+                    <item key="profile=exact_analysis;language=en">
+                        <tokenizer><name>standard</name></tokenizer>
+                        <charFilters>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[$]</item>
+                                    <item key="replacement">dollar</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[€]</item>
+                                    <item key="replacement">euro</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[£]</item>
+                                    <item key="replacement">pound</item>
+                                </conf>
+                            </item>
+                        </charFilters>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
                     <item key="profile=document_label_analysis;language=en">
                         <tokenizer>
                             <name>standard</name>

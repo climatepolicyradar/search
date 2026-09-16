@@ -71,36 +71,59 @@ def _normalize_currency_symbols(query: str) -> str:
     return query
 
 
-# A query that is nothing but one double-quoted phrase, e.g.
-# '"national strategy for climate change 2050"'. Partially-quoted queries
-# ('brazil "net zero"') are deliberately not handled and keep going through
-# userQuery() - see FUS-136.
-_FULLY_QUOTED_QUERY = re.compile(r'^\s*"([^"]+)"\s*$')
-
-# Literal ("quoted") search against the passage body. `text(@exact_phrase)`
-# tokenizes the whole string with the FIELD's own analyzer (exact_analysis),
-# and `grammar.composite:'phrase'` joins the tokens as an in-order,
-# no-gaps PhraseItem instead of the default weakAnd. See PR #411 for the full
-# write-up (docs.vespa.ai .../yql.html#text and .../query.html#model.type.composite).
-_EXACT_PHRASE_YQL = (
-    " and content_not_stemmed contains "
-    "({grammar.composite:'phrase'}text(@exact_phrase))"
-)
+# Each double-quoted phrase in a query. Two alternatives: a normal closed "..."
+# span, and an unclosed trailing quote ('UK "climate act') which we treat as if
+# the user had closed it at end of string. See FUS-470.
+_QUOTED_PHRASE = re.compile(r'"([^"]*)"|"([^"]+)$')
 
 
-def _quoted_phrase(query: str) -> str | None:
+def _parse_query(query: str) -> tuple[str, list[str]]:
     """
-    Return the phrase inside a fully-quoted query, or None if it isn't one.
+    Split a raw query into (free_text, exact_phrases).
 
-    None when: not fully quoted, or the quoted text has no alphanumerics
-    (e.g. '"---"') - the analyzer yields no tokens and Vespa rejects the query,
-    so those fall back to userQuery().
+    Every `"quoted span"` - and an unclosed trailing quote - becomes one phrase.
+    Text outside quotes is returned as free_text, to drive userQuery().
+    A phrase with no alphanumerics (e.g. '"---"') is dropped: the analyzer yields no
+    tokens and Vespa rejects an empty phrase.
+
+        'UK "climate act"'      -> ("UK", ["climate act"])
+        '"net zero" "by 2050"'  -> ("", ["net zero", "by 2050"])
+        '"climate act'          -> ("", ["climate act"])
+        'climate change'        -> ("climate change", [])
     """
-    match = _FULLY_QUOTED_QUERY.match(query)
-    if match is None:
-        return None
-    phrase = match.group(1)
-    return phrase if re.search(r"[^\W_]", phrase) else None
+    phrases: list[str] = []
+
+    def _collect(match: re.Match[str]) -> str:
+        raw = match.group(1) if match.group(1) is not None else match.group(2)
+        phrase = raw.strip()
+        if re.search(r"[^\W_]", phrase):
+            phrases.append(phrase)
+        return " "
+
+    free_text = re.sub(r"\s+", " ", _QUOTED_PHRASE.sub(_collect, query)).strip()
+    return free_text, phrases
+
+
+def _passage_phrase_yql(count: int) -> str:
+    """One in-order phrase clause per quoted phrase."""
+    return "".join(
+        " and content_not_stemmed contains "
+        f"({{grammar.composite:'phrase'}}text(@exact_phrase_{i}))"
+        for i in range(count)
+    )
+
+
+def _document_phrase_yql(count: int) -> str:
+    """One phrase clause per quoted phrase, each matching title OR description OR passages."""
+    out: list[str] = []
+    for i in range(count):
+        p = f"@exact_phrase_{i}"
+        out.append(
+            f" and (title_not_stemmed contains ({{grammar.composite:'phrase'}}text({p}))"
+            f" or description_not_stemmed contains ({{grammar.composite:'phrase'}}text({p}))"
+            f" or passages_text_not_stemmed contains ({{grammar.composite:'phrase'}}text({p})))"
+        )
+    return "".join(out)
 
 # region Settings
 class Settings(BaseSettings):
@@ -872,6 +895,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         ' or ({defaultIndex: "identifiers"}userInput(@query)))'
     )
 
+
     def search(
         self,
         query: str | None,
@@ -892,16 +916,21 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 struct_map=documents_filter_struct_field_to_vespa_field_map,
             )
 
+        free_text, phrases = _parse_query(query) if query else ("", [])
+
         yql = f"select * from sources documents where {where}"
-        if query:
+        if free_text:
             yql += self._userQuery
-        logger.info("🔎 Document search query built (query=%r, yql=%s)", query, yql)
+        yql += _document_phrase_yql(len(phrases))
+        logger.info(
+            "🔎 Document search query built (query=%r, free_text=%r, phrases=%r, yql=%s)",
+            query, free_text, phrases, yql,
+        )
 
         sort_overrides = _ranking_overrides_for_document_order_by(order_by)
 
         request_body: dict[str, Any] = {
             "yql": yql,
-            "query": _normalize_currency_symbols(query) if query else query,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
@@ -909,6 +938,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
+
+        if free_text:
+            request_body["query"] = _normalize_currency_symbols(free_text)
+        for i, phrase in enumerate(phrases):
+            request_body[f"exact_phrase_{i}"] = phrase
 
         topic_ids = _topic_ids_from_filters(filters)
         if topic_ids and not sort_overrides:
@@ -1073,9 +1107,12 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         """Return aggregations (label/concept groups with counts) filtered by the search query."""
         # Build the top-level where clause from the search query and any filters,
         # mirroring how `search()` constructs its YQL.
+        free_text, phrases = _parse_query(query) if query else ("", [])
+
         where = "true"
-        if query:
+        if free_text:
             where += self._userQuery
+        where += _document_phrase_yql(len(phrases))
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
@@ -1117,12 +1154,15 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
         request_body = {
             "yql": yql,
-            "query": query,
             "hits": 0,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
         }
+        if free_text:
+            request_body["query"] = free_text
+        for i, phrase in enumerate(phrases):
+            request_body[f"exact_phrase_{i}"] = phrase
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
@@ -1166,9 +1206,12 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     ) -> dict[str, dict[tuple[str, str], tuple[Label, int]]]:
         """Run a Vespa grouping query and return label/concept buckets partitioned by attribute."""
 
+        free_text, phrases = _parse_query(query) if query else ("", [])
+
         where = "true"
-        if query:
+        if free_text:
             where += self._userQuery
+        where += _document_phrase_yql(len(phrases))
         where += _build_filter_query(
             where_filter,
             field_map=documents_filter_field_to_vespa_field_map,
@@ -1190,12 +1233,15 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
         request_body = {
             "yql": yql,
-            "query": query,
             "hits": 0,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
         }
+        if free_text:
+            request_body["query"] = free_text
+        for i, phrase in enumerate(phrases):
+            request_body[f"exact_phrase_{i}"] = phrase
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
@@ -1432,21 +1478,10 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
 
-        exact_phrase = _quoted_phrase(query) if query else None
+        free_text, phrases = _parse_query(query) if query else ("", [])
 
         where = "true"
         filters: Filter | None = None
-
-        yql = f"select * from sources passages where {where}"
-        if exact_phrase is not None:
-            yql += _EXACT_PHRASE_YQL
-        elif query:
-            yql += " and userQuery()"
-
-        logger.info(
-            "🔎 Passage search query built (query=%r, exact_phrase=%r, yql=%s)",
-            query, exact_phrase, yql,
-        )
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
@@ -1457,10 +1492,14 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             )
 
         yql = f"select * from sources passages where {where}"
-        if query:
+        if free_text:
             yql += " and userQuery()"
+        yql += _passage_phrase_yql(len(phrases))
 
-        logger.info("🔎 Passage search query built (query=%r, yql=%s)", query, yql)
+        logger.info(
+            "🔎 Passage search query built (query=%r, free_text=%r, phrases=%r, yql=%s)",
+            query, free_text, phrases, yql,
+        )
 
         sort_overrides = _ranking_overrides_for_passage_order_by(order_by)
 
@@ -1471,23 +1510,16 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "timeout": "5s",
             "model.language": "en",
             "rules.rulebase": "passages",
-            # TODO: always requesting debug-summary here (rather than only
-            # when self.debug) so `Passage.tokens` (text_tokens) is populated
-            # on every live request, not just debug/CLI usage. This uses
-            # `from-disk` field access instead of in-memory attributes, so it
-            # is slower per-query than the default summary - accepted as a
-            # simplicity-over-performance tradeoff for now. Push back to only
-            # when self.debug once once `tokens`' field shape/necessity is settled
-            # `tokens`' field shape/necessity is settled (see Passage.tokens).
+            # (keep the existing debug-summary TODO comment here)
             "presentation.summary": "debug-summary",
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
 
-        if exact_phrase is not None:
-            request_body["exact_phrase"] = exact_phrase
-        elif query:
-            request_body["query"] = _normalize_currency_symbols(query)
+        if free_text:
+            request_body["query"] = _normalize_currency_symbols(free_text)
+        for i, phrase in enumerate(phrases):
+            request_body[f"exact_phrase_{i}"] = phrase
 
         topic_ids = _topic_ids_from_filters(filters)
         if topic_ids and not sort_overrides:
