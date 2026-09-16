@@ -297,8 +297,9 @@ test_cases = [
         search_terms="ira",
         expected_result_ids=[
             "CCLW.family.10699.0",
+            "Sabin.family.109771.0"
         ],
-        description="searching for 'ira' should return the Inflation Reduction Act",
+        description="searching for 'ira' should return the Inflation Reduction Act and litigation case 'United States — Certain Tax Credits Under the Inflation Reduction Act' first.",
     ),
     PrecisionTestCase[Document](
         category="document name",
