@@ -247,12 +247,14 @@ export default function () {
     [`${checkLabel}: status is 200`]: (response: Response) =>
       response.status === 200,
     [`${checkLabel}: response has results array`]: (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
     [`${checkLabel}: result count matches expectation`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       const results = body?.results ?? [];
       return combination.expectZeroResults

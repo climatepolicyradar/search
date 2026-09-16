@@ -301,6 +301,7 @@ export default function () {
     [`${combination.name}: facets match requested fields`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       const facets = body?.facets ?? null;
 

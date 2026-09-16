@@ -160,17 +160,20 @@ export default function () {
     [`${combination.name}: response has results array`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
     [`${combination.name}: returns exactly page_size results`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return (body?.results ?? []).length === combination.pageSize;
     },
     [`${combination.name}: results have string text_block_id and document_id`]:
       (response: Response) => {
+        if (response.status !== 200) return false;
         const body = response.json() as TSearchResponse;
         const results = body?.results ?? [];
         return results.every(
