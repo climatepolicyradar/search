@@ -732,6 +732,8 @@ def _warn_if_degraded(response_json: dict[str, Any], request_context: str) -> No
     not an error and must not be raised - but the hits are drawn from a subset of
     the corpus, so ranking comparisons built on it are not comparable with a full
     one. WARNING because the caller still gets a usable answer.
+    
+    @see: https://docs.vespa.ai/en/performance/graceful-degradation.html
     """
     coverage = response_json.get("root", {}).get("coverage") or {}
     # Vespa reports every degradation reason it knows about, most of them false.
