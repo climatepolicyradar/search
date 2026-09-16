@@ -59,13 +59,51 @@ def test_document_sort_ranking_string_puts_missing_values_last(
     assert _document_sort_ranking_string(field, direction) == expected
 
 
-def test_document_search_engine_reads_pages_from_embedded_passage_struct() -> None:
-    """The embedded documents.passages struct's pages field lands on Passage.pages."""
+def _document_engine(**kwargs) -> DevVespaDocumentSearchEngine:
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    return DevVespaDocumentSearchEngine(settings=settings, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("engine_kwargs", "expected_summary"),
+    [
+        ({}, "search"),
+        ({"bolding": True}, "search-with-passages"),
+        ({"debug": True}, "debug-summary"),
+        ({"debug": True, "bolding": True}, "debug-summary"),
+    ],
+)
+def test_document_search_never_requests_the_default_summary(
+    engine_kwargs: dict, expected_summary: str
+) -> None:
+    """Every search hit summary must be one of the summaries with trimmed fields."""
+    engine = _document_engine(**engine_kwargs)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="needle",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["presentation.summary"] == expected_summary
+
+
+def test_document_search_engine_builds_passages_from_matched_passages_text() -> None:
+    """
+    Test that each returned element becomes a text-only `Passage` on the document.
+    
+    With `matched-elements-only` on `passages_text`, Vespa returns only the
+    passages that matched, and the `passages` struct is not in the summary at
+    all.
+    """
+    engine = _document_engine(bolding=True)
 
     fake_response = {
         "root": {
@@ -76,19 +114,10 @@ def test_document_search_engine_reads_pages_from_embedded_passage_struct() -> No
                         "document_source": (
                             '{"id": "doc-0", "labels": [], "documents": []}'
                         ),
-                        "passages": [
-                            {
-                                "text_block_id": "block-0",
-                                "idx": 0,
-                                "language": "en",
-                                "type": "Text",
-                                "type_confidence": 1.0,
-                                "page_number": 3,
-                                "pages": [3, 4],
-                                "heading_id": None,
-                            }
+                        "passages_text": [
+                            "<hi>needle</hi> in a haystack",
+                            "another <hi>needle</hi>",
                         ],
-                        "passages_text": ["<hi>needle</hi> in a haystack"],
                     },
                 }
             ]
@@ -102,7 +131,12 @@ def test_document_search_engine_reads_pages_from_embedded_passage_struct() -> No
             order_by=[],
         )
 
-    assert result.results[0].passages[0].pages == [3, 4]
+    passages = result.results[0].passages
+    assert [p.text for p in passages] == [
+        "<hi>needle</hi> in a haystack",
+        "another <hi>needle</hi>",
+    ]
+    assert all(p.document_id == "doc-0" for p in passages)
 
 
 def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> None:
