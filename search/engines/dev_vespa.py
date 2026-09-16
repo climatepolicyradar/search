@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import unicodedata
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -789,6 +790,8 @@ def _execute_vespa_query(
     apart. The return type is deliberately non-optional so that regressing to
     ``return None`` here fails type checking.
     """
+    request_body = {"presentation.timing": True, **request_body}
+
     logger.info("Vespa request started [%s]", request_context)
     logger.debug(
         "Vespa request payload [%s]: %s",
@@ -796,6 +799,7 @@ def _execute_vespa_query(
         json.dumps(request_body, indent=2),
     )
 
+    started = time.perf_counter()
     try:
         response = post_fn(
             endpoint,
@@ -807,8 +811,10 @@ def _execute_vespa_query(
         )
     except Exception as exc:
         logger.exception(
-            "Error: Vespa request failed before a response was received [%s]",
+            "Error: Vespa request failed before a response was received [%s] "
+            "(elapsed_ms=%d)",
             request_context,
+            (time.perf_counter() - started) * 1000,
         )
         raise VespaError(
             f"Vespa request failed before a response was received [{request_context}]"
@@ -837,11 +843,20 @@ def _execute_vespa_query(
     _warn_if_degraded(response_json, request_context)
 
     hit_count = len(response_json.get("root", {}).get("children", []) or [])
+    timing = response_json.get("timing") or {}
     logger.info(
-        "Success: Vespa request completed [%s] (hits=%s, total_count=%s)",
+        "Success: Vespa request completed [%s] (hits=%s, total_count=%s, "
+        "elapsed_ms=%d, vespa_querytime_ms=%d, vespa_summaryfetchtime_ms=%d, "
+        "vespa_searchtime_ms=%d, bytes=%d, summary=%s)",
         request_context,
         hit_count,
         _get_total_count(response_json),
+        (time.perf_counter() - started) * 1000,
+        timing.get("querytime", 0) * 1000,
+        timing.get("summaryfetchtime", 0) * 1000,
+        timing.get("searchtime", 0) * 1000,
+        len(response.content),
+        request_body.get("presentation.summary", "default"),
     )
     return response_json
 
