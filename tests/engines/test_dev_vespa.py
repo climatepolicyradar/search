@@ -605,6 +605,33 @@ def test_passage_search_engine_sends_ranking_profile_without_debug() -> None:
     assert request_body["ranking.profile"] == "bm25_multiplicative"
 
 
+@pytest.mark.parametrize(
+    ("debug", "expected_summary"),
+    [(False, "search"), (True, "debug-summary")],
+)
+def test_passage_search_engine_requests_the_search_summary_unless_debugging(
+    debug: bool, expected_summary: str
+) -> None:
+    """Live requests use the in-memory `search` summary; `debug=True` uses `debug-summary`."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["presentation.summary"] == expected_summary
+
+
 def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor() -> None:
     """Topics being filtered for become the topic ranking tensor."""
     settings = Settings(

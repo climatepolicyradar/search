@@ -30,7 +30,12 @@ from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
 from search.engines import Pagination
-from search.engines.dev_vespa import DevVespaPassageSearchEngine, Settings
+from search.engines.dev_vespa import (
+    DevVespaPassageSearchEngine,
+    FieldFilter,
+    Filter,
+    Settings,
+)
 from search.passage import Passage
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.passage import VespaLabel, VespaPassage
@@ -299,8 +304,8 @@ def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
     """
     `bolding=True` reports matched query terms as `boldings`; the default does not.
 
-    Passage search always requests the `debug-summary` summary class, which
-    declares `summary content {}` explicitly, so this pins that the field's
+    Passage search requests the `search` summary class, which declares
+    `summary content {}` explicitly, so this pins that the field's
     `bolding: on` reaches that class and is not silently dropped.
 
     `text` is tag-free either way - Vespa's `<hi>` markup is stripped out and
