@@ -723,6 +723,40 @@ def _get_total_count(response: dict[str, Any]) -> int | None:
     return response.get("root", {}).get("fields", {}).get("totalCount")
 
 
+def _warn_if_degraded(response_json: dict[str, Any], request_context: str) -> None:
+    """
+    Warn when Vespa answered from less than the whole corpus.
+
+    A query that exhausts its budget, or whose content nodes did not all answer,
+    comes back as a 200 carrying partial results. That is a valid response - it is
+    not an error and must not be raised - but the hits are drawn from a subset of
+    the corpus, so ranking comparisons built on it are not comparable with a full
+    one. WARNING because the caller still gets a usable answer.
+    
+    @see: https://docs.vespa.ai/en/performance/graceful-degradation.html
+    """
+    coverage = response_json.get("root", {}).get("coverage") or {}
+    # Vespa reports every degradation reason it knows about, most of them false.
+    reasons = {
+        reason: value
+        for reason, value in (coverage.get("degraded") or {}).items()
+        if value
+    }
+    covered_percent = coverage.get("coverage")
+    incomplete = isinstance(covered_percent, (int, float)) and covered_percent < 100
+    if not reasons and not incomplete:
+        return
+
+    logger.warning(
+        "Vespa returned a degraded result [%s] (coverage=%s%%, documents=%s, "
+        "degraded=%s)",
+        request_context,
+        covered_percent,
+        coverage.get("documents"),
+        reasons or None,
+    )
+
+
 def _execute_vespa_query(
     *,
     endpoint: str,
@@ -800,6 +834,8 @@ def _execute_vespa_query(
         logger.exception("Error: Vespa returned invalid JSON [%s]", request_context)
         raise VespaError(f"Vespa returned invalid JSON [{request_context}]") from exc
 
+    _warn_if_degraded(response_json, request_context)
+
     hit_count = len(response_json.get("root", {}).get("children", []) or [])
     logger.info(
         "Success: Vespa request completed [%s] (hits=%s, total_count=%s)",
@@ -823,10 +859,10 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 # None leaves the rank profile's own default in place.
 _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
 
-# How many candidates weakAnd keeps before the rank profile runs. weakAnd picks them 
-# with an idf over the `default` fieldset - which includes `passages_text` – so long 
-# PDFs with many passage hits can crowd out a short exact title match and that document 
-# is then never scored at all. 
+# How many candidates weakAnd keeps before the rank profile runs. weakAnd picks them
+# with an idf over the `default` fieldset - which includes `passages_text` – so long
+# PDFs with many passage hits can crowd out a short exact title match and that document
+# is then never scored at all.
 # Vespa's own default is max(hits, 100), which ties retrieval depth to the page
 # size - so a page_size=500 search matched 5872 documents where the facet query
 # for the same terms, running at hits=0, matched 1801. Results and facet counts
@@ -1105,9 +1141,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 # NOTE: these are all fields that are stored as type summary in the index.
                 # This is because overriding the default summary in the schema adds fields
                 # to it, rather than redefining the schema from scratch.
-                # `passages_text` is excluded as well: the matched passages are
-                # already on the `Document` above, and repeating them in the debug
-                # payload can exhaust memory during relevance test runs.
+                # `passages` and `passages_text` are excluded as well: they carry a
+                # document's full passage payload (~2MB per hit), which is enough to
+                # exhaust memory over a relevance run.
+                # The matched passages are already on the `Document` above.
                 _STANDARD_FIELDS = {
                     "document_source",
                     "sddocname",
@@ -1621,7 +1658,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
             vespa_passage = VespaPassage.model_validate(fields)
-            passages.append(Passage.from_vespa_passage(vespa_passage))
+            passages.append(Passage.from_vespa_passage(vespa_passage, bolding=bolding))
             if self.debug:
                 debug_info.append(
                     {
