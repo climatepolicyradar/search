@@ -281,3 +281,59 @@ def test_a_full_coverage_response_is_not_warned_about(caplog) -> None:
 
 
 # endregion Degraded coverage
+
+# region Timing instrumentation
+
+
+def test_every_request_asks_vespa_for_timing() -> None:
+    """
+    `presentation.timing` is on for every call.
+
+    Without it a slow query cannot be attributed: FUS-479 read as a 83ms search
+    when 4.5s of the budget was going on summary fetch.
+    """
+    post_fn = MagicMock(return_value=_response(200, json_value={}))
+
+    _execute(post_fn)
+
+    assert post_fn.call_args.kwargs["json"]["presentation.timing"] is True
+
+
+def test_a_completed_request_logs_where_the_time_went(caplog) -> None:
+    """The success line splits Vespa's own timing out and records the payload size."""
+    response = _response(
+        200,
+        json_value={
+            "timing": {
+                "querytime": 0.011,
+                "summaryfetchtime": 4.457,
+                "searchtime": 4.469,
+            },
+            "root": {"children": [], "fields": {"totalCount": 0}},
+        },
+    )
+    response.content = b"x" * 1234
+
+    with caplog.at_level(logging.INFO):
+        _execute(MagicMock(return_value=response))
+
+    completed = [r.message for r in caplog.records if "completed" in r.message][0]
+    assert "vespa_querytime_ms=11" in completed
+    assert "vespa_summaryfetchtime_ms=4457" in completed
+    assert "vespa_searchtime_ms=4469" in completed
+    assert "bytes=1234" in completed
+    assert "summary=default" in completed
+    assert "elapsed_ms=" in completed
+
+
+def test_a_failed_request_logs_how_long_it_waited(caplog) -> None:
+    """Test that timeuts log how long they waited."""
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(VespaError):
+            _execute(MagicMock(side_effect=requests.Timeout("timed out")))
+
+    failed = [r.message for r in caplog.records if "before a response" in r.message][0]
+    assert "elapsed_ms=" in failed
+
+
+# endregion Timing instrumentation
