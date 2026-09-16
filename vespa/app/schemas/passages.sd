@@ -35,6 +35,8 @@ schema passages {
         }
         field document_id type string {
             indexing: attribute | summary
+            attribute: fast-search
+            rank: filter
         }
         field document_ref type reference<documents> {
             indexing: attribute

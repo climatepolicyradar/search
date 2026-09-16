@@ -424,6 +424,51 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
     }
 
 
+def test_passage_document_id_filter_is_exact_and_covers_the_corpus(vespa_app: Vespa):
+    """
+    `document_id` filters return exactly the passages of those documents, with full coverage.
+
+    This is the shape the frontend sends on every passage search (one clause per
+    document in the family). `document_id` is `fast-search` so the OR is a set of
+    dictionary lookups rather than a per-passage scan; without it a large family
+    soft-times-out and Vespa answers from part of the corpus.
+    """
+    for doc_id in ("doc-fs-a", "doc-fs-b", "doc-fs-c"):
+        _feed_document(
+            vespa_app,
+            DocumentFactory.build(id=doc_id, labels=[_principal_label()]),
+        )
+        _feed_passage(
+            vespa_app,
+            _text_block(f"tb-{doc_id}", "Mangrove restoration protects coastlines."),
+            document_id=doc_id,
+        )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    filters = Filter(
+        op="and",
+        filters=[
+            Filter(
+                op="or",
+                filters=[
+                    FieldFilter(field="document_id", op="contains", value="doc-fs-a"),
+                    FieldFilter(field="document_id", op="contains", value="doc-fs-c"),
+                ],
+            )
+        ],
+    )
+
+    response = engine.search(
+        query="mangrove",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters_json_string=filters.model_dump_json(),
+    )
+
+    assert sorted(p.document_id for p in response.results) == ["doc-fs-a", "doc-fs-c"]
+    assert response.total_size == 2
+
+
 @pytest.mark.parametrize(
     ("case_id", "query", "text", "should_match"),
     [
