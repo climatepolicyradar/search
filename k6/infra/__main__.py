@@ -48,7 +48,7 @@ from pulumiverse_grafana import Provider, k6
 K6_DIR = Path(__file__).resolve().parent.parent
 
 # Already exists in Grafana and imported into this stack — see module docstring.
-SMOKE_RESOURCES = ["documents", "passages", "labels"]
+SMOKE_RESOURCES = ["documents", "passages", "labels", "labels-taxonomy"]
 
 
 @dataclass(frozen=True)

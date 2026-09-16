@@ -48,6 +48,13 @@ k6/
           filter-combinations.ts  # GET /search/passages?filters=
           order-by-combinations.ts # GET /search/passages?order_by=
           pagination-combinations.ts # GET /search/passages?page_token/page_size
+        labels/
+          index.ts                # GET /search/labels (base query)
+          filter-combinations.ts  # GET /search/labels?type=/filters=
+          order-by-noop.ts        # GET /search/labels?order_by= (regression guard — see below)
+          pagination-combinations.ts # GET /search/labels?page_token/page_size
+        labels-taxonomy/
+          index.ts                # GET /search/labels-taxonomy (smoke only — see below)
 ```
 
 Every file in a route directory tests that one route — co-locating them means
@@ -131,6 +138,29 @@ no fan-out has nothing more expensive to target. Passing `-e PROFILE=load` to a
 script without one silently falls back to k6's own defaults (1 VU, 1 iteration)
 rather than erroring, since `resolveProfile` returns `undefined` for an unknown
 profile name (the cloud name is only merged in when a profile is found).
+
+`labels/filter-combinations.ts` follows the same pattern as
+`passages/filter-combinations.ts` — `type`/`filters` add YQL predicates to one
+query rather than triggering extra Vespa calls, so load mode fixes to the
+fixture's most structurally complex real combination (`type` + `filters`
+combined) instead of sweeping. Its `load` thresholds are backed by real data:
+`/search/labels` was already one of the four routes measured directly in the
+2026-09-09/2026-09-10 breakpoint runs, it just had no k6 script to cite that
+data until now — see the comment in that file and
+`k6/docs/load-threshold-methodology.md`.
+
+`labels/order-by-noop.ts` replaces the `order-by-combinations.ts` this route
+would otherwise have: `order_by` is parsed but never applied by
+`DevVespaLabelSearchEngine.search()` (see the comment at the top of that file
+for the code trail and team confirmation), so there are no sortable fields to
+sweep. Instead it's a regression guard asserting two different `order_by` values
+return identical result order — it has no `load` profile, since there's no
+distinct request shape to put load-relevant weight behind.
+
+`labels-taxonomy/index.ts` is smoke-only, no `load` profile — it's a hardcoded
+in-memory Python list (`api/labels_taxonomy.py`) with no Vespa call or other
+I/O, so there's no capacity ceiling specific to this route beyond the service's
+own baseline throughput.
 
 ## Metric tag naming: `name`
 

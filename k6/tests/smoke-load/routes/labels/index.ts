@@ -1,0 +1,153 @@
+import http, { type Response } from "k6/http";
+import { check, sleep } from "k6";
+import { SharedArray } from "k6/data";
+import tempo from "https://jslib.k6.io/http-instrumentation-tempo/1.0.1/index.js";
+
+// __ENV reads a variable passed on the command line, e.g. `-e BASE_URL=...`.
+// Defaults to production so `k6 run` works out of the box with no setup.
+// https://grafana.com/docs/k6/latest/using-k6/k6-options/environment-variables/
+const BASE_URL = __ENV.BASE_URL || "https://api.climatepolicyradar.org/search";
+
+// Per-iteration pause each VU takes between requests (`sleep(SLEEP_SECONDS)`
+// at the end of this script's default function). Configurable so the request
+// rate can be dialled without touching VU count — e.g. `-e SLEEP_SECONDS=0.1`
+// to push a heavier load, or a larger value to space requests out. Defaults
+// to 1s of simulated think time, the standard smoke/load-test pacing.
+const SLEEP_SECONDS = Number(__ENV.SLEEP_SECONDS ?? 1);
+
+// A VU ("virtual user") is one simulated concurrent user — it runs a script's
+// default-exported function in a loop for `duration`. PROFILES below (VUs/
+// duration differ per route, and a `load` profile is added once that route's
+// load test is scoped) is picked via `-e PROFILE=<name>`. With no env var
+// set, defaults to `load` if PROFILES has one, else whichever profile is
+// listed first (`smoke`, by convention — see PROFILES below). Defaulting to
+// `load` when available matters for scripts uploaded to Grafana Cloud k6 as a
+// scheduled LoadTest resource (see k6/infra/__main__.py) — Cloud has no way
+// to pass `-e PROFILE=...` at trigger time, so whatever this resolves to with
+// no env var set is what a scheduled cloud run always executes. CI's smoke
+// workflow and any local smoke check must pass `-e PROFILE=smoke` explicitly
+// once a script has a load profile; it is no longer the no-flags default.
+// https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/
+//
+// `cloudName` sets `options.cloud.name`, the identifier Grafana Cloud k6 uses
+// to group this script's runs. Without it, Cloud falls back to the script's
+// own filename — multiple routes named `index.ts` (the base-query convention,
+// see k6/README.md's Layout section) then collide under one indistinguishable
+// "index.ts" name in the project's runs list.
+function resolveProfile(
+  cloudName: string,
+  profiles: Record<string, object>,
+): object {
+  const defaultProfileName =
+    "load" in profiles ? "load" : Object.keys(profiles)[0];
+  const profile = profiles[__ENV.PROFILE || defaultProfileName] as
+    | Record<string, unknown>
+    | undefined;
+  if (!profile) return profile as unknown as object;
+  return { ...profile, cloud: { name: cloudName } };
+}
+
+// SharedArray shares this data once across all VUs instead of every VU
+// holding its own copy in memory.
+// https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
+//
+// Real label values (not free text) — /search/labels ranks on prefix/loose
+// matches against `value`/`alternative_labels`, so these are chosen from the
+// labels-taxonomy hardcoded list (api/labels_taxonomy.py) and known label
+// types, matching what a user actually types in the typeahead
+// (navigator-frontend's useLabelSearch.ts).
+const labelQueries = new SharedArray("label-queries", function () {
+  return ["Report", "Adaptation", "Policy", "Romania", "Corporate"];
+});
+
+type TLabelResult = { id?: unknown; type?: unknown; value?: unknown };
+type TSearchResponse = { results?: TLabelResult[] };
+
+const PROFILES = {
+  smoke: {
+    vus: 5,
+    duration: "1m",
+    // A failed check() alone doesn't fail the run — it only shows up as a
+    // pass-rate in the summary. This threshold makes anything below 100% of
+    // checks passing exit the run non-zero, which is the bar for a smoke test.
+    // https://grafana.com/docs/k6/latest/using-k6/thresholds/
+    thresholds: { checks: ["rate==1.00"] },
+  },
+};
+
+// k6 requires `options` to be a named export — this is how it reads VU/
+// duration config for the run, not a convention we chose.
+export const options = resolveProfile("labels: base query", PROFILES);
+
+// Distributed tracing: attaches a W3C `traceparent` header — the format
+// OTel's default propagator reads — to every HTTP request from this point
+// forward and tags each request's trace_id in the output metadata, so
+// Grafana Cloud k6 can correlate this run's requests with server-side spans
+// in Grafana Cloud Traces (Tempo). This is the k6-x-tempo feature the Cloud
+// Insights recommendations flagged for this test. Requires search-api's
+// OTel setup to extract the incoming traceparent header for the trace to
+// actually correlate — see
+// https://grafana.com/docs/k6/latest/javascript-api/jslib/http-instrumentation-tempo
+tempo.instrumentHTTP({
+  propagator: "w3c",
+});
+
+// k6 calls this function once per VU iteration for the whole run.
+export default function () {
+  const query = labelQueries[Math.floor(Math.random() * labelQueries.length)];
+  // No order_by param: defaults to `relevance desc` per the OpenAPI schema,
+  // but note this is a no-op for /search/labels — see order_by-related
+  // comments in this route's absence of an order-by-combinations.ts file
+  // (k6/README.md and this route's usage note explain why one wasn't
+  // written) and DevVespaLabelSearchEngine.search() in
+  // search/engines/dev_vespa.py, which never references its `order_by`
+  // argument. Confirmed with search-api's owning team (#team-fusion,
+  // 2026-09-16): required by the abstract SearchEngine base class signature,
+  // genuinely unimplemented for labels.
+  const res = http.get(
+    `${BASE_URL}/labels?query=${encodeURIComponent(query)}`,
+    {
+      // Group by route path + the relevant query param *names* (never
+      // values) instead of letting k6 default `name`/`url` to the full
+      // dynamic query string — per-request query text was producing a
+      // high-cardinality set of unique values across http_reqs,
+      // http_req_waiting, and http_req_tls_handshaking (flagged by Cloud
+      // Insights' Metric Tags audit). Naming convention across this suite:
+      // `{path}?{param_names}`, param names only — see k6/README.md's
+      // Layout section.
+      // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
+      tags: { name: "labels?query" },
+    },
+  );
+
+  // check() records pass/fail per assertion without stopping the iteration
+  // on failure (unlike a thrown error) — failures show up in the run
+  // summary as a percentage. A smoke test's bar is 100% checks passing.
+  // https://grafana.com/docs/k6/latest/using-k6/checks/
+  check(res, {
+    "status is 200": (response: Response) => response.status === 200,
+    "response has results array": (response: Response) => {
+      if (response.status !== 200) return false;
+      const body = response.json() as TSearchResponse;
+      return Array.isArray(body?.results);
+    },
+    "results have id, type and value": (response: Response) => {
+      if (response.status !== 200) return false;
+      const body = response.json() as TSearchResponse;
+      const results = body?.results ?? [];
+      return (
+        results.length > 0 &&
+        results.every(
+          (result) =>
+            typeof result?.id === "string" &&
+            typeof result?.type === "string" &&
+            typeof result?.value === "string",
+        )
+      );
+    },
+  });
+
+  // Paces iterations so VUs don't hammer the endpoint back-to-back with
+  // zero delay — standard for smoke/load tests, mimics real user think time.
+  sleep(SLEEP_SECONDS);
+}
