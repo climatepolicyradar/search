@@ -201,6 +201,7 @@ export default function () {
     [`${combination.orderBy}: results have id and title`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       const results = body?.results ?? [];
       return (
@@ -212,6 +213,7 @@ export default function () {
       );
     },
     [`${combination.orderBy}: results are sorted`]: (response: Response) => {
+      if (response.status !== 200) return false;
       if (
         combination.sortField === null ||
         combination.sortDirection === null

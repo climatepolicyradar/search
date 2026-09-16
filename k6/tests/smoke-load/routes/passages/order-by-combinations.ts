@@ -210,15 +210,18 @@ export default function () {
     [`${combination.orderBy}: response has results array`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
     [`${combination.orderBy}: response has results`]: (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results) && body.results.length > 0;
     },
     [`${combination.orderBy}: results have string text_block_id and document_id`]:
       (response: Response) => {
+        if (response.status !== 200) return false;
         const body = response.json() as TSearchResponse;
         const results = body?.results ?? [];
         return results.every(
@@ -228,6 +231,7 @@ export default function () {
         );
       },
     [`${combination.orderBy}: results are sorted`]: (response: Response) => {
+      if (response.status !== 200) return false;
       if (
         combination.sortField === null ||
         combination.sortDirection === null

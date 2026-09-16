@@ -193,10 +193,12 @@ export default function () {
   check(res, {
     "status is 200": (response: Response) => response.status === 200,
     "response has matching data.id": (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TDocumentResponse;
       return body?.data?.id === documentId;
     },
     "response has data.title": (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TDocumentResponse;
       return (
         typeof body?.data?.title === "string" && body.data.title.length > 0
