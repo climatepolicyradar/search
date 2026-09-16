@@ -134,7 +134,6 @@ def passage_data_strategy(draw) -> dict:
         "type_confidence": draw(st.floats(min_value=0.0, max_value=1.0)),
         "heading_id": draw(st.one_of(st.none(), text_block_id_strategy)),
         "document_id": draw(document_id_strategy),
-        "tokens": draw(st.lists(text_strategy, max_size=5)),
     }
 
 
