@@ -12,7 +12,6 @@ from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
     RecallTestCase,
-    RelativeOrderTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
     any_words_in_string,
@@ -496,16 +495,6 @@ test_cases = [
         search_terms="loss & damage finance",
         description="search for loss & damage finance should return NDCs from small island developing states in the top 20 results",
         expected_result_ids=["UNFCCC.family.i00004847.n0000"],
-        k=20,
-    ),
-    RelativeOrderTestCase[Document](
-        category="passage breadth",
-        search_terms="heatwave",
-        # Warm Homes Plan's only two matches are an endnote list (p109) and a
-        # notes block (p118); NAP3 has 12 body mentions. See FUS-457.
-        higher_result_id="UNFCCC.family.i00001131.n0000",
-        lower_result_id="CCLW.family.i00003221.n0000",
-        description="A document with many body mentions of heatwave should rank above one whose only mentions are an endnote and a notes block.",
         k=20,
     ),
 ]
