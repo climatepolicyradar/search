@@ -34,16 +34,21 @@ class Label(BaseModel):
     value: str = Field(default="")
 
 
-class PassageLabelRelationship(BaseModel):
+class BaseSpan[T](BaseModel):
+    """A span is a class that allows you to wrap text from start_index:end_index in value T"""
+
+    start_index: int
+    end_index: int
+    labelled_text: str
+    value: T
+
+
+class PassageLabelRelationship(BaseSpan[Label]):
     """A label applied to a passage, with the fields describing that relationship."""
 
-    value: Label
     classifier_id: str = Field(default="")
-    end_index: float = Field(default=0.0)
-    labelled_text: str = Field(default="")
     labellers: list[str] = Field(default_factory=list)
     prediction_probability: float = Field(default=0.0)
-    start_index: float = Field(default=0.0)
     timestamps: list[str] = Field(default_factory=list)
 
 
@@ -51,12 +56,15 @@ _HI_OPEN = "<hi>"
 _HI_CLOSE = "</hi>"
 
 
-class Bolding(BaseModel):
-    """A span of a passage's text that Vespa matched against the query."""
+class Bolding(BaseSpan[None]):
+    """
+    A span of a passage's text that Vespa matched against the query.
 
-    start_index: int
-    end_index: int
-    labelled_text: str
+    @see: https://docs.vespa.ai/en/reference/schemas/schemas.html#bolding
+    """
+
+    # There is nothing to wrap the matched text in as it is just freetext.
+    value: None = None
 
 
 class BoldedText(BaseModel):
