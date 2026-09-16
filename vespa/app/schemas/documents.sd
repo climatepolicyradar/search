@@ -251,6 +251,7 @@ schema documents {
             profile: passage_analysis
         }
         bolding: on
+        summary: matched-elements-only
     }
 
     field case_number type string {
