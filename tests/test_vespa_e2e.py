@@ -1154,44 +1154,36 @@ def _feed_document_with_passages(app: Vespa) -> Document:
     return document
 
 
-def test_search_hits_carry_only_the_passages_that_matched(vespa_app: Vespa):
-    """`matched-elements-only` on `passages_text` should only return matched passages."""
+@pytest.mark.parametrize("bolding", [False, True])
+def test_search_hits_carry_no_passages(vespa_app: Vespa, bolding: bool):
+    """
+    Document hits never carry passages, with or without bolding.
+
+    `matched-elements-only` can returns every passage that matched, but for
+    numeric queries this can be thousands per document. `/search/passages` is the route
+    for passages (FUS-479).
+    """
     _feed_document_with_passages(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
-    result = engine.search(
-        query="flood", pagination=Pagination(page_token=1, page_size=10), order_by=[]
-    )
-
-    assert [p.text for p in result.results[0].passages] == [
-        "The <hi>flood</hi> defence budget.",
-        "Another <hi>flood</hi> warning.",
-    ]
-
-
-def test_search_hits_without_bolding_carry_no_passages(vespa_app: Vespa):
-    """The API's default (`bolding=False`) never fetched a usable passage; now it fetches none."""
-    _feed_document_with_passages(vespa_app)
-
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=bolding)
     result = engine.search(
         query="flood", pagination=Pagination(page_token=1, page_size=10), order_by=[]
     )
 
     assert result.results[0].passages == []
-    fields = _raw_hit_fields(vespa_app, "flood", "search")
-    assert "passages" not in fields
-    assert "passages_text" not in fields
 
 
-def test_search_summaries_never_fetch_the_passages_struct(vespa_app: Vespa):
-    """The struct array is the larger half of the payload and is read by nobody."""
+def test_search_summaries_never_fetch_passage_fields(vespa_app: Vespa):
+    """Neither the struct array nor the text array is in any summary the API requests."""
     _feed_document_with_passages(vespa_app)
 
-    for summary in ("search-with-passages", "debug-summary"):
+    for summary in ("search", "debug-summary"):
         fields = _raw_hit_fields(vespa_app, "flood", summary)
         assert "passages" not in fields, summary
-        assert len(fields["passages_text"]) == 2, summary
+        if summary == "debug-summary":
+            assert "passages_text" in fields, summary
+        else:
+            assert "passages_text" not in fields, summary
 
 
 # endregion Search summaries
