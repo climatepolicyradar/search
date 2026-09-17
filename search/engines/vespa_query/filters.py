@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Literal, NamedTuple
+from typing import Literal, NamedTuple
 
 from pydantic import BaseModel
 
