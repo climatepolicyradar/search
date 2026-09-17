@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 from pydantic import AnyHttpUrl
 
-from search.engines import OrderBy, Pagination, dev_vespa
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
@@ -15,6 +15,7 @@ from search.engines.dev_vespa import (
     Filter,
     Settings,
     documents_search_engine,
+    labels_search_engine,
     normalise_topic_id,
     passages_search_engine,
 )
@@ -886,7 +887,7 @@ def test_label_search_engine_computes_offset_from_page_token(
     engine = _label_engine()
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query=None,
@@ -900,7 +901,8 @@ def test_label_search_engine_computes_offset_from_page_token(
 
 
 @pytest.mark.xfail(
-    reason="order_by is a documented no-op for labels (search/engines/dev_vespa.py's "
+    reason="order_by is a documented no-op for labels "
+    "(search/engines/dev_vespa/labels_search_engine.py's "
     "DevVespaLabelSearchEngine.search()). Canary for when that changes - see "
     "test_vespa_labels_e2e.py's order_by tests for the full rationale.",
     strict=True,
@@ -911,7 +913,7 @@ def test_label_search_engine_applies_order_by_to_request_body() -> None:
     engine = _label_engine()
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query="some",
@@ -928,7 +930,7 @@ def test_label_search_engine_filters_by_label_type() -> None:
     engine = _label_engine()
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query=None,
@@ -946,7 +948,7 @@ def test_label_search_engine_omits_type_clause_without_label_type() -> None:
     engine = _label_engine()
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query=None,
@@ -969,7 +971,7 @@ def test_label_search_engine_applies_filters_json_string_to_yql() -> None:
     )
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query=None,
@@ -987,7 +989,7 @@ def test_label_search_engine_strips_quotes_from_query() -> None:
     engine = _label_engine()
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query='"Romania"',
@@ -1013,7 +1015,7 @@ def test_label_search_engine_parses_valid_label_source() -> None:
         }
     }
 
-    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1035,7 +1037,7 @@ def test_label_search_engine_skips_hits_with_malformed_label_source() -> None:
         }
     }
 
-    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1056,7 +1058,7 @@ def test_label_search_engine_skips_hits_with_empty_label_source() -> None:
         }
     }
 
-    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1086,7 +1088,7 @@ def test_label_search_engine_populates_debug_info_when_debugging() -> None:
         }
     }
 
-    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
         engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1112,7 +1114,7 @@ def test_label_search_engine_omits_debug_info_by_default() -> None:
         }
     }
 
-    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
         engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1132,7 +1134,7 @@ def test_label_search_engine_reads_total_size_from_response() -> None:
         }
     }
 
-    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
