@@ -793,6 +793,83 @@ def test_document_get_renders_labels_and_concepts() -> None:
     assert concept_label.passages_id is None
 
 
+def test_passage_search_engine_quoted_query_builds_exact_phrase() -> None:
+    """A fully-quoted passage query becomes an in-order phrase on the unstemmed field."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query='"net zero"',
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    yql = request_body["yql"]
+    assert "content_not_stemmed contains" in yql
+    assert "{grammar.composite:'phrase'}text(@exact_phrase_0)" in yql
+    assert "userQuery()" not in yql
+    assert request_body["exact_phrase_0"] == "net zero"
+    assert "query" not in request_body
+
+
+def test_passage_search_engine_mixes_free_term_and_phrase() -> None:
+    """'brazil "net zero"' -> free term via userQuery() AND an exact phrase."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query='brazil "net zero"',
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert "and userQuery()" in request_body["yql"]
+    assert "content_not_stemmed contains" in request_body["yql"]
+    assert request_body["query"] == "brazil"
+    assert request_body["exact_phrase_0"] == "net zero"
+
+
+def test_document_search_engine_quoted_query_builds_exact_phrase() -> None:
+    """A fully-quoted document query phrase-matches title, description AND passages_text."""
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query='"just transition"',
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    yql = request_body["yql"]
+    assert "title_not_stemmed contains" in yql
+    assert "description_not_stemmed contains" in yql
+    assert "passages_text_not_stemmed contains" in yql
+    assert "userQuery()" not in yql
+    assert request_body["exact_phrase_0"] == "just transition"
+    assert "query" not in request_body
+
+
 def _document_search_yql(engine: DevVespaDocumentSearchEngine) -> str:
     """Run a text search against a mocked Vespa and return the YQL it sent."""
     with patch.object(
