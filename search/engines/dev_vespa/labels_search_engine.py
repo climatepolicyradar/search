@@ -8,8 +8,12 @@ from search.data_in_models import Label as DataInLabel
 from search.data_in_models import LabelRelationship
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
-from search.engines.vespa_query.client import Settings, _execute_vespa_query, _get_total_count
-from search.engines.vespa_query.filters import ArrayStructField, _build_filter_query, Filter
+from search.engines.vespa_query.client import (
+    Settings,
+    _execute_vespa_query,
+    _get_total_count,
+)
+from search.engines.vespa_query.filters import ArrayStructField, Filter, _build_filter_query
 from search.engines.vespa_query.query_text import _strip_quotes
 from search.log import get_logger
 
