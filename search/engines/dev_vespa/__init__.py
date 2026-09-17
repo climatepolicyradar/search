@@ -14,35 +14,22 @@ This isn't a viable URL for API Gatewayway, you can use
 The secondary URL uses a `+` which matches 1 or more characters. 🤷
 
 For now we just use `requests` which yields the same results.
+
+This module has been split into search.engines.vespa_query.* (shared
+utilities) and search.engines.dev_vespa.* (engine-specific code). Everything
+below is re-exported here so existing imports keep working unchanged.
 """
 
 from __future__ import annotations
 
-from search.engines.dev_vespa.documents_search_engine import (
-    DevVespaDocumentSearchEngine,
-    DevVespaPrincipalDocumentSearchEngine,
-    _DEFAULT_DOCUMENT_RANK_PROFILE,
-    _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
-    _DEFAULT_PASSAGES_BREADTH_WEIGHT,
-    documents_filter_field_to_vespa_field_map,
-    documents_filter_struct_field_to_vespa_field_map,
-)
-from search.engines.dev_vespa.labels import (
-    MISSING_PLACEHOLDER,
-    CountAggregation,
-    DevVespaInstanceAddIn,
-    get_labels_from_vespa_response,
-)
-from search.engines.dev_vespa.labels_search_engine import (
-    DevVespaLabelSearchEngine,
-    labels_filter_field_to_vespa_field_map,
-    labels_filter_struct_field_to_vespa_field_map,
-)
-from search.engines.dev_vespa.passages_search_engine import (
-    DevVespaPassageSearchEngine,
-    _DEFAULT_PASSAGE_RANK_PROFILE,
-    passages_filter_field_to_vespa_field_map,
-    passages_filter_struct_field_to_vespa_field_map,
+# Shared query-building utilities.
+from search.engines.vespa_query.client import (
+    API_TIMEOUT,
+    HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
+    Settings,
+    _execute_vespa_query,
+    _get_total_count,
+    _warn_if_degraded,
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
@@ -75,14 +62,6 @@ from search.engines.vespa_query.query_text import (
     _resolve_geography_aliases,
     _strip_quotes,
 )
-from search.engines.vespa_query.client import (
-    API_TIMEOUT,
-    HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
-    Settings,
-    _execute_vespa_query,
-    _get_total_count,
-    _warn_if_degraded,
-)
 from search.engines.vespa_query.sorting import (
     DOCUMENT_SORT_API_FIELDS,
     PASSAGE_SORT_API_FIELDS,
@@ -93,7 +72,33 @@ from search.engines.vespa_query.sorting import (
     passage_sort_field_to_vespa_field_map,
     sort_field_to_vespa_field_map,
 )
-from search.label import Label
-from search.log import get_logger
 
-logger = get_logger(__name__)
+# Shared engine helpers.
+from search.engines.dev_vespa.labels import (
+    MISSING_PLACEHOLDER,
+    CountAggregation,
+    DevVespaInstanceAddIn,
+    get_labels_from_vespa_response,
+)
+
+# The three engines.
+from search.engines.dev_vespa.documents_search_engine import (
+    DevVespaDocumentSearchEngine,
+    DevVespaPrincipalDocumentSearchEngine,
+    _DEFAULT_DOCUMENT_RANK_PROFILE,
+    _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
+    _DEFAULT_PASSAGES_BREADTH_WEIGHT,
+    documents_filter_field_to_vespa_field_map,
+    documents_filter_struct_field_to_vespa_field_map,
+)
+from search.engines.dev_vespa.passages_search_engine import (
+    DevVespaPassageSearchEngine,
+    _DEFAULT_PASSAGE_RANK_PROFILE,
+    passages_filter_field_to_vespa_field_map,
+    passages_filter_struct_field_to_vespa_field_map,
+)
+from search.engines.dev_vespa.labels_search_engine import (
+    DevVespaLabelSearchEngine,
+    labels_filter_field_to_vespa_field_map,
+    labels_filter_struct_field_to_vespa_field_map,
+)
