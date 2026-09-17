@@ -13,7 +13,11 @@ from search.engines.vespa_query.client import (
     _execute_vespa_query,
     _get_total_count,
 )
-from search.engines.vespa_query.filters import ArrayStructField, Filter, _build_filter_query
+from search.engines.vespa_query.filters import (
+    ArrayStructField,
+    Filter,
+    _build_filter_query,
+)
 from search.engines.vespa_query.query_text import _strip_quotes
 from search.log import get_logger
 
