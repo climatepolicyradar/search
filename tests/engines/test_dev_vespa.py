@@ -9,6 +9,7 @@ from search.engines import OrderBy, Pagination, dev_vespa
 from search.engines.dev_vespa import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
+    DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
     FieldFilter,
     Filter,
@@ -843,3 +844,283 @@ def test_document_search_engine_forwards_target_hits() -> None:
     assert '{defaultIndex: "geographies"}userInput(@geo_query)' in yql
     assert '{defaultIndex: "identifiers"}userInput(@query)' in yql
     assert engine.parameters["total_target_hits"] == 200
+
+
+def _label_engine(**kwargs) -> DevVespaLabelSearchEngine:
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    return DevVespaLabelSearchEngine(settings=settings, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("page_token", "page_size", "expected_offset"),
+    [
+        (1, 10, 0),
+        (2, 10, 10),
+        (10, 10, 90),
+        (1, 1000, 0),
+    ],
+)
+def test_label_search_engine_computes_offset_from_page_token(
+    page_token: int, page_size: int, expected_offset: int
+) -> None:
+    """`offset` is derived from `page_token`, not passed straight through."""
+    engine = _label_engine()
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query=None,
+            pagination=Pagination(page_token=page_token, page_size=page_size),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["offset"] == expected_offset
+    assert request_body["hits"] == page_size
+
+
+@pytest.mark.xfail(
+    reason="order_by is a documented no-op for labels (search/engines/dev_vespa.py's "
+    "DevVespaLabelSearchEngine.search()). Canary for when that changes - see "
+    "test_vespa_labels_e2e.py's order_by tests for the full rationale.",
+    strict=True,
+    raises=AssertionError,
+)
+def test_label_search_engine_applies_order_by_to_request_body() -> None:
+    """order_by should override ranking/sorting the way it does for passages."""
+    engine = _label_engine()
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query="some",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="value", direction="desc")],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert "ranking.sorting" in request_body
+
+
+def test_label_search_engine_filters_by_label_type() -> None:
+    """A `label_type` argument adds a `type contains` clause to the YQL."""
+    engine = _label_engine()
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+            label_type="country",
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert 'type contains "country"' in request_body["yql"]
+
+
+def test_label_search_engine_omits_type_clause_without_label_type() -> None:
+    """No `label_type` means no `type contains` clause in the YQL."""
+    engine = _label_engine()
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert "type contains" not in request_body["yql"]
+
+
+def test_label_search_engine_applies_filters_json_string_to_yql() -> None:
+    """`filters_json_string` is validated and folded into the YQL `where` clause."""
+    engine = _label_engine()
+    filters_json = json.dumps(
+        {
+            "op": "and",
+            "filters": [{"field": "type", "op": "not_contains", "value": "keyword"}],
+        }
+    )
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+            filters_json_string=filters_json,
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert '!(type contains "keyword")' in request_body["yql"]
+
+
+def test_label_search_engine_strips_quotes_from_query() -> None:
+    """Query text is quote-stripped before being sent to Vespa (matches doc/passage engines)."""
+    engine = _label_engine()
+
+    with patch.object(
+        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+    ) as mock_execute:
+        engine.search(
+            query='"Romania"',
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    request_body = mock_execute.call_args.kwargs["request_body"]
+    assert request_body["query"] == "Romania"
+
+
+def test_label_search_engine_parses_valid_label_source() -> None:
+    """A hit with a valid `label_source` JSON payload becomes a result label."""
+    engine = _label_engine()
+    label_json = json.dumps(
+        {"id": "geography::Romania", "type": "geography", "value": "Romania"}
+    )
+    fake_response = {
+        "root": {
+            "children": [
+                {"fields": {"label_source": label_json}},
+            ]
+        }
+    }
+
+    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+        result = engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert len(result.results) == 1
+    assert result.results[0].id == "geography::Romania"
+
+
+def test_label_search_engine_skips_hits_with_malformed_label_source() -> None:
+    """A hit whose `label_source` fails to parse is dropped, not raised."""
+    engine = _label_engine()
+    fake_response = {
+        "root": {
+            "children": [
+                {"fields": {"label_source": "not valid json"}},
+            ]
+        }
+    }
+
+    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+        result = engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert result.results == []
+
+
+def test_label_search_engine_skips_hits_with_empty_label_source() -> None:
+    """A hit with no `label_source` field is dropped, not raised."""
+    engine = _label_engine()
+    fake_response = {
+        "root": {
+            "children": [
+                {"fields": {}},
+            ]
+        }
+    }
+
+    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+        result = engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert result.results == []
+
+
+def test_label_search_engine_populates_debug_info_when_debugging() -> None:
+    """`debug=True` records per-hit relevance/summary info on `last_debug_info`."""
+    engine = _label_engine(debug=True)
+    label_json = json.dumps(
+        {"id": "geography::Romania", "type": "geography", "value": "Romania"}
+    )
+    fake_response = {
+        "root": {
+            "children": [
+                {
+                    "relevance": 0.5,
+                    "fields": {
+                        "label_source": label_json,
+                        "value": "Romania",
+                    },
+                },
+            ]
+        }
+    }
+
+    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+        engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert len(engine.last_debug_info) == 1
+    assert engine.last_debug_info[0]["relevance"] == 0.5
+    assert engine.last_debug_info[0]["value"] == "Romania"
+
+
+def test_label_search_engine_omits_debug_info_by_default() -> None:
+    """Without `debug=True`, no per-hit debug info is collected."""
+    engine = _label_engine()
+    label_json = json.dumps(
+        {"id": "geography::Romania", "type": "geography", "value": "Romania"}
+    )
+    fake_response = {
+        "root": {
+            "children": [
+                {"fields": {"label_source": label_json}},
+            ]
+        }
+    }
+
+    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+        engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert engine.last_debug_info == []
+
+
+def test_label_search_engine_reads_total_size_from_response() -> None:
+    """`total_size` is read from the Vespa response's `totalCount` field."""
+    engine = _label_engine()
+    fake_response = {
+        "root": {
+            "fields": {"totalCount": 42},
+            "children": [],
+        }
+    }
+
+    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+        result = engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert result.total_size == 42

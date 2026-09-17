@@ -689,4 +689,78 @@ def test_label_search_returns_non_empty_label_source(vespa_app: Vespa):
     assert results[0] != ""
 
 
+@pytest.mark.xfail(
+    reason="order_by is a no-op for labels (test_dev_vespa.py::"
+    "test_label_search_engine_applies_order_by_to_request_body). Remove xfail "
+    "once it actually sorts results.",
+    strict=True,
+    raises=AssertionError,
+)
+def test_label_search_order_by_value_ascending_sorts_real_results(vespa_app: Vespa):
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Zebra", "category", "Zebra"))
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Apple", "category", "Apple"))
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Mango", "category", "Mango"))
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+
+    # With query=None every label ties on relevance=0, so Vespa's tie-break
+    # order is unspecified and could coincidentally already be ascending by
+    # `value` - that would let this test pass even with order_by as a no-op.
+    # Assert the *unordered* baseline isn't ascending first, so a pass below
+    # is only possible via a real order_by implementation.
+    unordered_values = [
+        label.value
+        for label in engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        ).results
+    ]
+    assert unordered_values != ["Apple", "Mango", "Zebra"]
+
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="value", direction="asc")],
+    ).results
+
+    assert [label.value for label in results] == ["Apple", "Mango", "Zebra"]
+
+
+@pytest.mark.xfail(
+    reason="Descending counterpart to test_label_search_order_by_value_"
+    "ascending_sorts_real_results - keep both so a future fix that reads the "
+    "sort field but hardcodes/ignores `direction` doesn't pass by accident.",
+    strict=True,
+    raises=AssertionError,
+)
+def test_label_search_order_by_value_descending_sorts_real_results(vespa_app: Vespa):
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Zebra", "category", "Zebra"))
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Apple", "category", "Apple"))
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Mango", "category", "Mango"))
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+
+    # See test_label_search_order_by_value_ascending_sorts_real_results: with
+    # query=None every label ties on relevance=0, so the unordered baseline
+    # must be checked first to rule out a coincidental descending tie-break.
+    unordered_values = [
+        label.value
+        for label in engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        ).results
+    ]
+    assert unordered_values != ["Zebra", "Mango", "Apple"]
+
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="value", direction="desc")],
+    ).results
+
+    assert [label.value for label in results] == ["Zebra", "Mango", "Apple"]
+
+
 # endregion Labels schema
