@@ -2,7 +2,10 @@
 
 import pytest
 
-from search.engines.dev_vespa import GEOGRAPHY_ALIASES, _resolve_geography_aliases
+from search.engines.vespa_query.query_text import (
+    GEOGRAPHY_ALIASES,
+    _resolve_geography_aliases,
+)
 
 
 @pytest.mark.parametrize(
