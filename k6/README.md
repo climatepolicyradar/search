@@ -145,16 +145,6 @@ combined) instead of sweeping. Its `load` thresholds are backed by real data:
 data until now — see the comment in that file and
 `k6/docs/load-threshold-methodology.md`.
 
-`labels/` has no `order-by-combinations.ts`: `order_by` is parsed by
-`api/routers.py`'s `read_labels` but never applied by
-`DevVespaLabelSearchEngine.search()` (`search/engines/dev_vespa.py`) — no
-sortable fields exist to sweep. See the usage comment in `labels/index.ts` and
-`k6/docs/results/2026-09-16-labels-route-load-test-coverage.md` for the code
-trail and team confirmation. Smoke-test load (k6 scripts run against production,
-checking response correctness at trivial concurrency) is the wrong tool for
-guarding this as a regression — if it's worth pinning down as an assertion, that
-belongs in `tests/test_api_labels.py` against a mocked engine, not here.
-
 ## Metric tag naming: `name`
 
 Every `http.get` call passes an explicit `tags: { name: ... }`. Without it, k6
