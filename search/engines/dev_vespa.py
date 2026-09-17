@@ -239,20 +239,6 @@ _value_type_to_vespa_attributes_field = {
     bool: "attributes_boolean",
 }
 
-sort_field_to_vespa_field_map = {
-    "attributes.published_date": ["attributes_published_date"],
-    "title": ["title_sort"],
-}
-
-# Public API field names for ``order_by`` (JSON paths + ``relevance``), aligned
-# with :data:`sort_field_to_vespa_field_map` keys.
-DOCUMENT_SORT_API_FIELDS: frozenset[str] = frozenset(
-    {"relevance", *sort_field_to_vespa_field_map.keys()}
-)
-
-# Public API field names for ``order_by`` on ``/passages``.
-PASSAGE_SORT_API_FIELDS: frozenset[str] = frozenset({"relevance", "idx"})
-
 
 def _build_condition_yql(
     condition: Condition,
