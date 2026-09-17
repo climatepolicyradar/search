@@ -13,7 +13,7 @@ independently matchable.
 
 The rule, in `vespa/app/rules/passages.sr`:
 
-```
+```text
 gga +> ?"global goal adaptation";
 ```
 
@@ -36,7 +36,7 @@ Passage search's default rank profile is `bm25_multiplicative`
 (`vespa/app/schemas/passages.sd`, selected via `_DEFAULT_PASSAGE_RANK_PROFILE`
 in `search/engines/dev_vespa.py`):
 
-```
+```text
 function text_score() {
     expression: bm25(content)
 }
@@ -55,7 +55,7 @@ down to `bm25(content)` alone.
 
 ## The formula, from Vespa's own docs
 
-```
+```text
 score(D,Q) = Σᵢ IDF(qᵢ) · f(qᵢ,D)·(k₁+1) / [f(qᵢ,D) + k₁·(1−b + b·fieldLen/avgFieldLen)]
 
 IDF(qᵢ) = ln( 1 + (N − n(qᵢ) + 0.5) / (n(qᵢ) + 0.5) )
@@ -122,7 +122,7 @@ really happening.
 
 **`query gga`** (rewrite fires: `gga OR "global goal adaptation"`), top hit:
 
-```
+```text
 id       UNFCCC.non-party.1587.0::73
 bm25(content)         21.964565542958013
 fieldLength(content)  29.0
@@ -132,7 +132,7 @@ relevance             53.55213801070417   # first-phase score
 **`query "global goal adaptation"`** typed literally (no "gga" in the query
 text, so the rule never fires), top hit:
 
-```
+```text
 id       UNFCCC.non-party.1121.0::32
 bm25(content)         18.173672514150155
 fieldLength(content)  114.0
@@ -158,11 +158,10 @@ above is the clean isolation.)
 
 The two-example comparison above generalizes: pulling every result for `gga` up
 to rank 50 (via `DevVespaPassageSearchEngine` directly, to get clean per-hit
-`summaryfeatures` instead of the CLI's truncated text display — see the
-truncation gotcha below) and checking each passage's raw text for the literal
-token vs. the three phrase words gives:
+`summaryfeatures` instead of the CLI's truncated text display and checking each
+passage's raw text for the literal token vs. the three phrase words gives:
 
-```
+```text
   # id                               type               bm25   len      rel  gga  phrase  both   #gga
 -----------------------------------------------------------------------------------------------------
   1 UNFCCC.non-party.1587.0::73      Text             21.965  29.0   53.552   Y      Y      Y       3
