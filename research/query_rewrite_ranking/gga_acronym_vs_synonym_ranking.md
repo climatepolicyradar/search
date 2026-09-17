@@ -245,7 +245,7 @@ passage's raw text for the literal token vs. the three phrase words gives:
 gga-only: 0  phrase-only: 0  both: 50  neither: 0
 ```
 
-### Report: three things this census confirms:
+### Report: three things this census confirms
 
 - **Zero pure acronym-only or phrase-only passages appear in the top 50** —
   every hit matches both branches of the OR rewrite. Co-occurrence, not rarity,
