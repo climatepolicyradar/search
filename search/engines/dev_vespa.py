@@ -39,14 +39,11 @@ from search.engines.vespa_query.query_text import (
     _resolve_geography_aliases,
     _strip_quotes,
 )
-from search.engines.vespa_query.sorting import (
+from search.engines.vespa_query.sorting import (  # noqa: F401
     DOCUMENT_SORT_API_FIELDS,
     PASSAGE_SORT_API_FIELDS,
-    _document_sort_ranking_string,
-    _passage_sort_ranking_string,
     _ranking_overrides_for_document_order_by,
     _ranking_overrides_for_passage_order_by,
-    passage_sort_field_to_vespa_field_map,
     sort_field_to_vespa_field_map,
 )
 from search.label import Label
