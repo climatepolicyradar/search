@@ -21,6 +21,7 @@ from search.engines.dev_vespa import (
     DevVespaPassageSearchEngine,
     Settings,
 )
+from search.engines.dev_vespa import documents_search_engine
 
 
 @pytest.fixture
@@ -130,11 +131,18 @@ def test_execute_returns_the_decoded_body_on_success() -> None:
 @pytest.fixture
 def failing_query():
     """Make every Vespa request fail."""
-    with patch.object(
-        dev_vespa,
-        "_execute_vespa_query",
-        side_effect=VespaError("Vespa is down"),
-    ) as mock_execute:
+    with (
+        patch.object(
+            dev_vespa,
+            "_execute_vespa_query",
+            side_effect=VespaError("Vespa is down"),
+        ) as mock_execute,
+        patch.object(
+            documents_search_engine,
+            "_execute_vespa_query",
+            side_effect=VespaError("Vespa is down"),
+        ),
+    ):
         yield mock_execute
 
 
