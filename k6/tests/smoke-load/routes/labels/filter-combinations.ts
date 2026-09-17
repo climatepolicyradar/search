@@ -64,13 +64,6 @@ const isLoadProfile = (__ENV.PROFILE || "load") === "load";
 // own pagination-combinations.ts (this route used to have one): pagination
 // isn't part of any real navigator-frontend usage of this route (it always
 // requests page_size=10000 in one shot, never paging past page 1).
-//
-// Covers: no type (baseline, tested by index.ts, not repeated here), a
-// single `type` param, `filters` alone (the large `type not_contains`
-// exclusion list from useLabelSearch.ts's `loadLabels`), `type` combined
-// with `filters`, a zero-result combination, a deep page (offset check,
-// see above), and the real `loadLabels` shape (page_size=10000 +
-// exclusion filters).
 type TFilterCombination = {
   name: string;
   type: string | null;
