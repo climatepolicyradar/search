@@ -1,4 +1,13 @@
 <query-profile id="default">
+    <!-- We avoid using Vespa's default `document-summary`
+    as it automatically includes all `| summary` indexed fields 
+    which has the potential to balloon our query times as seen previously.
+
+    @see: https://github.com/climatepolicyradar/search/pull/551#issuecomment-5710806120
+    @see: https://docs.vespa.ai/en/querying/document-summaries.html
+    @related: VESPA_DEFAULT_DOCUMENT_SUMMARY
+    -->
+    <field name="presentation.summary">search</field>
     <field name="hits">10000</field>
     <field name="maxHits">50001</field>
     <field name="maxOffset">500000</field>

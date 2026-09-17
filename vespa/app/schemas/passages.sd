@@ -224,6 +224,21 @@ schema passages {
         summary-features: text_score() topic_score() proximity_boost bm25(content) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(is_page_header_or_footer) attribute(looks_like_demoted_section)
     }
 
+    # `document-summary default` is deliberately left implicit.
+    # Vespa owns that class: it holds every field declared `summary`,
+    # so it is quite expensive.
+    # 
+    # We avoid using the `default` `document-summary` by setting the default to
+    # `search` in ../app/services.xml. This removes someone accidentally fogetting
+    # to specify a `presentation.summary`, us defaulting to `default` and our
+    # query time metrics ballooning.
+    #
+    # @see: https://docs.vespa.ai/en/querying/document-summaries.html
+    # @see: https://github.com/climatepolicyradar/search/pull/551#issuecomment-5710806120
+    # @related: VESPA_DEFAULT_DOCUMENT_SUMMARY
+    #
+    # Declaring an empty block causes warnings in the deploy because Vespa only
+    # marks the class `from-disk` when it creates the class itself.
     document-summary search {
         summary id {}
         summary idx {}

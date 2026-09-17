@@ -1,0 +1,43 @@
+# A Vespa container dedicated to local API performance testing.
+#
+# Deliberately separate from ../../vespa/docker-compose.yml: that one is the
+# day-to-day dev container, and a perf run needs a corpus you control. Distinct
+# project name, container name, volume and host ports mean the two can be up at
+# the same time without fighting over 8080/19071 — and without a perf feed
+# landing in whatever you were debugging in the other one.
+#
+# Host port map (container port in brackets):
+#   8082  [8080]  query / document API — what search-api and `vespa feed` talk to
+#   19072 [19071] config server        — what `vespa deploy` talks to
+#
+# 8080 is left alone because the repo-root `just serve-api` binds it, and 8081
+# because ../../vespa/docker-compose.yml already publishes it.
+name: vespa-local
+
+services:
+  vespa:
+    # Pin VESPA_VERSION (e.g. `VESPA_VERSION=8.585.35 just up`) when you want
+    # numbers that are comparable across runs — `latest` moves under you, and a
+    # Vespa upgrade between two perf runs is indistinguishable from a
+    # regression in the query you were measuring.
+    image: vespaengine/vespa:${VESPA_VERSION:-latest}
+    container_name: vespa-local
+    ports:
+      - 8082:8080
+      - 19072:19071
+    volumes:
+      - vespa-local-data:/opt/vespa/var
+
+    # Health is the *config server* (19071), not the query port (8080).
+    # Vespa's query port does not answer until an application has been
+    # deployed, so healthchecking it would make `docker compose up --wait`
+    # block forever on a fresh volume — the exact state `just deploy` is
+    # about to fix. 19071 healthy is precisely "ready to accept a deploy".
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:19071/state/v1/health]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+volumes:
+  vespa-local-data:

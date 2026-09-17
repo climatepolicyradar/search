@@ -1,0 +1,136 @@
+# A local Vespa for pointing ./api at, so search-api performance can be measured
+# end to end on one machine. Everything here is in service of that.
+#
+# Typical first run:
+#
+#     just gen-documents      # sample a corpus from the production export
+#     just up                 # start the container
+#     just deploy             # deploy ../../vespa/app into it
+#     just feed-documents     # load the corpus
+#     just serve-api          # in one terminal
+#     just perf-test          # in another
+#
+# `just all` does the first four in order.
+#
+# Run from this directory (`cd search/vespa-local && just <recipe>`), mirroring
+# the api/ and vespa/ per-directory justfile convention so the repo-root
+# justfile does not have to change.
+
+# The repo-root .env holds a *cloud* VESPA_ENDPOINT. Loading it here would make
+# it ambiguous whether a recipe was talking to the local container or to
+# production, so this justfile takes no ambient config: the endpoints below are
+# the only ones it uses.
+set dotenv-load := false
+
+# The production Snowflake export lives in the prod account; `default` has no
+# credentials for it. Overridable for anyone whose profile is named differently.
+export AWS_PROFILE := env_var_or_default("AWS_PROFILE", "production")
+
+# Host ports published by docker-compose.yml — see the comment there for why
+# these and not 8080/19071.
+VESPA_URL := "http://localhost:8082"
+VESPA_CONFIG_URL := "http://localhost:19072"
+
+# Where the API is served, and so what perf-test points at. 8000 matches
+# api/justfile's `dev` recipe; the repo-root `just serve-api` uses 8080, which
+# is why that one is not reused here.
+API_PORT := "8000"
+
+APP_DIR := "../../vespa/app"
+CORPUS := "../../.data_cache/vespa-local/documents.jsonl"
+
+# List every recipe.
+default:
+    @just --list
+
+# Takes any flag from `just gen-documents -- --help`, e.g.
+# `just gen-documents --files all --largest 500`.
+
+# Sample a documents corpus from the production export, biased to big documents.
+gen-documents *ARGS:
+    uv run python sample_documents.py {{ ARGS }}
+
+# `--wait` blocks until the config server is healthy, i.e. until `just deploy`
+# will actually succeed — see the healthcheck comment in docker-compose.yml.
+
+# Start the local Vespa container.
+up:
+    docker compose up -d --wait
+
+# Copies the app to a temp build dir first and strips Vespa Cloud-only `deploy:*`
+# attributes (e.g. deploy:application) from services.xml, which a self-hosted
+# Vespa rejects during XML validation. Same treatment as ../../vespa/justfile's
+# `deploy` — see FUS-74 — with the config port pointed at this container.
+
+# Deploy ../../vespa/app to the local container.
+deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    build_dir=$(mktemp -d)
+    trap 'rm -rf "$build_dir"' EXIT
+    cp -R {{ APP_DIR }}/. "$build_dir"
+    sed -E -i.bak 's/[[:space:]]+deploy:[a-zA-Z]+="[^"]*"//g' "$build_dir/services.xml"
+    rm -f "$build_dir/services.xml.bak"
+    uv run vespa deploy "$build_dir" --target {{ VESPA_CONFIG_URL }}/ --wait 300
+
+# Feed the sampled corpus into the local container.
+feed-documents:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f {{ CORPUS }} ]; then
+        echo "No corpus at {{ CORPUS }} — run \`just gen-documents\` first." >&2
+        exit 1
+    fi
+    uv run vespa feed {{ CORPUS }} --target {{ VESPA_URL }} --progress 10
+
+# gen-documents -> up -> deploy -> feed-documents.
+all: gen-documents up deploy feed-documents
+
+# The endpoint is passed as an environment variable rather than written to
+# api/.env: pydantic-settings lets the environment win over the dotenv file, so
+# this overrides whatever cloud endpoint `just -f ../../api/justfile gen-env`
+# last wrote, without clobbering it. The token is a placeholder — a self-hosted
+# Vespa ignores the Authorization header, but Settings requires the field.
+
+# Serve ./api against the local container, in the foreground.
+serve-api:
+    VESPA_ENDPOINT={{ VESPA_URL }} \
+    VESPA_READ_TOKEN=local-vespa-no-auth \
+        uv run --directory ../.. fastapi dev api/main.py --port {{ API_PORT }}
+
+# Five of the most expensive real /search/documents shapes from ../../k6, run
+# against the API from `just serve-api`, reported as one table.
+
+# Run the local perf test. `just perf-test 20 2m` for 20 VUs over 2 minutes.
+perf-test vus="5" duration="30s":
+    k6 run -e VUS={{ vus }} -e DURATION={{ duration }} \
+        -e BASE_URL=http://localhost:{{ API_PORT }}/search \
+        perf.ts
+
+# Useful when a perf number looks wrong and you need to know which side of the
+# API it came from.
+
+# Query the local container directly, bypassing the API.
+query yql="select * from documents where true" hits="5":
+    curl -sG "{{ VESPA_URL }}/search/" \
+        --data-urlencode 'yql={{ yql }}' \
+        --data-urlencode 'hits={{ hits }}' \
+        | jq '.root.fields.totalCount, .root.children[]?.id'
+
+# How many documents the local container is actually holding.
+count:
+    @curl -sG "{{ VESPA_URL }}/search/" \
+        --data-urlencode 'yql=select * from documents where true' \
+        --data-urlencode 'hits=0' | jq '.root.fields.totalCount'
+
+# Type-check perf.ts. Needs `npm install` in ../../k6 first, for @types/k6.
+check:
+    ../../k6/node_modules/.bin/tsc --noEmit --project tsconfig.json
+
+# Stop the container, keeping the fed corpus in its volume.
+down:
+    docker compose down
+
+# Stop the container and delete its volume, so the next `up` starts empty.
+reset:
+    docker compose down -v
