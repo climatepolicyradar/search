@@ -20,8 +20,9 @@ from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
     Settings,
+    documents_search_engine,
+    passages_search_engine,
 )
-from search.engines.dev_vespa import documents_search_engine
 
 
 @pytest.fixture
@@ -139,6 +140,11 @@ def failing_query():
         ) as mock_execute,
         patch.object(
             documents_search_engine,
+            "_execute_vespa_query",
+            side_effect=VespaError("Vespa is down"),
+        ),
+        patch.object(
+            passages_search_engine,
             "_execute_vespa_query",
             side_effect=VespaError("Vespa is down"),
         ),
