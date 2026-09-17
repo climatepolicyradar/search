@@ -14,10 +14,10 @@ from search.engines.dev_vespa import (
     FieldFilter,
     Filter,
     Settings,
-    _document_sort_ranking_string,
     _topic_ids_from_filters,
     normalise_topic_id,
 )
+from search.engines.vespa_query.sorting import _document_sort_ranking_string
 
 
 @pytest.mark.parametrize(
