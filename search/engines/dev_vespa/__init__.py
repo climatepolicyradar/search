@@ -20,27 +20,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from search.data_in_models import LabelRelationship
 from search.data_in_models import Label as DataInLabel
+from search.data_in_models import LabelRelationship
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
-from search.engines.dev_vespa.documents_search_engine import (
+from search.engines.dev_vespa.documents_search_engine import (  # noqa: F401
+    _DEFAULT_DOCUMENT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
     DevVespaPrincipalDocumentSearchEngine,
-    _DEFAULT_DOCUMENT_RANK_PROFILE,
-    _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
-    _DEFAULT_PASSAGES_BREADTH_WEIGHT,
     documents_filter_field_to_vespa_field_map,
     documents_filter_struct_field_to_vespa_field_map,
 )
 from search.engines.dev_vespa.labels import (
-    MISSING_PLACEHOLDER,
-    CountAggregation,
+    CountAggregation,  # noqa: F401
     DevVespaInstanceAddIn,
-    get_labels_from_vespa_response,
 )
 from search.engines.vespa_query.client import (
-    API_TIMEOUT,
-    HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
+    HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,  # noqa: F401
     Settings,
     _execute_vespa_query,
     _get_total_count,
@@ -62,7 +57,6 @@ from search.engines.vespa_query.filters import (  # noqa: F401
 )
 from search.engines.vespa_query.query_text import (
     _normalize_currency_symbols,
-    _resolve_geography_aliases,
     _strip_quotes,
 )
 from search.engines.vespa_query.sorting import (  # noqa: F401
@@ -72,7 +66,6 @@ from search.engines.vespa_query.sorting import (  # noqa: F401
     _ranking_overrides_for_passage_order_by,
     sort_field_to_vespa_field_map,
 )
-from search.label import Label
 from search.log import get_logger
 from search.passage import Passage
 from search.vespa.passage import VespaPassage

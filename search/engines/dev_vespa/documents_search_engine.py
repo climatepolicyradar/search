@@ -28,8 +28,8 @@ from search.engines.vespa_query.client import (
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
-    Filter,
     FieldFilter,
+    Filter,
     _build_filter_query,
     _facet_filter_label_type,
     _get_label_types_from_filters,
