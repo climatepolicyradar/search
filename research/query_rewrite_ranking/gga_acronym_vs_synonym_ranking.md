@@ -1,6 +1,33 @@
-# Why "gga" and "global goal on adaptation" in ranking (rule rewrites)
+# Query rewrite spike ("gga -> "global goal adaptation" example)
 
-See FUS-258. Written by Claude and human edited.
+Summary
+
+ranking:
+
+- Top ranked passages contain both the original term and the rewritten
+  phrase/terms due to the summed IDF scores in BM25. The acronym "gga" is rare
+  and therefore the IDF score is boosted, but the IDF score of
+  `PHRASE('global','goal','adaptation')` can compete or outcompete the rarity of
+  'gga' as the scores are summed over the three terms.
+- Final ranking not determined only by these scores. Other factors influence
+  ranking, most importantly passage length. -See 'Report' section near the
+  bottom of this document for full details.
+
+stopwords:
+
+- The RHS (the rewrite) must not contain any stopwords defined in
+  vespa/app/`lucene-linguistics/en/stopwords.txt`, even when exact match with
+  quotes is implemented
+
+enforced term adjacency:
+
+- when searching "gga", the rewrite enforces that 'global', 'goal', and
+  'adaptation' are adjacent, so a passage like 'progress on the global goal was
+  measured against adaptation' doesn't match. This behaviour is fine and
+  desired. When simply searching 'global goal on adaptation', this would match
+  as adjacency is not required.
+
+See FUS-258. Written by Claude and human edited+human summary.
 
 Searching `gga` in the `passage_search` debug CLI returns passages containing
 the literal token "gga" ranked above passages containing the synonym phrase
@@ -218,7 +245,7 @@ passage's raw text for the literal token vs. the three phrase words gives:
 gga-only: 0  phrase-only: 0  both: 50  neither: 0
 ```
 
-Three things this census confirms:
+### Report: three things this census confirms:
 
 - **Zero pure acronym-only or phrase-only passages appear in the top 50** —
   every hit matches both branches of the OR rewrite. Co-occurrence, not rarity,
