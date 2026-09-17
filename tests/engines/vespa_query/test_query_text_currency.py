@@ -2,7 +2,7 @@
 
 import pytest
 
-from search.engines.dev_vespa import _normalize_currency_symbols
+from search.engines.vespa_query.query_text import _normalize_currency_symbols
 
 
 @pytest.mark.parametrize(
