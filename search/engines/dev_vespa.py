@@ -35,9 +35,6 @@ from search.data_in_models import Document, DocumentRelationship, LabelRelations
 from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
 from search.engines.vespa_query.query_text import (
-    CURRENCY_SYMBOL_REPLACEMENTS,
-    GEOGRAPHY_ALIASES,
-    _fold_accents,
     _normalize_currency_symbols,
     _resolve_geography_aliases,
     _strip_quotes,
