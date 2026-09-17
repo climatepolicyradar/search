@@ -47,8 +47,7 @@ from pulumiverse_grafana import Provider, k6
 # package.
 K6_DIR = Path(__file__).resolve().parent.parent
 
-# Already exists in Grafana and imported into this stack — see module docstring.
-SMOKE_RESOURCES = ["documents", "passages", "labels", "labels-taxonomy"]
+SMOKE_RESOURCES = ["documents", "passages", "labels"]
 
 
 @dataclass(frozen=True)
@@ -125,6 +124,18 @@ LOAD_TESTS: list[LoadTestSpec] = [
         name="passages: filter combinations",
         cron="0 4 * * 2",  # Tuesday 04:00 UTC
         starts="2026-09-15T04:00:00Z",
+    ),
+    LoadTestSpec(
+        resource="labels",
+        script_path="tests/smoke-load/routes/labels/index.ts",
+        name="labels: base query",
+    ),
+    LoadTestSpec(
+        resource="labels",
+        script_path="tests/smoke-load/routes/labels/filter-combinations.ts",
+        name="labels: type and filter combinations",
+        cron="0 3 * * 3",  # Wednesday 03:00 UTC
+        starts="2026-09-16T03:00:00Z",
     ),
 ]
 
