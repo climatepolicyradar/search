@@ -1,7 +1,0 @@
-{
-  "extends": "../../k6/tsconfig.json",
-  "compilerOptions": {
-    "typeRoots": ["../../k6/node_modules/@types"]
-  },
-  "include": ["perf.ts"]
-}
