@@ -50,11 +50,7 @@ k6/
           pagination-combinations.ts # GET /search/passages?page_token/page_size
         labels/
           index.ts                # GET /search/labels (base query)
-          filter-combinations.ts  # GET /search/labels?type=/filters=
-          order-by-noop.ts        # GET /search/labels?order_by= (regression guard — see below)
-          pagination-combinations.ts # GET /search/labels?page_token/page_size
-        labels-taxonomy/
-          index.ts                # GET /search/labels-taxonomy (smoke only — see below)
+          filter-combinations.ts  # GET /search/labels?type=/filters=/page_token/page_size
 ```
 
 Every file in a route directory tests that one route — co-locating them means
@@ -149,18 +145,15 @@ combined) instead of sweeping. Its `load` thresholds are backed by real data:
 data until now — see the comment in that file and
 `k6/docs/load-threshold-methodology.md`.
 
-`labels/order-by-noop.ts` replaces the `order-by-combinations.ts` this route
-would otherwise have: `order_by` is parsed but never applied by
-`DevVespaLabelSearchEngine.search()` (see the comment at the top of that file
-for the code trail and team confirmation), so there are no sortable fields to
-sweep. Instead it's a regression guard asserting two different `order_by` values
-return identical result order — it has no `load` profile, since there's no
-distinct request shape to put load-relevant weight behind.
-
-`labels-taxonomy/index.ts` is smoke-only, no `load` profile — it's a hardcoded
-in-memory Python list (`api/labels_taxonomy.py`) with no Vespa call or other
-I/O, so there's no capacity ceiling specific to this route beyond the service's
-own baseline throughput.
+`labels/` has no `order-by-combinations.ts`: `order_by` is parsed by
+`api/routers.py`'s `read_labels` but never applied by
+`DevVespaLabelSearchEngine.search()` (`search/engines/dev_vespa.py`) — no
+sortable fields exist to sweep. See the usage comment in `labels/index.ts` and
+`k6/docs/results/2026-09-16-labels-route-load-test-coverage.md` for the code
+trail and team confirmation. Smoke-test load (k6 scripts run against production,
+checking response correctness at trivial concurrency) is the wrong tool for
+guarding this as a regression — if it's worth pinning down as an assertion, that
+belongs in `tests/test_api_labels.py` against a mocked engine, not here.
 
 ## Metric tag naming: `name`
 
