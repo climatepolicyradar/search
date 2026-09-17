@@ -366,6 +366,19 @@
     -->
     <content id="search-production" version="1.0">
         <min-redundancy>2</min-redundancy>
+
+        <!-- When we aggregated passages onto Principals from member documents
+             we have seen 1 case of a document, `Sabin.family.155.0`, balloon to
+             148MiB.
+
+             This is a stop gap as it's suggested that you do not up this value
+             from the default 100MiB.
+
+             @see: https://docs.vespa.ai/en/reference/applications/services/container.html#document-api:~:text=operations%20are%20ignored.-,max%2Ddocument%2Dsize,-optional
+             TODO: https://linear.app/climate-policy-radar/issue/FUS-513/investigate-ways-of-reducing-vespas-max-document-size-back-to-100mb -->
+        <tuning>
+            <max-document-size>200MiB</max-document-size>
+        </tuning>
         <documents>
             <document type="documents" mode="index" global="true" />
             <document type="passages" mode="index" global="true" />
