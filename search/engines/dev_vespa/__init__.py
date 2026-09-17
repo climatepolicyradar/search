@@ -24,12 +24,18 @@ from http import HTTPStatus
 from typing import Any
 
 import requests
-from pydantic import BaseModel, TypeAdapter
+from pydantic import TypeAdapter
 from vespa.querybuilder import Grouping as G
 
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
+from search.engines.dev_vespa.labels import (
+    MISSING_PLACEHOLDER,
+    CountAggregation,
+    DevVespaInstanceAddIn,
+    get_labels_from_vespa_response,
+)
 from search.engines.vespa_query.filters import (
     ArrayStructField,
     AttributesCondition,
@@ -87,21 +93,6 @@ from search.vespa.passage import VespaPassage
 logger = get_logger(__name__)
 
 
-# We make this very obvious as it is used for values that should exist
-MISSING_PLACEHOLDER = "MISSING"
-
-
-# region Aggregations
-
-
-class CountAggregation[T](BaseModel):
-    count: int
-    value: T
-
-
-# endregion Aggregations
-
-
 # region Documents
 documents_filter_field_to_vespa_field_map = {
     "labels.value.id": ["labels.id", "concepts.id"],
@@ -127,57 +118,6 @@ _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
 _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS = 2000
 
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
-
-
-def get_labels_from_vespa_response(
-    source: dict[str, Any],
-    fields: dict[str, Any],
-) -> list[LabelRelationship]:
-    """
-    Build a document's labels from a Vespa response.
-
-    `labels` is a concatenation of document_source.labels and concepts.
-    """
-    labels: list[LabelRelationship] = []
-    for label in source.get("labels", []):
-        labels.append(
-            LabelRelationship(
-                type=label.get("type", MISSING_PLACEHOLDER),
-                value=DataInLabel(
-                    id=label.get("value").get("id", MISSING_PLACEHOLDER),
-                    value=label.get("value").get("value", MISSING_PLACEHOLDER),
-                    type=label.get("value").get("type", MISSING_PLACEHOLDER),
-                ),
-                timestamp=label.get("timestamp"),
-            )
-        )
-
-    for concept in fields.get("concepts", []):
-        labels.append(
-            LabelRelationship(
-                type="concept",
-                value=DataInLabel(
-                    id=concept.get("id", MISSING_PLACEHOLDER),
-                    type="concept",
-                    value=concept.get("value", MISSING_PLACEHOLDER),
-                ),
-                passages_id=None,
-                count=concept.get("count", MISSING_PLACEHOLDER),
-            )
-        )
-
-    return labels
-
-
-class DevVespaInstanceAddIn:
-    """Surfaces the personal dev instance name (from settings) onto the engine id/config."""
-
-    settings: "Settings"
-
-    @property
-    def instance_name(self) -> str | None:
-        """Name of the specific instance of the search engine"""
-        return self.settings.vespa_dev_instance_name
 
 
 class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]):
