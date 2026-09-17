@@ -95,15 +95,7 @@ tempo.instrumentHTTP({
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
   const query = labelQueries[Math.floor(Math.random() * labelQueries.length)];
-  // No order_by param: defaults to `relevance desc` per the OpenAPI schema,
-  // but note this is a no-op for /search/labels — see order_by-related
-  // comments in this route's absence of an order-by-combinations.ts file
-  // (k6/README.md and this route's usage note explain why one wasn't
-  // written) and DevVespaLabelSearchEngine.search() in
-  // search/engines/dev_vespa.py, which never references its `order_by`
-  // argument. Confirmed with search-api's owning team (#team-fusion,
-  // 2026-09-16): required by the abstract SearchEngine base class signature,
-  // genuinely unimplemented for labels.
+  // No order_by param: defaults to `relevance desc` per the OpenAPI schema.
   const res = http.get(
     `${BASE_URL}/labels?query=${encodeURIComponent(query)}`,
     {
