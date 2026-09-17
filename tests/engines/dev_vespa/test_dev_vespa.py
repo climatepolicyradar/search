@@ -6,6 +6,7 @@ import pytest
 from pydantic import AnyHttpUrl
 
 from search.engines import OrderBy, Pagination, dev_vespa
+from search.engines.dev_vespa import documents_search_engine
 from search.engines.dev_vespa import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
@@ -14,9 +15,9 @@ from search.engines.dev_vespa import (
     FieldFilter,
     Filter,
     Settings,
-    _topic_ids_from_filters,
     normalise_topic_id,
 )
+from search.engines.vespa_query.filters import _topic_ids_from_filters
 from search.engines.vespa_query.sorting import _document_sort_ranking_string
 
 
@@ -84,7 +85,9 @@ def test_document_search_never_requests_the_default_summary(
     engine = _document_engine(**engine_kwargs)
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        documents_search_engine,
+        "_execute_vespa_query",
+        return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
             query="needle",
@@ -122,7 +125,9 @@ def test_document_search_hits_carry_no_passages() -> None:
         }
     }
 
-    with patch.object(dev_vespa, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(
+        documents_search_engine, "_execute_vespa_query", return_value=fake_response
+    ):
         result = engine.search(
             query="needle",
             pagination=Pagination(page_token=1, page_size=10),
@@ -491,7 +496,9 @@ def test_document_search_engine_sends_filtered_topics_as_a_query_tensor() -> Non
     engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        documents_search_engine,
+        "_execute_vespa_query",
+        return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
             query="some",
@@ -518,7 +525,9 @@ def test_document_search_engine_omits_topic_inputs_without_topics_filter() -> No
     engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        documents_search_engine,
+        "_execute_vespa_query",
+        return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
             query="some",
@@ -540,7 +549,9 @@ def test_document_search_engine_forwards_topic_weight() -> None:
     engine = DevVespaDocumentSearchEngine(settings=settings, topic_weight=0.0)
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        documents_search_engine,
+        "_execute_vespa_query",
+        return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
             query="some",
@@ -565,7 +576,9 @@ def test_document_search_engine_omits_topic_inputs_under_a_sort_override() -> No
     engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        documents_search_engine,
+        "_execute_vespa_query",
+        return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
             query="some",
@@ -780,7 +793,7 @@ def test_document_get_renders_labels_and_concepts() -> None:
         }
     }
 
-    with patch.object(dev_vespa.requests, "get", return_value=response):
+    with patch.object(documents_search_engine.requests, "get", return_value=response):
         document = engine.get("doc-0")
 
     assert document is not None
@@ -797,7 +810,9 @@ def test_document_get_renders_labels_and_concepts() -> None:
 def _document_search_yql(engine: DevVespaDocumentSearchEngine) -> str:
     """Run a text search against a mocked Vespa and return the YQL it sent."""
     with patch.object(
-        dev_vespa, "_execute_vespa_query", return_value={"root": {"children": []}}
+        documents_search_engine,
+        "_execute_vespa_query",
+        return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
             query="electric arc furnace",
