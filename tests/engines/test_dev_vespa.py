@@ -888,6 +888,7 @@ def test_label_search_engine_computes_offset_from_page_token(
     "DevVespaLabelSearchEngine.search()). Canary for when that changes - see "
     "test_vespa_labels_e2e.py's order_by tests for the full rationale.",
     strict=True,
+    raises=AssertionError,
 )
 def test_label_search_engine_applies_order_by_to_request_body() -> None:
     """order_by should override ranking/sorting the way it does for passages."""
