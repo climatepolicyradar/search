@@ -58,21 +58,27 @@ const isLoadProfile = (__ENV.PROFILE || "load") === "load";
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
 // `type` (a bare top-level field on the Vespa `labels` schema, grouped by
-// engine.all_label_types() and filtered via a plain `field: "type"` condition
-// — see labels_filter_field_to_vespa_field_map/struct_map in
-// search/engines/dev_vespa.py, both of which fall through to the raw field
-// name when unmapped) and `filters` are sourced from real navigator-frontend
-// usage (src/hooks/useLabelSearch.ts, src/pages/_search/index.tsx,
-// src/pages/geographies/[id].tsx), not guessed. Covers: no type (baseline,
-// tested by index.ts, not repeated here), a single `type` param, `filters`
-// alone (the large `type not_contains` exclusion list from
-// useLabelSearch.ts's `loadLabels`), `type` combined with `filters`, and a
-// zero-result combination.
+// engine.all_label_types() and filtered via a plain `field: "type"` condition.
+//
+// `page_token`/`page_size` are folded in here rather than living in their
+// own pagination-combinations.ts (this route used to have one): pagination
+// isn't part of any real navigator-frontend usage of this route (it always
+// requests page_size=10000 in one shot, never paging past page 1).
+//
+// Covers: no type (baseline, tested by index.ts, not repeated here), a
+// single `type` param, `filters` alone (the large `type not_contains`
+// exclusion list from useLabelSearch.ts's `loadLabels`), `type` combined
+// with `filters`, a zero-result combination, a deep page (offset check,
+// see above), and the real `loadLabels` shape (page_size=10000 +
+// exclusion filters).
 type TFilterCombination = {
   name: string;
   type: string | null;
   filters: unknown;
+  pageToken: number;
+  pageSize: number;
   expectZeroResults: boolean;
+  verifyOffsetAdvances: boolean;
 };
 
 const filterCombinations = new SharedArray(
@@ -83,7 +89,10 @@ const filterCombinations = new SharedArray(
         name: "type param only: country",
         type: "country",
         filters: null,
+        pageToken: 1,
+        pageSize: 10,
         expectZeroResults: false,
+        verifyOffsetAdvances: false,
       },
       {
         name: "filters only: exclude legacy/irrelevant types (real loadLabels shape)",
@@ -106,7 +115,10 @@ const filterCombinations = new SharedArray(
             { field: "type", op: "not_contains", value: "external_id" },
           ],
         },
+        pageToken: 1,
+        pageSize: 10,
         expectZeroResults: false,
+        verifyOffsetAdvances: false,
       },
       {
         name: "filters only: type contains concept/region/country (or), real _search/index.tsx shape",
@@ -119,7 +131,10 @@ const filterCombinations = new SharedArray(
             { field: "type", op: "contains", value: "country" },
           ],
         },
+        pageToken: 1,
+        pageSize: 10,
         expectZeroResults: false,
+        verifyOffsetAdvances: false,
       },
       {
         name: "type + filters combined",
@@ -128,13 +143,62 @@ const filterCombinations = new SharedArray(
           op: "and",
           filters: [{ field: "type", op: "contains", value: "entity_type" }],
         },
+        pageToken: 1,
+        pageSize: 10,
         expectZeroResults: false,
+        verifyOffsetAdvances: false,
       },
       {
         name: "zero-result combination: nonexistent label type",
         type: "nonexistent_label_type",
         filters: null,
+        pageToken: 1,
+        pageSize: 10,
         expectZeroResults: true,
+        verifyOffsetAdvances: false,
+      },
+      {
+        // page_token/page_size aren't part of any real navigator-frontend
+        // usage — kept only because this is the sole place proving
+        // DevVespaLabelSearchEngine's offset math takes effect end-to-end.
+        // See this file's top comment.
+        name: "deep page (tests offset cost)",
+        type: null,
+        filters: null,
+        pageToken: 10,
+        pageSize: 10,
+        expectZeroResults: false,
+        verifyOffsetAdvances: true,
+      },
+      {
+        // The only combination below that mirrors real navigator-frontend
+        // usage exactly: useLabelSearch.ts's loadLabels always requests
+        // page_size=10000 together with this same exclusion-list filter, in
+        // one shot, never paging.
+        name: "real loadLabels shape: page_size=10000 + exclusion filters",
+        type: null,
+        filters: {
+          op: "and",
+          filters: [
+            { field: "type", op: "not_contains", value: "framework" },
+            { field: "type", op: "not_contains", value: "keyword" },
+            { field: "type", op: "not_contains", value: "hazard" },
+            { field: "type", op: "not_contains", value: "instrument" },
+            { field: "type", op: "not_contains", value: "theme" },
+            { field: "type", op: "not_contains", value: "result_type" },
+            { field: "type", op: "not_contains", value: "role" },
+            { field: "type", op: "not_contains", value: "language" },
+            { field: "type", op: "not_contains", value: "sector" },
+            { field: "type", op: "not_contains", value: "deprecated_category" },
+            { field: "type", op: "not_contains", value: "domain" },
+            { field: "type", op: "not_contains", value: "process" },
+            { field: "type", op: "not_contains", value: "external_id" },
+          ],
+        },
+        pageToken: 1,
+        pageSize: 10000,
+        expectZeroResults: false,
+        verifyOffsetAdvances: false,
       },
     ];
   },
@@ -243,7 +307,10 @@ export default function () {
 
   // Built by hand rather than via URLSearchParams — not available in k6's
   // JS runtime (goja), unlike Node/browser.
-  const queryParts: string[] = [];
+  const queryParts: string[] = [
+    `page_token=${combination.pageToken}`,
+    `page_size=${combination.pageSize}`,
+  ];
   if (combination.type) {
     queryParts.push(`type=${encodeURIComponent(combination.type)}`);
   }
@@ -278,7 +345,10 @@ export default function () {
     // still defaults to the literal request URL (cache-buster and all)
     // unless set explicitly here too, which was the actual source of the
     // reported cardinality on other cache-busted routes in this suite.
-    tags: { name: "labels?type,filters", url: "labels?type,filters" },
+    tags: {
+      name: "labels?type,filters,page_token,page_size",
+      url: "labels?type,filters,page_token,page_size",
+    },
   });
 
   const checkLabel = combination.name;
@@ -312,6 +382,34 @@ export default function () {
             );
     },
   });
+
+  if (combination.verifyOffsetAdvances) {
+    // Proves the offset is actually taking effect, not silently ignored: a
+    // deep page must return different labels than page 1 for the same
+    // type/filters.
+    const firstPageQueryParts = queryParts
+      .filter((part) => !part.startsWith("page_token="))
+      .map((part) => (part.startsWith("page_size=") ? "page_size=10" : part));
+    firstPageQueryParts.unshift("page_token=1");
+    const firstPageRes = http.get(
+      `${BASE_URL}/labels?${firstPageQueryParts.join("&")}`,
+      {
+        tags: {
+          name: "labels?type,filters,page_token,page_size",
+          url: "labels?type,filters,page_token,page_size",
+        },
+      },
+    );
+    check(firstPageRes, {
+      [`${checkLabel}: differs from page 1`]: () => {
+        const deepPageBody = res.json() as TSearchResponse;
+        const firstPageBody = firstPageRes.json() as TSearchResponse;
+        const deepPageIds = (deepPageBody?.results ?? []).map((r) => r.id);
+        const firstPageIds = (firstPageBody?.results ?? []).map((r) => r.id);
+        return JSON.stringify(deepPageIds) !== JSON.stringify(firstPageIds);
+      },
+    });
+  }
 
   // Paces iterations so VUs don't hammer the endpoint back-to-back with
   // zero delay — standard for smoke/load tests, mimics real user think time.
