@@ -28,15 +28,15 @@ from search.engines.vespa_query.client import (
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
-    Filter,
     FieldFilter,
+    Filter,
     _build_filter_query,
     _facet_filter_label_type,
     _get_label_types_from_filters,
     _prune_filter,
     _topic_ids_from_filters,
 )
-from search.engines.vespa_query.query_text import (
+from search.engines.vespa_query.query_text_modifiers import (
     _normalize_currency_symbols,
     _resolve_geography_aliases,
     _strip_quotes,
