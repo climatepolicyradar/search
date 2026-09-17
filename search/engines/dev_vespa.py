@@ -32,27 +32,19 @@ from vespa.querybuilder import Grouping as G
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
-from search.engines.vespa_query.filters import (
+from search.engines.vespa_query.filters import (  # noqa: F401
+    TOPIC_FILTER_FIELD,
     ArrayStructField,
     AttributesCondition,
-    ComplexExampleFilter,
     Condition,
     FieldFilter,
     Filter,
-    SimpleExampleFilter,
-    TOPIC_FILTER_FIELD,
-    TOPIC_ID_PREFIX,
-    _build_condition_yql,
     _build_filter_query,
     _build_filter_yql,
     _facet_filter_label_type,
-    _format_value,
     _get_label_types_from_filters,
     _prune_filter,
-    _published_date_operand,
-    _to_unix_timestamp,
     _topic_ids_from_filters,
-    _value_type_to_vespa_attributes_field,
     normalise_topic_id,
 )
 from search.engines.vespa_query.query_text_modifiers import (
