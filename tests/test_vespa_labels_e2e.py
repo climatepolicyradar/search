@@ -689,4 +689,49 @@ def test_label_search_returns_non_empty_label_source(vespa_app: Vespa):
     assert results[0] != ""
 
 
+@pytest.mark.xfail(
+    reason="order_by is a no-op for labels (test_dev_vespa.py::"
+    "test_label_search_engine_applies_order_by_to_request_body). Remove xfail "
+    "once it actually sorts results.",
+    strict=True,
+)
+def test_label_search_order_by_value_ascending_sorts_real_results(vespa_app: Vespa):
+    # Fed in an order, and with query terms, that plain relevance ranking would
+    # not coincidentally sort ascending by `value` - only a real `order_by`
+    # implementation would.
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Zebra", "category", "Zebra"))
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Apple", "category", "Apple"))
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Mango", "category", "Mango"))
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="value", direction="asc")],
+    ).results
+
+    assert [label.value for label in results] == ["Apple", "Mango", "Zebra"]
+
+
+@pytest.mark.xfail(
+    reason="Descending counterpart to test_label_search_order_by_value_"
+    "ascending_sorts_real_results - keep both so a future fix that reads the "
+    "sort field but hardcodes/ignores `direction` doesn't pass by accident.",
+    strict=True,
+)
+def test_label_search_order_by_value_descending_sorts_real_results(vespa_app: Vespa):
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Zebra", "category", "Zebra"))
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Apple", "category", "Apple"))
+    _feed_label(vespa_app, _taxonomy_vespa_label("category::Mango", "category", "Mango"))
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="value", direction="desc")],
+    ).results
+
+    assert [label.value for label in results] == ["Zebra", "Mango", "Apple"]
+
+
 # endregion Labels schema
