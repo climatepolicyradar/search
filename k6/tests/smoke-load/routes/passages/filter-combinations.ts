@@ -183,6 +183,11 @@ const PROFILES = {
   smoke: {
     vus: 5,
     duration: "1m",
+    // A failed check() alone doesn't fail the run — it only shows up as a
+    // pass-rate in the summary. This threshold makes anything below 100% of
+    // checks passing exit the run non-zero, which is the bar for a smoke test.
+    // https://grafana.com/docs/k6/latest/using-k6/thresholds/
+    thresholds: { checks: ["rate==1.00"] },
   },
   load: {
     // Two phases test two different things, per review feedback on the
@@ -317,7 +322,14 @@ export default function () {
       // real request param, so it's excluded) — see k6/README.md's Layout
       // section.
       // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
-      tags: { name: "passages?query,filters" },
+      //
+      // `url` is a separate k6-builtin tag that `name` does NOT override —
+      // it still defaults to the literal request URL (cache-buster and all)
+      // unless set explicitly here too, which was the actual source of the
+      // reported cardinality. No extra breakdown tag is needed here: load
+      // mode always fixes `combination` to the single nested or-in-and case
+      // (see isLoadProfile above), so nothing else varies per request.
+      tags: { name: "passages?query,filters", url: "passages?query,filters" },
     },
   );
 
@@ -340,12 +352,14 @@ export default function () {
     [`${checkLabel}: status is 200`]: (response: Response) =>
       response.status === 200,
     [`${checkLabel}: response has results array`]: (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
     [`${checkLabel}: result count matches expectation`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       if (!Array.isArray(body?.results)) return false;
       return combination.expectZeroResults
@@ -355,6 +369,7 @@ export default function () {
     [`${checkLabel}: results have string text_block_id and document_id`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       const results = body?.results ?? [];
       // Vacuously true for the zero-result case (nothing to check), which is

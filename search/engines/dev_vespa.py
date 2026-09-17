@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import unicodedata
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -723,6 +724,40 @@ def _get_total_count(response: dict[str, Any]) -> int | None:
     return response.get("root", {}).get("fields", {}).get("totalCount")
 
 
+def _warn_if_degraded(response_json: dict[str, Any], request_context: str) -> None:
+    """
+    Warn when Vespa answered from less than the whole corpus.
+
+    A query that exhausts its budget, or whose content nodes did not all answer,
+    comes back as a 200 carrying partial results. That is a valid response - it is
+    not an error and must not be raised - but the hits are drawn from a subset of
+    the corpus, so ranking comparisons built on it are not comparable with a full
+    one. WARNING because the caller still gets a usable answer.
+    
+    @see: https://docs.vespa.ai/en/performance/graceful-degradation.html
+    """
+    coverage = response_json.get("root", {}).get("coverage") or {}
+    # Vespa reports every degradation reason it knows about, most of them false.
+    reasons = {
+        reason: value
+        for reason, value in (coverage.get("degraded") or {}).items()
+        if value
+    }
+    covered_percent = coverage.get("coverage")
+    incomplete = isinstance(covered_percent, (int, float)) and covered_percent < 100
+    if not reasons and not incomplete:
+        return
+
+    logger.warning(
+        "Vespa returned a degraded result [%s] (coverage=%s%%, documents=%s, "
+        "degraded=%s)",
+        request_context,
+        covered_percent,
+        coverage.get("documents"),
+        reasons or None,
+    )
+
+
 def _execute_vespa_query(
     *,
     endpoint: str,
@@ -755,6 +790,8 @@ def _execute_vespa_query(
     apart. The return type is deliberately non-optional so that regressing to
     ``return None`` here fails type checking.
     """
+    request_body = {"presentation.timing": True, **request_body}
+
     logger.info("Vespa request started [%s]", request_context)
     logger.debug(
         "Vespa request payload [%s]: %s",
@@ -762,6 +799,7 @@ def _execute_vespa_query(
         json.dumps(request_body, indent=2),
     )
 
+    started = time.perf_counter()
     try:
         response = post_fn(
             endpoint,
@@ -773,8 +811,10 @@ def _execute_vespa_query(
         )
     except Exception as exc:
         logger.exception(
-            "Error: Vespa request failed before a response was received [%s]",
+            "Error: Vespa request failed before a response was received [%s] "
+            "(elapsed_ms=%d)",
             request_context,
+            (time.perf_counter() - started) * 1000,
         )
         raise VespaError(
             f"Vespa request failed before a response was received [{request_context}]"
@@ -800,12 +840,23 @@ def _execute_vespa_query(
         logger.exception("Error: Vespa returned invalid JSON [%s]", request_context)
         raise VespaError(f"Vespa returned invalid JSON [{request_context}]") from exc
 
+    _warn_if_degraded(response_json, request_context)
+
     hit_count = len(response_json.get("root", {}).get("children", []) or [])
+    timing = response_json.get("timing") or {}
     logger.info(
-        "Success: Vespa request completed [%s] (hits=%s, total_count=%s)",
+        "Success: Vespa request completed [%s] (hits=%s, total_count=%s, "
+        "elapsed_ms=%d, vespa_querytime_ms=%d, vespa_summaryfetchtime_ms=%d, "
+        "vespa_searchtime_ms=%d, bytes=%d, summary=%s)",
         request_context,
         hit_count,
         _get_total_count(response_json),
+        (time.perf_counter() - started) * 1000,
+        timing.get("querytime", 0) * 1000,
+        timing.get("summaryfetchtime", 0) * 1000,
+        timing.get("searchtime", 0) * 1000,
+        len(response.content),
+        request_body.get("presentation.summary", "default"),
     )
     return response_json
 
@@ -822,6 +873,17 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 
 # None leaves the rank profile's own default in place.
 _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
+
+# How many candidates weakAnd keeps before the rank profile runs. weakAnd picks them
+# with an idf over the `default` fieldset - which includes `passages_text` – so long
+# PDFs with many passage hits can crowd out a short exact title match and that document
+# is then never scored at all.
+# Vespa's own default is max(hits, 100), which ties retrieval depth to the page
+# size - so a page_size=500 search matched 5872 documents where the facet query
+# for the same terms, running at hits=0, matched 1801. Results and facet counts
+# were describing different candidate sets, and `total_count` moved with the
+# requested page size. Pinning it here decouples the two. See FUS-475.
+_DEFAULT_DOCUMENT_TOTAL_TARGET_HITS = 2000
 
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
@@ -905,6 +967,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
         passages_breadth_weight: float | None = _DEFAULT_PASSAGES_BREADTH_WEIGHT,
+        total_target_hits: int = _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
     ) -> None:
         """
         Initialise the search engine.
@@ -912,9 +975,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         :param debug: When ``True``, request the ``debug-summary`` document
             summary from Vespa and store per-hit token information in
             :attr:`last_debug_info`.
-        :param bolding: When ``False``, request the ``no-bolding`` document
-            summary, returning plain title/description without ``<hi>`` tags.
-            Ignored when ``debug=True``.
+        :param bolding: When ``True``, matched terms in ``title`` and
+            ``description`` are wrapped in ``<hi>`` tags. Search hits never
+            carry passages; ``/search/passages`` is the route for those.
         :param ranking_profile: Vespa rank profile to score with. Defaults to
             ``bm25-title-geo``.
         :param topic_weight: How much a filtered-for topic's mention counts
@@ -923,6 +986,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             contributes to relevance. ``None`` leaves the profile's own default
             (0.1); ``0.0`` switches passage-breadth ranking off. Ignored by
             profiles that do not declare the input.
+        :param total_target_hits: How many candidates weakAnd keeps before
+            ranking, across the whole content cluster.
+            Raising it stops a strong title match being pruned before the rank
+            profile ever sees it, at the cost of matching more broadly. See
+            :data:`_DEFAULT_DOCUMENT_TOTAL_TARGET_HITS`.
         """
         self.debug = debug
         self.bolding = bolding
@@ -931,6 +999,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
         self.passages_breadth_weight = passages_breadth_weight
+        self.total_target_hits = total_target_hits
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -939,19 +1008,29 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
             "passages_breadth_weight": self.passages_breadth_weight,
+            "total_target_hits": self.total_target_hits,
         }
 
-    _userQuery: str = (
-        " and (userQuery() "
-        # As geographies and title_synonyms use different Lucene analyzers
-        # to the default fieldset, they're referenced explicitly in the query
-        # so they can be searched.
-        # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
-        # `geo_query` is `query` with geography aliases resolved to the canonical
-        # names carried by the field - see _resolve_geography_aliases.
-        ' or ({defaultIndex: "geographies"}userInput(@geo_query))'
-        ' or ({defaultIndex: "identifiers"}userInput(@query)))'
-    )
+    @property
+    def _userQuery(self) -> str:
+        """
+        The text-matching half of the YQL, carrying the weakAnd retrieval depth.
+
+        `userInput(@query)` rather than `userQuery()` because `totalTargetHits`
+        only binds to the former. Both build a weakAnd over the `default` fieldset
+        and are otherwise equivalent here.
+        """
+        return (
+            f" and (({{totalTargetHits:{self.total_target_hits}}}userInput(@query)) "
+            # As geographies and title_synonyms use different Lucene analyzers
+            # to the default fieldset, they're referenced explicitly in the query
+            # so they can be searched.
+            # https://docs.vespa.ai/en/reference/querying/yql.html#defaultindex
+            # `geo_query` is `query` with geography aliases resolved to the canonical
+            # names carried by the field - see _resolve_geography_aliases.
+            ' or ({defaultIndex: "geographies"}userInput(@geo_query))'
+            ' or ({defaultIndex: "identifiers"}userInput(@query)))'
+        )
 
     def search(
         self,
@@ -1013,6 +1092,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
+        else:
+            request_body["presentation.summary"] = "search"
         if not self.bolding:
             request_body["presentation.bolding"] = "false"
 
@@ -1044,34 +1125,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 list[DocumentRelationship]
             ).validate_python(source.get("documents", []))
 
-            # `passages` and `passages_text` indices are aligned
-            # as `passages_text` is derived from `passages` in the schema.
-            # Vespa wraps matched terms with <hi>...</hi> on the bolded `passages_text` field.
-            # We use this to identify which `passages[i]` matched the query.
-            document_id = source.get("id", MISSING_PLACEHOLDER)
-            passages_field = fields.get("passages", [])
-            passages_text = fields.get("passages_text", [])
-            passages: list[Passage] = []
-            for i, passage in enumerate(passages_field):
-                if i >= len(passages_text):
-                    break
-                bolded_text = passages_text[i]
-                if "<hi>" not in bolded_text:
-                    continue
-                passages.append(
-                    Passage(
-                        text_block_id=passage.get("text_block_id", ""),
-                        idx=passage.get("idx", 0),
-                        text=bolded_text,
-                        language=passage.get("language", ""),
-                        type=passage.get("type", ""),
-                        type_confidence=passage.get("type_confidence", 0.0),
-                        pages=passage.get("pages", []),
-                        heading_id=passage.get("heading_id"),
-                        document_id=document_id,
-                    )
-                )
-
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
@@ -1080,7 +1133,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                     labels=labels,
                     attributes=source.get("attributes", {}),
                     documents=document_relationships,
-                    passages=passages,
                 )
             )
 
@@ -1088,10 +1140,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 # NOTE: these are all fields that are stored as type summary in the index.
                 # This is because overriding the default summary in the schema adds fields
                 # to it, rather than redefining the schema from scratch.
-                # `passages` and `passages_text` are excluded as well: they carry a
-                # document's full passage payload (~2MB per hit), which is enough to 
-                # exhaust memory over a relevance run.
-                # The matched passages are already on the `Document` above.
                 _STANDARD_FIELDS = {
                     "document_source",
                     "sddocname",
@@ -1570,15 +1618,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "timeout": "5s",
             "model.language": "en",
             "rules.rulebase": "passages",
-            # TODO: always requesting debug-summary here (rather than only
-            # when self.debug) so `Passage.tokens` (text_tokens) is populated
-            # on every live request, not just debug/CLI usage. This uses
-            # `from-disk` field access instead of in-memory attributes, so it
-            # is slower per-query than the default summary - accepted as a
-            # simplicity-over-performance tradeoff for now. Push back to only
-            # when self.debug once once `tokens`' field shape/necessity is settled
-            # `tokens`' field shape/necessity is settled (see Passage.tokens).
-            "presentation.summary": "debug-summary",
+            "presentation.summary": "debug-summary" if self.debug else "search",
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
@@ -1605,7 +1645,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
             vespa_passage = VespaPassage.model_validate(fields)
-            passages.append(Passage.from_vespa_passage(vespa_passage))
+            passages.append(Passage.from_vespa_passage(vespa_passage, bolding=bolding))
             if self.debug:
                 debug_info.append(
                     {

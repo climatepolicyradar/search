@@ -183,7 +183,19 @@ export default function () {
     // suite: `{path}?{param_names}`, param names only — see k6/README.md's
     // Layout section.
     // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
-    tags: { name: "documents/{document_id}" },
+    //
+    // `url` is a separate k6-builtin tag that `name` does NOT override — it
+    // still defaults to the literal request URL (cache-buster and all)
+    // unless set explicitly here too, which was the actual source of the
+    // reported cardinality. `documentId` is its own low-cardinality tag
+    // (only 4 possible values) so the Grafana Cloud UI's per-document
+    // breakdown doesn't collapse away now that `url` no longer varies per
+    // request.
+    tags: {
+      name: "documents/{document_id}",
+      url: "documents/{document_id}",
+      documentId,
+    },
   });
 
   // check() records pass/fail per assertion without stopping the iteration
@@ -193,10 +205,12 @@ export default function () {
   check(res, {
     "status is 200": (response: Response) => response.status === 200,
     "response has matching data.id": (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TDocumentResponse;
       return body?.data?.id === documentId;
     },
     "response has data.title": (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TDocumentResponse;
       return (
         typeof body?.data?.title === "string" && body.data.title.length > 0

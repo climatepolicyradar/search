@@ -1096,3 +1096,94 @@ def test_get_raises_vespa_error_when_unreachable():
 
 
 # endregion
+
+
+# region Search summaries (FUS-479)
+def _feed_passages(app: Vespa, document_id: str, texts: list[str]) -> None:
+    """Assign `passages` to an already-fed document, as the passages feed does."""
+    passages = [
+        {
+            "text_block_id": f"{document_id}-{i}",
+            "language": "en",
+            "type": "Text",
+            "type_confidence": 1.0,
+            "page_number": i,
+            "pages": [i],
+            "text": text,
+            "heading_id": None,
+        }
+        for i, text in enumerate(texts)
+    ]
+    r = req.put(
+        f"{app.end_point}/document/v1/documents/documents/docid/{document_id}",
+        json={"fields": {"passages": {"assign": passages}}},
+        timeout=5,
+    )
+    r.raise_for_status()
+
+
+def _raw_hit_fields(app: Vespa, query: str, summary: str) -> dict[str, Any]:
+    """The first hit's raw summary fields, bypassing the engine's parsing."""
+    r = req.post(
+        f"{app.end_point}/search/",
+        json={
+            "yql": "select * from sources documents where userQuery()",
+            "query": query,
+            "hits": 1,
+            "presentation.summary": summary,
+        },
+        timeout=5,
+    )
+    r.raise_for_status()
+    return r.json()["root"]["children"][0]["fields"]
+
+
+_PASSAGES = [
+    "The flood defence budget.",
+    "Nothing to see here.",
+    "Another flood warning.",
+]
+
+
+def _feed_document_with_passages(app: Vespa) -> Document:
+    document = DocumentFactory.build(
+        title="A report", description="About water", labels=[]
+    )
+    _feed_document(app, document)
+    _feed_passages(app, document.id, _PASSAGES)
+    return document
+
+
+@pytest.mark.parametrize("bolding", [False, True])
+def test_search_hits_carry_no_passages(vespa_app: Vespa, bolding: bool):
+    """
+    Document hits never carry passages, with or without bolding.
+
+    `matched-elements-only` can returns every passage that matched, but for
+    numeric queries this can be thousands per document. `/search/passages` is the route
+    for passages (FUS-479).
+    """
+    _feed_document_with_passages(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=bolding)
+    result = engine.search(
+        query="flood", pagination=Pagination(page_token=1, page_size=10), order_by=[]
+    )
+
+    assert result.results[0].passages == []
+
+
+def test_search_summaries_never_fetch_passage_fields(vespa_app: Vespa):
+    """Neither the struct array nor the text array is in any summary the API requests."""
+    _feed_document_with_passages(vespa_app)
+
+    for summary in ("search", "debug-summary"):
+        fields = _raw_hit_fields(vespa_app, "flood", summary)
+        assert "passages" not in fields, summary
+        if summary == "debug-summary":
+            assert "passages_text" in fields, summary
+        else:
+            assert "passages_text" not in fields, summary
+
+
+# endregion Search summaries

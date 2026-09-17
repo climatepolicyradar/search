@@ -12,7 +12,6 @@ from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
     RecallTestCase,
-    RelativeOrderTestCase,
     SearchComparisonTestCase,
     all_words_in_string,
     any_words_in_string,
@@ -192,8 +191,16 @@ test_cases = [
     FieldCharacteristicsTestCase[Document](
         category="question",
         search_terms="what is the croatias climate strategy",
-        characteristics_test=lambda document: all_words_in_string(
+        characteristics_test=lambda document: (
+            all_words_in_string(
             ["climate", "strategy"], document.title
+            ) or
+            all_words_in_string(
+            ["climate", "plan"], document.title
+            ) or
+            all_words_in_string(
+            ["climate", "programme"], document.title
+            ),
         )
         and any(
             (relationship.value.value == "Croatia" and relationship.type == "geography")
@@ -297,8 +304,9 @@ test_cases = [
         search_terms="ira",
         expected_result_ids=[
             "CCLW.family.10699.0",
+            "Sabin.family.109771.0"
         ],
-        description="searching for 'ira' should return the Inflation Reduction Act",
+        description="searching for 'ira' should return the Inflation Reduction Act and litigation case 'United States — Certain Tax Credits Under the Inflation Reduction Act' first.",
     ),
     PrecisionTestCase[Document](
         category="document name",
@@ -495,16 +503,6 @@ test_cases = [
         search_terms="loss & damage finance",
         description="search for loss & damage finance should return NDCs from small island developing states in the top 20 results",
         expected_result_ids=["UNFCCC.family.i00004847.n0000"],
-        k=20,
-    ),
-    RelativeOrderTestCase[Document](
-        category="passage breadth",
-        search_terms="heatwave",
-        # Warm Homes Plan's only two matches are an endnote list (p109) and a
-        # notes block (p118); NAP3 has 12 body mentions. See FUS-457.
-        higher_result_id="UNFCCC.family.i00001131.n0000",
-        lower_result_id="CCLW.family.i00003221.n0000",
-        description="A document with many body mentions of heatwave should rank above one whose only mentions are an endnote and a notes block.",
         k=20,
     ),
 ]

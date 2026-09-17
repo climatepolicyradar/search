@@ -35,6 +35,8 @@ schema passages {
         }
         field document_id type string {
             indexing: attribute | summary
+            attribute: fast-search
+            rank: filter
         }
         field document_ref type reference<documents> {
             indexing: attribute
@@ -149,6 +151,15 @@ schema passages {
     # hop without denormalising per-passage.
     import field principal_document_ref.title_attribute as principal_title {}
 
+    field content_not_stemmed type string {
+        indexing: input content | index
+        index: enable-bm25
+        stemming: none
+        linguistics {
+            profile: exact_analysis
+        }
+    }
+
     fieldset default {
         fields: content
     }
@@ -165,7 +176,7 @@ schema passages {
         }
 
         function text_score() {
-            expression: nativeRank(content) + nativeProximity(content)
+            expression: nativeRank(content) + nativeProximity(content) + nativeRank(content_not_stemmed)
         }
         function short_headings_penalty() {
             expression: query(short_heading_weight) * attribute(looks_like_short_heading)
@@ -202,7 +213,7 @@ schema passages {
         }
 
         function text_score() {
-            expression: bm25(content)
+            expression: bm25(content) + bm25(content_not_stemmed)
         }
         function proximity_boost() {
             expression: 1 + query(prox_weight) * nativeProximity(content)
@@ -222,7 +233,7 @@ schema passages {
         summary-features: text_score() topic_score() proximity_boost bm25(content) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(is_page_header_or_footer) attribute(looks_like_demoted_section)
     }
 
-    document-summary debug-summary {
+    document-summary search {
         summary id {}
         summary idx {}
         summary language {}
@@ -240,8 +251,15 @@ schema passages {
         summary heading_id {}
         summary labels {}
         summary heading_text {}
+    }
+
+    document-summary debug-summary inherits search {
         summary text_tokens {
             source: content
+            tokens
+        }
+        summary content_not_stemmed_tokens {
+            source: content_not_stemmed
             tokens
         }
         from-disk

@@ -251,6 +251,26 @@ schema documents {
             profile: passage_analysis
         }
         bolding: on
+        summary: matched-elements-only
+    }
+
+    field title_not_stemmed type string {
+        indexing: input title | index
+        index: enable-bm25
+        stemming: none
+        linguistics { profile: exact_analysis }
+    }
+    field description_not_stemmed type string {
+        indexing: input description | index
+        index: enable-bm25
+        stemming: none
+        linguistics { profile: exact_analysis }
+    }
+    field passages_text_not_stemmed type array<string> {
+        indexing: input passages | for_each { get_field text } | index
+        index: enable-bm25
+        stemming: none
+        linguistics { profile: exact_analysis }
     }
 
     field case_number type string {
@@ -316,8 +336,12 @@ schema documents {
             expression: query(topic_weight) * sum(map(attribute(concept_counts), f(x)(log(1 + x))) * query(topic_q))
         }
 
+        function exact_phrase_score() {
+            expression: bm25(title_not_stemmed) + bm25(description_not_stemmed) + bm25(passages_text_not_stemmed)
+        }
+
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + identifiers_score() + topic_score()
+            expression: title_score() + description_score() + passages_score() + geographies_score() + identifiers_score() + topic_score() + exact_phrase_score()
         }
         summary-features: title_score() description_score() passages_score() geographies_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) fieldMatch(title).fieldCompleteness identifiers_score() topic_score()
     }
@@ -333,7 +357,7 @@ schema documents {
         # its small magnitude (~0.2) makes it a tie-breaker, not a competitor to
         # title_score.
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + identifiers_score() + topic_score()
+            expression: title_score() + description_score() + passages_score() + geographies_score() + identifiers_score() + topic_score() + exact_phrase_score()
         }
         summary-features: title_score() description_score() passages_score() geographies_score() bm25(title) fieldMatch(title).completeness fieldMatch(title).queryCompleteness fieldMatch(title).fieldCompleteness fieldMatch(title).significance nativeProximity(title) identifiers_score() topic_score()
     }
@@ -380,16 +404,14 @@ schema documents {
         function title_score () {
             expression: query(title_weight) * fieldMatch(title_geo).completeness * bm25(title_geo) + query(title_proximity_weight) * nativeProximity(title_geo)
         }
-
-        # log(1 + x) damping, consistent with topic_score() above. This means a long
+                # log(1 + x) damping, consistent with topic_score() above. This means a long
         # report with many mentions can't run away with the top of the list - 
         # tenfold more matches is worth roughly twice the score, not ten times.
         function passages_breadth_score() {
             expression: query(passages_breadth_weight) * log(1 + elementSimilarity(passages_text).coverageSum)
         }
-
         first-phase {
-            expression: title_score() + description_score() + passages_score() + passages_breadth_score() + geographies_score() + identifiers_score() + topic_score()
+            expression: title_score() + description_score() + passages_score() + passages_breadth_score() + geographies_score() + identifiers_score() + topic_score() + exact_phrase_score()
         }
         # matchCount is carried as a diagnostic only: if coverageSum misbehaves,
         # switching the expression above to it is a one-word change.
@@ -404,7 +426,7 @@ schema documents {
             expression: query(label_boost_factor) * (attributeMatch(labels_type_value_attribute) > 0)
         }
         first-phase {
-            expression: title_score() + description_score() + passages_score() + geographies_score() + label_boost_score() + identifiers_score()
+            expression: title_score() + description_score() + passages_score() + geographies_score() + label_boost_score() + identifiers_score() + exact_phrase_score()
         }
         summary-features: title_score() description_score() passages_score() geographies_score() label_boost_score() nativeRank(title) nativeRank(description) nativeRank(passages_text) nativeProximity(title) identifiers_score()
     }
@@ -420,7 +442,27 @@ schema documents {
     document-summary default {
     }
 
-    document-summary debug-summary inherits default {
+    # Search hits. Everything `DevVespaDocumentSearchEngine.search` reads, and
+    # nothing of the passage payload.
+    document-summary search {
+        summary id {}
+        summary title {}
+        summary description {}
+        summary labels {}
+        summary concepts {}
+        summary document_source {}
+        summary attributes_published_date {}
+        summary principal_id {}
+    }
+
+    # Search hits plus only the passages that matched the query, bolded. Used
+    # when the caller asks for bolding. The `passages` struct (ids, pages,
+    # headings) is not included: no consumer reads it on a search hit.
+    document-summary search-with-passages inherits search {
+        summary passages_text {}
+    }
+
+    document-summary debug-summary inherits search-with-passages {
         summary title_tokens {
             source: title
             tokens

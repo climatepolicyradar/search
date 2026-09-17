@@ -47,6 +47,12 @@ function resolveProfile(
   return { ...profile, cloud: { name: cloudName } };
 }
 
+// Resolved the same way resolveProfile picks a default above — a script whose
+// default() branches on load vs. smoke (e.g. picking one worst-case fixture
+// vs. sweeping all of them) must agree with what `options` resolved to, or
+// the two would silently disagree once no env var is passed.
+const isLoadProfile = (__ENV.PROFILE || "load") === "load";
+
 // SharedArray shares this data once across all VUs instead of every VU
 // holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
@@ -195,6 +201,74 @@ const PROFILES = {
     // https://grafana.com/docs/k6/latest/using-k6/thresholds/
     thresholds: { checks: ["rate==1.00"] },
   },
+  load: {
+    // Two phases test two different things, per review feedback on the
+    // original single 3-step ramp (10/25/50 VUs, 30s climbs, 1m holds):
+    // that shape only measures reactivity to a rapid spike, not the
+    // sustained-throughput ceiling, since search-api's autoscaling never
+    // gets time to act during it.
+    //
+    // Phase 1 (sustained ceiling): a slow 2m climb into each of 10/25/50
+    // VUs, holding 6m at each — long enough to sustain CPU above the 70%
+    // target and let task count settle — so a capacity cliff shows up tied
+    // to a specific, autoscaled-for VU count rather than an artefact of the
+    // ramp outrunning ECS.
+    //
+    // Phase 2 (spike reactivity): ramp back to a near-zero baseline, hold
+    // long enough for ECS to have scaled in again, then jump straight to 50
+    // VUs in 15s. This isolates "how fast can it react to a sudden spike"
+    // against a known low-scale starting point, rather than measuring a
+    // spike on top of whatever task count phase 1 left behind.
+    //
+    // A `filters` clause adds YQL predicates to /documents' single search
+    // query rather than triggering extra Vespa calls the way `fields=`
+    // does (see fields-combinations.ts), so there is no fan-out-maximising
+    // combination to chase here. Load mode instead fixes the request to
+    // the fixture's most structurally complex real shape (the nested
+    // or-in-and) as the closest available proxy for "most expensive single
+    // query", rather than sweeping all combinations, so a threshold breach
+    // is attributable to one specific request shape.
+    scenarios: {
+      rampingLoad: {
+        executor: "ramping-vus",
+        startVUs: 0,
+        stages: [
+          // Phase 1: sustained ceiling
+          { duration: "2m", target: 10 },
+          { duration: "6m", target: 10 },
+          { duration: "2m", target: 25 },
+          { duration: "6m", target: 25 },
+          { duration: "2m", target: 50 },
+          { duration: "6m", target: 50 },
+          // Reset to baseline, giving ECS time to scale back in
+          { duration: "1m", target: 2 },
+          { duration: "5m", target: 2 },
+          // Phase 2: spike reactivity
+          { duration: "15s", target: 50 },
+          { duration: "1m", target: 50 },
+          { duration: "30s", target: 0 },
+        ],
+      },
+    },
+    // Thresholds: 2000ms is a loose tripwire above measured healthy
+    // capacity, not a fitted SLO. Derived using the method in
+    // k6/docs/load-threshold-methodology.md; see
+    // k6/docs/results/2026-09-09-breakpoint-test-baseline.md for the
+    // measurements this value is based on — three same-day production
+    // runs put the healthy region's p95 at 860ms-1.85s and the collapse
+    // point (a hard cliff, not gradual) at ~6rps offered load, so 2000ms
+    // has real headroom on both sides. Re-derive (new dated results file,
+    // method doc unchanged) rather than editing the number here from
+    // memory — the underlying capacity is expected to move as
+    // infrastructure changes, per that results file's caveats.
+    // http_req_failed aborts the run early on a failure spike rather than
+    // burning the full ramp on a route that's already broken.
+    thresholds: {
+      // Loose tripwire, not a tight SLO — see comment above.
+      http_req_duration: ["p(95)<2000"],
+      http_req_failed: [{ threshold: "rate<0.01", abortOnFail: true }],
+    },
+  },
 };
 
 // k6 requires `options` to be a named export — this is how it reads VU/
@@ -219,21 +293,48 @@ tempo.instrumentHTTP({
 
 // k6 calls this function once per VU iteration for the whole run.
 export default function () {
-  const combination =
-    filterCombinations[Math.floor(Math.random() * filterCombinations.length)];
+  // Smoke mode sweeps all combinations to check correctness; load mode
+  // repeats the single most structurally complex real shape (the nested
+  // or-in-and) to find a capacity ceiling for it — the two profiles are
+  // testing different things, not just different volumes of the same thing.
+  const combination = isLoadProfile
+    ? filterCombinations.find((c) => c.name.includes("nested or-in-and"))!
+    : filterCombinations[Math.floor(Math.random() * filterCombinations.length)];
   const filtersParam = encodeURIComponent(JSON.stringify(combination.filters));
-  const res = http.get(`${BASE_URL}/documents?filters=${filtersParam}`, {
-    // Group by route path + the relevant query param *names* (never values)
-    // instead of letting k6 default `name`/`url` to the full dynamic
-    // filters query string — per-request filters JSON was producing a
-    // high-cardinality set of unique values across http_reqs,
-    // http_req_waiting, and http_req_tls_handshaking (flagged by Cloud
-    // Insights' Metric Tags audit). Naming convention across this suite:
-    // `{path}?{param_names}`, param names only — see k6/README.md's Layout
-    // section.
-    // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
-    tags: { name: "documents?filters" },
-  });
+  // Load mode always requests the same fixed filter combination, so without
+  // a cache-buster it's a single, entirely static URL — CloudFront serves
+  // almost every request after the first as a hit, measuring the edge, not
+  // origin (see k6/tests/breakpoint/README.md finding 0). Smoke mode sweeps
+  // many combinations testing correctness, not capacity, so it's left
+  // cacheable.
+  const cacheBuster = isLoadProfile
+    ? `&_cb=${__VU}-${__ITER}-${Date.now()}`
+    : "";
+  const res = http.get(
+    `${BASE_URL}/documents?filters=${filtersParam}${cacheBuster}`,
+    {
+      // Group by route path + the relevant query param *names* (never
+      // values) instead of letting k6 default `name`/`url` to the full
+      // dynamic filters query string plus load-mode cache buster —
+      // per-request filters JSON and cache-buster values were producing a
+      // high-cardinality set of unique values across http_reqs,
+      // http_req_waiting, and http_req_tls_handshaking (flagged by Cloud
+      // Insights' Metric Tags audit). Naming convention across this suite:
+      // `{path}?{param_names}`, param names only (the cache-buster isn't a
+      // real request param, so it's excluded) — see k6/README.md's Layout
+      // section.
+      // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
+      //
+      // `url` is a separate k6-builtin tag that `name` does NOT override —
+      // it still defaults to the literal request URL (cache-buster and
+      // all) unless set explicitly here too, which was the actual source
+      // of the reported cardinality on other cache-busted routes in this
+      // suite. No extra breakdown tag is needed here: load mode always
+      // fixes `combination` to the single nested or-in-and case, so
+      // nothing else varies per request.
+      tags: { name: "documents?filters", url: "documents?filters" },
+    },
+  );
 
   // k6 check/group names may not contain "::" — fixture names quote real
   // label values (e.g. "status::Principal"), so strip it for display only.
@@ -247,12 +348,14 @@ export default function () {
     [`${checkLabel}: status is 200`]: (response: Response) =>
       response.status === 200,
     [`${checkLabel}: response has results array`]: (response: Response) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       return Array.isArray(body?.results);
     },
     [`${checkLabel}: result count matches expectation`]: (
       response: Response,
     ) => {
+      if (response.status !== 200) return false;
       const body = response.json() as TSearchResponse;
       const results = body?.results ?? [];
       return combination.expectZeroResults
