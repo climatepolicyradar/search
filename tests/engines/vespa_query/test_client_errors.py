@@ -21,6 +21,7 @@ from search.engines.dev_vespa import (
     DevVespaPassageSearchEngine,
     Settings,
     documents_search_engine,
+    labels_search_engine,
     passages_search_engine,
 )
 
@@ -145,6 +146,11 @@ def failing_query():
         ),
         patch.object(
             passages_search_engine,
+            "_execute_vespa_query",
+            side_effect=VespaError("Vespa is down"),
+        ),
+        patch.object(
+            labels_search_engine,
             "_execute_vespa_query",
             side_effect=VespaError("Vespa is down"),
         ),
