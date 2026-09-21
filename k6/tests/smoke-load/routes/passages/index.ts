@@ -99,7 +99,7 @@ const PROFILES = {
     // spike on top of whatever task count phase 1 left behind.
     //
     // /search/passages is a single Vespa query with a 5s timeout
-    // (search/engines/dev_vespa.py:1363) — no fan-out, unlike
+    // (search/engines/dev_vespa/passages_search_engine.py:109) — no fan-out, unlike
     // /documents?fields=, so this profile doesn't need a worst-case-
     // combination fixed request the way fields-combinations.ts does;
     // sweeping the smoke test's query fixture is representative enough on
