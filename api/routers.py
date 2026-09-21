@@ -103,7 +103,13 @@ def download_documents(
         ),
     ),
 ):
-    """Stream the current search's results as a CSV, one row per document."""
+    """
+    Stream the current search's results as a CSV, one row per document.
+
+    Registered ahead of `/documents/{document_id}` below: FastAPI matches
+    path routes in registration order, and {document_id} would otherwise
+    greedily consume "download" as a document ID.
+    """
     logger.info(
         "Downloading document search as CSV "
         "(query=%r, max_results=%s, filters_present=%s)",
