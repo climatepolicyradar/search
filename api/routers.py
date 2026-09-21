@@ -85,7 +85,7 @@ def read_llms_txt() -> str:
 
 
 @router.get(
-    "/documents/download",
+    "/documents:download",
     responses=SEARCH_RESPONSES,
 )
 def download_documents(
@@ -106,9 +106,9 @@ def download_documents(
     """
     Stream the current search's results as a CSV, one row per document.
 
-    Registered ahead of `/documents/{document_id}` below: FastAPI matches
-    path routes in registration order, and {document_id} would otherwise
-    greedily consume "download" as a document ID.
+    Path is `/documents:download` (an AIP-136 custom method on the
+    `documents` resource, @see: https://google.aip.dev/136) rather than
+    `/documents/download`, so it can never collide with `/documents/{document_id}`.
     """
     logger.info(
         "Downloading document search as CSV "

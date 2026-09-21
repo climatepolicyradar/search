@@ -1,4 +1,4 @@
-"""CSV building for `GET /search/documents/download`."""
+"""CSV building for `GET /search/documents:download`."""
 
 import csv
 import io
@@ -19,7 +19,7 @@ ATTRIBUTE_COLUMN_PREFIX = "attributes."
 LABEL_COLUMN_PREFIX = "labels."
 
 
-def _label_columns(documents: list[Document]) -> list[str]:
+def _label_type_columns(documents: list[Document]) -> list[str]:
     """Distinct, non-excluded label types present across ``documents``, sorted."""
     types: set[str] = set()
     for document in documents:
@@ -71,7 +71,7 @@ def build_csv_rows(documents: list[Document]) -> tuple[list[str], list[dict[str,
         ``header``.
     """
     attribute_columns = _attribute_columns(documents)
-    label_columns = _label_columns(documents)
+    label_columns = _label_type_columns(documents)
     header = ["document_id", "title", "description", *attribute_columns, *label_columns]
     rows = [
         _row_for_document(document, attribute_columns, label_columns)

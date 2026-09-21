@@ -1,4 +1,4 @@
-"""Tests for `GET /search/documents/download`."""
+"""Tests for `GET /search/documents:download`."""
 
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
@@ -30,7 +30,7 @@ def test_download_returns_csv_with_content_disposition(document_client) -> None:
     )
 
     response = client.get(
-        "/search/documents/download", params={"query": "toxic"}
+        "/search/documents:download", params={"query": "toxic"}
     )
 
     assert response.status_code == HTTPStatus.OK
@@ -45,7 +45,7 @@ def test_download_defaults_max_results_to_500(document_client) -> None:
         results=[], total_size=0, next_page_token=None
     )
 
-    client.get("/search/documents/download", params={"query": "toxic"})
+    client.get("/search/documents:download", params={"query": "toxic"})
 
     _, kwargs = mock_engine.search.call_args
     assert kwargs["pagination"].page_size == 100
@@ -60,7 +60,7 @@ def test_download_respects_max_results_query_param(document_client) -> None:
     )
 
     response = client.get(
-        "/search/documents/download",
+        "/search/documents:download",
         params={"query": "toxic", "max_results": 5},
     )
 
@@ -75,7 +75,7 @@ def test_download_returns_503_on_vespa_error(document_client) -> None:
     mock_engine.search.side_effect = VespaError("Vespa is down")
 
     response = client.get(
-        "/search/documents/download", params={"query": "toxic"}
+        "/search/documents:download", params={"query": "toxic"}
     )
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
@@ -86,7 +86,7 @@ def test_download_rejects_non_positive_max_results(document_client) -> None:
     client, _ = document_client
 
     response = client.get(
-        "/search/documents/download",
+        "/search/documents:download",
         params={"query": "toxic", "max_results": 0},
     )
 

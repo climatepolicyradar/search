@@ -1,4 +1,4 @@
-"""Unit tests for the CSV-building logic behind `/search/documents/download`."""
+"""Unit tests for the CSV-building logic behind `/search/documents:download`."""
 
 import csv
 import io
