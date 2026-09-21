@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic_settings import SettingsConfigDict
 
+from api.download import DEFAULT_MAX_RESULTS, fetch_documents_for_download, generate_csv
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.utils import (
@@ -81,6 +82,65 @@ def read_llms_txt() -> str:
     @see: https://llmstxt.org
     """
     return LLMS_TXT_PATH.read_text(encoding="utf-8")
+
+
+@router.get(
+    "/documents/download",
+    responses=SEARCH_RESPONSES,
+)
+def download_documents(
+    query: str | None = Query(None, description="What are you looking for?"),
+    filters_json_string: str | None = Query(
+        None, alias="filters", description=DOCUMENTS_FILTERS_DESCRIPTION
+    ),
+    order_by: list[OrderBy] = Depends(documents_order_by),
+    max_results: int = Query(
+        DEFAULT_MAX_RESULTS,
+        gt=0,
+        description=(
+            "Maximum number of documents to include, most-relevant first. "
+            f"Defaults to {DEFAULT_MAX_RESULTS}."
+        ),
+    ),
+):
+    """Stream the current search's results as a CSV, one row per document."""
+    logger.info(
+        "Downloading document search as CSV "
+        "(query=%r, max_results=%s, filters_present=%s)",
+        query,
+        max_results,
+        bool(filters_json_string),
+    )
+
+    normalised_filters = normalise_filters(filters_json_string)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+    try:
+        documents = fetch_documents_for_download(
+            engine,
+            query=query,
+            order_by=order_by,
+            filters_json_string=normalised_filters,
+            max_results=max_results,
+        )
+    except Exception:
+        logger.exception(
+            "Error: document download request failed (query=%r, max_results=%s)",
+            query,
+            max_results,
+        )
+        raise
+
+    logger.info(
+        "Success: document download request completed (query=%r, results=%s)",
+        query,
+        len(documents),
+    )
+
+    return StreamingResponse(
+        generate_csv(documents),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=search-results.csv"},
+    )
 
 
 @router.get(
