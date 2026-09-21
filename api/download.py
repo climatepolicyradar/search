@@ -1,6 +1,4 @@
-"""
-CSV building for `GET /search/documents/download`.
-"""
+"""CSV building for `GET /search/documents/download`."""
 
 import csv
 import io
