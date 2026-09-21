@@ -1,5 +1,6 @@
 # trunk-ignore-all(checkov,terrascan,hadolint)
-FROM prefecthq/prefect:3-python3.13
+# @related: PREFECT_VERSION
+FROM prefecthq/prefect:3.8.6-python3.13
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 

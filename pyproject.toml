@@ -9,7 +9,10 @@ dependencies = [
   "duckdb>=1.5.5",
   "fastapi[standard]>=0.141.1",
   "posthog>=7.52.0",
-  "prefect[slack]>=3.8.5",
+  # @related: PREFECT_VERSION
+  # This should match the Dockerfiles using prefect as that's what we deploy to prefect
+  # which can cause unexpected results.
+  "prefect[slack]==3.8.6",
   "pydantic>=2.13.5",
   "pydantic-settings>=2.15.0",
   "python-dotenv>=1.2.3",
