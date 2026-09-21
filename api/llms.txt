@@ -40,6 +40,13 @@ Every path below is relative to `https://api.climatepolicyradar.org`, so
 No authentication — see Limits and etiquette.
 
 - `GET /search/documents` — search and filter documents.
+- `GET /search/documents/download` — the current document search (same
+  `query`/`filters`/`order_by` as above) as a CSV, one row per document,
+  capped at `max_results` (default 500). No `page_token`/`page_size`/`fields`/
+  `debug`/`bolding` — pagination is internal. Columns: `document_id`, `title`,
+  `description`, one `attributes.<key>` per attribute present, one
+  `labels.<type>` per non-classifier label type present. Topic and concept
+  labels are never included.
 - `GET /search/documents/{document_id}` — retrieve one document.
 - `GET /search/passages` — search passage text. Defaults to `idx asc` (reading
   order); pass `order_by=relevance desc` for best-match-first.
