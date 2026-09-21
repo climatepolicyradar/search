@@ -202,65 +202,6 @@ elif stack != "review":
         image_tag_mutability="MUTABLE",
     )
 
-    # AppRunner
-    apprunner_ecr_role = iam.Role(
-        f"{application_name}-apprunner-ecr-role",
-        name=f"{application_name}-apprunner-ecr-role",
-        description="IAM role for AppRunner",
-        assume_role_policy=iam.get_policy_document(
-            statements=[
-                iam.GetPolicyDocumentStatementArgs(
-                    effect="Allow",
-                    principals=[
-                        iam.GetPolicyDocumentStatementPrincipalArgs(
-                            type="Service",
-                            identifiers=["build.apprunner.amazonaws.com"],
-                        )
-                    ],
-                    actions=["sts:AssumeRole"],
-                )
-            ]
-        ).json,
-    )
-    apprunner_ecr_role_policy = iam.RolePolicy(
-        f"{application_name}-apprunner-ecr-role-policy",
-        name=f"{application_name}-apprunner-ecr-role-policy",
-        role=apprunner_ecr_role.id,
-        policy=iam.get_policy_document(
-            statements=[
-                iam.GetPolicyDocumentStatementArgs(
-                    effect="Allow",
-                    actions=[
-                        "ecr:GetDownloadUrlForLayer",
-                        "ecr:BatchGetImage",
-                        "ecr:DescribeImages",
-                        "ecr:GetAuthorizationToken",
-                        "ecr:BatchCheckLayerAvailability",
-                    ],
-                    resources=["*"],
-                )
-            ]
-        ).json,
-    )
-
-    apprunner_instance_role = iam.Role(
-        f"{application_name}-apprunner-instance-role",
-        name=f"{application_name}-apprunner-instance-role",
-        assume_role_policy=iam.get_policy_document(
-            statements=[
-                iam.GetPolicyDocumentStatementArgs(
-                    effect="Allow",
-                    principals=[
-                        iam.GetPolicyDocumentStatementPrincipalArgs(
-                            type="Service",
-                            identifiers=["tasks.apprunner.amazonaws.com"],
-                        )
-                    ],
-                    actions=["sts:AssumeRole"],
-                ),
-            ]
-        ).json,
-    )
     vespa_endpoint = ssm.Parameter(
         "vespa-endpoint",
         name="/search/vespa/endpoint",
@@ -292,38 +233,6 @@ elif stack != "review":
         name="/search/vespa-dev/write_token",
         type=ssm.ParameterType.SECURE_STRING,
         value=config.get("vespa_dev_write_token"),
-    )
-
-    apprunner_ssm_parameter_policy = iam.RolePolicy(
-        f"{application_name}-ssm-parameter-policy",
-        name=f"{application_name}-ssm-parameter-policy",
-        role=apprunner_instance_role.name,
-        policy=pulumi.Output.all(
-            vespa_endpoint_arn=vespa_endpoint.arn,
-            vespa_read_token_arn=vespa_read_token.arn,
-            vespa_dev_write_token_arn=vespa_dev_write_token.arn,
-        ).apply(
-            lambda args: json.dumps(
-                {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "ssm:GetParameter",
-                                "ssm:GetParameters",
-                                "ssm:DescribeParameters",
-                            ],
-                            "Resource": [
-                                args["vespa_endpoint_arn"],
-                                args["vespa_read_token_arn"],
-                                args["vespa_dev_write_token_arn"],
-                            ],
-                        }
-                    ],
-                }
-            )
-        ),
     )
 
     ecs_read_s3_policy = iam.Policy(
@@ -477,7 +386,7 @@ elif stack != "review":
     # ECS Express Mode
     # -----
 
-    # Task role: runtime permissions (S3 read) — reuses the same policy as AppRunner
+    # Task role: runtime permissions (S3 read)
     ecs_task_role = iam.Role(
         f"{application_name}-ecs-task-role",
         name=f"{application_name}-ecs-task-role",
