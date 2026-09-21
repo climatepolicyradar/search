@@ -130,8 +130,7 @@ def fetch_documents_for_download(
 
 def generate_csv(documents: list[Document]) -> Iterator[str]:
     """
-    Yield CSV text chunks for ``documents``: one header line, then one line
-    per document.
+    Yield CSV text chunks for ``documents``: a header line, then one per row.
 
     Reuses one ``StringIO`` buffer across rows (``seek(0)`` + ``truncate(0)``
     between writes) rather than allocating a fresh one per row.

@@ -162,10 +162,11 @@ async def log_request_lifecycle(request: Request, call_next):
 @app.get("/")
 @router.get("")
 async def root(request: Request):
-    """Root endpoint: API information as schema.org JSON-LD.
-    
-    We use both routers to make sure we can have /search available
-    publicly and / available to the ECS health check.
+    """
+    Root endpoint: API information as schema.org JSON-LD.
+
+    We use both routers to make sure we can have /search available publicly
+    and / available to the ECS health check.
     """
     base = str(request.base_url).rstrip("/")
     return {
@@ -219,6 +220,3 @@ app.include_router(router)
 
 telemetry.instrument_fastapi(app)
 telemetry.setup_exception_hook()
-
-
-

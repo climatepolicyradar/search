@@ -168,6 +168,8 @@ def _docs(*ids: str) -> list[Document]:
 
 def test_fetch_stops_once_max_results_reached(monkeypatch) -> None:
     """
+    Pin the multi-call path without contradicting the short-page rule.
+
     With a real internal page size, `max_results=3` is requested in one call
     (page_size=min(_INTERNAL_PAGE_SIZE, 3)=3), so a second call only happens
     if the first page is genuinely full at the *requested* size and more
