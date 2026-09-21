@@ -92,11 +92,8 @@ def generate_csv(documents: list[Document]) -> Iterator[str]:
     Yield CSV text chunks for ``documents``: one header line, then one line
     per document.
 
-    ``documents`` is already fully materialized (bounded by the caller's
-    ``max_results``), so this yields per-row rather than streaming from Vespa
-    incrementally — simpler, and the row count is always small enough that
-    building each line as it's needed costs nothing over building it all at
-    once.
+    Reuses one ``StringIO`` buffer across rows (``seek(0)`` + ``truncate(0)``
+    between writes) rather than allocating a fresh one per row.
     """
     header, rows = build_csv_rows(documents)
     buffer = io.StringIO()
