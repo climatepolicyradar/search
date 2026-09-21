@@ -1,12 +1,5 @@
 """
 CSV building for `GET /search/documents/download`.
-
-Column exclusion is explicit rather than an allow-list, per FUS-509 item 3
-("confirm topic/classifier metadata is excluded, do not assume"): topic and
-concept labels are the only place classifier output lives on a `Document`
-(`search/engines/dev_vespa.py`'s `get_labels_from_vespa_response`) — never in
-`attributes`. Excluding them here, in one place with a test pinning the exact
-set, makes that guarantee visible rather than incidental.
 """
 
 import csv
