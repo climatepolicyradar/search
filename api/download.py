@@ -2,9 +2,7 @@
 
 import csv
 import io
-import math
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
 
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
@@ -101,38 +99,24 @@ def fetch_documents_for_download(
     """
     Fetch up to ``max_results`` documents, paging the engine internally.
 
-    Pages are independent offset-based requests (``page_token`` maps directly
-    to a Vespa ``offset``), so they're fetched concurrently rather than one
-    round trip at a time. Results are then reassembled in page order and
-    truncated at the first short/empty page - Vespa has no more matches past
-    that point, mirroring the previous sequential early-stop behaviour.
+    Stops when either ``max_results`` is reached or a page comes back shorter
+    than requested (Vespa has no more matches) - whichever happens first.
     """
-    page_count = math.ceil(max_results / _INTERNAL_PAGE_SIZE)
-    page_sizes = [
-        min(_INTERNAL_PAGE_SIZE, max_results - (page_token - 1) * _INTERNAL_PAGE_SIZE)
-        for page_token in range(1, page_count + 1)
-    ]
-
-    def fetch_page(page_token: int, page_size: int) -> list[Document]:
+    results: list[Document] = []
+    page_token = 1
+    while len(results) < max_results:
+        page_size = min(_INTERNAL_PAGE_SIZE, max_results - len(results))
         response = engine.search(
             query=query,
             pagination=Pagination(page_token=page_token, page_size=page_size),
             order_by=order_by,
             filters_json_string=filters_json_string,
         )
-        return response.results
-
-    with ThreadPoolExecutor(max_workers=page_count) as pool:
-        pages = list(
-            pool.map(fetch_page, range(1, page_count + 1), page_sizes)
-        )
-
-    results: list[Document] = []
-    for page, page_size in zip(pages, page_sizes):
-        results.extend(page)
-        if len(page) < page_size:
+        results.extend(response.results)
+        if len(response.results) < page_size:
             break
-    return results[:max_results]
+        page_token += 1
+    return results
 
 
 def generate_csv(documents: list[Document]) -> Iterator[str]:
