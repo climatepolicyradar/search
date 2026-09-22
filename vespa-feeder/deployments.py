@@ -13,6 +13,7 @@ from documents_flow import (
     documents_principal_concepts_feeder_flow,
 )
 from labels_flow import labels_feeder_flow
+from nightly_flow import nightly_feeder_flow
 from passages_flow import (
     passages_feeder_flow,
 )
@@ -34,13 +35,32 @@ class VespaFeederDeployment:
 
 
 _FEEDS: list[VespaFeederDeployment] = [
+    # Orchestration
+    # This is the only deployment on a cron, as it orchestrates the
+    # documents, labels and passages flow.
+    #
+    # The reason to have these run sequentially is the strain it puts
+    # on Vespa is they run in parallel, especially as documents and passages
+    # both feed passage data which is significant.
+    # It triggers the feeds' own deployments rather than running them itself,
+    # so each feed keeps its own sizing below and this task only has to hold a
+    # Prefect client while it waits - hence the smallest sizing we can give it.
+    VespaFeederDeployment(
+        flow=nightly_feeder_flow,
+        job_variables={"cpu": 256, "memory": 512},
+        # the dl-snowflake-models-run flow runs daily at 07:30 UTC
+        # and takes < 3hrs so we orchestrate to be after that.
+        # These are both UTC.
+        cron="30 10 * * *",
+    ),
+    # We keep these deployments in case we need to run them individually
+    # on a manual basis.
     # Labels
-    VespaFeederDeployment(flow=labels_feeder_flow, cron="0 5 * * *"),
+    VespaFeederDeployment(flow=labels_feeder_flow),
     # Documents
     VespaFeederDeployment(
         flow=documents_feeder_flow,
         job_variables={"cpu": 1024, "memory": 2048},
-        cron="0 5 * * *",
     ),
     # we've removed the cron to stop these tasks running on a schedule,
     # but keeping them as an escape hatch until we have had search running stable for a while.
@@ -58,7 +78,6 @@ _FEEDS: list[VespaFeederDeployment] = [
     VespaFeederDeployment(
         flow=passages_feeder_flow,
         job_variables={"cpu": 1024, "memory": 4096},
-        cron="0 5 * * *",
     ),
 ]
 
