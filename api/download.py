@@ -2,11 +2,15 @@
 
 import csv
 import io
+import time  # TODO(profiling): remove
 from collections.abc import Iterator
 
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
+from search.log import get_logger  # TODO(profiling): remove
+
+logger = get_logger(__name__)  # TODO(profiling): remove
 
 EXCLUDED_LABEL_TYPES = {"topic", "concept"}
 
@@ -102,20 +106,34 @@ def fetch_documents_for_download(
     Stops when either ``max_results`` is reached or a page comes back shorter
     than requested (Vespa has no more matches) - whichever happens first.
     """
+    fetch_start = time.perf_counter()  # TODO(profiling): remove
     results: list[Document] = []
     page_token = 1
     while len(results) < max_results:
         page_size = min(_INTERNAL_PAGE_SIZE, max_results - len(results))
+        page_start = time.perf_counter()  # TODO(profiling): remove
         response = engine.search(
             query=query,
             pagination=Pagination(page_token=page_token, page_size=page_size),
             order_by=order_by,
             filters_json_string=filters_json_string,
         )
+        logger.info(  # TODO(profiling): remove
+            "PROFILING page=%s page_size=%s took=%.3fs",
+            page_token,
+            page_size,
+            time.perf_counter() - page_start,
+        )
         results.extend(response.results)
         if len(response.results) < page_size:
             break
         page_token += 1
+    logger.info(  # TODO(profiling): remove
+        "PROFILING fetch_documents_for_download total pages=%s results=%s took=%.3fs",
+        page_token,
+        len(results),
+        time.perf_counter() - fetch_start,
+    )
     return results
 
 
@@ -126,7 +144,13 @@ def generate_csv(documents: list[Document]) -> Iterator[str]:
     Reuses one ``StringIO`` buffer across rows (``seek(0)`` + ``truncate(0)``
     between writes) rather than allocating a fresh one per row.
     """
+    build_start = time.perf_counter()  # TODO(profiling): remove
     header, rows = build_csv_rows(documents)
+    logger.info(  # TODO(profiling): remove
+        "PROFILING build_csv_rows rows=%s took=%.3fs",
+        len(rows),
+        time.perf_counter() - build_start,
+    )
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=header)
     writer.writeheader()

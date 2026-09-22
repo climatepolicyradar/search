@@ -120,6 +120,7 @@ def download_documents(
 
     normalised_filters = normalise_filters(filters_json_string)
     engine = DevVespaDocumentSearchEngine(settings=settings)
+    request_start = time.perf_counter()  # TODO(profiling): remove
     try:
         documents = fetch_documents_for_download(
             engine,
@@ -136,6 +137,10 @@ def download_documents(
         )
         raise
 
+    logger.info(  # TODO(profiling): remove
+        "PROFILING fetch_documents_for_download (router-level) took=%.3fs",
+        time.perf_counter() - request_start,
+    )
     logger.info(
         "Success: document download request completed (query=%r, results=%s)",
         query,
