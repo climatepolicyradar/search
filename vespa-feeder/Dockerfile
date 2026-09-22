@@ -26,3 +26,4 @@ COPY labels_flow.py .
 COPY documents_flow.py .
 COPY passages_derived_data.py .
 COPY passages_flow.py .
+COPY nightly_flow.py .
