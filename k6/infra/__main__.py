@@ -3,7 +3,7 @@ Grafana Cloud k6 projects, load tests, and schedules for search-api.
 
 Split into its own Pulumi project (separate from `search/infra`) so that
 updating a k6 script only ever runs a `pulumi up` scoped to these resources —
-not the full search-api stack (AppRunner, ECS, S3, IAM, Vespa config), which
+not the full search-api stack (ECS, S3, IAM, Vespa config), which
 would otherwise risk rolling in whatever else happens to have drifted or been
 queued up in that stack at the same time.
 
@@ -15,7 +15,7 @@ Manages two k6 Cloud projects per `k6/tests/smoke-load/routes/<resource>/` group
   so sustained load does not consume GitHub runner minutes.
 
 Kept separate rather than sharing one Grafana project per resource because
-Grafana Cloud k6 has no per-test/schedule way to set `PROFILE` at cloud-run 
+Grafana Cloud k6 has no per-test/schedule way to set `PROFILE` at cloud-run
 time (only an org-wide env var setting, too coarse to tell one
 script's smoke run from its own load run) — mixing both test types into one
 project would mean unrelated run shapes sitting in the same history with no
@@ -31,7 +31,7 @@ Failure notifications cannot be provisioned here: the
 do not expose notification/webhook/alert field (as of 2026-09-16), and
 k6 results live in Grafana Cloud k6's own datasource, not a
 Prometheus-compatible one Grafana's core alerting can query. We need to
-set up the notifications ourselves in the Grafana Cloud k6 UI. 
+set up the notifications ourselves in the Grafana Cloud k6 UI.
 """
 
 from dataclasses import dataclass
@@ -62,10 +62,10 @@ class LoadTestSpec:
     :param name: human-friendly load test name in Grafana Cloud
     :param cron: 5-field cron expression, evaluated in UTC; None =
         provisioned but not scheduled
-        
+
         `cron`/`starts` are optional so a spec can be provisioned
         (uploaded as a Grafana Cloud k6 LoadTest, runnable manually or
-        from CI) without also being put on a recurring schedule 
+        from CI) without also being put on a recurring schedule
     :param starts: RFC3339 timestamp; fixed rather than computed at
         apply time, so re-running `pulumi up` doesn't perpetually diff
         the schedule's start
