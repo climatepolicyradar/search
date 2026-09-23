@@ -29,6 +29,7 @@ from prefect.client.schemas.objects import State
 from prefect.futures import PrefectFuture
 from prefect.states import Failed
 from pydantic import BaseModel, ConfigDict, Field
+from telemetry import tracer, trace
 
 from prefect import get_run_logger, task
 
@@ -208,6 +209,7 @@ def get_ssm_parameter(name: str) -> str:
     return value.strip()
 
 
+@tracer.start_as_current_span("materialize_s3_files")
 def materialize_s3_files(bucket: str, batched_s3_keys: list[str]) -> list[Path]:
     s3: S3Client = boto3.client("s3")
 
@@ -220,12 +222,17 @@ def materialize_s3_files(bucket: str, batched_s3_keys: list[str]) -> list[Path]:
     return materialized_s3_files
 
 
+@tracer.start_as_current_span("materialize_derived_files")
 def materialize_derived_files(
     materialized_s3_files: list[Path],
     derive_data_from_source: Callable[[dict], dict] | None,
 ) -> list[Path]:
-    if derive_data_from_source is None:
-        return materialized_s3_files
+    """
+    Write a `.derived` copy of every source file, deriver or no deriver.
+
+    This allows `feed_batch` to delete the S3 sources as soon as this returns.
+    """
+    derive = derive_data_from_source or (lambda record: record)
 
     materialized_derived_files = []
     for materialized_s3_file in materialized_s3_files:
@@ -236,13 +243,14 @@ def materialize_derived_files(
             for line in src:
                 if not line.strip():
                     continue
-                record = derive_data_from_source(orjson.loads(line))
+                record = derive(orjson.loads(line))
                 dst.write(orjson.dumps(record) + b"\n")
         materialized_derived_files.append(derived_file)
 
     return materialized_derived_files
 
 
+@tracer.start_as_current_span("feed_derived_files")
 def feed_derived_files(
     materialized_derived_files: list[Path],
     endpoint: str,
@@ -319,16 +327,19 @@ def feed_derived_files(
     )
 
 
+@tracer.start_as_current_span("delete_materialized_s3_files")
 def delete_materialized_s3_files(materialized_s3_files: list[Path]) -> None:
     for materialized_s3_file in materialized_s3_files:
         materialized_s3_file.unlink(missing_ok=True)
 
 
+@tracer.start_as_current_span("delete_materialized_derived_files")
 def delete_materialized_derived_files(materialized_derived_files: list[Path]) -> None:
     for materialized_derived_file in materialized_derived_files:
         materialized_derived_file.unlink(missing_ok=True)
 
 
+@tracer.start_as_current_span("feed_batch")
 @task(cache_policy=INPUTS - "derive_data_from_source")
 def feed_batch(
     endpoint: str,
@@ -348,8 +359,7 @@ def feed_batch(
         derive_data_from_source=derive_data_from_source,
     )
 
-    # small optimisation on disk space as these are not needed in
-    # any future steps.
+    # Halves peak disk - a batch otherwise holds both sets at once.
     delete_materialized_s3_files(materialized_s3_files=materialized_s3_files)
 
     try:
@@ -361,12 +371,12 @@ def feed_batch(
             feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
         )
     finally:
-        delete_materialized_s3_files(materialized_s3_files=materialized_s3_files)
         delete_materialized_derived_files(
             materialized_derived_files=materialized_derived_files
         )
 
 
+@tracer.start_as_current_span("vespa_feeder_v2")
 def vespa_feeder_v2(
     s3_bucket: str,
     s3_key: str,
@@ -397,9 +407,20 @@ def vespa_feeder_v2(
         # produced the files varies along the ordering.
         s3_keys = s3_keys[:: round(1 / sample_rate)]
 
+    # Log and trace before we get going
     run_logger.info(
         f"Feeding {len(s3_keys)} files from s3://{s3_bucket}/{s3_key} "
         f"in batches of {batch_size} (sample_rate={sample_rate})"
+    )
+    trace.get_current_span().set_attributes(
+        {
+            "s3_bucket": s3_bucket,
+            "s3_key": s3_key,
+            "batch_size": batch_size,
+            "sample_rate": sample_rate,
+            "connections": connections,
+            "s3_keys_len": len(s3_keys),
+        }
     )
 
     s3_key_batches = list(batched(s3_keys, batch_size))
