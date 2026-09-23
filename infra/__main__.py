@@ -109,7 +109,13 @@ if is_review_stack:
         infrastructure_role_arn=shared_infrastructure_role_arn,
         task_role_arn=shared_task_role_arn,
         primary_container=ExpressGatewayServicePrimaryContainerArgs(
-            image=pulumi.Output.concat(shared_ecr_url, ":", stack),
+            # `review_image.ref` is a tag-with-digest (e.g. `repo:tag@sha256:...`),
+            # not just the static `repo:tag` string - Pulumi only diffs on input
+            # values, so a plain tag never changes between builds and the ECS
+            # service would never detect that a new image was pushed underneath
+            # it. The digest changes on every build, so this makes each new
+            # image push actually trigger a service update.
+            image=review_image.ref,
             container_port=8080,
             environments=[
                 ExpressGatewayServicePrimaryContainerEnvironmentArgs(
