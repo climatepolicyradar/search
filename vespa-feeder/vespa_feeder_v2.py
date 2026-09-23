@@ -41,7 +41,7 @@ from prefect import get_run_logger, task
 _DEFAULT_CONNECTIONS = 2
 
 
-# How many S3 keys each stage/feed/delete chain handles at once.
+# How many S3 keys each materialize/feed/delete chain handles at once.
 DEFAULT_BATCH_SIZE = 10
 
 # 1 feeds every file list_s3_keys discovers. Lower it to benchmark against a
@@ -208,43 +208,43 @@ def get_ssm_parameter(name: str) -> str:
     return value.strip()
 
 
-def stage_s3_files(bucket: str, batched_s3_keys: list[str]) -> list[Path]:
+def materialize_s3_files(bucket: str, batched_s3_keys: list[str]) -> list[Path]:
     s3: S3Client = boto3.client("s3")
 
-    staged_s3_files = []
+    materialized_s3_files = []
     for s3_key in batched_s3_keys:
-        staged_s3_file = Path(tempfile.gettempdir()) / s3_key.split("/")[-1]
-        s3.download_file(bucket, s3_key, str(staged_s3_file))
-        staged_s3_files.append(staged_s3_file)
+        materialized_s3_file = Path(tempfile.gettempdir()) / s3_key.split("/")[-1]
+        s3.download_file(bucket, s3_key, str(materialized_s3_file))
+        materialized_s3_files.append(materialized_s3_file)
 
-    return staged_s3_files
+    return materialized_s3_files
 
 
-def stage_derived_files(
-    staged_s3_files: list[Path],
+def materialize_derived_files(
+    materialized_s3_files: list[Path],
     derive_data_from_source: Callable[[dict], dict] | None,
 ) -> list[Path]:
     if derive_data_from_source is None:
-        return staged_s3_files
+        return materialized_s3_files
 
-    staged_derived_files = []
-    for staged_s3_file in staged_s3_files:
-        derived_file = staged_s3_file.with_name(
-            f"{staged_s3_file.stem}.derived{staged_s3_file.suffix}"
+    materialized_derived_files = []
+    for materialized_s3_file in materialized_s3_files:
+        derived_file = materialized_s3_file.with_name(
+            f"{materialized_s3_file.stem}.derived{materialized_s3_file.suffix}"
         )
-        with staged_s3_file.open("rb") as src, derived_file.open("wb") as dst:
+        with materialized_s3_file.open("rb") as src, derived_file.open("wb") as dst:
             for line in src:
                 if not line.strip():
                     continue
                 record = derive_data_from_source(orjson.loads(line))
                 dst.write(orjson.dumps(record) + b"\n")
-        staged_derived_files.append(derived_file)
+        materialized_derived_files.append(derived_file)
 
-    return staged_derived_files
+    return materialized_derived_files
 
 
 def feed_derived_files(
-    staged_derived_files: list[Path],
+    materialized_derived_files: list[Path],
     endpoint: str,
     application: str,
     connections: int = _DEFAULT_CONNECTIONS,
@@ -252,8 +252,8 @@ def feed_derived_files(
 ) -> FeedResult:
     input_count = sum(
         1
-        for staged_derived_file in staged_derived_files
-        for line in staged_derived_file.open("rb")
+        for materialized_derived_file in materialized_derived_files
+        for line in materialized_derived_file.open("rb")
         if line.strip()
     )
 
@@ -261,7 +261,10 @@ def feed_derived_files(
         [
             "vespa",
             "feed",
-            *[str(staged_derived_file) for staged_derived_file in staged_derived_files],
+            *[
+                str(materialized_derived_file)
+                for materialized_derived_file in materialized_derived_files
+            ],
             "--target",
             endpoint,
             "--application",
@@ -275,7 +278,7 @@ def feed_derived_files(
         env=os.environ,
         capture_output=True,
         text=True,
-        timeout=feed_timeout_seconds_per_file * len(staged_derived_files),
+        timeout=feed_timeout_seconds_per_file * len(materialized_derived_files),
         check=True,
     )
 
@@ -305,7 +308,7 @@ def feed_derived_files(
         )
 
     return FeedResult(
-        feed_paths=staged_derived_files,
+        feed_paths=materialized_derived_files,
         input_count=input_count,
         operation_count=response.feeder_operation_count,
         ok_count=response.feeder_ok_count,
@@ -316,14 +319,14 @@ def feed_derived_files(
     )
 
 
-def delete_staged_s3_files(staged_s3_files: list[Path]) -> None:
-    for staged_s3_file in staged_s3_files:
-        staged_s3_file.unlink(missing_ok=True)
+def delete_materialized_s3_files(materialized_s3_files: list[Path]) -> None:
+    for materialized_s3_file in materialized_s3_files:
+        materialized_s3_file.unlink(missing_ok=True)
 
 
-def delete_staged_derived_files(staged_derived_files: list[Path]) -> None:
-    for staged_derived_file in staged_derived_files:
-        staged_derived_file.unlink(missing_ok=True)
+def delete_materialized_derived_files(materialized_derived_files: list[Path]) -> None:
+    for materialized_derived_file in materialized_derived_files:
+        materialized_derived_file.unlink(missing_ok=True)
 
 
 @task(cache_policy=INPUTS - "derive_data_from_source")
@@ -336,30 +339,32 @@ def feed_batch(
     batched_s3_keys: tuple[str, ...],
     derive_data_from_source: Callable[[dict], dict] | None = None,
 ) -> FeedResult:
-    staged_s3_files = stage_s3_files(
+    materialized_s3_files = materialize_s3_files(
         bucket=s3_bucket, batched_s3_keys=list(batched_s3_keys)
     )
 
-    staged_derived_files = stage_derived_files(
-        staged_s3_files=staged_s3_files,
+    materialized_derived_files = materialize_derived_files(
+        materialized_s3_files=materialized_s3_files,
         derive_data_from_source=derive_data_from_source,
     )
 
     # small optimisation on disk space as these are not needed in
     # any future steps.
-    delete_staged_s3_files(staged_s3_files=staged_s3_files)
+    delete_materialized_s3_files(materialized_s3_files=materialized_s3_files)
 
     try:
         return feed_derived_files(
-            staged_derived_files=staged_derived_files,
+            materialized_derived_files=materialized_derived_files,
             endpoint=endpoint,
             application=application,
             connections=connections,
             feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
         )
     finally:
-        delete_staged_s3_files(staged_s3_files=staged_s3_files)
-        delete_staged_derived_files(staged_derived_files=staged_derived_files)
+        delete_materialized_s3_files(materialized_s3_files=materialized_s3_files)
+        delete_materialized_derived_files(
+            materialized_derived_files=materialized_derived_files
+        )
 
 
 def vespa_feeder_v2(
