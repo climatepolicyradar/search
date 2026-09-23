@@ -34,6 +34,13 @@ ignore = [
   # Pytest fixtures may receive unused injected dependencies
   "ARG001", # https://docs.astral.sh/ruff/rules/unused-function-argument/
 
+  # Test doubles mirror the signature of what they stand in for, so they take
+  # arguments they have no use for
+  "ARG002", # https://docs.astral.sh/ruff/rules/unused-method-argument/
+
+  # monkeypatch stubs are lambdas that must accept the caller's arguments
+  "ARG005", # https://docs.astral.sh/ruff/rules/unused-lambda-argument/
+
   # Test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
   "D102", # https://docs.astral.sh/ruff/rules/undocumented-public-method/
 ]

@@ -229,8 +229,8 @@ def passages_feeder_flow_v2(
     batch_size: int = DEFAULT_BATCH_SIZE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
     s3_key: str = "latest",
-) -> State | None:
-    return vespa_feeder_v2(
+) -> None:
+    vespa_feeder_v2(
         s3_bucket="cpr-prod-snowflake-data-export",
         s3_key=f"production/published/pipeline_data_in_vespa_passage_updates_v1/{s3_key}",
         derive_data_from_source=derive_passage_data,

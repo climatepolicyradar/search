@@ -25,11 +25,9 @@ import orjson
 from mypy_boto3_s3 import S3Client
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import INPUTS
-from prefect.client.schemas.objects import State
 from prefect.futures import PrefectFuture
-from prefect.states import Failed
 from pydantic import BaseModel, ConfigDict, Field
-from telemetry import tracer, trace
+from telemetry import trace, tracer
 
 from prefect import get_run_logger, task
 
@@ -60,8 +58,11 @@ class FailedDocument:
     error: str
 
 
+# Per-batch outcomes, not exceptions: a batch that loses records is reported
+# through FeedResult so every other batch still gets fed and counted. The run
+# raises VespaFeederFailed once, at the end, with all of them.
 @dataclass
-class VespaHTTPError(Exception):
+class VespaFeedError:
     """Transport layer gave up — no HTTP response received for some records."""
 
     feeder_error_count: int  # feeder.error.count
@@ -69,7 +70,7 @@ class VespaHTTPError(Exception):
 
 
 @dataclass
-class VespaResponseError(Exception):
+class VespaResponseError:
     """HTTP responses received but records still lost after exhausting retries."""
 
     ok_count: int  # feeder.ok.count
@@ -79,7 +80,23 @@ class VespaResponseError(Exception):
     failed_documents: list[FailedDocument]
 
 
-VespaFeedError = VespaHTTPError | VespaResponseError
+VespaError = VespaFeedError | VespaResponseError
+
+
+class VespaFeederFailed(Exception):
+    """Records were lost that `vespa feed`'s own retries never recovered."""
+
+    def __init__(self, message: str, failed_results: list["FeedResult"]) -> None:
+        super().__init__(message)
+        self.failed_results = failed_results
+
+    def __reduce__(self):
+        """
+        Without this, unpickling calls __init__ with `args`, which holds only the message
+
+        Prefect pickles exceptions to persist a failed run.
+        """
+        return (self.__class__, (str(self), self.failed_results))
 
 
 class VespaFeedResponse(BaseModel):
@@ -109,7 +126,7 @@ class FeedResult:
     feeder_error_count: int  # transport-layer failures, no HTTP response received
     throttled_count: int  # requests that got a 429 at some point (may have retried ok)
     other_http_error_count: int  # non-2xx responses other than 429, e.g. 5xx
-    errors: list[VespaFeedError]
+    errors: list[VespaError]
 
 
 _GIVING_UP_RE = re.compile(r"^feed: (.+) for put (\S+): giving up", re.MULTILINE)
@@ -293,14 +310,14 @@ def feed_derived_files(
     response = VespaFeedResponse.model_validate(orjson.loads(result.stdout))
     throttled_count = response.http_response_code_counts.get("429", 0)
     other_http_error_count = response.http_response_error_count - throttled_count
-    missing_count = response.feeder_operation_count - response.feeder_ok_count
+    not_ok_count = response.feeder_operation_count - response.feeder_ok_count
     failed_documents = _parse_failed_documents(result.stderr)
 
-    errors: list[VespaFeedError] = []
-    if missing_count > 0:
+    errors: list[VespaError] = []
+    if not_ok_count > 0:
         if response.feeder_error_count > 0:
             errors.append(
-                VespaHTTPError(
+                VespaFeedError(
                     feeder_error_count=response.feeder_error_count,
                     failed_documents=failed_documents,
                 )
@@ -339,8 +356,8 @@ def delete_materialized_derived_files(materialized_derived_files: list[Path]) ->
         materialized_derived_file.unlink(missing_ok=True)
 
 
-@tracer.start_as_current_span("feed_batch")
 @task(cache_policy=INPUTS - "derive_data_from_source")
+@tracer.start_as_current_span("feed_batch")
 def feed_batch(
     endpoint: str,
     application: str,
@@ -385,7 +402,7 @@ def vespa_feeder_v2(
     connections: int = _DEFAULT_CONNECTIONS,
     feed_timeout_seconds_per_file: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS_PER_FILE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
-) -> State | None:
+) -> None:
     run_logger = get_run_logger()
 
     if not 0 < sample_rate <= 1:
@@ -469,10 +486,9 @@ def vespa_feeder_v2(
             for result in failed_results
             for feed_path in result.feed_paths
         )
-        return Failed(
-            message=(
-                f"vespa_feed: failed for {len(failed_results)}/{len(results)} "
-                f"batch(es): {failed_paths}. See the vespa-feeder-run-summary "
-                "artifact and per-batch error logs above for details."
-            )
+        raise VespaFeederFailed(
+            f"vespa_feed: failed for {len(failed_results)}/{len(results)} "
+            f"batch(es): {failed_paths}. See the vespa-feeder-run-summary "
+            "artifact and per-batch error logs above for details.",
+            failed_results,
         )
