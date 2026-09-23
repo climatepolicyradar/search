@@ -3,16 +3,12 @@
 import csv
 import io
 import math
-import time  # TODO(profiling): remove
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
-from search.log import get_logger  # TODO(profiling): remove
-
-logger = get_logger(__name__)  # TODO(profiling): remove
 
 EXCLUDED_LABEL_TYPES = {"topic", "concept"}
 
@@ -111,7 +107,6 @@ def fetch_documents_for_download(
     truncated at the first short/empty page - Vespa has no more matches past
     that point, mirroring the previous sequential early-stop behaviour.
     """
-    fetch_start = time.perf_counter()  # TODO(profiling): remove
     page_count = math.ceil(max_results / _INTERNAL_PAGE_SIZE)
     page_sizes = [
         min(_INTERNAL_PAGE_SIZE, max_results - (page_token - 1) * _INTERNAL_PAGE_SIZE)
@@ -119,18 +114,11 @@ def fetch_documents_for_download(
     ]
 
     def fetch_page(page_token: int, page_size: int) -> list[Document]:
-        page_start = time.perf_counter()  # TODO(profiling): remove
         response = engine.search(
             query=query,
             pagination=Pagination(page_token=page_token, page_size=page_size),
             order_by=order_by,
             filters_json_string=filters_json_string,
-        )
-        logger.info(  # TODO(profiling): remove
-            "PROFILING page=%s page_size=%s took=%.3fs",
-            page_token,
-            page_size,
-            time.perf_counter() - page_start,
         )
         return response.results
 
@@ -144,14 +132,7 @@ def fetch_documents_for_download(
         results.extend(page)
         if len(page) < page_size:
             break
-    results = results[:max_results]
-    logger.info(  # TODO(profiling): remove
-        "PROFILING fetch_documents_for_download total pages=%s results=%s took=%.3fs",
-        page_count,
-        len(results),
-        time.perf_counter() - fetch_start,
-    )
-    return results
+    return results[:max_results]
 
 
 def generate_csv(documents: list[Document]) -> Iterator[str]:
@@ -161,13 +142,7 @@ def generate_csv(documents: list[Document]) -> Iterator[str]:
     Reuses one ``StringIO`` buffer across rows (``seek(0)`` + ``truncate(0)``
     between writes) rather than allocating a fresh one per row.
     """
-    build_start = time.perf_counter()  # TODO(profiling): remove
     header, rows = build_csv_rows(documents)
-    logger.info(  # TODO(profiling): remove
-        "PROFILING build_csv_rows rows=%s took=%.3fs",
-        len(rows),
-        time.perf_counter() - build_start,
-    )
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=header)
     writer.writeheader()
