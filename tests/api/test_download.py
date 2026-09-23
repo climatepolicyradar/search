@@ -5,6 +5,8 @@ import io
 from datetime import datetime
 from unittest.mock import MagicMock
 
+import pytest
+
 from api.download import (
     DEFAULT_MAX_RESULTS,
     EXCLUDED_LABEL_TYPES,
@@ -13,7 +15,7 @@ from api.download import (
     generate_csv,
 )
 from search.data_in_models import Document, Label, LabelRelationship
-from search.engines import ListResponse, Pagination
+from search.engines import ListResponse, Pagination, VespaError
 
 
 def _label(type_: str, value_type: str, value: str) -> LabelRelationship:
@@ -153,12 +155,22 @@ def test_generate_csv_with_no_documents_produces_just_a_header() -> None:
 
 
 def _make_engine(pages: list[list[Document]]) -> MagicMock:
-    """A mock `DevVespaDocumentSearchEngine` returning `pages` in sequence."""
+    """
+    A mock `DevVespaDocumentSearchEngine` returning `pages[page_token - 1]`.
+
+    Pages are fetched concurrently by the implementation, so responses are
+    keyed by the requested `page_token` (not by call order) to stay
+    deterministic regardless of thread scheduling.
+    """
     engine = MagicMock()
-    engine.search.side_effect = [
-        ListResponse(results=page, total_size=None, next_page_token=None)
-        for page in pages
-    ]
+
+    def search(**kwargs):
+        page_token = kwargs["pagination"].page_token
+        return ListResponse(
+            results=pages[page_token - 1], total_size=None, next_page_token=None
+        )
+
+    engine.search.side_effect = search
     return engine
 
 
@@ -166,23 +178,12 @@ def _docs(*ids: str) -> list[Document]:
     return [Document(id=i, title=i, description=None) for i in ids]
 
 
-def test_fetch_stops_once_max_results_reached(monkeypatch) -> None:
+def test_fetch_combines_multiple_pages_up_to_max_results(monkeypatch) -> None:
     """
-    Pin the multi-call path without contradicting the short-page rule.
+    Pages are fetched concurrently, then reassembled in page order.
 
-    With a real internal page size, `max_results=3` is requested in one call
-    (page_size=min(_INTERNAL_PAGE_SIZE, 3)=3), so a second call only happens
-    if the first page is genuinely full at the *requested* size and more
-    remain. Patch `_INTERNAL_PAGE_SIZE` down to 2 so:
-    - call 1 requests page_size=min(2, 3)=2, mock returns 2 items (full,
-      continue), page_token becomes 2
-    - call 2 requests page_size=min(2, 3-2)=1, mock returns exactly 1 item
-      (matches what was requested, loop's `max_results` condition then
-      stops it - not the short-page rule)
-    This reaches `max_results=3` in two calls without contradicting the
-    short-page-means-exhausted rule the other tests in this file rely on
-    (mocks must return exactly the page size the implementation will
-    request at each step, not arbitrary canned pages).
+    Patch `_INTERNAL_PAGE_SIZE` down to 2 so `max_results=3` spans two pages
+    (page 1: page_size=2, page 2: page_size=1), both dispatched up front.
     """
     monkeypatch.setattr("api.download._INTERNAL_PAGE_SIZE", 2)
     engine = _make_engine([_docs("a", "b"), _docs("c")])
@@ -195,19 +196,36 @@ def test_fetch_stops_once_max_results_reached(monkeypatch) -> None:
     assert engine.search.call_count == 2
 
 
-def test_fetch_stops_when_a_page_is_short() -> None:
-    """A page shorter than requested means Vespa has no more results."""
-    engine = _make_engine([_docs("a", "b")])
-    engine.search.side_effect = [
-        ListResponse(results=_docs("a", "b"), total_size=None, next_page_token=None),
-    ]
+def test_fetch_truncates_after_a_short_page() -> None:
+    """
+    A page shorter than requested means Vespa has no more results.
+
+    Results from any page after the short one are discarded, even though
+    every page is dispatched concurrently up front.
+    """
+    engine = _make_engine([_docs("a", "b"), _docs("c")])
 
     results = fetch_documents_for_download(
-        engine, query="x", order_by=[], filters_json_string=None, max_results=100
+        engine, query="x", order_by=[], filters_json_string=None, max_results=200
     )
 
     assert [d.id for d in results] == ["a", "b"]
-    assert engine.search.call_count == 1
+
+
+def test_fetch_propagates_a_page_failure() -> None:
+    """
+    A failed page's exception surfaces to the caller, not just its siblings.
+
+    Pages are fetched concurrently via a thread pool; this confirms that
+    doesn't swallow a `VespaError` raised by one of the underlying calls.
+    """
+    engine = MagicMock()
+    engine.search.side_effect = VespaError("Vespa request failed")
+
+    with pytest.raises(VespaError):
+        fetch_documents_for_download(
+            engine, query="x", order_by=[], filters_json_string=None, max_results=200
+        )
 
 
 def test_default_max_results_is_500() -> None:

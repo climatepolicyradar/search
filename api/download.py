@@ -2,8 +2,10 @@
 
 import csv
 import io
+import math
 import time  # TODO(profiling): remove
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
@@ -103,14 +105,20 @@ def fetch_documents_for_download(
     """
     Fetch up to ``max_results`` documents, paging the engine internally.
 
-    Stops when either ``max_results`` is reached or a page comes back shorter
-    than requested (Vespa has no more matches) - whichever happens first.
+    Pages are independent offset-based requests (``page_token`` maps directly
+    to a Vespa ``offset``), so they're fetched concurrently rather than one
+    round trip at a time. Results are then reassembled in page order and
+    truncated at the first short/empty page - Vespa has no more matches past
+    that point, mirroring the previous sequential early-stop behaviour.
     """
     fetch_start = time.perf_counter()  # TODO(profiling): remove
-    results: list[Document] = []
-    page_token = 1
-    while len(results) < max_results:
-        page_size = min(_INTERNAL_PAGE_SIZE, max_results - len(results))
+    page_count = math.ceil(max_results / _INTERNAL_PAGE_SIZE)
+    page_sizes = [
+        min(_INTERNAL_PAGE_SIZE, max_results - (page_token - 1) * _INTERNAL_PAGE_SIZE)
+        for page_token in range(1, page_count + 1)
+    ]
+
+    def fetch_page(page_token: int, page_size: int) -> list[Document]:
         page_start = time.perf_counter()  # TODO(profiling): remove
         response = engine.search(
             query=query,
@@ -124,13 +132,22 @@ def fetch_documents_for_download(
             page_size,
             time.perf_counter() - page_start,
         )
-        results.extend(response.results)
-        if len(response.results) < page_size:
+        return response.results
+
+    with ThreadPoolExecutor(max_workers=page_count) as pool:
+        pages = list(
+            pool.map(fetch_page, range(1, page_count + 1), page_sizes)
+        )
+
+    results: list[Document] = []
+    for page, page_size in zip(pages, page_sizes):
+        results.extend(page)
+        if len(page) < page_size:
             break
-        page_token += 1
+    results = results[:max_results]
     logger.info(  # TODO(profiling): remove
         "PROFILING fetch_documents_for_download total pages=%s results=%s took=%.3fs",
-        page_token,
+        page_count,
         len(results),
         time.perf_counter() - fetch_start,
     )
