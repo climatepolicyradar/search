@@ -1095,6 +1095,91 @@ def test_get_raises_vespa_error_when_unreachable():
         engine.get("any-id")
 
 
+def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_app: Vespa):
+    """A fully-quoted document query phrase-matches title and description; order matters."""
+    doc_title = DocumentFactory.build(
+        id="doc-just-title",
+        title="A just transition framework for coal regions",
+        description="Unrelated summary text.",
+        labels=[],
+    )
+    doc_desc = DocumentFactory.build(
+        id="doc-just-desc",
+        title="National energy plan",
+        description="The plan is built on a just transition.",
+        labels=[],
+    )
+    doc_reordered = DocumentFactory.build(
+        id="doc-reordered",
+        title="A transition that is just and fair",
+        description="Nothing relevant here.",
+        labels=[],
+    )
+    for d in (doc_title, doc_desc, doc_reordered):
+        _feed_document(vespa_app, d)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    ids = {
+        d.id
+        for d in engine.search(
+            query='"just transition"',
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        ).results
+    }
+
+    assert "doc-just-title" in ids, f"phrase in title must match, got: {ids}"
+    assert "doc-just-desc" in ids, f"phrase in description must match, got: {ids}"
+    assert "doc-reordered" not in ids, f"out-of-order phrase must not match, got: {ids}"
+
+
+def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):
+    """`"$100"` matches a $100 title but not $1000 (exact_analysis currency charFilters)."""
+    doc_100 = DocumentFactory.build(
+        id="doc-100", title="Grant of $100 approved", description="d", labels=[]
+    )
+    doc_1000 = DocumentFactory.build(
+        id="doc-1000", title="Grant of $1000 approved", description="d", labels=[]
+    )
+    _feed_document(vespa_app, doc_100)
+    _feed_document(vespa_app, doc_1000)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    ids = {
+        d.id
+        for d in engine.search(
+            query='"$100"',
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        ).results
+    }
+
+    assert "doc-100" in ids, f"quoted $100 must match the $100 title, got: {ids}"
+    assert "doc-1000" not in ids, f"quoted $100 must not match $1000, got: {ids}"
+
+
+def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa):
+    """An unquoted query still stems and goes through userQuery()."""
+    doc = DocumentFactory.build(
+        id="doc-plain",
+        title="National strategy for climate change 2050",
+        description="d",
+        labels=[],
+    )
+    _feed_document(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    ids = {
+        d.id
+        for d in engine.search(
+            query="national strategies",  # plural, unquoted -> must still stem
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        ).results
+    }
+
+    assert "doc-plain" in ids, f"unquoted queries must still stem, got: {ids}"
+
 # endregion
 
 
