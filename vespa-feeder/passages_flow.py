@@ -12,6 +12,11 @@ from passages_derived_data import (
 )
 from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
+from vespa_feeder_v2 import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_SAMPLE_RATE,
+    vespa_feeder_v2,
+)
 
 from prefect import flow
 
@@ -207,4 +212,28 @@ def passages_feeder_flow() -> State | None:
         s3_bucket="cpr-prod-snowflake-data-export",
         s3_key="production/published/pipeline_data_in_vespa_passage_updates_v1/latest",
         derive_data_from_source=derive_passage_data,
+    )
+
+
+@flow(
+    name="search-vespa-feeder-passages-v2",
+    description="Feed passages JSONL from the data-lake Snowflake export into Vespa, deriving document_ref per record",
+    task_runner=feed_task_runner(max_workers=8),
+    log_prints=True,
+    on_completion=[SlackNotify.on_success],
+    on_failure=[SlackNotify.on_failure],
+    on_crashed=[SlackNotify.on_crashed],
+    on_cancellation=[SlackNotify.on_cancellation],
+)
+def passages_feeder_flow_v2(
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    sample_rate: float = DEFAULT_SAMPLE_RATE,
+    s3_key: str = "latest",
+) -> State | None:
+    return vespa_feeder_v2(
+        s3_bucket="cpr-prod-snowflake-data-export",
+        s3_key=f"production/published/pipeline_data_in_vespa_passage_updates_v1/{s3_key}",
+        derive_data_from_source=derive_passage_data,
+        batch_size=batch_size,
+        sample_rate=sample_rate,
     )
