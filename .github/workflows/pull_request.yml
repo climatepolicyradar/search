@@ -103,6 +103,17 @@ jobs:
             echo "✅ No .py files found in scripts/ root directory"
           fi
 
+  check-prefect-version:
+    runs-on: ubuntu-latest
+    name: Check prefect version
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+      - name: Install just
+        uses: extractions/setup-just@v4
+      - name: Check prefect is pinned to one version everywhere
+        run: just check-prefect-version
+
   test:
     runs-on: ubuntu-latest
     needs: [changes]
