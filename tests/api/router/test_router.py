@@ -131,6 +131,43 @@ def test_get_labels_taxonomy_includes_global_stocktake_category() -> None:
     assert gst1["labels"][0]["value"]["id"] == "category::Global Stocktake"
 
 
+def test_get_labels_taxonomy_includes_global_stocktake_party_branch() -> None:
+    """
+    Party must nest under Global Stocktake.
+
+    The existing UNFCCC document types must also nest under Party (in addition
+    to their existing UNFCCC parent) so they render under both branches.
+    """
+    client = TestClient(app)
+
+    response = client.get("/search/labels-taxonomy")
+
+    body = response.json()
+    results_by_id = {result["id"]: result for result in body["results"]}
+
+    party = results_by_id["author_type::Party"]
+    assert party["type"] == "author_type"
+    assert party["value"] == "Party"
+    assert party["labels"][0]["type"] == "subconcept_of"
+    assert party["labels"][0]["value"]["id"] == "category::Global Stocktake"
+
+    document_type_ids = [
+        "entity_type::Nationally Determined Contribution (NDC)",
+        "entity_type::National Adaptation Plan (NAP)",
+        "entity_type::Biennial Transparency Report (BTR)",
+        "entity_type::Long-term Low-emission Development Strategy (LT-LEDS)",
+        "entity_type::Biennial Update Report (BUR)",
+        "entity_type::Biennial Report (BR)",
+        "entity_type::National Communication (NC)",
+        "entity_type::National Inventory Report (NIR)",
+        "entity_type::Adaptation Communication (AC)",
+    ]
+    for document_type_id in document_type_ids:
+        document_type = results_by_id[document_type_id]
+        parent_ids = {relationship["value"]["id"] for relationship in document_type["labels"]}
+        assert parent_ids == {"un_convention::UNFCCC", "author_type::Party"}
+
+
 def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
     """The root response is how an agent with no prior knowledge finds the docs."""
     client = TestClient(app)
