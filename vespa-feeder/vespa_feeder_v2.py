@@ -58,9 +58,6 @@ class FailedDocument:
     error: str
 
 
-# Per-batch outcomes, not exceptions: a batch that loses records is reported
-# through FeedResult so every other batch still gets fed and counted. The run
-# raises VespaFeederFailed once, at the end, with all of them.
 @dataclass
 class VespaFeedError:
     """Transport layer gave up — no HTTP response received for some records."""
