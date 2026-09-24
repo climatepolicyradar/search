@@ -1,7 +1,7 @@
 # Runs as a CI check that auto-fixes passages.sr, labels.sr. and documents.sr by removing stopwords from the right-hand side of the rules.
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 import typer
 
