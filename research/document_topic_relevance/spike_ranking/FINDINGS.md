@@ -157,7 +157,7 @@ When productionising this signal (out of scope for the spike):
 ## Sense-check against `DevVespaDocumentSearchEngine.search()`
 
 Compared the spike against the production query path in
-`search/engines/dev_vespa.py`.
+`search/engines/dev_vespa/documents_search_engine.py`.
 
 ### Compatible by design
 

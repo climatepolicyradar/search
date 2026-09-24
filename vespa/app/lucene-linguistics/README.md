@@ -51,7 +51,8 @@ redeploy.
 Synonym expansion is handled in two different ways depending on the field:
 
 - **Geography** aliases are resolved in Python, in `GEOGRAPHY_ALIASES` /
-  `_resolve_geography_aliases` (`search/engines/dev_vespa.py`). To add a country
+  `_resolve_geography_aliases`
+  (`search/engines/vespa_query/query_text_modifiers.py`). To add a country
   alias, edit that table — there is no geography synonym file any more.
 
   They are not Lucene synonyms, and cannot be, because neither side of Vespa's

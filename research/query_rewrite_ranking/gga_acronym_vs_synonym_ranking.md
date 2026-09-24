@@ -61,7 +61,7 @@ passages that still say "...global goal on adaptation...".
 
 Passage search's default rank profile is `bm25_multiplicative`
 (`vespa/app/schemas/passages.sd`, selected via `_DEFAULT_PASSAGE_RANK_PROFILE`
-in `search/engines/dev_vespa.py`):
+in `search/engines/dev_vespa/passages_search_engine.py`):
 
 ```text
 function text_score() {
@@ -277,7 +277,8 @@ gga-only: 0  phrase-only: 0  both: 50  neither: 0
 - Rank profile:
   [`vespa/app/schemas/passages.sd`](../../vespa/app/schemas/passages.sd)
   (`bm25_multiplicative`)
-- Engine wiring: `search/engines/dev_vespa.py` — `"rules.rulebase": "passages"`,
+- Engine wiring: `search/engines/dev_vespa/passages_search_engine.py` —
+  `"rules.rulebase": "passages"`,
   `_DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"`
 - BM25/IDF formula reference:
   [docs.vespa.ai/en/reference/bm25.html](https://docs.vespa.ai/en/reference/bm25.html)
