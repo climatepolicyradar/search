@@ -52,7 +52,8 @@ function resolveProfile(
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
 // `page_token` is a 1-based page number; search-api computes Vespa's offset
-// as `(page_token - 1) * page_size` (search/engines/dev_vespa.py). Covers
+// as `(page_token - 1) * page_size`
+// (search/engines/dev_vespa/documents_search_engine.py). Covers
 // the first page (default), a deep page (offset 490 — tests the cost of
 // Vespa skipping over ranked results internally), and a large `page_size`.
 // The fixed `query=climate` result set (~17k documents at time of writing)

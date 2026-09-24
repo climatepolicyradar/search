@@ -66,14 +66,15 @@ Only then propose a fix.
 - **Field indexing**: Match type (contains vs exact) must align with how the
   field is indexed. Check `index` vs `attribute` mode in the schema.
 - **Synonym expansion**: Two mechanisms are in use. Geography aliases are
-  resolved in Python (`GEOGRAPHY_ALIASES` in `search/engines/dev_vespa.py`),
-  which rewrites them to the canonical name as a quoted phrase in the
-  `geo_query` parameter — Lucene synonyms can't express them on either side of
-  the index, see `lucene-linguistics/README.md`. Everything else (title acronyms
-  etc) uses Vespa semantic rules in `vespa/app/rules/` — `documents.sr` by
-  default, `labels.sr` for label search (set via `rules.rulebase=labels`). If
-  geography rewrites aren't firing, check `GEOGRAPHY_ALIASES` (no redeploy
-  needed); for anything else check the relevant `.sr` file and redeploy.
+  resolved in Python (`GEOGRAPHY_ALIASES` in
+  `search/engines/vespa_query/query_text_modifiers.py`), which rewrites them to
+  the canonical name as a quoted phrase in the `geo_query` parameter — Lucene
+  synonyms can't express them on either side of the index, see
+  `lucene-linguistics/README.md`. Everything else (title acronyms etc) uses
+  Vespa semantic rules in `vespa/app/rules/` — `documents.sr` by default,
+  `labels.sr` for label search (set via `rules.rulebase=labels`). If geography
+  rewrites aren't firing, check `GEOGRAPHY_ALIASES` (no redeploy needed); for
+  anything else check the relevant `.sr` file and redeploy.
 - **Deploy target**: Local = `http://localhost:19071/`, use `just deploy` which
   already has the right target and wait time.
 

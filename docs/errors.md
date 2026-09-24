@@ -95,7 +95,8 @@ review.
   single `VespaError` handler.
 - `search/engines/` — engine methods raise `VespaError`
   (`search/engines/__init__.py`) and never return an empty result set for a
-  failed query. See `_execute_vespa_query` in `search/engines/dev_vespa.py`.
+  failed query. See `_execute_vespa_query` in
+  `search/engines/vespa_query/client.py`.
 - `relevance_tests/` — the harness is a boundary too. It is the top of the call
   stack for a batch job, so it catches, and `TestResult.status` is the tagged
   result it translates into: `passed`, `failed`, or `errored`. A case that could

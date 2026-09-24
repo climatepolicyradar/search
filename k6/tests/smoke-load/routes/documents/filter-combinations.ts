@@ -60,8 +60,9 @@ const isLoadProfile = (__ENV.PROFILE || "load") === "load";
 // `filters` is free-form JSON not enumerated in the OpenAPI schema, so these
 // combinations are sourced from real usage, not guessed: the shape matches
 // search-api's Filter/FieldFilter/AttributesCondition models
-// (search/engines/dev_vespa.py, see SimpleExampleFilter/ComplexExampleFilter
-// there) and is exactly what navigator-frontend sends as the `filters` param
+// (search/engines/vespa_query/filters.py, see SimpleExampleFilter/
+// ComplexExampleFilter there) and is exactly what navigator-frontend sends
+// as the `filters` param
 // (src/api/search.ts, src/utils/search/filterPathsToQueryGroup.ts). Covers a
 // single filter, multiple filters `and`-ed (incl. an AttributesCondition
 // date range), a top-level `or` and a nested `or`-in-`and` (both matching
