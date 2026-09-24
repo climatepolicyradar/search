@@ -2,7 +2,7 @@
 
 import pytest
 
-from search.engines.vespa_query.query_text import (
+from search.engines.vespa_query.query_text_modifiers import (
     GEOGRAPHY_ALIASES,
     _resolve_geography_aliases,
 )

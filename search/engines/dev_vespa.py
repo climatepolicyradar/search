@@ -34,7 +34,7 @@ from vespa.querybuilder import Grouping as G
 from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
-from search.engines.vespa_query.query_text import (
+from search.engines.vespa_query.query_text_modifiers import (
     _normalize_currency_symbols,
     _resolve_geography_aliases,
     _strip_quotes,
