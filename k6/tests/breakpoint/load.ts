@@ -326,8 +326,9 @@ export function documents(): void {
 }
 
 // Single Vespa query, but with the from-disk debug-summary forced on every
-// request (search/engines/dev_vespa/passages_search_engine.py:112), so
-// per-hit cost scales with page_size.
+// request (DevVespaPassageSearchEngine.search() in
+// search/engines/dev_vespa/passages_search_engine.py), so per-hit cost
+// scales with page_size.
 export function passages(): void {
   const query = encodeURIComponent(pick(QUERIES));
   const filters =

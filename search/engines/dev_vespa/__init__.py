@@ -14,10 +14,6 @@ This isn't a viable URL for API Gatewayway, you can use
 The secondary URL uses a `+` which matches 1 or more characters. 🤷
 
 For now we just use `requests` which yields the same results.
-
-This module has been split into search.engines.vespa_query.* (shared
-utilities) and search.engines.dev_vespa.* (engine-specific code). Everything
-below is re-exported here so existing imports keep working unchanged.
 """
 
 from __future__ import annotations

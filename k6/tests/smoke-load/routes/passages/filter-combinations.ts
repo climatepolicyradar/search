@@ -217,7 +217,8 @@ const PROFILES = {
     // spike on top of whatever task count phase 1 left behind.
     //
     // /search/passages is a single Vespa query with a 5s timeout
-    // (search/engines/dev_vespa/passages_search_engine.py:109) — a `filters` clause adds YQL
+    // (DevVespaPassageSearchEngine.search() in
+    // search/engines/dev_vespa/passages_search_engine.py) — a `filters` clause adds YQL
     // predicates to that same query rather than triggering extra Vespa
     // calls (unlike /documents?fields=), so there is no fan-out-maximising
     // combination to chase the way fields-combinations.ts does. Load mode

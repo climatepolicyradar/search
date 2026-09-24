@@ -258,7 +258,7 @@
                     <!-- geo_analysis_search: lowercase + stemming, for search time.
                          Geography aliases are resolved in Python before the query reaches
                          Vespa - see GEOGRAPHY_ALIASES in
-                         search/engines/vespa_query/query_text.py and
+                         search/engines/vespa_query/query_text_modifiers.py and
                          lucene-linguistics/README.md for why they can't live here. -->
                     <item key="profile=geo_analysis_search;language=en">
                         <tokenizer>

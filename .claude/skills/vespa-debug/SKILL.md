@@ -67,8 +67,8 @@ Only then propose a fix.
   field is indexed. Check `index` vs `attribute` mode in the schema.
 - **Synonym expansion**: Two mechanisms are in use. Geography aliases are
   resolved in Python (`GEOGRAPHY_ALIASES` in
-  `search/engines/vespa_query/query_text.py`), which rewrites them to the
-  canonical name as a quoted phrase in the `geo_query` parameter — Lucene
+  `search/engines/vespa_query/query_text_modifiers.py`), which rewrites them to
+  the canonical name as a quoted phrase in the `geo_query` parameter — Lucene
   synonyms can't express them on either side of the index, see
   `lucene-linguistics/README.md`. Everything else (title acronyms etc) uses
   Vespa semantic rules in `vespa/app/rules/` — `documents.sr` by default,
