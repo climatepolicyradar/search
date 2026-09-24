@@ -418,6 +418,79 @@ schema documents {
         summary-features: title_score() description_score() passages_score() passages_breadth_score() geographies_score() bm25(title_geo) fieldMatch(title_geo).completeness fieldMatch(title_geo).queryCompleteness fieldMatch(title_geo).fieldCompleteness nativeProximity(title_geo) identifiers_score() topic_score() elementSimilarity(passages_text).coverageSum elementSimilarity(passages_text).matchCount
     }
 
+    # Minimum Should Match: drop documents covering too little of the query.
+    #
+    # WHY: weakAnd is an OR, so every term is optional and a longer query matches
+    # MORE - "parametric" gave 0 results, "parametric insurance act" ~2000.
+    # Vespa has no `minimum_should_match`, so `coverage()` below builds one.
+    #
+    # Separate profile, not an input on the parent, to keep the drop limit away
+    # from the default. Picking this profile is the flag; query(msm) is the dial.
+    rank-profile bm25-title-geo-msm inherits bm25-title-geo {
+        inputs {
+            # Fraction of the query's terms a document must cover. 0.0 is off.
+            query(msm) double: 0.0
+        }
+
+        # The parent's two outputs, restated because a third joins them.
+        rank-properties {
+            elementSimilarity(passages_text).output.coverageSum: "sum(q)"
+            elementSimilarity(passages_text).output.matchCount: "sum(w)"
+            # Best single passage's query coverage - the MSM signal. max(), not
+            # sum(): "both terms in one passage" is a real signal, "both terms
+            # somewhere in a 200-page PDF" is not.
+            elementSimilarity(passages_text).output.maxCoverage: "max(q)"
+        }
+
+        # Query coverage, 0.0 - 1.0: a document earns its place on its title OR
+        # on a passage. An approximation - Vespa has no cross-field coverage
+        # feature, so a document with one term in the title and the other in a
+        # passage scores 0.5. Still better than sum(), which cannot tell that
+        # document from one missing a term outright.
+        function coverage() {
+            expression: max(fieldMatch(title_geo).queryCompleteness, elementSimilarity(passages_text).maxCoverage)
+        }
+
+        # The parent's first-phase expression, named so the guard can wrap it.
+        # Keep in step with `bm25-title-geo`.
+        function relevance_score() {
+            expression: title_score() + description_score() + passages_score() + passages_breadth_score() + geographies_score() + identifiers_score() + topic_score() + exact_phrase_score()
+        }
+
+        first-phase {
+            # -1 is a sentinel, not a score - below the limit, so Vespa drops the
+            # document rather than ranking it last. Limit is -0.5 so a genuine
+            # 0.0 survives.
+            expression: if (coverage() < query(msm), -1, relevance_score())
+            rank-score-drop-limit: -0.5
+        }
+
+        # coverage() carried so `?debug=true` answers "why was this dropped".
+        summary-features: title_score() description_score() passages_score() passages_breadth_score() geographies_score() bm25(title_geo) fieldMatch(title_geo).completeness fieldMatch(title_geo).queryCompleteness fieldMatch(title_geo).fieldCompleteness nativeProximity(title_geo) identifiers_score() topic_score() elementSimilarity(passages_text).coverageSum elementSimilarity(passages_text).matchCount elementSimilarity(passages_text).maxCoverage coverage()
+    }
+
+    # `unranked` plus the MSM guard, for sorted listings. A date sort switches to
+    # `unranked`, which would otherwise return the unfiltered set - so sorting
+    # would quietly show more documents than the same query by relevance.
+    rank-profile unranked-msm {
+        inputs {
+            query(msm) double: 0.0
+        }
+
+        rank-properties {
+            elementSimilarity(passages_text).output.maxCoverage: "max(q)"
+        }
+
+        function coverage() {
+            expression: max(fieldMatch(title_geo).queryCompleteness, elementSimilarity(passages_text).maxCoverage)
+        }
+
+        first-phase {
+            expression: if (coverage() < query(msm), -1, 1)
+            rank-score-drop-limit: -0.5
+        }
+    }
+
     rank-profile label-boosted inherits nativerank {
         inputs {
             query(label_boost_factor) double: 0.2

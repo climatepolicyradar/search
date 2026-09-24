@@ -72,6 +72,50 @@ _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS = 2000
 
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
+# Vespa has no `minimum_should_match`, so MSM lives in the rank profile: turning
+# it on means switching profile, not just setting an input.
+_DEFAULT_MSM = 0.0
+_MSM_DOCUMENT_RANK_PROFILE = "bm25-title-geo-msm"
+# A date sort switches to `unranked`, which carries no guard.
+_MSM_DOCUMENT_SORT_RANK_PROFILE = "unranked-msm"
+
+# Vespa ignores an input a profile does not declare, so `msm` sent anywhere else
+# is a silent no-op. See docs/errors.md.
+_MSM_CAPABLE_RANK_PROFILES = frozenset(
+    {_MSM_DOCUMENT_RANK_PROFILE, _MSM_DOCUMENT_SORT_RANK_PROFILE}
+)
+
+
+def _resolve_document_rank_profile(ranking_profile: str | None, msm: float) -> str:
+    """
+    Pick the rank profile for a document search.
+
+    An explicit ``ranking_profile`` wins, so relevance sweeps can pin one.
+    Otherwise MSM decides, as it needs a profile declaring ``query(msm)``.
+
+    :param ranking_profile: Caller's explicit choice, or ``None`` to derive one
+    :param msm: Fraction of query terms a document must cover, 0.0 - 1.0
+    :return: The Vespa rank profile name
+    :raises ValueError: if ``msm`` is out of range, or set above 0 on a profile
+        that would silently ignore it
+    """
+    if not 0.0 <= msm <= 1.0:
+        raise ValueError(f"msm must be between 0.0 and 1.0, got {msm!r}")
+
+    if ranking_profile is None:
+        return (
+            _MSM_DOCUMENT_RANK_PROFILE if msm > 0.0 else _DEFAULT_DOCUMENT_RANK_PROFILE
+        )
+
+    if msm > 0.0 and ranking_profile not in _MSM_CAPABLE_RANK_PROFILES:
+        raise ValueError(
+            f"msm={msm} needs a rank profile declaring query(msm); "
+            f"{ranking_profile!r} does not. "
+            f"Use one of: {sorted(_MSM_CAPABLE_RANK_PROFILES)}"
+        )
+
+    return ranking_profile
+
 
 class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]):
     """
@@ -98,10 +142,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         settings: Settings,
         debug: bool = False,
         bolding: bool = False,
-        ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
+        ranking_profile: str | None = None,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
         passages_breadth_weight: float | None = _DEFAULT_PASSAGES_BREADTH_WEIGHT,
         total_target_hits: int = _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
+        msm: float = _DEFAULT_MSM,
     ) -> None:
         """
         Initialise the search engine.
@@ -112,8 +157,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         :param bolding: When ``True``, matched terms in ``title`` and
             ``description`` are wrapped in ``<hi>`` tags. Search hits never
             carry passages; ``/search/passages`` is the route for those.
-        :param ranking_profile: Vespa rank profile to score with. Defaults to
-            ``bm25-title-geo``.
+        :param ranking_profile: Vespa rank profile to score with. ``None``
+            derives one from ``msm`` - ``bm25-title-geo`` when MSM is off,
+            ``bm25-title-geo-msm`` when it is on.
         :param topic_weight: How much a filtered-for topic's mention counts
             contribute to relevance. ``0.0`` switches topic ranking off.
         :param passages_breadth_weight: How much the number of matching passages
@@ -125,15 +171,37 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             Raising it stops a strong title match being pruned before the rank
             profile ever sees it, at the cost of matching more broadly. See
             :data:`_DEFAULT_DOCUMENT_TOTAL_TARGET_HITS`.
+        :param msm: Minimum Should Match - the fraction of the query's terms a
+            document must cover to be returned, 0.0 - 1.0. ``0.0`` is off.
+            Coverage is the best-matching single passage or the title,
+            whichever is higher, so ``1.0`` means "one passage contains the
+            whole query", not "these words are somewhere in this 200-page PDF".
+        :raises ValueError: if ``msm`` is outside 0.0 - 1.0, or set above 0
+            alongside a ``ranking_profile`` that would ignore it.
         """
         self.debug = debug
         self.bolding = bolding
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
-        self.ranking_profile = ranking_profile
+        self.msm = msm
+        self.ranking_profile = _resolve_document_rank_profile(ranking_profile, msm)
         self.topic_weight = topic_weight
         self.passages_breadth_weight = passages_breadth_weight
         self.total_target_hits = total_target_hits
+
+    @property
+    def _msm_request_fields(self) -> dict[str, float]:
+        """
+        The ``query(msm)`` input, for every query that must see the same document set.
+
+        Empty when MSM is off, so the request body is unchanged from before this
+        parameter existed. Searches, aggregations and facets all carry it: they
+        are separate Vespa queries, and a facet counted over a wider set than the
+        results is the inconsistency FUS-475 was about.
+        """
+        if self.ranking_profile not in _MSM_CAPABLE_RANK_PROFILES:
+            return {}
+        return {"input.query(msm)": self.msm}
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -143,6 +211,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "topic_weight": self.topic_weight,
             "passages_breadth_weight": self.passages_breadth_weight,
             "total_target_hits": self.total_target_hits,
+            "msm": self.msm,
         }
 
     @property
@@ -195,6 +264,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         logger.info("🔎 Document search query built (query=%r, yql=%s)", query, yql)
 
         sort_overrides = _ranking_overrides_for_document_order_by(order_by)
+        if sort_overrides and self.msm > 0.0:
+            # MSM changes which documents exist, not just their order, so a
+            # sort cannot opt out of it the way the weights below do.
+            sort_overrides["ranking.profile"] = _MSM_DOCUMENT_SORT_RANK_PROFILE
 
         normalized_query = _normalize_currency_symbols(query) if query else query
 
@@ -213,6 +286,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
+        request_body.update(self._msm_request_fields)
 
         topic_ids = _topic_ids_from_filters(filters)
         if topic_ids and not sort_overrides:
@@ -409,6 +483,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
+            **self._msm_request_fields,
         }
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
@@ -485,6 +560,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
+            **self._msm_request_fields,
         }
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
