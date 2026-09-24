@@ -6,7 +6,6 @@ import pytest
 from pydantic import AnyHttpUrl
 
 from search.engines import OrderBy, Pagination, dev_vespa
-from search.engines.dev_vespa import documents_search_engine
 from search.engines.dev_vespa import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
@@ -15,6 +14,7 @@ from search.engines.dev_vespa import (
     FieldFilter,
     Filter,
     Settings,
+    documents_search_engine,
     normalise_topic_id,
 )
 from search.engines.vespa_query.filters import _topic_ids_from_filters

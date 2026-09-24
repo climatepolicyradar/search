@@ -20,8 +20,8 @@ from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
     Settings,
+    documents_search_engine,
 )
-from search.engines.dev_vespa import documents_search_engine
 
 
 @pytest.fixture
