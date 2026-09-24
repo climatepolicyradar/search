@@ -25,6 +25,7 @@ from search.data_in_models import Document
 from search.data_in_models import Label as DataInLabel
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
+    _DEFAULT_MSM,
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
@@ -182,25 +183,35 @@ def read_documents(
     order_by: list[OrderBy] = Depends(documents_order_by),
     debug: bool = False,
     bolding: bool = False,
+    msm: float = Query(
+        _DEFAULT_MSM,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum Should Match: the fraction of the query's terms a document "
+            "must contain. 0 (default) leaves every term optional; 1 requires all."
+        ),
+    ),
 ):
     start = time.perf_counter()
     logger.info(
         "Searching documents "
         "(query=%r, page_token=%s, page_size=%s, debug=%s, bolding=%s, "
-        "filters_present=%s)",
+        "filters_present=%s, msm=%s)",
         query,
         pagination.page_token,
         pagination.page_size,
         debug,
         bolding,
         bool(filters_json_string),
+        msm,
     )
 
     normalised_filters = normalise_filters(filters_json_string)
     requested_fields = set(fields or [])
 
     engine = DevVespaDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=bolding
+        settings=settings, debug=debug, bolding=bolding, msm=msm
     )
     aggregation_engines = {
         "aggregations.labels": engine.aggregations,

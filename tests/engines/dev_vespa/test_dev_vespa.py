@@ -8,6 +8,8 @@ from pydantic import AnyHttpUrl
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
+    _MSM_DOCUMENT_RANK_PROFILE,
+    _MSM_DOCUMENT_SORT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
@@ -861,6 +863,127 @@ def test_document_search_engine_forwards_target_hits() -> None:
     assert '{defaultIndex: "geographies"}userInput(@geo_query)' in yql
     assert '{defaultIndex: "identifiers"}userInput(@query)' in yql
     assert engine.parameters["total_target_hits"] == 200
+
+
+# region Minimum Should Match
+
+
+def _document_search_request_body(
+    engine: DevVespaDocumentSearchEngine,
+    order_by: list[OrderBy] = [],  # noqa: B006 - read-only, never mutated
+) -> dict:
+    """Run a text search against a mocked Vespa and return the body it sent."""
+    with patch.object(
+        documents_search_engine,
+        "_execute_vespa_query",
+        return_value={"root": {"children": []}},
+    ) as mock_execute:
+        engine.search(
+            query="parametric insurance act",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=order_by,
+        )
+
+    return mock_execute.call_args.kwargs["request_body"]
+
+
+def test_msm_defaults_to_off_and_changes_nothing() -> None:
+    """
+    MSM off must be byte-identical to the behaviour that predates it.
+
+    The default rank profile carries no `rank-score-drop-limit`, so sending
+    `query(msm)` to it would be a silent no-op rather than a filter.
+    """
+    engine = _document_engine()
+
+    body = _document_search_request_body(engine)
+
+    assert engine.msm == 0.0
+    assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
+    assert "input.query(msm)" not in body
+
+
+def test_msm_selects_the_msm_rank_profile_and_forwards_the_value() -> None:
+    """Turning MSM on switches profile as well as setting the input."""
+    engine = _document_engine(msm=0.6)
+
+    body = _document_search_request_body(engine)
+
+    assert body["ranking.profile"] == _MSM_DOCUMENT_RANK_PROFILE
+    assert body["input.query(msm)"] == 0.6
+    assert engine.parameters["msm"] == 0.6
+
+
+def test_msm_survives_a_sort() -> None:
+    """
+    A sorted listing must not return documents a relevance search would drop.
+
+    Sorting swaps in `unranked`, which carries no MSM guard, so `unranked-msm`
+    has to take its place. MSM changes which documents exist, not their order.
+    """
+    engine = _document_engine(msm=0.6)
+
+    body = _document_search_request_body(
+        engine, order_by=[OrderBy(field="attributes.published_date", direction="desc")]
+    )
+
+    assert body["ranking.profile"] == _MSM_DOCUMENT_SORT_RANK_PROFILE
+    assert body["input.query(msm)"] == 0.6
+    assert body["ranking.sorting"]
+
+
+def test_msm_reaches_aggregations_and_facets() -> None:
+    """
+    Facet counts and results have to describe the same document set.
+
+    These run as separate Vespa queries; a facet counted over a wider set than
+    the results is the inconsistency FUS-475 was about.
+    """
+    engine = _document_engine(msm=0.6)
+
+    with patch.object(
+        documents_search_engine,
+        "_execute_vespa_query",
+        return_value={"root": {"children": []}},
+    ) as mock_execute:
+        engine.aggregations(query="parametric insurance act")
+        engine.labels_type_facets(query="parametric insurance act")
+
+    for call in mock_execute.call_args_list:
+        body = call.kwargs["request_body"]
+        assert body["input.query(msm)"] == 0.6
+        assert body["ranking.profile"] in {
+            _MSM_DOCUMENT_RANK_PROFILE,
+            _MSM_DOCUMENT_SORT_RANK_PROFILE,
+        }
+
+
+@pytest.mark.parametrize("msm", [-0.1, 1.1, 2.0])
+def test_msm_out_of_range_raises(msm: float) -> None:
+    """An out-of-range msm is a caller error, not something to clamp silently."""
+    with pytest.raises(ValueError, match="between 0.0 and 1.0"):
+        _document_engine(msm=msm)
+
+
+def test_msm_on_a_profile_that_ignores_it_raises() -> None:
+    """
+    Vespa accepts an input a profile does not declare, and ignores it.
+
+    That would answer a filtered query with an unfiltered result set - the
+    failure docs/errors.md exists to prevent - so the engine refuses instead.
+    """
+    with pytest.raises(ValueError, match="declaring query\\(msm\\)"):
+        _document_engine(msm=0.6, ranking_profile="bm25")
+
+
+def test_msm_zero_leaves_an_explicit_rank_profile_alone() -> None:
+    """Relevance sweeps pin a profile; MSM off must not override that."""
+    engine = _document_engine(ranking_profile="bm25")
+
+    assert engine.ranking_profile == "bm25"
+
+
+# endregion Minimum Should Match
 
 
 def _label_engine(**kwargs) -> DevVespaLabelSearchEngine:
