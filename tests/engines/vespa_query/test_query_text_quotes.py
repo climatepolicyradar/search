@@ -2,7 +2,7 @@
 
 import pytest
 
-from search.engines.dev_vespa import _strip_quotes
+from search.engines.vespa_query.query_text_modifiers import _strip_quotes
 
 
 @pytest.mark.parametrize(
