@@ -48,6 +48,14 @@ lint:
 lint-all:
     trunk check --all --fix
 
+# auto-fix RHS rule entries that spell out stopwords (vespa/app/rules/*.sr)
+fix-vespa-rules-stopwords:
+    uv run python scripts/vespa_rules/fix_rhs_stopwords_in_sr.py
+
+# check RHS rule entries don't spell out stopwords - CI will use this
+check-vespa-rules-stopwords:
+    uv run python scripts/vespa_rules/fix_rhs_stopwords_in_sr.py --check
+
 # serve the API on a local development server with hot reloading
 serve-api:
     uv run uvicorn api.main:app --reload --port 8080
