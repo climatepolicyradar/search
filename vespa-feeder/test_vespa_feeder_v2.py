@@ -1,8 +1,11 @@
 """Table-driven tests for the pieces the v2 feeder flow composes."""
 
+import contextlib
 import json
+import signal
 import subprocess
 import tempfile
+from collections.abc import Callable
 from itertools import takewhile
 from pathlib import Path
 
@@ -52,28 +55,68 @@ class _FakeS3:
         Path(destination).write_bytes(self.objects[key])
 
 
+class _FakeVespaFeedProcess:
+    """The `subprocess.Popen` a `_FakeVespaFeed` hands back."""
+
+    def __init__(self, feed: "_FakeVespaFeed", argv: list[str], stdout: str) -> None:
+        self.args = argv
+        self.returncode = None
+        self.terminated = False
+        self.killed = False
+        self._feed = feed
+        self._stdout = stdout
+
+    def communicate(self, timeout: int | None = None) -> tuple[str, str]:
+        self._feed.timeouts.append(timeout)
+        if self._feed.on_communicate is not None:
+            self._feed.on_communicate(self)
+        self.returncode = self._feed.returncode
+        return self._stdout, self._feed.stderr
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def kill(self) -> None:
+        self.killed = True
+
+    def __enter__(self) -> "_FakeVespaFeedProcess":
+        return self
+
+    def __exit__(self, *_) -> bool:
+        return False
+
+
 class _FakeVespaFeed:
     """
-    Stands in for `subprocess.run`, recording what `vespa feed` was handed.
+    Stands in for `subprocess.Popen`, recording what `vespa feed` was handed.
 
-    It reads the feed files off disk at call time, so `fed_records` is proof the
-    files still existed and held records at the moment they were fed. A non-zero
-    `returncode` raises the way `check=True` makes the real call raise.
+    It reads the feed files off disk when the process is spawned, so
+    `fed_records` is proof the files still existed and held records at the
+    moment they were fed.
+
+    `on_communicate` runs while the process is live and registered in
+    `_vespa_feed_processes` - the only window in which a SIGTERM has anything
+    to terminate.
     """
 
     def __init__(
-        self, stdout: str | None = None, stderr: str = "", returncode: int = 0
+        self,
+        stdout: str | None = None,
+        stderr: str = "",
+        returncode: int = 0,
+        on_communicate: Callable[[_FakeVespaFeedProcess], None] | None = None,
     ) -> None:
         self.stdout = stdout
         self.stderr = stderr
         self.returncode = returncode
+        self.on_communicate = on_communicate
         self.calls: list[list[str]] = []
-        self.timeouts: list[int] = []
+        self.timeouts: list[int | None] = []
         self.fed_records: list[dict] = []
+        self.processes: list[_FakeVespaFeedProcess] = []
 
-    def __call__(self, argv: list[str], **kwargs) -> subprocess.CompletedProcess:
+    def __call__(self, argv: list[str], **kwargs) -> _FakeVespaFeedProcess:
         self.calls.append(argv)
-        self.timeouts.append(kwargs["timeout"])
 
         feed_paths = takewhile(lambda arg: not arg.startswith("--"), argv[2:])
         records = [record for path in feed_paths for record in _read_jsonl(Path(path))]
@@ -82,11 +125,9 @@ class _FakeVespaFeed:
         stdout = self.stdout or _vespa_feed_stdout(
             operation=len(records), ok=len(records)
         )
-        if self.returncode != 0 and kwargs["check"]:
-            raise subprocess.CalledProcessError(
-                self.returncode, argv, stdout, self.stderr
-            )
-        return subprocess.CompletedProcess(argv, self.returncode, stdout, self.stderr)
+        process = _FakeVespaFeedProcess(self, argv, stdout)
+        self.processes.append(process)
+        return process
 
 
 @pytest.fixture
@@ -94,6 +135,27 @@ def temp_workspace(monkeypatch, tmp_path: Path) -> Path:
     """Point the feeder's `tempfile.gettempdir()` at a per-test directory."""
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
     return tmp_path
+
+
+@pytest.fixture
+def displaced_sigterm_handler():
+    """
+    Install a no-op SIGTERM handler for the feeder's own handler to displace.
+
+    Both the handler and `_previous_sigterm_handler` are process-wide, so they
+    have to be put back afterwards. The no-op also keeps `raise_signal` from
+    reaching a default disposition that would kill the test session.
+    """
+    original = signal.getsignal(signal.SIGTERM)
+    original_previous = feeder._main_thread_sigterm_handler
+
+    displaced_signums: list[int] = []
+    signal.signal(signal.SIGTERM, lambda signum, _: displaced_signums.append(signum))
+    yield displaced_signums
+
+    signal.signal(signal.SIGTERM, original)
+    feeder._main_thread_sigterm_handler = original_previous
+    feeder._vespa_feed_processes.clear()
 
 
 @pytest.mark.parametrize(
@@ -206,7 +268,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
         for n in range(3)
     ]
     fake_feed = _FakeVespaFeed()
-    monkeypatch.setattr(feeder.subprocess, "run", fake_feed)
+    monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
     result = feeder.feed_derived_files(
         materialized_derived_files=files,
@@ -308,7 +370,7 @@ def test_feed_derived_files_reports_what_the_cli_returned(
     monkeypatch, tmp_path, stdout, stderr, expected
 ):
     files = [_write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
-    monkeypatch.setattr(feeder.subprocess, "run", _FakeVespaFeed(stdout, stderr))
+    monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed(stdout, stderr))
 
     result = feeder.feed_derived_files(
         materialized_derived_files=files, endpoint="http://vespa", application="app"
@@ -329,7 +391,7 @@ def test_feed_derived_files_raises_when_the_cli_exits_non_zero(monkeypatch, tmp_
     files = [_write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
     monkeypatch.setattr(
         feeder.subprocess,
-        "run",
+        "Popen",
         _FakeVespaFeed(
             stderr="dial tcp 127.0.0.1:1: connect: connection refused\n", returncode=1
         ),
@@ -341,6 +403,107 @@ def test_feed_derived_files_raises_when_the_cli_exits_non_zero(monkeypatch, tmp_
             endpoint="http://127.0.0.1:1",
             application="app",
         )
+
+
+def _time_out(process: _FakeVespaFeedProcess) -> None:
+    raise subprocess.TimeoutExpired(process.args, timeout=300)
+
+
+def _sigterm(_: _FakeVespaFeedProcess) -> None:
+    signal.raise_signal(signal.SIGTERM)
+
+
+@pytest.mark.parametrize(
+    (
+        "mid_feed",
+        "returncode",
+        "expected_exception",
+        "expected_cleanup",
+        "expected_forwarded",
+    ),
+    [
+        pytest.param(None, 0, None, None, [], id="feed-succeeded"),
+        pytest.param(
+            None,
+            1,
+            subprocess.CalledProcessError,
+            None,
+            [],
+            id="feed-exited-non-zero",
+        ),
+        pytest.param(
+            _time_out, 0, subprocess.TimeoutExpired, "killed", [], id="feed-timed-out"
+        ),
+        pytest.param(
+            _sigterm,
+            -signal.SIGTERM,
+            subprocess.CalledProcessError,
+            "terminated",
+            [signal.SIGTERM],
+            id="sigterm-mid-feed",
+        ),
+    ],
+)
+def test_feed_derived_files_manages_the_vespa_feed_process(
+    monkeypatch,
+    tmp_path,
+    displaced_sigterm_handler,
+    mid_feed,
+    returncode,
+    expected_exception,
+    expected_cleanup,
+    expected_forwarded,
+):
+    """
+    However the feed ends, it must leave no `vespa feed` behind it.
+
+    Two invariants hold on every row. The process is in
+    `_vespa_feed_processes` for exactly as long as it is in flight - left
+    behind, some later SIGTERM terminates it long after its batch finished -
+    and nothing is still running once the call returns.
+
+    `expected_cleanup` names who had to end the process: nothing on a clean
+    exit, `killed` on a timeout (`subprocess.run` used to do that for us),
+    `terminated` when the SIGTERM handler reached it.
+
+    `expected_forwarded` is the signal handed back to the one we displaced.
+    Under a flow run that is Prefect's SIGTERM bridge, which raises
+    TerminationSignal and drives the run to Cancelled; swallowing it leaves
+    the flow submitting batches after a graceful stop was asked for, which is
+    what v1's handler in flow.py does.
+    """
+    files = [_write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
+    registered_while_in_flight: list[set] = []
+
+    def on_communicate(process: _FakeVespaFeedProcess) -> None:
+        registered_while_in_flight.append(set(feeder._vespa_feed_processes))
+        if mid_feed is not None:
+            mid_feed(process)
+
+    fake_feed = _FakeVespaFeed(returncode=returncode, on_communicate=on_communicate)
+    monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
+
+    feeder._terminate_vespa_feed_processes_on_sigterm_handler()
+    assert signal.getsignal(signal.SIGTERM) is feeder._terminate_vespa_feed_processes
+
+    raises = (
+        contextlib.nullcontext()
+        if expected_exception is None
+        else pytest.raises(expected_exception)
+    )
+    with raises:
+        feeder.feed_derived_files(
+            materialized_derived_files=files,
+            endpoint="http://vespa",
+            application="app",
+        )
+
+    process = fake_feed.processes[0]
+    assert registered_while_in_flight == [{process}]
+    assert feeder._vespa_feed_processes == set()
+    assert process.killed is (expected_cleanup == "killed")
+    assert process.terminated is (expected_cleanup == "terminated")
+    assert displaced_sigterm_handler == expected_forwarded
 
 
 @pytest.mark.parametrize(
@@ -407,7 +570,7 @@ def test_feed_batch_feeds_the_records_then_leaves_nothing_on_disk(
 ):
     monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3(s3_objects))
     fake_feed = _FakeVespaFeed()
-    monkeypatch.setattr(feeder.subprocess, "run", fake_feed)
+    monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
     result = feeder.feed_batch.fn(
         endpoint="http://vespa",

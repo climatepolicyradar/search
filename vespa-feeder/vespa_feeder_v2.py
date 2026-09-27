@@ -11,14 +11,18 @@ import `vespa_feeder` and compose it with their own S3 source and (if any)
 deriver function. Nothing in this module is domain-specific.
 """
 
+import logging
 import os
 import re
+import signal
 import subprocess
 import tempfile
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import batched
 from pathlib import Path
+from types import FrameType
 
 import boto3
 import orjson
@@ -30,6 +34,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from telemetry import trace, tracer
 
 from prefect import get_run_logger, task
+
+logger = logging.getLogger(__name__)
 
 # Per-subprocess connection pool size (see the `--connections` comment in
 # vespa_feed). Paired with the flow's own ThreadPoolTaskRunner(max_workers=N)
@@ -50,6 +56,58 @@ DEFAULT_SAMPLE_RATE = 1.0
 
 # How long
 _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS_PER_FILE = 300
+
+
+# we store all `vespa feed` processes in this set to be able to
+# terminate them on SIGTERM of the main thread
+_vespa_feed_processes: set[subprocess.Popen] = set()
+# we use the `_vespa_feed_processes_lock` to `add` or `discard` or read the processes on `_vespa_feed_processes`
+_vespa_feed_processes_lock = threading.Lock()
+# we store this value to be able to run it on `_terminate_vespa_feed_processes` to avoid
+# swallowing any `TerminationSignals`
+_main_thread_sigterm_handler: Callable | int | None = None
+
+
+def _terminate_vespa_feed_processes(signum: int, frame: FrameType | None) -> None:
+    with _vespa_feed_processes_lock:
+        processes = list(_vespa_feed_processes)
+    # A module-level logger rather than get_run_logger(): this runs inside a
+    # signal handler, which can re-enter whatever the interrupted frame held.
+    logger.warning(
+        f"Received signal {signum}, terminating {len(processes)} "
+        "in-flight vespa feed process(es)"
+    )
+    for process in processes:
+        process.terminate()
+
+    # Hand back to the handler we displaced - under a flow run that is
+    # Prefect's own SIGTERM bridge, which raises TerminationSignal and drives
+    # the run to Cancelled. Returning here instead swallows the signal: the
+    # flow keeps submitting batches and never reports the cancellation.
+    if callable(_main_thread_sigterm_handler):
+        _main_thread_sigterm_handler(signum, frame)
+
+
+def _terminate_vespa_feed_processes_on_sigterm_handler() -> None:
+    """
+    Runs `_terminate_vespa_feed_processes` on the main threads `SIGTERM`.
+
+    This avoids any unhandled `_vespa_feed_processes`.
+
+    Calling this from vespa_feeder_v2 rather than at import time keeps it in
+    the Prefect process running the flow.
+    """
+
+    global _main_thread_sigterm_handler
+    # The conditional guards as signal.signal() raises ValueError outside
+    # the main thread.
+    #
+    # Prefect's runner can re-import this module from a worker thread (e.g. to resolve
+    # on_crashed hooks after the flow run's own process has already died).
+    if threading.current_thread() is threading.main_thread():
+        _main_thread_sigterm_handler = signal.signal(
+            signal.SIGTERM, _terminate_vespa_feed_processes
+        )
 
 
 @dataclass
@@ -279,7 +337,10 @@ def feed_derived_files(
         if line.strip()
     )
 
-    result = subprocess.run(
+    # Popen rather than subprocess.run so _terminate_vespa_feed_processes has
+    # something to terminate: run() owns its child privately, and this call is
+    # on a task runner worker thread, where a signal handler never runs.
+    with subprocess.Popen(
         [
             "vespa",
             "feed",
@@ -298,17 +359,38 @@ def feed_derived_files(
             "--verbose",
         ],
         env=os.environ,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=feed_timeout_seconds_per_file * len(materialized_derived_files),
-        check=True,
-    )
+    ) as process:
+        with _vespa_feed_processes_lock:
+            _vespa_feed_processes.add(process)
+        try:
+            stdout, stderr = process.communicate(
+                timeout=feed_timeout_seconds_per_file * len(materialized_derived_files)
+            )
+        except BaseException:
+            # What subprocess.run does too: never leave the child running when
+            # the call that owns it is unwinding. Popen.__exit__ then closes
+            # the pipes and reaps it.
+            process.kill()
+            raise
+        finally:
+            with _vespa_feed_processes_lock:
+                _vespa_feed_processes.discard(process)
 
-    response = VespaFeedResponse.model_validate(orjson.loads(result.stdout))
+    # replicates the `check=True` from `subprocess.run()`
+    # as we use `Popen` above.
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(
+            process.returncode, process.args, output=stdout, stderr=stderr
+        )
+
+    response = VespaFeedResponse.model_validate(orjson.loads(stdout))
     throttled_count = response.http_response_code_counts.get("429", 0)
     other_http_error_count = response.http_response_error_count - throttled_count
     not_ok_count = response.feeder_operation_count - response.feeder_ok_count
-    failed_documents = _parse_failed_documents(result.stderr)
+    failed_documents = _parse_failed_documents(stderr)
 
     errors: list[VespaError] = []
     if not_ok_count > 0:
@@ -401,6 +483,9 @@ def vespa_feeder_v2(
     sample_rate: float = DEFAULT_SAMPLE_RATE,
 ) -> None:
     run_logger = get_run_logger()
+    # this ensures we terminate any `vespa feed` processes
+    # spawned from `feed_derived_files`
+    _terminate_vespa_feed_processes_on_sigterm_handler()
 
     if not 0 < sample_rate <= 1:
         raise ValueError(f"sample_rate must be in (0, 1], got {sample_rate}")
