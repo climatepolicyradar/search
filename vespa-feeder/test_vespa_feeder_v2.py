@@ -186,15 +186,15 @@ def displaced_sigterm_handler():
     ],
 )
 def test_materialize_s3_files_writes_one_file_per_key(
-    monkeypatch, temp_workspace, s3_objects, batched_s3_keys, expected_files
+    monkeypatch, tmp_path, s3_objects, batched_s3_keys, expected_files
 ):
     monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3(s3_objects))
 
     paths = feeder.materialize_s3_files(
-        bucket="bucket", batched_s3_keys=batched_s3_keys
+        bucket="bucket", batched_s3_keys=batched_s3_keys, materialize_dir=tmp_path
     )
 
-    assert paths == [temp_workspace / name for name in expected_files]
+    assert paths == [tmp_path / name for name in expected_files]
     assert {path.name: _read_jsonl(path) for path in paths} == expected_files
 
 
@@ -507,11 +507,6 @@ def test_feed_derived_files_manages_the_vespa_feed_process(
 
 
 @pytest.mark.parametrize(
-    "delete_materialized_files",
-    [feeder.delete_materialized_s3_files, feeder.delete_materialized_derived_files],
-    ids=["s3-files", "derived-files"],
-)
-@pytest.mark.parametrize(
     ("present", "absent"),
     [
         pytest.param(["one.jsonl"], [], id="present"),
@@ -520,13 +515,13 @@ def test_feed_derived_files_manages_the_vespa_feed_process(
         pytest.param([], [], id="nothing-to-delete"),
     ],
 )
-def test_delete_materialized_files_removes_every_file_it_is_given(
-    tmp_path, delete_materialized_files, present, absent
+def test_delete_materialized_s3_files_removes_every_file_it_is_given(
+    tmp_path, present, absent
 ):
     paths = [_write_jsonl(tmp_path / name, [{"id": 1}]) for name in present]
     paths += [tmp_path / name for name in absent]
 
-    delete_materialized_files(paths)
+    feeder.delete_materialized_s3_files(paths)
 
     assert list(tmp_path.iterdir()) == []
 
@@ -586,4 +581,81 @@ def test_feed_batch_feeds_the_records_then_leaves_nothing_on_disk(
     assert fake_feed.fed_records == expected_records
     assert result.ok_count == len(expected_records)
     assert result.errors == []
+    assert list(temp_workspace.iterdir()) == []
+
+
+_BATCH_S3_OBJECTS = {
+    "prefix/one.jsonl": b'{"id": 1}\n',
+    "prefix/two.jsonl": b'{"id": 2}\n',
+}
+
+
+class _BrokenS3(_FakeS3):
+    """Downloads every key but the last, leaving a partial batch on disk."""
+
+    def download_file(self, bucket: str, key: str, destination: str) -> None:
+        if key == list(self.objects)[-1]:
+            raise RuntimeError("s3 download failed")
+        super().download_file(bucket, key, destination)
+
+
+def _broken_deriver(record: dict) -> dict:
+    raise RuntimeError("deriver failed")
+
+
+@pytest.mark.parametrize(
+    ("s3_client", "derive_data_from_source", "vespa_feed", "expected_exception"),
+    [
+        pytest.param(
+            lambda: _BrokenS3(_BATCH_S3_OBJECTS),
+            None,
+            _FakeVespaFeed,
+            RuntimeError,
+            id="a-download-fails",
+        ),
+        pytest.param(
+            lambda: _FakeS3(_BATCH_S3_OBJECTS),
+            _broken_deriver,
+            _FakeVespaFeed,
+            RuntimeError,
+            id="the-deriver-raises",
+        ),
+        pytest.param(
+            lambda: _FakeS3(_BATCH_S3_OBJECTS),
+            None,
+            lambda: _FakeVespaFeed(returncode=1),
+            subprocess.CalledProcessError,
+            id="vespa-feed-exits-non-zero",
+        ),
+    ],
+)
+def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
+    monkeypatch,
+    temp_workspace,
+    s3_client,
+    derive_data_from_source,
+    vespa_feed,
+    expected_exception,
+):
+    """
+    The failure has to reach the caller with no file left behind.
+
+    Both halves matter: the batch runs on a long-lived worker, so a leak here
+    accumulates across every batch of the run, and swallowing the error would
+    report a batch as fed that never was.
+    """
+    monkeypatch.setattr(feeder.boto3, "client", lambda _: s3_client())
+    monkeypatch.setattr(feeder.subprocess, "Popen", vespa_feed())
+
+    with pytest.raises(expected_exception):
+        feeder.feed_batch.fn(
+            endpoint="http://vespa",
+            application="app",
+            connections=2,
+            feed_timeout_seconds_per_file=300,
+            s3_bucket="bucket",
+            batched_s3_keys=tuple(_BATCH_S3_OBJECTS),
+            derive_data_from_source=derive_data_from_source,
+        )
+
     assert list(temp_workspace.iterdir()) == []

@@ -282,12 +282,14 @@ def get_ssm_parameter(name: str) -> str:
 
 
 @tracer.start_as_current_span("materialize_s3_files")
-def materialize_s3_files(bucket: str, batched_s3_keys: list[str]) -> list[Path]:
+def materialize_s3_files(
+    bucket: str, batched_s3_keys: list[str], materialize_dir: Path
+) -> list[Path]:
     s3: S3Client = boto3.client("s3")
 
     materialized_s3_files = []
     for s3_key in batched_s3_keys:
-        materialized_s3_file = Path(tempfile.gettempdir()) / s3_key.split("/")[-1]
+        materialized_s3_file = materialize_dir / s3_key.split("/")[-1]
         s3.download_file(bucket, s3_key, str(materialized_s3_file))
         materialized_s3_files.append(materialized_s3_file)
 
@@ -429,12 +431,6 @@ def delete_materialized_s3_files(materialized_s3_files: list[Path]) -> None:
         materialized_s3_file.unlink(missing_ok=True)
 
 
-@tracer.start_as_current_span("delete_materialized_derived_files")
-def delete_materialized_derived_files(materialized_derived_files: list[Path]) -> None:
-    for materialized_derived_file in materialized_derived_files:
-        materialized_derived_file.unlink(missing_ok=True)
-
-
 @task(cache_policy=INPUTS - "derive_data_from_source")
 @tracer.start_as_current_span("feed_batch")
 def feed_batch(
@@ -446,29 +442,29 @@ def feed_batch(
     batched_s3_keys: tuple[str, ...],
     derive_data_from_source: Callable[[dict], dict] | None = None,
 ) -> FeedResult:
-    materialized_s3_files = materialize_s3_files(
-        bucket=s3_bucket, batched_s3_keys=list(batched_s3_keys)
-    )
+    # All files from s3 and derived are stored in the `TemporaryDirectory`
+    # and deleted when `with` block exists via `TemporaryDirectory.__exit__`.
+    with tempfile.TemporaryDirectory(prefix="vespa-feeder-") as materialize_dir:
+        materialized_s3_files = materialize_s3_files(
+            bucket=s3_bucket,
+            batched_s3_keys=list(batched_s3_keys),
+            materialize_dir=Path(materialize_dir),
+        )
 
-    materialized_derived_files = materialize_derived_files(
-        materialized_s3_files=materialized_s3_files,
-        derive_data_from_source=derive_data_from_source,
-    )
+        materialized_derived_files = materialize_derived_files(
+            materialized_s3_files=materialized_s3_files,
+            derive_data_from_source=derive_data_from_source,
+        )
 
-    # Halves peak disk - a batch otherwise holds both sets at once.
-    delete_materialized_s3_files(materialized_s3_files=materialized_s3_files)
+        # Halves peak disk - a batch otherwise holds both sets at once.
+        delete_materialized_s3_files(materialized_s3_files=materialized_s3_files)
 
-    try:
         return feed_derived_files(
             materialized_derived_files=materialized_derived_files,
             endpoint=endpoint,
             application=application,
             connections=connections,
             feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
-        )
-    finally:
-        delete_materialized_derived_files(
-            materialized_derived_files=materialized_derived_files
         )
 
 
