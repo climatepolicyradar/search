@@ -28,7 +28,7 @@ import boto3
 import orjson
 from mypy_boto3_s3 import S3Client
 from prefect.artifacts import create_markdown_artifact
-from prefect.cache_policies import INPUTS
+from prefect.cache_policies import NO_CACHE
 from prefect.futures import PrefectFuture
 from pydantic import BaseModel, ConfigDict, Field
 from telemetry import trace, tracer
@@ -431,7 +431,10 @@ def delete_materialized_s3_files(materialized_s3_files: list[Path]) -> None:
         materialized_s3_file.unlink(missing_ok=True)
 
 
-@task(cache_policy=INPUTS - "derive_data_from_source")
+# Caching here would be wrong. A batch with failed documents
+# returns a `FeedResult` and finishes Completed, so it
+# would cache as a success and never be re-fed.
+@task(cache_policy=NO_CACHE)
 @tracer.start_as_current_span("feed_batch")
 def feed_batch(
     endpoint: str,
