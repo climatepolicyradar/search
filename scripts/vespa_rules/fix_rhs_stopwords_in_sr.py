@@ -1,6 +1,7 @@
 # Runs as a CI check that auto-fixes passages.sr, labels.sr. and documents.sr by removing stopwords from the right-hand side of the rules.
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import typer
@@ -15,18 +16,36 @@ def load_stopwords(path: Path) -> set[str]:
 # https://docs.vespa.ai/en/reference/querying/semantic-rules.html
 TERM_MARKERS = "?=+$-"
 
-def remove_stopwords_from_line_rhs(line: str, stopwords: set[str]) -> str:
+@dataclass
+class Violation:
+    file: Path
+    line_number: int
+    line: str
+    words: list[str]
+    fixable: bool
+    detail: str
+
+class UnfixableRhsError(ValueError):
+    """A rule line has a problem that can't be safely auto-fixed."""
+
+    def __init__(self, message: str, words: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.words = words or []
+
+def remove_stopwords_from_line_rhs(
+    line: str, stopwords: set[str]
+) -> tuple[str, list[str]]:
     newline = "\n" if line.endswith("\n") else ""
     stripped = line.strip()
 
     # pass through comments, empty lines, and @-directives unchanged
     if not stripped or stripped.startswith("#") or stripped.startswith("@"):
-        return line
+        return line, []
 
     # match rule lines
     match = re.match(r"(?P<lhs>.*?)(?P<op>->|\+>)(?P<rhs>.*);\s*$", stripped)
     if match is None:
-        raise ValueError(f"could not parse rule line: {line!r}")
+        raise UnfixableRhsError(f"could not parse rule line: {line!r}")
 
     lhs, op, rhs = match["lhs"], match["op"], match["rhs"]
 
@@ -36,6 +55,7 @@ def remove_stopwords_from_line_rhs(line: str, stopwords: set[str]) -> str:
     # their internal whitespace, then filter out stopwords and reassemble.
     terms = re.findall(r'[?=+$-]?"[^"]*"(?:!\d+)?|\S+', rhs)
     fixed_terms = []
+    removed_words = []
     for term in terms:
         marker = ""
         body = term
@@ -50,37 +70,94 @@ def remove_stopwords_from_line_rhs(line: str, stopwords: set[str]) -> str:
         quoted = re.match(r'^"([^"]*)"$', body)
         if quoted:
             phrase = quoted.group(1)
-            words = [word for word in phrase.split() if word.lower() not in stopwords]
+            words = []
+            for word in phrase.split():
+                if word.lower() in stopwords:
+                    removed_words.append(word)
+                else:
+                    words.append(word)
             if not words:
-                raise ValueError(
+                raise UnfixableRhsError(
                     f"every word in RHS phrase {term!r} is a stopword, "
-                    f"cannot auto-fix: {line!r}"
+                    f"cannot auto-fix: {line!r}",
+                    words=phrase.split(),
                 )
             fixed_terms.append(f'{marker}"{" ".join(words)}"{weight}')
             continue
 
         if not re.match(r"^[A-Za-z][\w'-]*$", body):
-            raise ValueError(
+            raise UnfixableRhsError(
                 f"unrecognised RHS term {term!r} (labels and reference "
                 f"productions like [..] / … aren't supported): {line!r}"
             )
 
         if body.lower() in stopwords:
+            removed_words.append(body)
             continue
         fixed_terms.append(f"{marker}{body}{weight}")
 
     if not fixed_terms:
-        raise ValueError(f"RHS would be empty after removing stopwords: {line!r}")
+        raise UnfixableRhsError(
+            f"RHS would be empty after removing stopwords: {line!r}",
+            words=removed_words,
+        )
 
-    return f"{lhs.strip()} {op} {' '.join(fixed_terms)};{newline}"
+    fixed_line = f"{lhs.strip()} {op} {' '.join(fixed_terms)};{newline}"
+    return fixed_line, removed_words
 
-def fix_file(path: Path, stopwords: set[str]) -> tuple[str, bool]:
+def fix_file(path: Path, stopwords: set[str]) -> tuple[str, list[Violation]]:
+    """Fix every fixable line; return the rebuilt text and every violation found."""
     with open(path, "r", encoding="utf-8") as f:
         lines = f.readlines()
-    fixed_lines = [remove_stopwords_from_line_rhs(line, stopwords) for line in lines]
-    original_text = "".join(lines)
-    fixed_text = "".join(fixed_lines)
-    return fixed_text, fixed_text != original_text
+
+    fixed_lines = []
+    violations: list[Violation] = []
+    for line_number, line in enumerate(lines, start=1):
+        try:
+            fixed_line, removed_words = remove_stopwords_from_line_rhs(line, stopwords)
+        except UnfixableRhsError as e:
+            fixed_lines.append(line)
+            violations.append(
+                Violation(
+                    file=path,
+                    line_number=line_number,
+                    line=line.rstrip("\n"),
+                    words=e.words,
+                    fixable=False,
+                    detail=str(e),
+                )
+            )
+            continue
+
+        fixed_lines.append(fixed_line)
+        if removed_words:
+            violations.append(
+                Violation(
+                    file=path,
+                    line_number=line_number,
+                    line=line.rstrip("\n"),
+                    words=removed_words,
+                    fixable=True,
+                    detail=f"RHS spells out stopword(s): {removed_words}",
+                )
+            )
+
+    return "".join(fixed_lines), violations
+
+def _print_violation(violation: Violation) -> None:
+    if violation.fixable:
+        print(
+            f"{violation.file}:{violation.line_number}: remove {violation.words} "
+            f"from: {violation.line}"
+        )
+    elif violation.words:
+        print(
+            f"{violation.file}:{violation.line_number}: stopword(s) {violation.words} "
+            f"found but can't be auto-removed here (needs a manual rewrite): "
+            f"{violation.line}"
+        )
+    else:
+        print(f"{violation.file}:{violation.line_number}: {violation.detail}")
 
 @app.command()
 def main(
@@ -98,21 +175,29 @@ def main(
     )
     stopwords = load_stopwords(stopwords_path)
 
-    files_needing_fix = []
+    any_violations = False
+    any_unresolved = False
     for sr_path in sorted(rules_dir.glob("*.sr")):
-        fixed_text, changed = fix_file(sr_path, stopwords)
-        if not changed:
+        fixed_text, violations = fix_file(sr_path, stopwords)
+        if not violations:
             continue
 
-        files_needing_fix.append(sr_path)
-        if check:
-            print(f"{sr_path} has RHS entries that spell out stopwords")
-        else:
+        any_violations = True
+        for violation in violations:
+            _print_violation(violation)
+            if not violation.fixable:
+                any_unresolved = True
+
+        if not check and any(v.fixable for v in violations):
             sr_path.write_text(fixed_text, encoding="utf-8")
             print(f"Fixed {sr_path}")
 
-    if check and files_needing_fix:
+    if check and any_violations:
         print("Run `just fix-vespa-rules-stopwords` locally and commit the result.")
+        raise typer.Exit(code=1)
+
+    if not check and any_unresolved:
+        print("Some lines could not be auto-fixed and need manual attention.")
         raise typer.Exit(code=1)
 
 
