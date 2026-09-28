@@ -39,8 +39,8 @@ def _build_topic_filter(topics: list[str], topic_or: bool) -> dict | None:
     Group the --topic values into a single condition, AND by default, OR with `--or`.
 
     Each topic sits in its own nested group because topics in a group would get collapsed
-    by the engine into a single `sameElement(...)`, so match nothing. See 
-    `_build_filter_yql` in `search/engines/dev_vespa.py`.
+    by the engine into a single `sameElement(...)`, so match nothing. See
+    `_build_filter_yql` in `search/engines/vespa_query/filters.py`.
     """
     if not topics:
         return None

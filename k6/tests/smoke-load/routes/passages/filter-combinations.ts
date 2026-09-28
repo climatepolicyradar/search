@@ -59,9 +59,11 @@ const isLoadProfile = (__ENV.PROFILE || "load") === "load";
 //
 // `filters` is free-form JSON not enumerated in the OpenAPI schema, so these
 // combinations are sourced from real usage, not guessed: the shape matches
-// search-api's Filter/FieldFilter models (search/engines/dev_vespa.py's
+// search-api's Filter/FieldFilter models
+// (search/engines/vespa_query/filters.py) and the
 // passages_filter_field_to_vespa_field_map / passages_filter_struct_field_to_
-// vespa_field_map) and is what navigator-frontend sends as the `filters`
+// vespa_field_map maps (search/engines/dev_vespa/passages_search_engine.py)
+// and is what navigator-frontend sends as the `filters`
 // param for passage search (src/api/passages.ts), always combined with a
 // document_id constraint there. Covers a single document_id filter, a single
 // labels.value.type filter, both `and`-ed, a nested or-in-and (multiple
@@ -215,7 +217,8 @@ const PROFILES = {
     // spike on top of whatever task count phase 1 left behind.
     //
     // /search/passages is a single Vespa query with a 5s timeout
-    // (search/engines/dev_vespa.py:1363) — a `filters` clause adds YQL
+    // (DevVespaPassageSearchEngine.search() in
+    // search/engines/dev_vespa/passages_search_engine.py) — a `filters` clause adds YQL
     // predicates to that same query rather than triggering extra Vespa
     // calls (unlike /documents?fields=), so there is no fan-out-maximising
     // combination to chase the way fields-combinations.ts does. Load mode
