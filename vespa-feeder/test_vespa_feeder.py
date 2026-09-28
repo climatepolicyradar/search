@@ -11,7 +11,7 @@ from pathlib import Path
 
 import orjson
 import pytest
-import vespa_feeder_v2 as feeder
+import vespa_feeder as feeder
 
 
 def _write_jsonl(path: Path, records: list[dict]) -> Path:
@@ -156,6 +156,22 @@ def displaced_sigterm_handler():
     signal.signal(signal.SIGTERM, original)
     feeder._main_thread_sigterm_handler = original_previous
     feeder._vespa_feed_processes.clear()
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param("search/vespa/labels_feed_materializer.jsonl", id="nested"),
+        pytest.param("one.jsonl", id="bucket-root"),
+    ],
+)
+def test_list_s3_keys_treats_a_jsonl_key_as_the_file_itself(monkeypatch, key):
+    def _no_s3(_):
+        raise AssertionError("a .jsonl key should not be listed as a prefix")
+
+    monkeypatch.setattr(feeder.boto3, "client", _no_s3)
+
+    assert feeder.list_s3_keys(bucket="bucket", key=key) == [key]
 
 
 @pytest.mark.parametrize(
@@ -469,8 +485,7 @@ def test_feed_derived_files_manages_the_vespa_feed_process(
     `expected_forwarded` is the signal handed back to the one we displaced.
     Under a flow run that is Prefect's SIGTERM bridge, which raises
     TerminationSignal and drives the run to Cancelled; swallowing it leaves
-    the flow submitting batches after a graceful stop was asked for, which is
-    what v1's handler in flow.py does.
+    the flow submitting batches after a graceful stop was asked for.
     """
     files = [_write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
     registered_while_in_flight: list[set] = []

@@ -2,7 +2,6 @@ import re
 from collections import Counter
 from typing import TypedDict
 
-from flow import feed_task_runner, vespa_feeder
 from passages_derived_data import (
     is_page_header_or_footer,
     looks_like_demoted_section,
@@ -10,12 +9,12 @@ from passages_derived_data import (
     looks_like_short_heading,
     looks_like_table_of_contents,
 )
-from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
-from vespa_feeder_v2 import (
+from task_runner import task_runner
+from vespa_feeder import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_SAMPLE_RATE,
-    vespa_feeder_v2,
+    vespa_feeder,
 )
 
 from prefect import flow
@@ -195,42 +194,24 @@ def derive_heading_text(record: dict) -> dict:
 # so disk isn't the binding constraint here, and 8 x _DEFAULT_CONNECTIONS=2 is
 # the 16 connections Vespa's feedapi-handler can take. This flow submits ~5.9k
 # tasks in one burst, so it is the one that actually depends on the cap being
-# on the task runner - see the submit loop in flow.py's vespa_feeder for what
-# happens without it.
+# on the task runner - see the submit loop in vespa_feeder for what happens
+# without it.
 @flow(
     name="search-vespa-feeder-passages",
     description="Feed passages JSONL from the data-lake Snowflake export into Vespa, deriving document_ref per record",
-    task_runner=feed_task_runner(max_workers=8),
+    task_runner=task_runner(max_workers=8),
     log_prints=True,
     on_completion=[SlackNotify.on_success],
     on_failure=[SlackNotify.on_failure],
     on_crashed=[SlackNotify.on_crashed],
     on_cancellation=[SlackNotify.on_cancellation],
 )
-def passages_feeder_flow() -> State | None:
-    return vespa_feeder(
-        s3_bucket="cpr-prod-snowflake-data-export",
-        s3_key="production/published/pipeline_data_in_vespa_passage_updates_v1/latest",
-        derive_data_from_source=derive_passage_data,
-    )
-
-
-@flow(
-    name="search-vespa-feeder-passages-v2",
-    description="Feed passages JSONL from the data-lake Snowflake export into Vespa, deriving document_ref per record",
-    task_runner=feed_task_runner(max_workers=8),
-    log_prints=True,
-    on_completion=[SlackNotify.on_success],
-    on_failure=[SlackNotify.on_failure],
-    on_crashed=[SlackNotify.on_crashed],
-    on_cancellation=[SlackNotify.on_cancellation],
-)
-def passages_feeder_flow_v2(
+def passages_feeder_flow(
     batch_size: int = DEFAULT_BATCH_SIZE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
     s3_key: str = "latest",
 ) -> None:
-    vespa_feeder_v2(
+    vespa_feeder(
         s3_bucket="cpr-prod-snowflake-data-export",
         s3_key=f"production/published/pipeline_data_in_vespa_passage_updates_v1/{s3_key}",
         derive_data_from_source=derive_passage_data,
