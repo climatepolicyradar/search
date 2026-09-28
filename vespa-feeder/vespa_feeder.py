@@ -94,7 +94,7 @@ def _terminate_vespa_feed_processes_on_sigterm_handler() -> None:
 
     This avoids any unhandled `_vespa_feed_processes`.
 
-    Calling this from vespa_feeder_v2 rather than at import time keeps it in
+    Calling this from vespa_feeder rather than at import time keeps it in
     the Prefect process running the flow.
     """
 
@@ -253,6 +253,11 @@ def _build_run_summary_markdown(
 
 
 def list_s3_keys(bucket: str, key: str) -> list[str]:
+    # A key naming a file is that file, not a prefix to walk - the Snowflake
+    # exports are directories of parts, the older materialisers a single JSONL.
+    if key.endswith(".jsonl"):
+        return [key]
+
     s3: S3Client = boto3.client("s3")
 
     prefix = key.rstrip("/") + "/"
@@ -471,8 +476,8 @@ def feed_batch(
         )
 
 
-@tracer.start_as_current_span("vespa_feeder_v2")
-def vespa_feeder_v2(
+@tracer.start_as_current_span("vespa_feeder")
+def vespa_feeder(
     s3_bucket: str,
     s3_key: str,
     derive_data_from_source: Callable[[dict], dict] | None = None,
@@ -498,6 +503,7 @@ def vespa_feeder_v2(
     )
 
     s3_keys = list_s3_keys(bucket=s3_bucket, key=s3_key)
+
     if sample_rate < 1:
         # Every nth key from the sorted listing, rather than the first n. Both
         # are deterministic - so every A/B variant feeds the identical subset -
