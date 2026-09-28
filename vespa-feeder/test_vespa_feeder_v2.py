@@ -185,13 +185,13 @@ def displaced_sigterm_handler():
         pytest.param({}, [], {}, id="no-keys"),
     ],
 )
-def test_materialize_s3_files_writes_one_file_per_key(
+def test_materialise_s3_files_writes_one_file_per_key(
     monkeypatch, tmp_path, s3_objects, batched_s3_keys, expected_files
 ):
     monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3(s3_objects))
 
-    paths = feeder.materialize_s3_files(
-        bucket="bucket", batched_s3_keys=batched_s3_keys, materialize_dir=tmp_path
+    paths = feeder.materialise_s3_files(
+        bucket="bucket", batched_s3_keys=batched_s3_keys, materialise_dir=tmp_path
     )
 
     assert paths == [tmp_path / name for name in expected_files]
@@ -235,7 +235,7 @@ def test_materialize_s3_files_writes_one_file_per_key(
         ),
     ],
 )
-def test_materialize_derived_files_writes_a_new_file_per_source(
+def test_materialise_derived_files_writes_a_new_file_per_source(
     tmp_path, sources, derive_data_from_source, expected_files
 ):
     """
@@ -250,8 +250,8 @@ def test_materialize_derived_files_writes_a_new_file_per_source(
         source_path.write_bytes(content)
         source_paths.append(source_path)
 
-    derived = feeder.materialize_derived_files(
-        materialized_s3_files=source_paths,
+    derived = feeder.materialise_derived_files(
+        materialised_s3_files=source_paths,
         derive_data_from_source=derive_data_from_source,
     )
 
@@ -271,7 +271,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
     monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
     result = feeder.feed_derived_files(
-        materialized_derived_files=files,
+        materialised_derived_files=files,
         endpoint="http://vespa",
         application="app",
         feed_timeout_seconds_per_file=300,
@@ -373,7 +373,7 @@ def test_feed_derived_files_reports_what_the_cli_returned(
     monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed(stdout, stderr))
 
     result = feeder.feed_derived_files(
-        materialized_derived_files=files, endpoint="http://vespa", application="app"
+        materialised_derived_files=files, endpoint="http://vespa", application="app"
     )
 
     assert {
@@ -399,7 +399,7 @@ def test_feed_derived_files_raises_when_the_cli_exits_non_zero(monkeypatch, tmp_
 
     with pytest.raises(subprocess.CalledProcessError):
         feeder.feed_derived_files(
-            materialized_derived_files=files,
+            materialised_derived_files=files,
             endpoint="http://127.0.0.1:1",
             application="app",
         )
@@ -493,7 +493,7 @@ def test_feed_derived_files_manages_the_vespa_feed_process(
     )
     with raises:
         feeder.feed_derived_files(
-            materialized_derived_files=files,
+            materialised_derived_files=files,
             endpoint="http://vespa",
             application="app",
         )
@@ -515,13 +515,13 @@ def test_feed_derived_files_manages_the_vespa_feed_process(
         pytest.param([], [], id="nothing-to-delete"),
     ],
 )
-def test_delete_materialized_s3_files_removes_every_file_it_is_given(
+def test_delete_materialised_s3_files_removes_every_file_it_is_given(
     tmp_path, present, absent
 ):
     paths = [_write_jsonl(tmp_path / name, [{"id": 1}]) for name in present]
     paths += [tmp_path / name for name in absent]
 
-    feeder.delete_materialized_s3_files(paths)
+    feeder.delete_materialised_s3_files(paths)
 
     assert list(tmp_path.iterdir()) == []
 

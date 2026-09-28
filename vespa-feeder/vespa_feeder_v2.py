@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CONNECTIONS = 2
 
 
-# How many S3 keys each materialize/feed/delete chain handles at once.
+# How many S3 keys each materialise/feed/delete chain handles at once.
 DEFAULT_BATCH_SIZE = 10
 
 # 1 feeds every file list_s3_keys discovers. Lower it to benchmark against a
@@ -281,24 +281,24 @@ def get_ssm_parameter(name: str) -> str:
     return value.strip()
 
 
-@tracer.start_as_current_span("materialize_s3_files")
-def materialize_s3_files(
-    bucket: str, batched_s3_keys: list[str], materialize_dir: Path
+@tracer.start_as_current_span("materialise_s3_files")
+def materialise_s3_files(
+    bucket: str, batched_s3_keys: list[str], materialise_dir: Path
 ) -> list[Path]:
     s3: S3Client = boto3.client("s3")
 
-    materialized_s3_files = []
+    materialised_s3_files = []
     for s3_key in batched_s3_keys:
-        materialized_s3_file = materialize_dir / s3_key.split("/")[-1]
-        s3.download_file(bucket, s3_key, str(materialized_s3_file))
-        materialized_s3_files.append(materialized_s3_file)
+        materialised_s3_file = materialise_dir / s3_key.split("/")[-1]
+        s3.download_file(bucket, s3_key, str(materialised_s3_file))
+        materialised_s3_files.append(materialised_s3_file)
 
-    return materialized_s3_files
+    return materialised_s3_files
 
 
-@tracer.start_as_current_span("materialize_derived_files")
-def materialize_derived_files(
-    materialized_s3_files: list[Path],
+@tracer.start_as_current_span("materialise_derived_files")
+def materialise_derived_files(
+    materialised_s3_files: list[Path],
     derive_data_from_source: Callable[[dict], dict] | None,
 ) -> list[Path]:
     """
@@ -308,25 +308,25 @@ def materialize_derived_files(
     """
     derive = derive_data_from_source or (lambda record: record)
 
-    materialized_derived_files = []
-    for materialized_s3_file in materialized_s3_files:
-        derived_file = materialized_s3_file.with_name(
-            f"{materialized_s3_file.stem}.derived{materialized_s3_file.suffix}"
+    materialised_derived_files = []
+    for materialised_s3_file in materialised_s3_files:
+        derived_file = materialised_s3_file.with_name(
+            f"{materialised_s3_file.stem}.derived{materialised_s3_file.suffix}"
         )
-        with materialized_s3_file.open("rb") as src, derived_file.open("wb") as dst:
+        with materialised_s3_file.open("rb") as src, derived_file.open("wb") as dst:
             for line in src:
                 if not line.strip():
                     continue
                 record = derive(orjson.loads(line))
                 dst.write(orjson.dumps(record) + b"\n")
-        materialized_derived_files.append(derived_file)
+        materialised_derived_files.append(derived_file)
 
-    return materialized_derived_files
+    return materialised_derived_files
 
 
 @tracer.start_as_current_span("feed_derived_files")
 def feed_derived_files(
-    materialized_derived_files: list[Path],
+    materialised_derived_files: list[Path],
     endpoint: str,
     application: str,
     connections: int = _DEFAULT_CONNECTIONS,
@@ -334,8 +334,8 @@ def feed_derived_files(
 ) -> FeedResult:
     input_count = sum(
         1
-        for materialized_derived_file in materialized_derived_files
-        for line in materialized_derived_file.open("rb")
+        for materialised_derived_file in materialised_derived_files
+        for line in materialised_derived_file.open("rb")
         if line.strip()
     )
 
@@ -347,8 +347,8 @@ def feed_derived_files(
             "vespa",
             "feed",
             *[
-                str(materialized_derived_file)
-                for materialized_derived_file in materialized_derived_files
+                str(materialised_derived_file)
+                for materialised_derived_file in materialised_derived_files
             ],
             "--target",
             endpoint,
@@ -369,7 +369,7 @@ def feed_derived_files(
             _vespa_feed_processes.add(process)
         try:
             stdout, stderr = process.communicate(
-                timeout=feed_timeout_seconds_per_file * len(materialized_derived_files)
+                timeout=feed_timeout_seconds_per_file * len(materialised_derived_files)
             )
         except BaseException:
             # What subprocess.run does too: never leave the child running when
@@ -414,7 +414,7 @@ def feed_derived_files(
         )
 
     return FeedResult(
-        feed_paths=materialized_derived_files,
+        feed_paths=materialised_derived_files,
         input_count=input_count,
         operation_count=response.feeder_operation_count,
         ok_count=response.feeder_ok_count,
@@ -425,10 +425,10 @@ def feed_derived_files(
     )
 
 
-@tracer.start_as_current_span("delete_materialized_s3_files")
-def delete_materialized_s3_files(materialized_s3_files: list[Path]) -> None:
-    for materialized_s3_file in materialized_s3_files:
-        materialized_s3_file.unlink(missing_ok=True)
+@tracer.start_as_current_span("delete_materialised_s3_files")
+def delete_materialised_s3_files(materialised_s3_files: list[Path]) -> None:
+    for materialised_s3_file in materialised_s3_files:
+        materialised_s3_file.unlink(missing_ok=True)
 
 
 # Caching here would be wrong. A batch with failed documents
@@ -447,23 +447,23 @@ def feed_batch(
 ) -> FeedResult:
     # All files from s3 and derived are stored in the `TemporaryDirectory`
     # and deleted when `with` block exists via `TemporaryDirectory.__exit__`.
-    with tempfile.TemporaryDirectory(prefix="vespa-feeder-") as materialize_dir:
-        materialized_s3_files = materialize_s3_files(
+    with tempfile.TemporaryDirectory(prefix="vespa-feeder-") as materialise_dir:
+        materialised_s3_files = materialise_s3_files(
             bucket=s3_bucket,
             batched_s3_keys=list(batched_s3_keys),
-            materialize_dir=Path(materialize_dir),
+            materialise_dir=Path(materialise_dir),
         )
 
-        materialized_derived_files = materialize_derived_files(
-            materialized_s3_files=materialized_s3_files,
+        materialised_derived_files = materialise_derived_files(
+            materialised_s3_files=materialised_s3_files,
             derive_data_from_source=derive_data_from_source,
         )
 
         # Halves peak disk - a batch otherwise holds both sets at once.
-        delete_materialized_s3_files(materialized_s3_files=materialized_s3_files)
+        delete_materialised_s3_files(materialised_s3_files=materialised_s3_files)
 
         return feed_derived_files(
-            materialized_derived_files=materialized_derived_files,
+            materialised_derived_files=materialised_derived_files,
             endpoint=endpoint,
             application=application,
             connections=connections,
