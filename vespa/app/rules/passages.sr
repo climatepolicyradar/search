@@ -33,6 +33,3 @@ ndc +> ?"nationally determined contribution";
 nature based solution -> ?"nature based solution" ?"nbs";
 gga +> ?"global goal adaptation";
 evs +> ?"electric car" ?"electric vehicle";
-testa +> ?"a deliberate stopword";
-testb +> ?"or a second example";
-testc +> ?"i could put even more";
