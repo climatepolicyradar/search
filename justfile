@@ -50,7 +50,7 @@ lint-all:
 
 # auto-fix RHS rule entries that spell out stopwords (vespa/app/rules/*.sr)
 fix-vespa-rules-stopwords:
-    uv run python scripts/vespa_rules/fix_rhs_stopwords_in_sr.py
+    uv run python scripts/vespa_rules/fix_rhs_stopwords_in_sr.py --fix
 
 # check RHS rule entries don't spell out stopwords - CI will use this
 check-vespa-rules-stopwords:

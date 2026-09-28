@@ -15,6 +15,7 @@ SCRIPT_PATH = (
 )
 
 STOPWORDS = {"on", "the", "a", "and"}
+STOPWORDS_TEXT = "\n".join(sorted(STOPWORDS)) + "\n"
 
 
 def _load_script():
@@ -30,106 +31,76 @@ def script():
     return _load_script()
 
 
-def _make_fake_repo(tmp_path: Path, sr_contents: str) -> Path:
-    """Lay out a fake repo dir mirroring the real one and copy the script into it."""
-    rules_dir = tmp_path / "vespa" / "app" / "rules"
-    lucene_dir = tmp_path / "vespa" / "app" / "lucene-linguistics" / "en"
-    rules_dir.mkdir(parents=True)
-    lucene_dir.mkdir(parents=True)
-    (lucene_dir / "stopwords.txt").write_text("\n".join(sorted(STOPWORDS)) + "\n")
-    (rules_dir / "passages.sr").write_text(sr_contents)
-
-    script_dir = tmp_path / "scripts" / "vespa_rules"
-    script_dir.mkdir(parents=True)
-    fake_script = script_dir / "fix_rhs_stopwords_in_sr.py"
-    fake_script.write_text(SCRIPT_PATH.read_text())
-    return fake_script
-
-
-def test_quoted_phrase_stopword_is_dropped(script) -> None:
-    """The passages.sr regression: a stopword spelled out in a quoted RHS phrase is removed."""
-    line = 'gga +> ?"global goal on adaptation";\n'
-    assert script.remove_stopwords_from_line_rhs(line, STOPWORDS) == (
-        'gga +> ?"global goal adaptation";\n',
-        ["on"],
-    )
-
-
-def test_bare_stopword_term_is_dropped(script) -> None:
-    """A bare (unquoted) RHS term that is itself a stopword is dropped entirely."""
-    line = "x -> foo and bar;\n"
-    assert script.remove_stopwords_from_line_rhs(line, STOPWORDS) == (
-        "x -> foo bar;\n",
-        ["and"],
-    )
-
-
-def test_marker_and_weight_are_preserved(script) -> None:
-    """A term-type marker and a `!weight` suffix survive the fix unchanged."""
-    line = 'x +> ?"electric car" ?"electric vehicle"!50;\n'
-    assert script.remove_stopwords_from_line_rhs(line, STOPWORDS) == (line, [])
-
-
-def test_multiple_stopwords_in_phrase_are_dropped(script) -> None:
-    """All stopwords in a quoted RHS phrase are removed, leaving the rest intact."""
-    line = 'x +> ?"the methane and the carbon";\n'
-    fixed_line, removed = script.remove_stopwords_from_line_rhs(line, STOPWORDS)
-    assert fixed_line == 'x +> ?"methane carbon";\n'
-    assert removed == ["the", "and", "the"]
-
-
-def test_stopwords_in_multiple_phrases_are_dropped(script) -> None:
-    """All stopwords in multiple RHS terms are removed, leaving the rest intact."""
-    line = 'x +> ?"greenhouse and gas" and ?"methane and carbon";\n'
-    fixed_line, removed = script.remove_stopwords_from_line_rhs(line, STOPWORDS)
-    assert fixed_line == 'x +> ?"greenhouse gas" ?"methane carbon";\n'
-    assert removed == ["and", "and", "and"]
-
-
-def test_multiple_stopwords_in_bare_terms_are_dropped(script) -> None:
-    """All stopwords in multiple bare RHS terms are removed, leaving the rest intact."""
-    line = "x -> methane is a greenhouse gas and carbon too;\n"
-    fixed_line, removed = script.remove_stopwords_from_line_rhs(line, STOPWORDS)
-    assert fixed_line == "x -> methane is greenhouse gas carbon too;\n"
-    assert removed == ["a", "and"]
+@pytest.mark.parametrize(
+    ("line", "fixed_line", "removed"),
+    [
+        pytest.param(
+            'gga +> ?"global goal on adaptation";\n',
+            'gga +> ?"global goal adaptation";\n',
+            ["on"],
+            id="quoted-phrase-stopword",
+        ),
+        pytest.param(
+            "x -> foo and bar;\n", "x -> foo bar;\n", ["and"], id="bare-stopword-term"
+        ),
+        pytest.param(
+            'x +> ?"electric car" ?"electric vehicle"!50;\n',
+            'x +> ?"electric car" ?"electric vehicle"!50;\n',
+            [],
+            id="marker-and-weight-preserved",
+        ),
+        pytest.param(
+            'x +> ?"the methane and the carbon";\n',
+            'x +> ?"methane carbon";\n',
+            ["the", "and", "the"],
+            id="multiple-stopwords-in-phrase",
+        ),
+        pytest.param(
+            'x +> ?"greenhouse and gas" and ?"methane and carbon";\n',
+            'x +> ?"greenhouse gas" ?"methane carbon";\n',
+            ["and", "and", "and"],
+            id="stopwords-in-multiple-phrases",
+        ),
+        pytest.param(
+            "x -> methane is a greenhouse gas and carbon too;\n",
+            "x -> methane is greenhouse gas carbon too;\n",
+            ["a", "and"],
+            id="multiple-stopwords-in-bare-terms",
+        ),
+        pytest.param(
+            'x +> ?"greenhouse and gas" and methane;\n',
+            'x +> ?"greenhouse gas" methane;\n',
+            ["and", "and"],
+            id="stopwords-in-mixed-terms",
+        ),
+        pytest.param("# a comment\n", "# a comment\n", [], id="comment-line"),
+        pytest.param("@language(en)\n", "@language(en)\n", [], id="directive-line"),
+        pytest.param("\n", "\n", [], id="blank-line"),
+        pytest.param(
+            'ndc +> ?"nationally determined contribution";\n',
+            'ndc +> ?"nationally determined contribution";\n',
+            [],
+            id="clean-line",
+        ),
+    ],
+)
+def test_stopwords_are_removed_from_rhs(script, line, fixed_line, removed) -> None:
+    """Stopwords are stripped from RHS terms; comments/directives/blanks/clean lines pass through."""
+    assert script.remove_stopwords_from_line_rhs(line, STOPWORDS) == (fixed_line, removed)
 
 
-def test_stopwords_in_mixed_terms_are_dropped(script) -> None:
-    """All stopwords in a mix of quoted and bare RHS terms are removed, leaving the rest intact."""
-    line = 'x +> ?"greenhouse and gas" and methane;\n'
-    fixed_line, removed = script.remove_stopwords_from_line_rhs(line, STOPWORDS)
-    assert fixed_line == 'x +> ?"greenhouse gas" methane;\n'
-    assert removed == ["and", "and"]
-
-
-@pytest.mark.parametrize("line", ["# a comment\n", "@language(en)\n", "\n"])
-def test_comment_directive_and_blank_lines_are_unchanged(script, line) -> None:
-    """Comments, @-directives, and blank lines pass through untouched."""
-    assert script.remove_stopwords_from_line_rhs(line, STOPWORDS) == (line, [])
-
-
-def test_clean_line_is_unchanged(script) -> None:
-    """A rule with no stopwords in its RHS is returned unchanged."""
-    line = 'ndc +> ?"nationally determined contribution";\n'
-    assert script.remove_stopwords_from_line_rhs(line, STOPWORDS) == (line, [])
-
-
-def test_unparsable_rule_line_raises(script) -> None:
-    """A non-comment/directive/blank line that isn't a valid `LHS OP RHS;` rule raises."""
+@pytest.mark.parametrize(
+    "line",
+    [
+        pytest.param("this is not a rule\n", id="unparsable-line"),
+        pytest.param('x +> ?"on the a";\n', id="all-stopword-phrase"),
+        pytest.param("x +> [1];\n", id="unrecognised-term"),
+    ],
+)
+def test_unfixable_lines_raise(script, line) -> None:
+    """Lines the fixer can't safely handle raise rather than being silently skipped or mangled."""
     with pytest.raises(ValueError):
-        script.remove_stopwords_from_line_rhs("this is not a rule\n", STOPWORDS)
-
-
-def test_all_stopword_phrase_raises(script) -> None:
-    """A quoted phrase made entirely of stopwords can't be auto-fixed, so it raises."""
-    with pytest.raises(ValueError):
-        script.remove_stopwords_from_line_rhs('x +> ?"on the a";\n', STOPWORDS)
-
-
-def test_unrecognised_term_raises(script) -> None:
-    """Reference productions (`[..]`) and labelled terms aren't supported and raise."""
-    with pytest.raises(ValueError):
-        script.remove_stopwords_from_line_rhs("x +> [1];\n", STOPWORDS)
+        script.remove_stopwords_from_line_rhs(line, STOPWORDS)
 
 
 def test_fix_file_reports_no_violations_for_clean_file(script, tmp_path: Path) -> None:
@@ -208,91 +179,118 @@ def test_fix_file_names_the_stopwords_in_an_unfixable_phrase(
     assert violations[0].words == ["on", "the", "a"]
 
 
-def test_check_mode_fails_and_does_not_write(tmp_path: Path) -> None:
-    """`--check` exits non-zero, reports the offending word, and leaves the file untouched."""
+def _make_fake_rules_dir(tmp_path: Path, sr_contents: str) -> tuple[Path, Path]:
+    """Build a bare rules dir + stopwords file under tmp_path for direct run() calls."""
+    rules_dir = tmp_path / "rules"
+    rules_dir.mkdir()
+    stopwords_path = tmp_path / "stopwords.txt"
+    stopwords_path.write_text(STOPWORDS_TEXT)
+    (rules_dir / "passages.sr").write_text(sr_contents)
+    return rules_dir, stopwords_path
+
+
+def test_run_check_fails_and_does_not_write(script, tmp_path, capsys) -> None:
+    """check=True exits non-zero, reports the offending word, and leaves the file untouched."""
     sr_with_stopword = 'gga +> ?"global goal on adaptation";\n'
-    fake_script = _make_fake_repo(tmp_path, sr_with_stopword)
+    rules_dir, stopwords_path = _make_fake_rules_dir(tmp_path, sr_with_stopword)
 
-    result = subprocess.run(
-        [sys.executable, str(fake_script), "--check"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-    )
+    exit_code = script.run(rules_dir, stopwords_path, check=True, fix=False)
 
-    assert result.returncode == 1
-    assert "'on'" in result.stdout
-    assert (
-        tmp_path / "vespa" / "app" / "rules" / "passages.sr"
-    ).read_text() == sr_with_stopword
+    assert exit_code == 1
+    assert "'on'" in capsys.readouterr().out
+    assert (rules_dir / "passages.sr").read_text() == sr_with_stopword
 
 
-def test_check_mode_reports_every_violation_not_just_the_first(tmp_path: Path) -> None:
-    """`--check` lists every violation in the file, not only the first one it hits."""
+def test_run_check_reports_every_violation_not_just_the_first(script, tmp_path, capsys) -> None:
+    """check=True lists every violation in the file, not only the first one it hits."""
     sr_contents = (
         'gga +> ?"global goal on adaptation";\n'
         "not a rule\n"
         'stopword +> ?"second on example";\n'
     )
-    fake_script = _make_fake_repo(tmp_path, sr_contents)
+    rules_dir, stopwords_path = _make_fake_rules_dir(tmp_path, sr_contents)
 
-    result = subprocess.run(
-        [sys.executable, str(fake_script), "--check"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
+    exit_code = script.run(rules_dir, stopwords_path, check=True, fix=False)
+
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert ":1:" in out
+    assert ":2:" in out
+    assert ":3:" in out
+
+
+def test_run_check_flags_specific_stopwords_in_unfixable_phrase(script, tmp_path, capsys) -> None:
+    """check=True names the exact stopwords even when the phrase can't be auto-fixed."""
+    rules_dir, stopwords_path = _make_fake_rules_dir(tmp_path, 'gga +> ?"on the a";\n')
+
+    exit_code = script.run(rules_dir, stopwords_path, check=True, fix=False)
+
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert "'on'" in out
+    assert "'the'" in out
+    assert "'a'" in out
+
+
+def test_run_check_passes_on_clean_file(script, tmp_path) -> None:
+    """check=True exits zero when no RHS entries contain stopwords."""
+    rules_dir, stopwords_path = _make_fake_rules_dir(
+        tmp_path, 'ndc +> ?"nationally determined contribution";\n'
     )
 
-    assert result.returncode == 1
-    assert ":1:" in result.stdout
-    assert ":2:" in result.stdout
-    assert ":3:" in result.stdout
+    exit_code = script.run(rules_dir, stopwords_path, check=True, fix=False)
+
+    assert exit_code == 0
 
 
-def test_check_mode_flags_specific_stopwords_in_unfixable_phrase(tmp_path: Path) -> None:
-    """`--check` names the exact stopwords even when the phrase can't be auto-fixed."""
-    fake_script = _make_fake_repo(tmp_path, 'gga +> ?"on the a";\n')
+def test_run_fix_exits_nonzero_when_unfixable_line_remains(script, tmp_path) -> None:
+    """fix=True still fixes what it can, but exits non-zero if something needs manual attention."""
+    sr_contents = 'gga +> ?"global goal on adaptation";\nnot a rule\n'
+    rules_dir, stopwords_path = _make_fake_rules_dir(tmp_path, sr_contents)
 
-    result = subprocess.run(
-        [sys.executable, str(fake_script), "--check"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-    )
+    exit_code = script.run(rules_dir, stopwords_path, check=False, fix=True)
 
-    assert result.returncode == 1
-    assert "'on'" in result.stdout
-    assert "'the'" in result.stdout
-    assert "'a'" in result.stdout
+    assert exit_code == 1
+    assert (
+        rules_dir / "passages.sr"
+    ).read_text() == 'gga +> ?"global goal adaptation";\nnot a rule\n'
 
 
-def test_check_mode_passes_on_clean_file(tmp_path: Path) -> None:
-    """`--check` exits zero when no RHS entries contain stopwords."""
-    clean_sr = 'ndc +> ?"nationally determined contribution";\n'
-    fake_script = _make_fake_repo(tmp_path, clean_sr)
-
-    result = subprocess.run(
-        [sys.executable, str(fake_script), "--check"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0
-
-
-def test_fix_mode_rewrites_file_and_subsequent_check_passes(tmp_path: Path) -> None:
-    """Running without `--check` fixes the file in place; a follow-up `--check` then exits 0."""
+def test_cli_entrypoint_end_to_end(tmp_path: Path) -> None:
+    """Smoke test for the actual `python3 <script>` entry point and its CLI defaults."""
     sr_with_stopword = 'gga +> ?"global goal on adaptation";\n'
-    fake_script = _make_fake_repo(tmp_path, sr_with_stopword)
-    sr_path = tmp_path / "vespa" / "app" / "rules" / "passages.sr"
+    rules_dir = tmp_path / "vespa" / "app" / "rules"
+    lucene_dir = tmp_path / "vespa" / "app" / "lucene-linguistics" / "en"
+    rules_dir.mkdir(parents=True)
+    lucene_dir.mkdir(parents=True)
+    (lucene_dir / "stopwords.txt").write_text(STOPWORDS_TEXT)
+    sr_path = rules_dir / "passages.sr"
+    sr_path.write_text(sr_with_stopword)
 
-    fix_result = subprocess.run(
+    script_dir = tmp_path / "scripts" / "vespa_rules"
+    script_dir.mkdir(parents=True)
+    fake_script = script_dir / "fix_rhs_stopwords_in_sr.py"
+    fake_script.write_text(SCRIPT_PATH.read_text())
+
+    # no flags -> defaults to --check: reports, exits 1, writes nothing
+    default_result = subprocess.run(
         [sys.executable, str(fake_script)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert default_result.returncode == 1
+    assert "'on'" in default_result.stdout
+    assert sr_path.read_text() == sr_with_stopword
+
+    # --fix alone (no explicit --no-check) fixes it and exits 0
+    fix_result = subprocess.run(
+        [sys.executable, str(fake_script), "--fix"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
     )
     assert fix_result.returncode == 0
     assert sr_path.read_text() == 'gga +> ?"global goal adaptation";\n'
 
+    # a follow-up --check now passes
     check_result = subprocess.run(
         [sys.executable, str(fake_script), "--check"],
         cwd=tmp_path,
@@ -300,17 +298,3 @@ def test_fix_mode_rewrites_file_and_subsequent_check_passes(tmp_path: Path) -> N
         text=True,
     )
     assert check_result.returncode == 0
-
-
-def test_fix_mode_exits_nonzero_when_unfixable_line_remains(tmp_path: Path) -> None:
-    """Fix mode still fixes what it can, but exits non-zero if something needs manual attention."""
-    sr_contents = 'gga +> ?"global goal on adaptation";\nnot a rule\n'
-    fake_script = _make_fake_repo(tmp_path, sr_contents)
-    sr_path = tmp_path / "vespa" / "app" / "rules" / "passages.sr"
-
-    result = subprocess.run(
-        [sys.executable, str(fake_script)], cwd=tmp_path, capture_output=True, text=True
-    )
-
-    assert result.returncode == 1
-    assert sr_path.read_text() == 'gga +> ?"global goal adaptation";\nnot a rule\n'

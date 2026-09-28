@@ -9,8 +9,7 @@ import typer
 app = typer.Typer()
 
 def load_stopwords(path: Path) -> set[str]:
-    with open(path, "r", encoding="utf-8") as f:
-        return {line.strip().lower() for line in f}
+    return {line.strip().lower() for line in path.read_text(encoding="utf-8").splitlines()}
 
 # For vespa semantic rule documentation,see
 # https://docs.vespa.ai/en/reference/querying/semantic-rules.html
@@ -107,8 +106,7 @@ def remove_stopwords_from_line_rhs(
 
 def fix_file(path: Path, stopwords: set[str]) -> tuple[str, list[Violation]]:
     """Fix every fixable line; return the rebuilt text and every violation found."""
-    with open(path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
 
     fixed_lines = []
     violations: list[Violation] = []
@@ -159,20 +157,8 @@ def _print_violation(violation: Violation) -> None:
     else:
         print(f"{violation.file}:{violation.line_number}: {violation.detail}")
 
-@app.command()
-def main(
-    check: bool = typer.Option(
-        False,
-        "--check",
-        help="report violations without fixing them",
-    ),
-) -> None:
-    """Remove stopwords from RHS entries in vespa/app/rules/*.sr."""
-    repo_root = Path(__file__).resolve().parents[2]
-    rules_dir = repo_root / "vespa" / "app" / "rules"
-    stopwords_path = (
-        repo_root / "vespa" / "app" / "lucene-linguistics" / "en" / "stopwords.txt"
-    )
+def run(rules_dir: Path, stopwords_path: Path, check: bool, fix: bool) -> int:
+    """Check/fix every *.sr file in rules_dir; return the process exit code."""
     stopwords = load_stopwords(stopwords_path)
 
     any_violations = False
@@ -188,17 +174,45 @@ def main(
             if not violation.fixable:
                 any_unresolved = True
 
-        if not check and any(v.fixable for v in violations):
+        if fix and any(v.fixable for v in violations):
             sr_path.write_text(fixed_text, encoding="utf-8")
             print(f"Fixed {sr_path}")
 
     if check and any_violations:
         print("Run `just fix-vespa-rules-stopwords` locally and commit the result.")
-        raise typer.Exit(code=1)
+        return 1
 
-    if not check and any_unresolved:
+    if fix and any_unresolved:
         print("Some lines could not be auto-fixed and need manual attention.")
-        raise typer.Exit(code=1)
+        return 1
+
+    return 0
+
+@app.command()
+def main(
+    check: bool = typer.Option(
+        True,
+        "--check",
+        help="report violations without fixing them",
+    ),
+    fix: bool = typer.Option(
+        False,
+        "--fix",
+        help="fix violations in-place (implies --no-check)",
+    ),
+) -> None:
+    """Remove stopwords from RHS entries in vespa/app/rules/*.sr."""
+    if fix:
+        check = False
+    repo_root = Path(__file__).resolve().parents[2]
+    rules_dir = repo_root / "vespa" / "app" / "rules"
+    stopwords_path = (
+        repo_root / "vespa" / "app" / "lucene-linguistics" / "en" / "stopwords.txt"
+    )
+
+    exit_code = run(rules_dir, stopwords_path, check=check, fix=fix)
+    if exit_code:
+        raise typer.Exit(code=exit_code)
 
 
 if __name__ == "__main__":
