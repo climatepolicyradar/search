@@ -1,11 +1,11 @@
 import orjson
+from slack_notify import SlackNotify
+from task_runner import task_runner
 from vespa_feeder import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_SAMPLE_RATE,
     vespa_feeder,
 )
-from slack_notify import SlackNotify
-from task_runner import task_runner
 
 from prefect import flow
 
