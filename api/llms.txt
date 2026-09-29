@@ -12,13 +12,21 @@ English translations of matching passages available.
 
 ## Data model
 
-Understanding these four concepts is necessary to query the API well.
+Understanding these five concepts is necessary to query the API well.
 
 - **Document** — one published item (a law, a policy, a court filing, an NDC).
   Has `id`, `title`, `description`, an `attributes` bag of metadata, and
   relationships to other documents.
 - **Document relationships** — documents are connected to each other via
   `documents[].value`. The edge of those nodes is described by `documents[].type`.
+- **Principal** — the parent record that groups a set of related documents,
+  such as the versions of one law or the filings (petitions, responses,
+  orders) of one court case. A Principal is itself a Document, labelled
+  `status::Principal`, and lists its members in `documents[]` as `has_version`
+  or `has_member`; each member points back to it with `is_version_of` or
+  `member_of`. `/search/documents` returns Principals *and* their members, so
+  one law or case can appear several times — filter on `status::Principal`
+  when you want one result per law, policy or case.
 - **Passage** — a text block within a document, produced by the PDF/HTML layout
   parser. Carries `text`, `language`, page numbers and bounding-box coordinates
   so a match can be located precisely on the page. `idx` gives reading order.
@@ -88,6 +96,29 @@ Three things the schema cannot tell you:
   which is also the only way to reach an unaliased field — `id`, `title`,
   `description` and `geographies` on `/documents`.
 
+### Principals and passages
+
+A Principal carries the passages of all its member documents. For `query` on
+`/search/documents`, passage text is searchable only through the Principal: a
+phrase from a member's text matches the Principal, and does not match the
+member itself, which can only match on its own title and description. Concept
+Labels, and the mention counts behind concept ranking, are likewise
+accumulated from every member onto the Principal. So full-text search on
+`/search/documents` is effectively Principal-level already; the
+`status::Principal` filter mostly removes members that matched on title,
+description or a Label filter.
+
+`/search/documents` results never include passage text, whatever the
+document. To read the passages, use `/search/passages`. Every passage carries
+both `document_id` (the member it came from) and `principal_id`, and both are
+filterable. Filter on `principal_id` for every passage across a law's versions
+or a case's filings, or on `document_id` for one member:
+
+```json
+{"op": "and", "filters": [
+  {"field": "principal_id", "op": "contains", "value": "Sabin.family.12165.0"}]}
+```
+
 ### Same-element matching on passages and labels
 
 On `/passages` and `/labels`, `labels` is an array of structs, and `labels.*`
@@ -114,6 +145,13 @@ Documents for a geography — URL-encode the JSON in a real request:
 
 ```
 GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"geography::USA"}]}
+```
+
+Principals only — one result per law, policy or case rather than one per
+member document:
+
+```
+GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"status::Principal"}]}
 ```
 
 Documents published in a closed date range. `published_date` is stored as a
