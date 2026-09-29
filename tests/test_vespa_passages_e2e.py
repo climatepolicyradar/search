@@ -937,6 +937,35 @@ def test_quoted_passage_search_requires_adjacency_and_order(vespa_app: Vespa):
     )
 
 
+def test_mixed_quoted_and_unquoted_passage_search(vespa_app: Vespa):
+    """Partial quoted spans can be combined with unquoted ones."""
+    principal = DocumentFactory.build(id="principal-mixed", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    passages = {
+        "tb-mix-both": "Peatland and seagrass projects store blue carbon.",
+        # Free term present, phrase reordered.
+        "tb-mix-free-only": "Peatland projects store carbon that is blue.",
+        # Phrase present, free term absent.
+        "tb-mix-phrase-only": "Seagrass projects store blue carbon.",
+        # Free term present, phrase inflected - the unstemmed field must reject it.
+        "tb-mix-inflected": "Peatland projects store blue carbons.",
+    }
+    for block_id, text in passages.items():
+        _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-mixed")
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query='peatlands "blue carbon"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
+    ids = [p.text_block_id for p in results.results]
+
+    assert ids == ["tb-mix-both"], (
+        f"expected only the passage with both the free term and the phrase, got: {ids}"
+    )
+
+
 def test_unquoted_passage_search_is_unaffected_by_exact_field(vespa_app: Vespa):
     """An unquoted query still goes through userQuery() against `content`."""
     principal = DocumentFactory.build(id="principal-plain", labels=[_principal_label()])

@@ -1180,6 +1180,55 @@ def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa)
 
     assert "doc-plain" in ids, f"unquoted queries must still stem, got: {ids}"
 
+
+
+
+def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
+    """Partial quoted spans can be combined with unquoted ones"""
+    docs = [
+        DocumentFactory.build(
+            id="doc-mix-both",
+            title="Peatland strategy for blue carbon",
+            description="d",
+            labels=[],
+        ),
+        DocumentFactory.build(
+            id="doc-mix-free-only",
+            title="Peatland strategy",
+            description="Carbon that is blue.",
+            labels=[],
+        ),
+        DocumentFactory.build(
+            id="doc-mix-phrase-only",
+            title="Seagrass strategy for blue carbon",
+            description="d",
+            labels=[],
+        ),
+        DocumentFactory.build(
+            id="doc-mix-inflected",
+            title="Peatland strategy for blue carbons",
+            description="d",
+            labels=[],
+        ),
+    ]
+    for d in docs:
+        _feed_document(vespa_app, d)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    ids = {
+        d.id
+        for d in engine.search(
+            query='peatlands "blue carbon"',
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        ).results
+    }
+
+    assert "doc-mix-both" in ids, f"free term + phrase must match, got: {ids}"
+    assert "doc-mix-free-only" not in ids, f"phrase is required, got: {ids}"
+    assert "doc-mix-phrase-only" not in ids, f"free term is required, got: {ids}"
+    assert "doc-mix-inflected" not in ids, f"quoted part must stay literal, got: {ids}"
+
 # endregion
 
 
