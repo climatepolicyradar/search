@@ -230,7 +230,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["query"] = normalized_free_text
             request_body["geo_query"] = _resolve_geography_aliases(normalized_free_text)
         for i, phrase in enumerate(phrases):
-            request_body[f"exact_phrase_{i}"] = phrase
+            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
 
         topic_ids = _topic_ids_from_filters(filters)
         if topic_ids and not sort_overrides:
@@ -431,7 +431,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["query"] = free_text
             request_body["geo_query"] = _resolve_geography_aliases(free_text)
         for i, phrase in enumerate(phrases):
-            request_body[f"exact_phrase_{i}"] = phrase
+            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
@@ -510,7 +510,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["query"] = free_text
             request_body["geo_query"] = _resolve_geography_aliases(free_text)
         for i, phrase in enumerate(phrases):
-            request_body[f"exact_phrase_{i}"] = phrase
+            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,

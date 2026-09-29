@@ -133,7 +133,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         if free_text:
             request_body["query"] = _normalize_currency_symbols(free_text)
         for i, phrase in enumerate(phrases):
-            request_body[f"exact_phrase_{i}"] = phrase
+            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
 
         topic_ids = _topic_ids_from_filters(filters)
         if topic_ids and not sort_overrides:
