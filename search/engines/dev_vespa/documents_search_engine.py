@@ -23,8 +23,8 @@ from search.engines.vespa_query.client import (
     API_TIMEOUT,
     HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
     Settings,
-    _execute_vespa_query,
     _get_total_count,
+    execute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
@@ -231,7 +231,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         if not self.bolding:
             request_body["presentation.bolding"] = "false"
 
-        response = _execute_vespa_query(
+        response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -410,7 +410,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
         }
-        response = _execute_vespa_query(
+        response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -486,7 +486,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
         }
-        response = _execute_vespa_query(
+        response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
