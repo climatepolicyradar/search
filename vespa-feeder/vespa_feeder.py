@@ -272,15 +272,53 @@ def _build_run_summary_markdown(
     return markdown
 
 
-def list_s3_keys(bucket: str, key: str) -> list[str]:
-    # A key naming a file is that file, not a prefix to walk - the Snowflake
-    # exports are directories of parts, the older materialisers a single JSONL.
-    if key.endswith(".jsonl"):
-        return [key]
+_EXPORT_NAME_RE = re.compile(r"^\d{8}T\d{6}Z$")
 
+
+def get_latest_s3_export_prefix(bucket: str, prefix: str) -> str:
+    """
+    The newest immutable snapshot under `prefix`, e.g. `20260922T190625Z`.
+
+    `/latest` is mutable which can, and has, been mutated during a run
+    causing S3 404 errors.
+
+    These keys are generated in the data-lake
+    @see: https://github.com/climatepolicyradar/data-lake/blob/bac07d00c9d799efa126e245accad590d4a0d1e5/orchestration/flows/data_export.py#L106
+    """
     s3: S3Client = boto3.client("s3")
 
-    prefix = key.rstrip("/") + "/"
+    paginator = s3.get_paginator("list_objects_v2")
+    export_names = sorted(
+        (
+            common_prefix.get("Prefix", "").removeprefix(prefix).removesuffix("/")
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/")
+            # because of `Delimiter`, we get `CommonPrefixes` returned as an aggregation
+            # e.g. { "CommonPrefixes": [
+            #   "production/published/pipeline_data_in_vespa_documents_updates_v1/20260630T082046Z",
+            #   "production/published/pipeline_data_in_vespa_documents_updates_v1/20260714T103748Z",
+            #   ...
+            #   "production/published/pipeline_data_in_vespa_documents_updates_v1/latest",
+            # ]}
+            #
+            # `CommonPrefixes` has a `MaxKeys` of 1000 - which, given this buckets expires objects
+            # every 90, has very little risk of us hitting that.
+            for common_prefix in page.get("CommonPrefixes", [])
+        ),
+        reverse=True,
+    )
+    for export_name in export_names:
+        # we check for a timestamp in case there are other rogue values or `latest`
+        if _EXPORT_NAME_RE.match(export_name):
+            return export_name
+
+    raise FileNotFoundError(
+        f"No timestamped snapshots found under s3://{bucket}/{prefix}"
+    )
+
+
+def list_s3_keys(bucket: str, prefix: str) -> list[str]:
+    s3: S3Client = boto3.client("s3")
+
     paginator = s3.get_paginator("list_objects_v2")
     objects = sorted(
         [
@@ -291,7 +329,7 @@ def list_s3_keys(bucket: str, key: str) -> list[str]:
         key=lambda obj: obj.get("Key", ""),
     )
     if not objects:
-        raise FileNotFoundError(f"No objects found at s3://{bucket}/{key}")
+        raise FileNotFoundError(f"No objects found at s3://{bucket}/{prefix}")
 
     keys = [obj.get("Key", "") for obj in objects]
 
@@ -499,7 +537,8 @@ def feed_batch(
 @tracer.start_as_current_span("vespa_feeder")
 def vespa_feeder(
     s3_bucket: str,
-    s3_key: str,
+    s3_prefix: str,
+    s3_export_prefix: str | None = None,
     derive_data_from_source: Callable[[dict], dict] | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     connections: int = _DEFAULT_CONNECTIONS,
@@ -522,7 +561,17 @@ def vespa_feeder(
         name="/search/vespa/write_token"
     )
 
-    s3_keys = list_s3_keys(bucket=s3_bucket, key=s3_key)
+    if s3_prefix.endswith(".jsonl"):
+        # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
+        s3_keys = [s3_prefix]
+        s3_prefix_full = s3_prefix
+    else:
+        if s3_export_prefix is None:
+            s3_export_prefix = get_latest_s3_export_prefix(
+                bucket=s3_bucket, prefix=s3_prefix
+            )
+        s3_prefix_full = f"{s3_prefix}{s3_export_prefix}"
+        s3_keys = list_s3_keys(bucket=s3_bucket, prefix=s3_prefix_full)
 
     if sample_rate < 1:
         # Every nth key from the sorted listing, rather than the first n. Both
@@ -533,13 +582,14 @@ def vespa_feeder(
 
     # Log and trace before we get going
     run_logger.info(
-        f"Feeding {len(s3_keys)} files from s3://{s3_bucket}/{s3_key} "
+        f"Feeding {len(s3_keys)} files from s3://{s3_bucket}/{s3_prefix_full} "
         f"in batches of {batch_size} (sample_rate={sample_rate})"
     )
     trace.get_current_span().set_attributes(
         {
             "s3_bucket": s3_bucket,
-            "s3_key": s3_key,
+            "s3_prefix": s3_prefix,
+            "s3_export_prefix": s3_export_prefix,
             "batch_size": batch_size,
             "sample_rate": sample_rate,
             "connections": connections,
