@@ -1,0 +1,7464 @@
+{
+  "aai": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-05-02",
+    "inq": 1
+  },
+  "abs": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 6,
+    "first": "2024-02-01",
+    "inq": 2
+  },
+  "acap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-10-07",
+    "inq": 1
+  },
+  "ace": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 7,
+    "first": "2024-07-26",
+    "inq": 5
+  },
+  "acs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ad": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-03-12",
+    "inq": 15
+  },
+  "adb": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 7,
+    "first": "2024-11-20",
+    "inq": 3
+  },
+  "adcp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ae": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "aecd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "aeo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "af": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 53,
+    "first": "2024-04-20",
+    "inq": 6
+  },
+  "af-terg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "afd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "afolu": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 0,
+    "first": "2025-02-27",
+    "inq": 3
+  },
+  "agm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "agr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-04-11",
+    "inq": 3
+  },
+  "agu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ahs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ai": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 25,
+    "first": "2023-09-12",
+    "inq": 99
+  },
+  "al": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 40,
+    "first": "2023-10-11",
+    "inq": 671
+  },
+  "ama": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "amap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-01-13",
+    "inq": 1
+  },
+  "ami": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "amoc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-09-22",
+    "inq": 1
+  },
+  "amrut": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-05-07",
+    "inq": 1
+  },
+  "ams": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "an": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2023-11-27",
+    "inq": 151
+  },
+  "ands": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "anpdf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-07-22",
+    "inq": 2
+  },
+  "anr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ansi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "anzbs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "apa": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 3,
+    "first": "2025-03-31",
+    "inq": 7
+  },
+  "apecs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "api": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 26,
+    "first": "2025-01-30",
+    "inq": 28
+  },
+  "apr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 8,
+    "first": "2024-11-29",
+    "inq": 5
+  },
+  "aps": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-04-16",
+    "inq": 1
+  },
+  "apua": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ar": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-02-11",
+    "inq": 3
+  },
+  "ara": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-02-05",
+    "inq": 1
+  },
+  "araf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-06-24",
+    "inq": 1
+  },
+  "ared": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-11-27",
+    "inq": 0
+  },
+  "asd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "asme": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "atsdr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "au": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-12-06",
+    "inq": 16
+  },
+  "awb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "awpb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "aws": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-12-09",
+    "inq": 1
+  },
+  "bac": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2025-12-11",
+    "inq": 0
+  },
+  "barmm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bat": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2025-03-12",
+    "inq": 6
+  },
+  "bbnj": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2025-09-23",
+    "inq": 2
+  },
+  "bbs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 11,
+    "first": "2023-12-14",
+    "inq": 3
+  },
+  "bccsap": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 3,
+    "first": "2023-09-22",
+    "inq": 2
+  },
+  "bcm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bee": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-12-09",
+    "inq": 3
+  },
+  "bemip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ber": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-11-07",
+    "inq": 5
+  },
+  "bess": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 0,
+    "first": "2023-12-22",
+    "inq": 0
+  },
+  "bev": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2023-12-19",
+    "inq": 3
+  },
+  "bfsf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bgepa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bil": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 2,
+    "first": "2023-12-08",
+    "inq": 0
+  },
+  "blm": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 30,
+    "first": "2025-09-30",
+    "inq": 6
+  },
+  "bnef": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bod": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-05-12",
+    "inq": 3
+  },
+  "boem": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 7,
+    "first": "2025-12-04",
+    "inq": 2
+  },
+  "bof": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bp": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 4,
+    "first": "2024-04-09",
+    "inq": 220
+  },
+  "brcrn": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-02-25",
+    "inq": 1
+  },
+  "brt": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-04-02",
+    "inq": 0
+  },
+  "bsi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "bsrn": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "btr": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 44,
+    "first": "2024-02-27",
+    "inq": 25
+  },
+  "bur": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 77,
+    "first": "2024-01-10",
+    "inq": 19
+  },
+  "bwdb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ca": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2023-11-08",
+    "inq": 24
+  },
+  "caa": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 62,
+    "first": "2023-10-22",
+    "inq": 4
+  },
+  "cabei": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-06-17",
+    "inq": 1
+  },
+  "cac": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cafe": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 6,
+    "first": "2025-04-16",
+    "inq": 7
+  },
+  "caidi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cait": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "can": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-11-23",
+    "inq": 48
+  },
+  "cap": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 10,
+    "first": "2023-09-26",
+    "inq": 60
+  },
+  "car": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 0,
+    "first": "2023-11-08",
+    "inq": 65
+  },
+  "carb": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 40,
+    "first": "2025-09-24",
+    "inq": 25
+  },
+  "card": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-03-19",
+    "inq": 12
+  },
+  "cat": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 4,
+    "first": "2023-11-10",
+    "inq": 6
+  },
+  "cb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 29,
+    "first": "2024-02-05",
+    "inq": 2
+  },
+  "cbam": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 18,
+    "first": "2023-09-26",
+    "inq": 22
+  },
+  "cbd": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 3,
+    "first": "2024-01-22",
+    "inq": 19
+  },
+  "cbi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cbit": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-11-18",
+    "inq": 1
+  },
+  "cbo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cbp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cbs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3909,
+    "first": "2023-09-09",
+    "inq": 33
+  },
+  "cca": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 418,
+    "first": "2023-09-19",
+    "inq": 5
+  },
+  "ccac": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-09-19",
+    "inq": 0
+  },
+  "ccag": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ccc": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 41,
+    "first": "2024-01-19",
+    "inq": 1
+  },
+  "ccccc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cccra": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ccd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2024-02-15",
+    "inq": 0
+  },
+  "cciep": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ccm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 91,
+    "first": "2023-09-19",
+    "inq": 0
+  },
+  "cco": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 12,
+    "first": "2024-08-03",
+    "inq": 0
+  },
+  "ccra": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2023-10-15",
+    "inq": 1
+  },
+  "ccs": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 30,
+    "first": "2023-09-18",
+    "inq": 48
+  },
+  "ccu": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-04-02",
+    "inq": 1
+  },
+  "cd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-03-16",
+    "inq": 1
+  },
+  "cdb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-11-13",
+    "inq": 0
+  },
+  "cdc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cdkn": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-02-19",
+    "inq": 0
+  },
+  "cdm": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 3,
+    "first": "2024-11-15",
+    "inq": 3
+  },
+  "cdp": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-03-20",
+    "inq": 3
+  },
+  "cdr": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 9,
+    "first": "2023-12-04",
+    "inq": 9
+  },
+  "cds": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-10-05",
+    "inq": 0
+  },
+  "cea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ceb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cef": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2024-03-02",
+    "inq": 1
+  },
+  "cefc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2023-09-18",
+    "inq": 0
+  },
+  "cem": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ceo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cepf": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-11-25",
+    "inq": 1
+  },
+  "ceq": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 4,
+    "first": "2025-09-30",
+    "inq": 3
+  },
+  "cer": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-10-24",
+    "inq": 3
+  },
+  "cesr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-06-14",
+    "inq": 1
+  },
+  "cf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-15",
+    "inq": 4
+  },
+  "cfo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cfr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-03-16",
+    "inq": 1
+  },
+  "cga": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-04-08",
+    "inq": 0
+  },
+  "cgiar": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-09-04",
+    "inq": 0
+  },
+  "chm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "chp": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 5,
+    "first": "2024-01-10",
+    "inq": 1
+  },
+  "ci": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-12-15",
+    "inq": 1
+  },
+  "cida": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ciee": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ciel": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-09-25",
+    "inq": 0
+  },
+  "cif": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 3,
+    "first": "2024-11-12",
+    "inq": 2
+  },
+  "cii": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-01-10",
+    "inq": 2
+  },
+  "cin": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-02-22",
+    "inq": 1
+  },
+  "cites": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2025-06-26",
+    "inq": 1
+  },
+  "clc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-04",
+    "inq": 1
+  },
+  "cm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-12-04",
+    "inq": 4
+  },
+  "cms": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-04-02",
+    "inq": 1
+  },
+  "cng": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-02-25",
+    "inq": 2
+  },
+  "cod": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-09-05",
+    "inq": 5
+  },
+  "corsia": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 0,
+    "first": "2024-11-18",
+    "inq": 4
+  },
+  "cpcb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-03-26",
+    "inq": 2
+  },
+  "cpeir": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cpi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-10-19",
+    "inq": 23
+  },
+  "cra": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 5,
+    "first": "2025-10-03",
+    "inq": 5
+  },
+  "crave": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "crc": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 3,
+    "first": "2025-10-21",
+    "inq": 1
+  },
+  "cres": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "crf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-10-24",
+    "inq": 4
+  },
+  "crs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-02-06",
+    "inq": 1
+  },
+  "crt": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-07-31",
+    "inq": 12
+  },
+  "crva": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-09-09",
+    "inq": 0
+  },
+  "cs": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-06-24",
+    "inq": 3
+  },
+  "csa": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 19,
+    "first": "2023-09-19",
+    "inq": 1
+  },
+  "csc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-02-02",
+    "inq": 2
+  },
+  "csir": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "csiro": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "cso": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "csp": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 2,
+    "first": "2024-01-03",
+    "inq": 15
+  },
+  "csr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 3,
+    "first": "2023-10-23",
+    "inq": 3
+  },
+  "csrd": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 11,
+    "first": "2023-09-27",
+    "inq": 32
+  },
+  "cta": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ctcn": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-12",
+    "inq": 0
+  },
+  "ctf": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2025-10-03",
+    "inq": 5
+  },
+  "cwa": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 9,
+    "first": "2023-09-26",
+    "inq": 0
+  },
+  "cyen": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "czma": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-07-19",
+    "inq": 0
+  },
+  "czmai": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "da": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 13,
+    "first": "2023-12-19",
+    "inq": 159
+  },
+  "dac": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2023-12-05",
+    "inq": 0
+  },
+  "daf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dbm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dbsa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-03-02",
+    "inq": 3
+  },
+  "dc": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-04-22",
+    "inq": 22
+  },
+  "dcc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2024-02-15",
+    "inq": 0
+  },
+  "dcd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-05-18",
+    "inq": 2
+  },
+  "dce": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dcp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dd": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2025-01-15",
+    "inq": 1
+  },
+  "dea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-11-23",
+    "inq": 8
+  },
+  "decc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-02-15",
+    "inq": 0
+  },
+  "dede": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "def": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-08-05",
+    "inq": 2
+  },
+  "denr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 3,
+    "first": "2025-10-15",
+    "inq": 4
+  },
+  "depa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-05-24",
+    "inq": 1
+  },
+  "depc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2026-06-13",
+    "inq": 0
+  },
+  "des": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-12-19",
+    "inq": 36
+  },
+  "desnz": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2023-10-10",
+    "inq": 2
+  },
+  "dfo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dgef": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dhs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dhw": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2024-11-17",
+    "inq": 0
+  },
+  "dict": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dilg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-01-30",
+    "inq": 1
+  },
+  "din": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-10-15",
+    "inq": 6
+  },
+  "dip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dls": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 194,
+    "first": "2023-09-22",
+    "inq": 5
+  },
+  "dmh": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dmi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dna": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-08-10",
+    "inq": 1
+  },
+  "doc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-04-07",
+    "inq": 3
+  },
+  "dom": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-04-02",
+    "inq": 1
+  },
+  "dpp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dps": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dpwh": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-01-30",
+    "inq": 1
+  },
+  "dr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-01-15",
+    "inq": 14
+  },
+  "drc": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 17,
+    "first": "2023-10-04",
+    "inq": 14
+  },
+  "drm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 107,
+    "first": "2023-09-22",
+    "inq": 0
+  },
+  "drr": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 93,
+    "first": "2023-09-07",
+    "inq": 16
+  },
+  "ds": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-12-14",
+    "inq": 1
+  },
+  "dsi": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-07-29",
+    "inq": 0
+  },
+  "dsm": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 6,
+    "first": "2024-08-09",
+    "inq": 1
+  },
+  "dti": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "duv": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "dwr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 8,
+    "first": "2024-02-15",
+    "inq": 0
+  },
+  "ea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ead": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-10-25",
+    "inq": 3
+  },
+  "eaf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-02-22",
+    "inq": 0
+  },
+  "eafrd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-09-26",
+    "inq": 1
+  },
+  "eagf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2023-09-26",
+    "inq": 1
+  },
+  "eap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-10-08",
+    "inq": 1
+  },
+  "eav": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ebrd": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 2,
+    "first": "2025-01-13",
+    "inq": 2
+  },
+  "ec": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 3,
+    "first": "2023-09-26",
+    "inq": 92
+  },
+  "ecbc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-08-03",
+    "inq": 1
+  },
+  "eccc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2023-11-14",
+    "inq": 0
+  },
+  "echr": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 3,
+    "first": "2023-10-15",
+    "inq": 10
+  },
+  "eclac": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-05-08",
+    "inq": 0
+  },
+  "ecn": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-07-04",
+    "inq": 0
+  },
+  "ecr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-12-03",
+    "inq": 1
+  },
+  "ecreee": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "edf": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 23,
+    "first": "2025-05-13",
+    "inq": 23
+  },
+  "ee": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 365,
+    "first": "2023-09-19",
+    "inq": 2
+  },
+  "eea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-08-15",
+    "inq": 1
+  },
+  "eeaa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eeas": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-11-16",
+    "inq": 2
+  },
+  "eed": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 22,
+    "first": "2023-10-04",
+    "inq": 1
+  },
+  "eedi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eei": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-05-12",
+    "inq": 1
+  },
+  "eeos": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eerc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eesl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eez": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2024-06-24",
+    "inq": 2
+  },
+  "ef": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 4,
+    "first": "2024-02-29",
+    "inq": 2
+  },
+  "efg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "egat": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "egr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "egu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eia": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 0,
+    "first": "2023-11-28",
+    "inq": 43
+  },
+  "eib": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 13,
+    "first": "2025-10-25",
+    "inq": 2
+  },
+  "eiec": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eif": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eim-es": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-09-04",
+    "inq": 2
+  },
+  "eis": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 14,
+    "first": "2024-03-02",
+    "inq": 1
+  },
+  "eiti": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "elaw": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-10-25",
+    "inq": 1
+  },
+  "ema": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 8,
+    "first": "2023-10-20",
+    "inq": 6
+  },
+  "emci": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "emff": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ems": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 4,
+    "first": "2024-08-07",
+    "inq": 1
+  },
+  "enrm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-07-28",
+    "inq": 0
+  },
+  "eo": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-07-07",
+    "inq": 7
+  },
+  "eor": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "epa": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 59,
+    "first": "2024-02-22",
+    "inq": 299
+  },
+  "epca": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 4,
+    "first": "2025-09-25",
+    "inq": 5
+  },
+  "epi": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-06-24",
+    "inq": 2
+  },
+  "epr": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 14,
+    "first": "2023-10-23",
+    "inq": 3
+  },
+  "epri": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "eps": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-02-19",
+    "inq": 2
+  },
+  "eqas": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "erc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "erdf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "erm": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-12-19",
+    "inq": 1
+  },
+  "es": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2023-12-19",
+    "inq": 26
+  },
+  "esa": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 11,
+    "first": "2024-02-21",
+    "inq": 3
+  },
+  "esap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "esd": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 3,
+    "first": "2024-07-25",
+    "inq": 2
+  },
+  "esf": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 2,
+    "first": "2024-03-02",
+    "inq": 0
+  },
+  "esia": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-08-11",
+    "inq": 3
+  },
+  "esif": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-10-07",
+    "inq": 0
+  },
+  "esmap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "esmf": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2025-11-26",
+    "inq": 2
+  },
+  "esmp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-08-18",
+    "inq": 0
+  },
+  "esmr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "esms": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 2,
+    "first": "2024-08-07",
+    "inq": 1
+  },
+  "esp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2024-01-10",
+    "inq": 1
+  },
+  "esr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 6,
+    "first": "2023-09-28",
+    "inq": 0
+  },
+  "ess": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-08-07",
+    "inq": 0
+  },
+  "etf": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 1,
+    "first": "2024-03-25",
+    "inq": 1
+  },
+  "etp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ets": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 20,
+    "first": "2023-09-28",
+    "inq": 73
+  },
+  "eu": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 96,
+    "first": "2023-09-14",
+    "inq": 716
+  },
+  "ev": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 0,
+    "first": "2023-10-01",
+    "inq": 54
+  },
+  "ews": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 15,
+    "first": "2023-11-13",
+    "inq": 5
+  },
+  "faa": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2026-01-12",
+    "inq": 1
+  },
+  "fao": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 3,
+    "first": "2024-02-21",
+    "inq": 8
+  },
+  "fata": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-16",
+    "inq": 1
+  },
+  "fc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-10-30",
+    "inq": 2
+  },
+  "fca": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2023-10-30",
+    "inq": 15
+  },
+  "fcpf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2026-04-24",
+    "inq": 0
+  },
+  "fda": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-01-02",
+    "inq": 0
+  },
+  "fdi": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 2,
+    "first": "2024-01-24",
+    "inq": 4
+  },
+  "fdre": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-08-08",
+    "inq": 1
+  },
+  "fe": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 8,
+    "first": "2024-04-29",
+    "inq": 1
+  },
+  "fec": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-02-20",
+    "inq": 0
+  },
+  "fema": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 5,
+    "first": "2025-09-25",
+    "inq": 9
+  },
+  "ferc": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 22,
+    "first": "2025-10-14",
+    "inq": 10
+  },
+  "ffgs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ffs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fip": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-10-21",
+    "inq": 2
+  },
+  "fiz": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 7,
+    "first": "2024-04-11",
+    "inq": 6
+  },
+  "flpma": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 54,
+    "first": "2023-10-19",
+    "inq": 0
+  },
+  "fmi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fmrl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fod": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "folu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-04-21",
+    "inq": 2
+  },
+  "fon": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fpa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-12-19",
+    "inq": 0
+  },
+  "fpic": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 4,
+    "first": "2024-05-08",
+    "inq": 4
+  },
+  "fr": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-12-30",
+    "inq": 6
+  },
+  "fra": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-12-19",
+    "inq": 4
+  },
+  "frfa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "frl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-11-18",
+    "inq": 0
+  },
+  "frv": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fsc": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2024-08-09",
+    "inq": 6
+  },
+  "fsds": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fsi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fso": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "fws": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 24,
+    "first": "2025-10-27",
+    "inq": 0
+  },
+  "fy": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2024-01-03",
+    "inq": 5
+  },
+  "gam": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gao": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 34,
+    "first": "2023-09-19",
+    "inq": 28
+  },
+  "gaul": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gaw": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-08-19",
+    "inq": 4
+  },
+  "gber": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gbf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2024-08-07",
+    "inq": 21
+  },
+  "gbff": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-10-31",
+    "inq": 1
+  },
+  "gbif": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2026-03-23",
+    "inq": 4
+  },
+  "gbv": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-03-20",
+    "inq": 0
+  },
+  "gcc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-10-30",
+    "inq": 1
+  },
+  "gcca": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-08-05",
+    "inq": 0
+  },
+  "gcea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gcf": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 21,
+    "first": "2023-11-03",
+    "inq": 59
+  },
+  "gcip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gcos": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gcpf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gcrmn": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gcv": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gdfne": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gdi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gdp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-09-19",
+    "inq": 6
+  },
+  "gdwm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ge": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-04-17",
+    "inq": 3
+  },
+  "gea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ged": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gef": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2023-11-30",
+    "inq": 38
+  },
+  "gem": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-03-02",
+    "inq": 0
+  },
+  "ges": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-01-17",
+    "inq": 1
+  },
+  "gesi": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-11-21",
+    "inq": 2
+  },
+  "gfanz": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-01-31",
+    "inq": 0
+  },
+  "gfc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-04-09",
+    "inq": 2
+  },
+  "gfcs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gfdrr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gfei": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gga": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 3,
+    "first": "2024-03-25",
+    "inq": 1
+  },
+  "gggi": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-05-06",
+    "inq": 1
+  },
+  "ggmc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 12,
+    "first": "2023-09-11",
+    "inq": 2
+  },
+  "gii": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ginr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gio": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-06-10",
+    "inq": 1
+  },
+  "gis": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-09-26",
+    "inq": 2
+  },
+  "giss": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "glof": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-09-18",
+    "inq": 4
+  },
+  "gmsl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gni": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "goos": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gor": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gpcc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gpg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gptf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gri": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 2,
+    "first": "2024-02-26",
+    "inq": 0
+  },
+  "grm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-08-18",
+    "inq": 1
+  },
+  "grs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gsn": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gsp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gto": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "guan": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-11-12",
+    "inq": 1
+  },
+  "gva": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-04-26",
+    "inq": 2
+  },
+  "gvwr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "gwec": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-03-21",
+    "inq": 3
+  },
+  "gwp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-04-09",
+    "inq": 1
+  },
+  "hact": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "has": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-10-25",
+    "inq": 79
+  },
+  "hcc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-03-16",
+    "inq": 0
+  },
+  "hcenr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hcmr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hcvf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hdi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hev": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-04-16",
+    "inq": 1
+  },
+  "hfa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hhs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2023-09-18",
+    "inq": 0
+  },
+  "hies": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hipcs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hnv": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hri": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hrsg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hrvca": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "hs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-01-23",
+    "inq": 1
+  },
+  "hu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-08-10",
+    "inq": 2
+  },
+  "hud": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2024-03-14",
+    "inq": 3
+  },
+  "hwp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ia": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-09-30",
+    "inq": 2
+  },
+  "iaasb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iaea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iarc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ias": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-10-07",
+    "inq": 2
+  },
+  "iasb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iata": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iba": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-03-16",
+    "inq": 1
+  },
+  "ibrd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-11-17",
+    "inq": 0
+  },
+  "icao": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2025-01-02",
+    "inq": 0
+  },
+  "icar": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "icat": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 3,
+    "first": "2024-02-26",
+    "inq": 8
+  },
+  "icc": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-10-08",
+    "inq": 2
+  },
+  "iccpr": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2024-07-31",
+    "inq": 1
+  },
+  "icct": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ice": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-01-19",
+    "inq": 14
+  },
+  "icep": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "icfre": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "icr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ict": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-03-08",
+    "inq": 3
+  },
+  "iczm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ida": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-20",
+    "inq": 3
+  },
+  "idb": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-06-30",
+    "inq": 0
+  },
+  "idd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "idp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ie": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-04-20",
+    "inq": 2
+  },
+  "iea": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 3,
+    "first": "2023-12-11",
+    "inq": 9
+  },
+  "iee": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-04-06",
+    "inq": 1
+  },
+  "ief": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-22",
+    "inq": 1
+  },
+  "ieg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ieo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ifad": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-11-21",
+    "inq": 0
+  },
+  "ifc": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 3,
+    "first": "2024-02-09",
+    "inq": 4
+  },
+  "ifpri": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ifrs": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 0,
+    "first": "2024-02-04",
+    "inq": 5
+  },
+  "igcc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-06-21",
+    "inq": 0
+  },
+  "iges": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iiasa": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-11-15",
+    "inq": 0
+  },
+  "iica": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-20",
+    "inq": 0
+  },
+  "iied": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iisd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iks": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 2,
+    "first": "2025-04-17",
+    "inq": 0
+  },
+  "ilo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-02-01",
+    "inq": 9
+  },
+  "ilri": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ima": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "imd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "imf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2025-11-11",
+    "inq": 2
+  },
+  "imo": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 2,
+    "first": "2024-10-22",
+    "inq": 6
+  },
+  "inc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-10-25",
+    "inq": 384
+  },
+  "indc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-02-13",
+    "inq": 4
+  },
+  "ioc": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-23",
+    "inq": 0
+  },
+  "iod": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iom": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-06-06",
+    "inq": 6
+  },
+  "ipbes": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-01-28",
+    "inq": 4
+  },
+  "ipcc": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 3,
+    "first": "2023-10-27",
+    "inq": 29
+  },
+  "ipdc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iplc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2025-04-30",
+    "inq": 0
+  },
+  "ipm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ipp": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-08-13",
+    "inq": 1
+  },
+  "ippc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2024-02-29",
+    "inq": 0
+  },
+  "ippf": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-08-18",
+    "inq": 0
+  },
+  "ippu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ira": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 17,
+    "first": "2023-09-18",
+    "inq": 8
+  },
+  "ires": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "irfa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iris": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "irmf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "irp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2024-02-09",
+    "inq": 0
+  },
+  "irr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-04-15",
+    "inq": 2
+  },
+  "irri": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "isa": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-03-13",
+    "inq": 2
+  },
+  "isic": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iso": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-02-07",
+    "inq": 14
+  },
+  "isric": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "it": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 3,
+    "first": "2023-09-26",
+    "inq": 45
+  },
+  "itl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "itpgrfa": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-07-27",
+    "inq": 0
+  },
+  "its": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-10-31",
+    "inq": 61
+  },
+  "itto": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iucn": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 0,
+    "first": "2024-11-28",
+    "inq": 3
+  },
+  "iuv": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ivc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-10-18",
+    "inq": 0
+  },
+  "iw": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iwg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iwmi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "iwrm": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 4,
+    "first": "2024-07-23",
+    "inq": 0
+  },
+  "jci": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "jcm": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 3,
+    "first": "2024-03-06",
+    "inq": 0
+  },
+  "jetp": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 3,
+    "first": "2023-09-27",
+    "inq": 7
+  },
+  "ji": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-01-30",
+    "inq": 0
+  },
+  "jica": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-06-04",
+    "inq": 0
+  },
+  "jrc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-03-18",
+    "inq": 1
+  },
+  "jreeef": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-09-04",
+    "inq": 0
+  },
+  "jsmo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "jtf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2023-11-07",
+    "inq": 1
+  },
+  "jva": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "kacst": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "kba": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-03-24",
+    "inq": 0
+  },
+  "kca": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "kea": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-12-11",
+    "inq": 0
+  },
+  "kff": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "kfs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "km": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-06-01",
+    "inq": 1
+  },
+  "kmd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "kmp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "knbs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "knecs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "kp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 49,
+    "first": "2023-09-22",
+    "inq": 0
+  },
+  "kpi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-04-02",
+    "inq": 2
+  },
+  "la": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-09-19",
+    "inq": 208
+  },
+  "lac": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2023-11-30",
+    "inq": 0
+  },
+  "lb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "lc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "lca": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 4,
+    "first": "2023-09-27",
+    "inq": 7
+  },
+  "ldc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-24",
+    "inq": 1
+  },
+  "ldcf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-08-20",
+    "inq": 4
+  },
+  "ldn": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 34,
+    "first": "2024-11-23",
+    "inq": 30
+  },
+  "leds": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 10,
+    "first": "2024-02-07",
+    "inq": 16
+  },
+  "leg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "lged": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-12-03",
+    "inq": 1
+  },
+  "lgma": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "lhda": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "list": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-10-30",
+    "inq": 42
+  },
+  "lms": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "lng": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 3,
+    "first": "2025-03-05",
+    "inq": 25
+  },
+  "lpd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "lpg": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 1,
+    "first": "2024-08-21",
+    "inq": 11
+  },
+  "lta": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ltifr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ltir": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "lto": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ltrc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "lu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-10-30",
+    "inq": 4
+  },
+  "luc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 17,
+    "first": "2024-02-21",
+    "inq": 1
+  },
+  "lucf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2023-10-30",
+    "inq": 1
+  },
+  "lvw": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ly": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ma": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 11,
+    "first": "2024-01-16",
+    "inq": 12
+  },
+  "mac": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-03-31",
+    "inq": 1
+  },
+  "maf": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-04-15",
+    "inq": 1
+  },
+  "mafs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mard": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2026-03-16",
+    "inq": 0
+  },
+  "mat": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-05-08",
+    "inq": 1
+  },
+  "mbt": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mbta": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-04-14",
+    "inq": 1
+  },
+  "mcf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mcm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mcrace": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mct": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-02-07",
+    "inq": 1
+  },
+  "me": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 54,
+    "first": "2023-10-31",
+    "inq": 57
+  },
+  "mea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-09-08",
+    "inq": 1
+  },
+  "meau": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "meb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mec": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-03-10",
+    "inq": 2
+  },
+  "mef": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2025-09-08",
+    "inq": 1
+  },
+  "mem": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 7,
+    "first": "2024-07-27",
+    "inq": 3
+  },
+  "memd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-01-18",
+    "inq": 0
+  },
+  "memr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 4,
+    "first": "2024-07-25",
+    "inq": 9
+  },
+  "menr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2026-03-16",
+    "inq": 8
+  },
+  "meps": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 5,
+    "first": "2024-07-26",
+    "inq": 6
+  },
+  "met": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2023-11-07",
+    "inq": 13
+  },
+  "mew": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 9,
+    "first": "2024-04-19",
+    "inq": 4
+  },
+  "mfa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-05-28",
+    "inq": 0
+  },
+  "mfem": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mhp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-07-05",
+    "inq": 10
+  },
+  "mia": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-06-04",
+    "inq": 1
+  },
+  "mic": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mics": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mie": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-04-13",
+    "inq": 1
+  },
+  "miit": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ml": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mla": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-12-11",
+    "inq": 0
+  },
+  "mlgrd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mlnr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 17,
+    "first": "2026-03-24",
+    "inq": 0
+  },
+  "mme": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 7,
+    "first": "2024-02-21",
+    "inq": 5
+  },
+  "mms": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mmt": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-02-20",
+    "inq": 0
+  },
+  "mnr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2026-01-28",
+    "inq": 0
+  },
+  "mnre": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-01-28",
+    "inq": 0
+  },
+  "mpi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mpis": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mpwt": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-08-05",
+    "inq": 13
+  },
+  "mrc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mrd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2026-03-16",
+    "inq": 0
+  },
+  "mrrd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mrv": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 11,
+    "first": "2023-11-13",
+    "inq": 12
+  },
+  "ms": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-03-03",
+    "inq": 6
+  },
+  "msfd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2026-08-03",
+    "inq": 0
+  },
+  "msp": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 7,
+    "first": "2025-04-28",
+    "inq": 2
+  },
+  "msw": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 2,
+    "first": "2024-11-15",
+    "inq": 2
+  },
+  "mt": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-05",
+    "inq": 6
+  },
+  "mta": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-09-25",
+    "inq": 1
+  },
+  "mtbe": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-09-13",
+    "inq": 0
+  },
+  "mtc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mtef": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mtpp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mtt": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mvp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "mwe": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-02-15",
+    "inq": 0
+  },
+  "mwi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nab": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-10-16",
+    "inq": 1
+  },
+  "naics": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nam": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-12-24",
+    "inq": 25
+  },
+  "nama": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-09-08",
+    "inq": 1
+  },
+  "nap": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 284,
+    "first": "2023-09-19",
+    "inq": 85
+  },
+  "napa": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 14,
+    "first": "2023-09-28",
+    "inq": 17
+  },
+  "napcc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 94,
+    "first": "2023-09-19",
+    "inq": 3
+  },
+  "narei": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "naruc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nasa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-06-08",
+    "inq": 5
+  },
+  "nba": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-23",
+    "inq": 0
+  },
+  "nbis": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nbmp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nbpspa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nbs": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 61,
+    "first": "2023-09-14",
+    "inq": 13
+  },
+  "nbsap": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 50,
+    "first": "2023-09-14",
+    "inq": 66
+  },
+  "nbsp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 50,
+    "first": "2023-09-14",
+    "inq": 1
+  },
+  "nc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 14,
+    "first": "2023-12-06",
+    "inq": 79
+  },
+  "nca": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2025-07-07",
+    "inq": 0
+  },
+  "ncar": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 1,
+    "first": "2026-05-19",
+    "inq": 0
+  },
+  "nccap": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 94,
+    "first": "2023-09-19",
+    "inq": 7
+  },
+  "nccas": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 52,
+    "first": "2023-09-19",
+    "inq": 1
+  },
+  "nccc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 8,
+    "first": "2023-11-05",
+    "inq": 4
+  },
+  "ncco": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2024-08-03",
+    "inq": 0
+  },
+  "nccp": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 167,
+    "first": "2023-09-19",
+    "inq": 8
+  },
+  "nccrs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 22,
+    "first": "2023-09-22",
+    "inq": 4
+  },
+  "nccs": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 203,
+    "first": "2023-09-19",
+    "inq": 5
+  },
+  "nccsc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-08-05",
+    "inq": 0
+  },
+  "ncip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2025-04-15",
+    "inq": 0
+  },
+  "ncp": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2025-10-16",
+    "inq": 4
+  },
+  "ncr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ncsa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ncsd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-04-15",
+    "inq": 0
+  },
+  "ncv": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nda": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-05-08",
+    "inq": 2
+  },
+  "ndc": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 120,
+    "first": "2023-09-18",
+    "inq": 610
+  },
+  "ndf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ndma": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ndmo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ndp": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 154,
+    "first": "2023-09-17",
+    "inq": 4
+  },
+  "ndpc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-03-16",
+    "inq": 0
+  },
+  "ndrrmp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 7,
+    "first": "2023-11-09",
+    "inq": 0
+  },
+  "nds": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 77,
+    "first": "2023-09-19",
+    "inq": 0
+  },
+  "ndvi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ne": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-04-09",
+    "inq": 7
+  },
+  "nea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2024-07-25",
+    "inq": 1
+  },
+  "neam": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "neap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 9,
+    "first": "2023-09-20",
+    "inq": 0
+  },
+  "nec": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-08-10",
+    "inq": 1
+  },
+  "necp": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 132,
+    "first": "2023-09-19",
+    "inq": 63
+  },
+  "neda": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "neeap": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 17,
+    "first": "2023-11-25",
+    "inq": 7
+  },
+  "needs": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-10-15",
+    "inq": 22
+  },
+  "nei": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2025-04-16",
+    "inq": 0
+  },
+  "nem": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nema": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2023-10-02",
+    "inq": 3
+  },
+  "nemc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nen": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-15",
+    "inq": 1
+  },
+  "nep": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 46,
+    "first": "2023-09-30",
+    "inq": 8
+  },
+  "nepa": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 6,
+    "first": "2023-10-22",
+    "inq": 17
+  },
+  "nerc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "neri": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-28",
+    "inq": 2
+  },
+  "nes": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "netl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nfa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nfi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-02-05",
+    "inq": 0
+  },
+  "nfms": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nfp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-09-01",
+    "inq": 1
+  },
+  "nfwi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nga": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 7,
+    "first": "2023-09-26",
+    "inq": 0
+  },
+  "ngfs": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2025-01-31",
+    "inq": 0
+  },
+  "ngl": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-10-31",
+    "inq": 1
+  },
+  "nhpa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nhtsa": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 8,
+    "first": "2025-09-25",
+    "inq": 5
+  },
+  "nic": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nid": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 27,
+    "first": "2024-09-23",
+    "inq": 26
+  },
+  "nie": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-01-13",
+    "inq": 1
+  },
+  "nies": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "niip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nim": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 25,
+    "first": "2024-08-04",
+    "inq": 0
+  },
+  "nir": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 96,
+    "first": "2023-10-05",
+    "inq": 60
+  },
+  "nis": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 3,
+    "first": "2024-04-17",
+    "inq": 1
+  },
+  "nisr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nlc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nmeee": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-09-24",
+    "inq": 0
+  },
+  "nmfr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nmfs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 20,
+    "first": "2025-10-01",
+    "inq": 9
+  },
+  "nmsa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2024-08-09",
+    "inq": 2
+  },
+  "nmvoc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-05-14",
+    "inq": 0
+  },
+  "no": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-09-15",
+    "inq": 1786
+  },
+  "noaa": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 4,
+    "first": "2025-03-25",
+    "inq": 1
+  },
+  "npa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "npas": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2025-07-15",
+    "inq": 0
+  },
+  "npc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-02-05",
+    "inq": 9
+  },
+  "npd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "npfe": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "npm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nps": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-10-12",
+    "inq": 0
+  },
+  "npsc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "npv": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-02-20",
+    "inq": 0
+  },
+  "nrc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-10-10",
+    "inq": 1
+  },
+  "nrdc": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 26,
+    "first": "2025-09-25",
+    "inq": 12
+  },
+  "nreap": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 6,
+    "first": "2023-12-10",
+    "inq": 2
+  },
+  "nrel": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-07-18",
+    "inq": 0
+  },
+  "nrm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2025-07-21",
+    "inq": 0
+  },
+  "nrmp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-10-05",
+    "inq": 0
+  },
+  "nsa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nsc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-08-04",
+    "inq": 0
+  },
+  "nsdp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 14,
+    "first": "2023-09-19",
+    "inq": 2
+  },
+  "nsdrm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2023-09-22",
+    "inq": 0
+  },
+  "nsds": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 28,
+    "first": "2023-09-29",
+    "inq": 2
+  },
+  "nsec": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nsf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-07-07",
+    "inq": 1
+  },
+  "nsia": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nso": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nssd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 28,
+    "first": "2023-09-29",
+    "inq": 0
+  },
+  "nssg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nstda": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nt": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-06",
+    "inq": 21
+  },
+  "nta": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ntf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-03-21",
+    "inq": 0
+  },
+  "nttaa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "nyserda": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "oas": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ocs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2025-11-19",
+    "inq": 0
+  },
+  "ocsla": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-02-19",
+    "inq": 1
+  },
+  "oda": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-11-21",
+    "inq": 2
+  },
+  "odi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ods": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 11,
+    "first": "2023-11-16",
+    "inq": 2
+  },
+  "oe": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2024-10-31",
+    "inq": 1
+  },
+  "oecd": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2023-10-12",
+    "inq": 34
+  },
+  "oecm": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-01-17",
+    "inq": 0
+  },
+  "oecs": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-11",
+    "inq": 0
+  },
+  "oep": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-01-06",
+    "inq": 1
+  },
+  "of": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-09-16",
+    "inq": 8151
+  },
+  "ohs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2025-12-12",
+    "inq": 0
+  },
+  "ol": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 15,
+    "first": "2025-07-12",
+    "inq": 4
+  },
+  "omb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-09-25",
+    "inq": 1
+  },
+  "onep": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ons": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "oof": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-02-19",
+    "inq": 0
+  },
+  "opis": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "opm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2025-11-19",
+    "inq": 0
+  },
+  "oraf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ornl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "osf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ostp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "otec": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-08-04",
+    "inq": 1
+  },
+  "ots": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ov": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ovl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 124,
+    "first": "2023-09-27",
+    "inq": 14
+  },
+  "pac": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-06-09",
+    "inq": 11
+  },
+  "pacczo": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-08-10",
+    "inq": 0
+  },
+  "pact": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-02-13",
+    "inq": 13
+  },
+  "paf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-07-21",
+    "inq": 0
+  },
+  "paho": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pame": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-20",
+    "inq": 5
+  },
+  "pat": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-11-24",
+    "inq": 1
+  },
+  "pb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-04-18",
+    "inq": 4
+  },
+  "pci": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pcu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pdo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-01-14",
+    "inq": 1
+  },
+  "pec": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pedia": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pee": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pes": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 4,
+    "first": "2023-11-21",
+    "inq": 3
+  },
+  "pf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-05-15",
+    "inq": 1
+  },
+  "pfan": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "phmsa": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 1,
+    "first": "2026-03-14",
+    "inq": 2
+  },
+  "pic": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2025-02-26",
+    "inq": 0
+  },
+  "pif": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-02-27",
+    "inq": 3
+  },
+  "pifs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pir": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-10-08",
+    "inq": 5
+  },
+  "piu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "piw": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "plli": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2023-11-04",
+    "inq": 29
+  },
+  "pmc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pmf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pmo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pmr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pmt": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pmu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "png": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 23,
+    "first": "2023-09-17",
+    "inq": 11
+  },
+  "po": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2023-10-16",
+    "inq": 6
+  },
+  "pop": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-12-11",
+    "inq": 1
+  },
+  "popp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ppa": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 3,
+    "first": "2023-12-30",
+    "inq": 1
+  },
+  "ppcr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 2,
+    "first": "2024-11-24",
+    "inq": 0
+  },
+  "ppe": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-04-15",
+    "inq": 1
+  },
+  "ppg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-12-26",
+    "inq": 0
+  },
+  "ppp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-02-11",
+    "inq": 4
+  },
+  "ppr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-10-19",
+    "inq": 17
+  },
+  "pra": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-11-27",
+    "inq": 2
+  },
+  "prsp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "prtr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-06-13",
+    "inq": 0
+  },
+  "prw": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "psa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "psc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-07-21",
+    "inq": 0
+  },
+  "psd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2026-02-10",
+    "inq": 1
+  },
+  "pse": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "psi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ptc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-04-06",
+    "inq": 2
+  },
+  "pwd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "pyrn": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "qa": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-18",
+    "inq": 0
+  },
+  "qc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-08-21",
+    "inq": 3
+  },
+  "ra": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2023-10-28",
+    "inq": 45
+  },
+  "rap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-08-28",
+    "inq": 3
+  },
+  "rc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 7,
+    "first": "2024-07-08",
+    "inq": 2
+  },
+  "rcp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-07-23",
+    "inq": 1
+  },
+  "rdb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rdf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rdp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "re": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 660,
+    "first": "2023-09-13",
+    "inq": 152
+  },
+  "rea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-03-26",
+    "inq": 1
+  },
+  "react": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rec": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 2,
+    "first": "2024-02-16",
+    "inq": 5
+  },
+  "redd": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 5,
+    "first": "2023-09-19",
+    "inq": 118
+  },
+  "redd+": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 5,
+    "first": "2023-10-02",
+    "inq": 0
+  },
+  "rei": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2025-03-07",
+    "inq": 1
+  },
+  "rema": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "res": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 76,
+    "first": "2023-09-19",
+    "inq": 28
+  },
+  "ress": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rfa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rfo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rfs": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 6,
+    "first": "2024-04-16",
+    "inq": 6
+  },
+  "rgc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rgr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ria": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-02-21",
+    "inq": 10
+  },
+  "rie": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-09-21",
+    "inq": 1
+  },
+  "rle": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-08-13",
+    "inq": 0
+  },
+  "rli": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rlie": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rmd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rmi": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2024-03-21",
+    "inq": 3
+  },
+  "rpf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rri": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rsda": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "rss": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-11-08",
+    "inq": 1
+  },
+  "sa": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2023-10-17",
+    "inq": 58
+  },
+  "sadc": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-03-08",
+    "inq": 4
+  },
+  "saf": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 10,
+    "first": "2024-01-05",
+    "inq": 13
+  },
+  "saicm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "saidi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "saifi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sami": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2025-10-21",
+    "inq": 7
+  },
+  "sanbi": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-11-19",
+    "inq": 0
+  },
+  "sap": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 0,
+    "first": "2024-05-30",
+    "inq": 4
+  },
+  "sapia": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sar": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sasb": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-12-17",
+    "inq": 1
+  },
+  "satp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sawep": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sbaa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sbm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sbrefa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sbti": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 2,
+    "first": "2023-11-22",
+    "inq": 4
+  },
+  "sc": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 16,
+    "first": "2023-11-29",
+    "inq": 8
+  },
+  "scap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-03-09",
+    "inq": 1
+  },
+  "scaqmd": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-12-22",
+    "inq": 1
+  },
+  "scc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 6,
+    "first": "2024-05-07",
+    "inq": 2
+  },
+  "sccf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-05-20",
+    "inq": 1
+  },
+  "scrap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-07-27",
+    "inq": 3
+  },
+  "sdc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sdg": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 5,
+    "first": "2023-10-21",
+    "inq": 16
+  },
+  "sea": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 13,
+    "first": "2023-09-30",
+    "inq": 176
+  },
+  "sec": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 13,
+    "first": "2023-10-17",
+    "inq": 35
+  },
+  "seea-ea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sef": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sei": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-08-06",
+    "inq": 0
+  },
+  "sep": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-02-01",
+    "inq": 4
+  },
+  "serac": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-12-14",
+    "inq": 4
+  },
+  "sesa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sesp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sfm": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 8,
+    "first": "2024-01-20",
+    "inq": 0
+  },
+  "sgp": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-11-17",
+    "inq": 0
+  },
+  "shgc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-05-15",
+    "inq": 1
+  },
+  "shs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2025-02-09",
+    "inq": 0
+  },
+  "si": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-09-28",
+    "inq": 10
+  },
+  "sia": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2023-10-12",
+    "inq": 2
+  },
+  "sib": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sida": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sids": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 4,
+    "first": "2024-04-24",
+    "inq": 8
+  },
+  "siec": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sigi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sip": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-08-04",
+    "inq": 0
+  },
+  "sis": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-11-22",
+    "inq": 2
+  },
+  "slm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 8,
+    "first": "2024-08-05",
+    "inq": 1
+  },
+  "slr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 27,
+    "first": "2024-03-05",
+    "inq": 0
+  },
+  "smartd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sme": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2023-10-02",
+    "inq": 7
+  },
+  "smhi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "smr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-06-08",
+    "inq": 0
+  },
+  "snap": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-09-22",
+    "inq": 2
+  },
+  "snc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-12-03",
+    "inq": 0
+  },
+  "sne": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-03-30",
+    "inq": 2
+  },
+  "so": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-12-12",
+    "inq": 8
+  },
+  "soc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sop": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-08-07",
+    "inq": 0
+  },
+  "spa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-09-16",
+    "inq": 12
+  },
+  "spc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "spcr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-05-25",
+    "inq": 0
+  },
+  "spi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "spr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sprep": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-06-18",
+    "inq": 0
+  },
+  "srep": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-08-10",
+    "inq": 1
+  },
+  "sri": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-09-22",
+    "inq": 54
+  },
+  "sso": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sst": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-01-23",
+    "inq": 2
+  },
+  "steo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "step": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "strpp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "sump": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "swds": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ta": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 5,
+    "first": "2024-11-14",
+    "inq": 8
+  },
+  "tac": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-02-23",
+    "inq": 0
+  },
+  "taf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-11-25",
+    "inq": 1
+  },
+  "tag": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tar": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-01-04",
+    "inq": 5
+  },
+  "tcap": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tcfd": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 2,
+    "first": "2023-09-28",
+    "inq": 17
+  },
+  "te": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2023-11-09",
+    "inq": 37
+  },
+  "tea": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-09-09",
+    "inq": 2
+  },
+  "tec": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-12",
+    "inq": 0
+  },
+  "tesda": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tess": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "teu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tev": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tfeu": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-03-16",
+    "inq": 2
+  },
+  "tgo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2024-07-23",
+    "inq": 0
+  },
+  "tha": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tii": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "til": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tna": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2024-06-04",
+    "inq": 0
+  },
+  "tnc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 12,
+    "first": "2024-02-07",
+    "inq": 0
+  },
+  "toc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "toe": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-07-31",
+    "inq": 2
+  },
+  "tof": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tossd": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-07-22",
+    "inq": 0
+  },
+  "tpes": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tpy": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "trif": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "trifr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "trir": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tsc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tsd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-03-30",
+    "inq": 1
+  },
+  "tsms": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tsr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ttbis": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ttl": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "tvet": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "twg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2025-07-18",
+    "inq": 0
+  },
+  "ua": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-07-22",
+    "inq": 1
+  },
+  "uaa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "uaw": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "uct": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-08-18",
+    "inq": 0
+  },
+  "uic": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "uk": {
+    "cpr": true,
+    "exact": 4,
+    "expm": 157,
+    "first": "2023-09-11",
+    "inq": 649
+  },
+  "umra": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "un": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 52,
+    "first": "2023-09-29",
+    "inq": 50
+  },
+  "uncbd": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 2,
+    "first": "2025-04-17",
+    "inq": 7
+  },
+  "unccd": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 2,
+    "first": "2023-09-29",
+    "inq": 12
+  },
+  "undaf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-01-26",
+    "inq": 3
+  },
+  "undp": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-01-30",
+    "inq": 17
+  },
+  "undrr": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-03-26",
+    "inq": 1
+  },
+  "unece": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-10-21",
+    "inq": 1
+  },
+  "unep": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 3,
+    "first": "2025-05-13",
+    "inq": 6
+  },
+  "unfccc": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 24,
+    "first": "2023-09-20",
+    "inq": 80
+  },
+  "unga": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 1,
+    "first": "2024-10-11",
+    "inq": 0
+  },
+  "ungc": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-07-28",
+    "inq": 0
+  },
+  "unhcr": {
+    "cpr": true,
+    "exact": 2,
+    "expm": 0,
+    "first": "2024-09-26",
+    "inq": 0
+  },
+  "unido": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2023-10-25",
+    "inq": 4
+  },
+  "unisdr": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "unops": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-11-21",
+    "inq": 1
+  },
+  "unsd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "ura": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "usa": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 61,
+    "first": "2023-09-21",
+    "inq": 170
+  },
+  "usaid": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2024-02-28",
+    "inq": 3
+  },
+  "usda": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-02-28",
+    "inq": 14
+  },
+  "usgs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2026-08-24",
+    "inq": 2
+  },
+  "usp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "uwa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "uwi": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "vat": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 2,
+    "first": "2024-07-25",
+    "inq": 4
+  },
+  "vc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 14,
+    "first": "2024-09-27",
+    "inq": 4
+  },
+  "vcs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2025-01-15",
+    "inq": 1
+  },
+  "vfdm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 1,
+    "first": "2025-12-07",
+    "inq": 2
+  },
+  "vmm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "vmme": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "voc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 4,
+    "first": "2024-11-27",
+    "inq": 0
+  },
+  "vos": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "vs": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-01-31",
+    "inq": 444
+  },
+  "wacc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "waj": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wb": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 12,
+    "first": "2024-12-09",
+    "inq": 1
+  },
+  "wbcsd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wbg": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wcf": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wcrp": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wcs": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-08-13",
+    "inq": 0
+  },
+  "wd-oecm": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wdpa": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "weee": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 0,
+    "first": "2025-08-14",
+    "inq": 1
+  },
+  "wef": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-05-20",
+    "inq": 2
+  },
+  "weo": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "2024-04-05",
+    "inq": 1
+  },
+  "weto": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wfd": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wfp": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-12-06",
+    "inq": 1
+  },
+  "who": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 3,
+    "first": "2023-11-13",
+    "inq": 18
+  },
+  "wii": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wmo": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 1,
+    "first": "2024-11-21",
+    "inq": 1
+  },
+  "wra": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wrc": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wri": {
+    "cpr": true,
+    "exact": 1,
+    "expm": 6,
+    "first": "2024-01-11",
+    "inq": 2
+  },
+  "wrma": {
+    "cpr": false,
+    "exact": 0,
+    "expm": 0,
+    "first": "",
+    "inq": 0
+  },
+  "wspa": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 1,
+    "first": "2025-12-11",
+    "inq": 2
+  },
+  "wto": {
+    "cpr": false,
+    "exact": 1,
+    "expm": 0,
+    "first": "2026-02-16",
+    "inq": 1
+  },
+  "wwf": {
+    "cpr": true,
+    "exact": 3,
+    "expm": 0,
+    "first": "2025-04-09",
+    "inq": 6
+  }
+}

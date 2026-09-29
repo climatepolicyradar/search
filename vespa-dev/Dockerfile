@@ -1,5 +1,6 @@
 # trunk-ignore-all(checkov,terrascan,hadolint)
-FROM prefecthq/prefect:3-python3.13
+# @related: PREFECT_VERSION
+FROM prefecthq/prefect:3.8.6-python3.13
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 

@@ -19,12 +19,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        resource: [documents, passages]
+        resource: [documents, passages, labels]
     env:
       K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
       K6_CLOUD_STACK_ID: ${{ secrets.K6_CLOUD_STACK_ID }}
       K6_CLOUD_DOCUMENTS_PROJECT_ID: ${{ secrets.K6_CLOUD_DOCUMENTS_PROJECT_ID }}
       K6_CLOUD_PASSAGES_PROJECT_ID: ${{ secrets.K6_CLOUD_PASSAGES_PROJECT_ID }}
+      K6_CLOUD_LABELS_PROJECT_ID: ${{ secrets.K6_CLOUD_LABELS_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v7
 
@@ -38,6 +39,7 @@ jobs:
           case "${{ matrix.resource }}" in
             documents) echo "id=$K6_CLOUD_DOCUMENTS_PROJECT_ID" >> "$GITHUB_OUTPUT" ;;
             passages) echo "id=$K6_CLOUD_PASSAGES_PROJECT_ID" >> "$GITHUB_OUTPUT" ;;
+            labels) echo "id=$K6_CLOUD_LABELS_PROJECT_ID" >> "$GITHUB_OUTPUT" ;;
             *) echo "Unknown resource: ${{ matrix.resource }}" >&2; exit 1 ;;
           esac
 

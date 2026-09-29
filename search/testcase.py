@@ -34,7 +34,7 @@ def _build_topic_filter(topics: list[str], topics_or: bool) -> Filter | None:
 
     Each topic sits in its own nested group because topics in a group would get collapsed
     by the engine into a single `sameElement(...)`, so match nothing. See
-    `_build_filter_yql` in `search/engines/dev_vespa.py`.
+    `_build_filter_yql` in `search/engines/vespa_query/filters.py`.
     """
     if not topics:
         return None
@@ -75,7 +75,8 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
     principal_id: str | None = None
     # Concept (topic) wikibase IDs, e.g. ["Q567", "Q1651"]. A result must carry
     # every listed concept to match, unless `topics_or` is set. On documents these
-    # also drive topic ranking - see `_topic_ids_from_filters` in dev_vespa.py.
+    # also drive topic ranking - see `_topic_ids_from_filters` in
+    # search/engines/vespa_query/filters.py.
     topics: list[str] | None = None
     topics_or: bool = Field(
         description=(

@@ -64,7 +64,7 @@ function resolveProfile(
 // succeeds with well-formed results. Verified live:
 // `relevance asc` returns results identical to `relevance desc`, matching
 // `_ranking_overrides_for_passage_order_by`'s behaviour
-// (search/engines/dev_vespa.py) of falling back to `relevance` (desc)
+// (search/engines/vespa_query/sorting.py) of falling back to `relevance` (desc)
 // ranking with a warning rather than erroring — asc is accepted but not
 // actually a distinct ordering, so this is asserted explicitly rather than
 // glossed over as "just another combination".

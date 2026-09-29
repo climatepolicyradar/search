@@ -427,22 +427,33 @@ unccd = Label(
     labels=[LabelRelationship(type="subconcept_of", value=un_submission)],
 )
 voluntary_land_degradation_neutrality_targets = Label(
-    id="entity_type::Voluntary Land Degradation Neutrality Targets (LDN-T)",
+    id="document_type::Voluntary Land Degradation Neutrality Targets (LDN-T)",
     value="Voluntary Land Degradation Neutrality Targets (LDN-T)",
-    type="entity_type",
+    type="document_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
 )
 country_report = Label(
-    id="entity_type::Country Report (CR)",
+    id="document_type::Country Report (CR)",
     value="Country Report (CR)",
-    type="entity_type",
+    type="document_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
 )
 national_drought_plan = Label(
-    id="entity_type::National Drought Plan (NDP)",
+    id="document_type::National Drought Plan (NDP)",
     value="National Drought Plan (NDP)",
-    type="entity_type",
+    type="document_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
+)
+
+# region global stocktake
+global_stocktake = Label(
+    type="category", id="category::Global Stocktake", value="Global Stocktake", labels=[]
+)
+gst1 = Label(
+    id="process::GST1",
+    value="GST1 Submission",
+    type="process",
+    labels=[LabelRelationship(type="subconcept_of", value=global_stocktake)],
 )
 
 
@@ -504,4 +515,6 @@ labels_taxonomy = [
     voluntary_land_degradation_neutrality_targets,
     country_report,
     national_drought_plan,
+    global_stocktake,
+    gst1,
 ]

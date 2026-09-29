@@ -1,5 +1,6 @@
 # trunk-ignore-all(checkov,terrascan,hadolint)
-FROM prefecthq/prefect:3-python3.13
+# @related: PREFECT_VERSION
+FROM prefecthq/prefect:3.8.6-python3.13
 
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
@@ -20,7 +21,8 @@ COPY slack_notify.py .
 COPY service-manifest.json .
 COPY feeder_metrics.py .
 COPY telemetry.py .
-COPY flow.py .
+COPY task_runner.py .
+COPY vespa_feeder.py .
 COPY labels_flow.py .
 COPY documents_flow.py .
 COPY passages_derived_data.py .

@@ -113,6 +113,24 @@ def test_get_labels_taxonomy_returns_non_empty_list() -> None:
     assert len(body["results"]) > 0
 
 
+def test_get_labels_taxonomy_includes_global_stocktake_category() -> None:
+    """GST1 must nest under the Global Stocktake category so the frontend filter tree renders it correctly."""
+    client = TestClient(app)
+
+    response = client.get("/search/labels-taxonomy")
+
+    body = response.json()
+    results_by_id = {result["id"]: result for result in body["results"]}
+
+    assert "category::Global Stocktake" in results_by_id
+
+    gst1 = results_by_id["process::GST1"]
+    assert gst1["type"] == "process"
+    assert gst1["value"] == "GST1 Submission"
+    assert gst1["labels"][0]["type"] == "subconcept_of"
+    assert gst1["labels"][0]["value"]["id"] == "category::Global Stocktake"
+
+
 def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
     """The root response is how an agent with no prior knowledge finds the docs."""
     client = TestClient(app)

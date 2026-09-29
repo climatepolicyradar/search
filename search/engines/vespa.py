@@ -14,7 +14,7 @@ from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Item
 from search.document import Document
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, TModel
-from search.engines.dev_vespa import (
+from search.engines.vespa_query.filters import (
     TOPIC_FILTER_FIELD,
     TOPIC_ID_PREFIX,
     Condition,
