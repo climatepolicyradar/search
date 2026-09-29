@@ -727,7 +727,7 @@ def summary_artifacts(monkeypatch):
     """Stubs everything `vespa_feeder` touches bar the batches, capturing artifacts."""
     artifacts = []
     monkeypatch.setenv("VESPA_CLI_DATA_PLANE_TOKEN", "")
-    monkeypatch.setattr(feeder, "get_ssm_parameter", lambda name: "stub")
+    monkeypatch.setattr(feeder, "get_ssm_parameter", lambda name: "stub")  # noqa: ARG005
     monkeypatch.setattr(feeder, "get_run_logger", lambda: logging.getLogger("test"))
     monkeypatch.setattr(
         feeder, "_terminate_vespa_feed_processes_on_sigterm_handler", lambda: None
@@ -748,7 +748,7 @@ def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
     routine. Collecting with `raise_on_failure=True` used to abandon the
     batches still in flight and skip the summary artifact entirely.
     """
-    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b", "c"])
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b", "c"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
@@ -783,7 +783,7 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
     the `finally` exists for this: a run stopped part-way still reports what
     it fed.
     """
-    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b"])
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
@@ -799,7 +799,7 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
 def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
     monkeypatch, summary_artifacts
 ):
-    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b"])
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
