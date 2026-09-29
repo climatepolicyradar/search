@@ -1199,7 +1199,7 @@ def test_search_summaries_never_fetch_passage_fields(vespa_app: Vespa):
 
 def _msm_corpus(app: Vespa) -> dict[str, str]:
     """
-    Three documents that cover the query "parametric insurance" differently.
+    Four documents that cover the query "parametric insurance" differently.
 
     :return: name -> document id, for asserting on which survive.
     """
@@ -1223,8 +1223,16 @@ def _msm_corpus(app: Vespa) -> dict[str, str]:
         description="A report",
         labels=[],
     )
+    # Both terms in the description only, with no passages at all. `description`
+    # is in the `default` fieldset, so this document matches - but it scored 0
+    # coverage until description joined coverage(), and was dropped at any msm.
+    description_doc = DocumentFactory.build(
+        title="Sixth National Communication",
+        description="Establishes parametric insurance for smallholder farmers.",
+        labels=[],
+    )
 
-    for document in (title_doc, split_doc, passage_doc):
+    for document in (title_doc, split_doc, passage_doc, description_doc):
         _feed_document(app, document)
 
     _feed_passages(
@@ -1249,6 +1257,7 @@ def _msm_corpus(app: Vespa) -> dict[str, str]:
         "title": title_doc.id,
         "split": split_doc.id,
         "passage": passage_doc.id,
+        "description": description_doc.id,
     }
 
 
@@ -1322,6 +1331,43 @@ def test_msm_full_requires_every_term(vespa_app: Vespa):
     assert ids["split"] not in hits
 
 
+def test_msm_counts_the_description(vespa_app: Vespa):
+    """
+    A document matching only in its description must survive.
+
+    `description` is searchable, so it brings documents into the results, but it
+    was left out of `coverage()` - meaning such a document scored 0 and was
+    dropped at any msm above 0. Raised in review on FUS-421.
+    """
+    ids = _msm_corpus(vespa_app)
+
+    hits = _msm_hit_ids(1.0)
+
+    assert ids["description"] in hits, (
+        "a document whose description contains the whole query must survive msm=1.0"
+    )
+
+
+def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa):
+    """
+    With no query text there is nothing for MSM to be a fraction of.
+
+    `coverage()` is 0 for every document when no terms were searched, so any
+    threshold above 0 would empty the corpus. Browsing by filter alone must not
+    be affected by a setting about query terms.
+    """
+    ids = _msm_corpus(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=1.0)
+    response = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+
+    assert {d.id for d in response.results} >= set(ids.values())
+
+
 def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
     """
     A date sort switches to `unranked`, which would otherwise skip the guard.
@@ -1344,3 +1390,4 @@ def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
 
 
 # endregion Minimum Should Match (MSM)
+

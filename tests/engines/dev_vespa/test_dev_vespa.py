@@ -8,8 +8,6 @@ from pydantic import AnyHttpUrl
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
-    _MSM_DOCUMENT_RANK_PROFILE,
-    _MSM_DOCUMENT_SORT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
@@ -903,13 +901,13 @@ def test_msm_defaults_to_off_and_changes_nothing() -> None:
     assert "input.query(msm)" not in body
 
 
-def test_msm_selects_the_msm_rank_profile_and_forwards_the_value() -> None:
-    """Turning MSM on switches profile as well as setting the input."""
+def test_msm_forwards_the_value_on_the_default_profile() -> None:
+    """`bm25-title-geo` declares query(msm), so no profile switch is needed."""
     engine = _document_engine(msm=0.6)
 
     body = _document_search_request_body(engine)
 
-    assert body["ranking.profile"] == _MSM_DOCUMENT_RANK_PROFILE
+    assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
     assert body["input.query(msm)"] == 0.6
     assert engine.parameters["msm"] == 0.6
 
@@ -918,8 +916,8 @@ def test_msm_survives_a_sort() -> None:
     """
     A sorted listing must not return documents a relevance search would drop.
 
-    Sorting swaps in `unranked`, which carries no MSM guard, so `unranked-msm`
-    has to take its place. MSM changes which documents exist, not their order.
+    `unranked` declares query(msm) and carries the same guard, so a sort filters
+    without needing a profile of its own.
     """
     engine = _document_engine(msm=0.6)
 
@@ -927,7 +925,7 @@ def test_msm_survives_a_sort() -> None:
         engine, order_by=[OrderBy(field="attributes.published_date", direction="desc")]
     )
 
-    assert body["ranking.profile"] == _MSM_DOCUMENT_SORT_RANK_PROFILE
+    assert body["ranking.profile"] == "unranked"
     assert body["input.query(msm)"] == 0.6
     assert body["ranking.sorting"]
 
@@ -952,10 +950,7 @@ def test_msm_reaches_aggregations_and_facets() -> None:
     for call in mock_execute.call_args_list:
         body = call.kwargs["request_body"]
         assert body["input.query(msm)"] == 0.6
-        assert body["ranking.profile"] in {
-            _MSM_DOCUMENT_RANK_PROFILE,
-            _MSM_DOCUMENT_SORT_RANK_PROFILE,
-        }
+        assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
 
 
 @pytest.mark.parametrize("msm", [-0.1, 1.1, 2.0])
@@ -965,19 +960,8 @@ def test_msm_out_of_range_raises(msm: float) -> None:
         _document_engine(msm=msm)
 
 
-def test_msm_on_a_profile_that_ignores_it_raises() -> None:
-    """
-    Vespa accepts an input a profile does not declare, and ignores it.
-
-    That would answer a filtered query with an unfiltered result set - the
-    failure docs/errors.md exists to prevent - so the engine refuses instead.
-    """
-    with pytest.raises(ValueError, match="declaring query\\(msm\\)"):
-        _document_engine(msm=0.6, ranking_profile="bm25")
-
-
-def test_msm_zero_leaves_an_explicit_rank_profile_alone() -> None:
-    """Relevance sweeps pin a profile; MSM off must not override that."""
+def test_an_explicit_rank_profile_is_respected() -> None:
+    """Relevance sweeps pin a profile; nothing may override that."""
     engine = _document_engine(ranking_profile="bm25")
 
     assert engine.ranking_profile == "bm25"

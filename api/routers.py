@@ -189,7 +189,9 @@ def read_documents(
         le=1.0,
         description=(
             "Minimum Should Match: the fraction of the query's terms a document "
-            "must contain. 0 (default) leaves every term optional; 1 requires all."
+            "must contain, measured against its title and geographies, its "
+            "description, or its best-matching passage. 0 (default) leaves "
+            "every term optional; 1 requires all."
         ),
     ),
 ):
