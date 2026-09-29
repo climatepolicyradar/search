@@ -139,11 +139,17 @@ VespaError = VespaFeedError | VespaResponseError
 
 
 class VespaFeederFailed(Exception):
-    """Records were lost that `vespa feed`'s own retries never recovered."""
+    """Records were lost: `vespa feed` never recovered them, or a batch raised."""
 
-    def __init__(self, message: str, failed_results: list["FeedResult"]) -> None:
+    def __init__(
+        self,
+        message: str,
+        failed_results: list["FeedResult"],
+        crashes: list[BaseException] | None = None,
+    ) -> None:
         super().__init__(message)
         self.failed_results = failed_results
+        self.crashes = crashes or []
 
     def __reduce__(self):
         """
@@ -151,7 +157,7 @@ class VespaFeederFailed(Exception):
 
         Prefect pickles exceptions to persist a failed run.
         """
-        return (self.__class__, (str(self), self.failed_results))
+        return (self.__class__, (str(self), self.failed_results, self.crashes))
 
 
 class VespaFeedResponse(BaseModel):
@@ -195,29 +201,33 @@ def _parse_failed_documents(stderr: str) -> list[FailedDocument]:
 
 
 def _build_run_summary_markdown(
-    results: list["FeedResult"], failed_results: list["FeedResult"]
+    successes: list["FeedResult"],
+    failures: list["FeedResult"],
+    exceptions: list[BaseException],
 ) -> str:
-    total_input = sum(r.input_count for r in results)
-    total_operation = sum(r.operation_count for r in results)
-    total_ok = sum(r.ok_count for r in results)
+    total_input = sum(r.input_count for r in successes)
+    total_operation = sum(r.operation_count for r in successes)
+    total_ok = sum(r.ok_count for r in successes)
     total_missing = total_operation - total_ok
-    total_feeder_errors = sum(r.feeder_error_count for r in results)
-    total_throttled = sum(r.throttled_count for r in results)
-    total_other_http_errors = sum(r.other_http_error_count for r in results)
+    total_feeder_errors = sum(r.feeder_error_count for r in successes)
+    total_throttled = sum(r.throttled_count for r in successes)
+    total_other_http_errors = sum(r.other_http_error_count for r in successes)
     throttle_rate = total_throttled / total_operation if total_operation else 0.0
 
-    icon = "🚨" if failed_results else "✅"
+    icon = "🚨" if failures or exceptions else "✅"
     status = (
-        f"**{len(failed_results)}/{len(results)} file(s) failed**"
-        if failed_results
+        f"**{len(failures) + len(exceptions)}/{len(successes) + len(exceptions)} "
+        "batch(es) failed**"
+        if failures or exceptions
         else "**All files indexed successfully**"
     )
 
     markdown = (
         f"### Vespa Feeder Run Summary\n\n{icon} {status}\n\n"
         "| Metric | Value |\n|---|---|\n"
-        f"| Files processed | {len(results)} |\n"
-        f"| Failed files | {len(failed_results)} |\n"
+        f"| Files processed | {len(successes)} |\n"
+        f"| Failed files | {len(failures)} |\n"
+        f"| Batches that raised | {len(exceptions)} |\n"
         f"| Input records | {total_input} |\n"
         f"| Operations | {total_operation} |\n"
         f"| OK | {total_ok} |\n"
@@ -230,13 +240,13 @@ def _build_run_summary_markdown(
         f"| Throttle rate | {throttle_rate:.2%} |\n"
     )
 
-    if failed_results:
+    if failures:
         markdown += (
             "\n#### Failed files\n\n"
             "| File | OK / Operation | Missing | Sample failed documents |\n"
             "|---|---|---|---|\n"
         )
-        for r in failed_results:
+        for r in failures:
             failed_docs = [doc for error in r.errors for doc in error.failed_documents]
             sample = "; ".join(
                 f"`{doc.doc_id}`: {doc.error}" for doc in failed_docs[:3]
@@ -248,6 +258,16 @@ def _build_run_summary_markdown(
                 f"{r.ok_count}/{r.operation_count} | "
                 f"{r.operation_count - r.ok_count} | {sample or '—'} |\n"
             )
+
+    if exceptions:
+        markdown += (
+            "\n#### Batches that raised\n\n"
+            "These never reported a result, so their records were not fed.\n\n"
+            "| Exception | Message |\n|---|---|\n"
+        )
+        for exception in exceptions:
+            detail = str(exception).replace("|", "\\|").replace("\n", " ")
+            markdown += f"| `{type(exception).__name__}` | {detail} |\n"
 
     return markdown
 
@@ -529,13 +549,13 @@ def vespa_feeder(
 
     s3_key_batches = list(batched(s3_keys, batch_size))
 
-    feed_futures: list[PrefectFuture[FeedResult]] = []
+    feed_results_futures: list[PrefectFuture[FeedResult]] = []
     for batch_number, batched_s3_keys in enumerate(s3_key_batches, start=1):
         run_logger.info(
             f"Feeding batch {batch_number}/{len(s3_key_batches)} "
             f"({len(batched_s3_keys)} files)"
         )
-        feed_futures.append(
+        feed_results_futures.append(
             feed_batch.submit(
                 endpoint=endpoint,
                 application=application,
@@ -547,35 +567,43 @@ def vespa_feeder(
             )
         )
 
-    results = []
-    for feed_future in feed_futures:
-        feed_result = feed_future.result()
-        run_logger.info(
-            f"Fed {len(feed_result.feed_paths)} file(s): "
-            f"input={feed_result.input_count} "
-            f"operation={feed_result.operation_count} ok={feed_result.ok_count} "
-            f"missing={feed_result.operation_count - feed_result.ok_count} "
-            f"throttled={feed_result.throttled_count}"
+    # resolve feed_results_futures and raise on any exceptions
+    feed_results: list[FeedResult] = []
+    feed_results_exceptions: list[BaseException] = []
+
+    # the finally is for a cancel mid-drain: `raise_on_failure=False` means no
+    # batch raises here, so it is SIGTERM that would otherwise lose the summary.
+    try:
+        for feed_result_future in feed_results_futures:
+            # we do not raise to be able to aggregate and report on this in the markdown artifact.
+            feed_result = feed_result_future.result(raise_on_failure=False)
+            if isinstance(feed_result, BaseException):
+                run_logger.error(
+                    f"Batch raised {type(feed_result).__name__}: {feed_result}"
+                )
+                feed_results_exceptions.append(feed_result)
+                continue
+
+            feed_results.append(feed_result)
+    finally:
+        # we then get the known failures from the vespa FeedResult
+        feed_results_errors = [result for result in feed_results if result.errors]
+
+        # publish the artifact in Prefect
+        create_markdown_artifact(
+            key="vespa-feeder-run-summary",
+            markdown=_build_run_summary_markdown(
+                feed_results, feed_results_errors, feed_results_exceptions
+            ),
+            description="Aggregate summary of the vespa-feeder run across all files",
         )
-        results.append(feed_result)
 
-    failed_results = [result for result in results if result.errors]
-
-    create_markdown_artifact(
-        key="vespa-feeder-run-summary",
-        markdown=_build_run_summary_markdown(results, failed_results),
-        description="Aggregate summary of the vespa-feeder run across all files",
-    )
-
-    if failed_results:
-        failed_paths = ", ".join(
-            str(feed_path)
-            for result in failed_results
-            for feed_path in result.feed_paths
-        )
+    if feed_results_errors or feed_results_exceptions:
         raise VespaFeederFailed(
-            f"vespa_feed: failed for {len(failed_results)}/{len(results)} "
-            f"batch(es): {failed_paths}. See the vespa-feeder-run-summary "
-            "artifact and per-batch error logs above for details.",
-            failed_results,
+            f"vespa_feed: of {len(feed_results) + len(feed_results_exceptions)} "
+            f"batch(es), {len(feed_results_errors)} lost records and "
+            f"{len(feed_results_exceptions)} raised. See the "
+            "vespa-feeder-run-summary artifact and per-batch error logs above.",
+            feed_results_errors,
+            feed_results_exceptions,
         )

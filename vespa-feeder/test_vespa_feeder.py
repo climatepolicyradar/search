@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import logging
 import signal
 import subprocess
 import tempfile
@@ -674,3 +675,144 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
         )
 
     assert list(temp_workspace.iterdir()) == []
+
+
+def _feed_result(
+    name: str, ok: int = 10, errors: list | None = None
+) -> feeder.FeedResult:
+    return feeder.FeedResult(
+        feed_paths=[Path(name)],
+        input_count=ok,
+        operation_count=ok,
+        ok_count=ok,
+        feeder_error_count=0,
+        throttled_count=0,
+        other_http_error_count=0,
+        errors=errors or [],
+    )
+
+
+class _FakeFuture:
+    """What `feed_batch.submit` hands back, wrapping one batch's outcome."""
+
+    def __init__(self, outcome: feeder.FeedResult | BaseException) -> None:
+        self.outcome = outcome
+
+    def result(self, timeout=None, raise_on_failure=True):
+        if raise_on_failure and isinstance(self.outcome, BaseException):
+            raise self.outcome
+        return self.outcome
+
+
+class _ExplodingFuture:
+    """A future that fails the drain loop itself, the way a mid-run cancel does."""
+
+    def result(self, timeout=None, raise_on_failure=True):
+        raise KeyboardInterrupt("cancelled mid-drain")
+
+
+class _FakeFeedBatch:
+    def __init__(self, futures) -> None:
+        self.futures = list(futures)
+        self.submitted = 0
+
+    def submit(self, **kwargs):
+        future = self.futures[self.submitted]
+        self.submitted += 1
+        return future
+
+
+@pytest.fixture
+def summary_artifacts(monkeypatch):
+    """Stubs everything `vespa_feeder` touches bar the batches, capturing artifacts."""
+    artifacts = []
+    monkeypatch.setenv("VESPA_CLI_DATA_PLANE_TOKEN", "")
+    monkeypatch.setattr(feeder, "get_ssm_parameter", lambda name: "stub")  # noqa: ARG005
+    monkeypatch.setattr(feeder, "get_run_logger", lambda: logging.getLogger("test"))
+    monkeypatch.setattr(
+        feeder, "_terminate_vespa_feed_processes_on_sigterm_handler", lambda: None
+    )
+    monkeypatch.setattr(
+        feeder, "create_markdown_artifact", lambda **kwargs: artifacts.append(kwargs)
+    )
+    return artifacts
+
+
+def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
+    monkeypatch, summary_artifacts
+):
+    """
+    A batch that raises must not take the rest of the run down with it.
+
+    Keys under a `latest/` prefix get rewritten mid-run, so a lone 404 is
+    routine. Collecting with `raise_on_failure=True` used to abandon the
+    batches still in flight and skip the summary artifact entirely.
+    """
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b", "c"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(RuntimeError("HeadObject: Not Found")),
+                _FakeFuture(_feed_result("three.jsonl")),
+            ]
+        ),
+    )
+
+    with pytest.raises(feeder.VespaFeederFailed) as exc_info:
+        feeder.vespa_feeder(s3_bucket="bucket", s3_key="latest", batch_size=1)
+
+    assert [str(crash) for crash in exc_info.value.crashes] == ["HeadObject: Not Found"]
+    assert exc_info.value.failed_results == []
+
+    markdown = summary_artifacts[0]["markdown"]
+    assert "| Files processed | 2 |" in markdown
+    assert "| Batches that raised | 1 |" in markdown
+    assert "| `RuntimeError` | HeadObject: Not Found |" in markdown
+
+
+def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
+    monkeypatch, summary_artifacts
+):
+    """
+    A cancel lands in the drain loop, not in a batch.
+
+    `raise_on_failure=False` keeps batch failures out of the control flow, so
+    the `finally` exists for this: a run stopped part-way still reports what
+    it fed.
+    """
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl")), _ExplodingFuture()]),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        feeder.vespa_feeder(s3_bucket="bucket", s3_key="latest", batch_size=1)
+
+    assert "| Files processed | 1 |" in summary_artifacts[0]["markdown"]
+
+
+def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
+    monkeypatch, summary_artifacts
+):
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(_feed_result("two.jsonl")),
+            ]
+        ),
+    )
+
+    feeder.vespa_feeder(s3_bucket="bucket", s3_key="latest", batch_size=1)
+
+    markdown = summary_artifacts[0]["markdown"]
+    assert "✅ **All files indexed successfully**" in markdown
+    assert "| Batches that raised | 0 |" in markdown
