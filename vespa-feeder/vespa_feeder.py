@@ -562,6 +562,8 @@ def vespa_feeder(
         name="/search/vespa/write_token"
     )
 
+    s3_export_prefix_pinned = s3_export_prefix is not None
+
     if s3_prefix.endswith(".jsonl"):
         # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
         s3_keys = [s3_prefix]
@@ -590,7 +592,8 @@ def vespa_feeder(
         {
             "s3_bucket": s3_bucket,
             "s3_prefix": s3_prefix,
-            "s3_export_prefix": s3_export_prefix,
+            "s3_export_prefix": s3_export_prefix or "",
+            "s3_export_prefix_pinned": s3_export_prefix_pinned,
             "batch_size": batch_size,
             "sample_rate": sample_rate,
             "connections": connections,

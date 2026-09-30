@@ -31,8 +31,6 @@ def labels_feeder_flow(
     vespa_feeder(
         s3_bucket="cpr-cache",
         s3_prefix="search/vespa/labels_feed_materializer.jsonl",
-        # One fixed file rather than a Snowflake export, so the prefix is
-        # already the whole key and there is no dated export to resolve.
         batch_size=batch_size,
         sample_rate=sample_rate,
     )
