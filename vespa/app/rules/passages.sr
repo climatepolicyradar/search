@@ -5,6 +5,7 @@
 # Includes the default documents rulebase
 
 @language(en)
+@stemming(false)
 @include(documents)
 
 # LHS +> ?"RHS" means LHS or RHS (RHS is tokenised ignoring punctuation
@@ -29,10 +30,10 @@
 # (with "on") matched nothing; "global goal adaptation" matches correctly,
 # including passages that still say "...global goal on adaptation...".
 
-ndc +> ?"nationally determined contribution";
+ndc +> ="nationally determined contribution";
 nature based solution -> ?"nature based solution" ?"nbs";
 gga +> ?"global goal adaptation";
-evs +> ?"electric car" ?"electric vehicle";
+evs, ev +> ?"electric car" ?"electric vehicle";
 
 adb +> ?"asian development bank";
 afolu +> ?"agriculture forestry other land use";

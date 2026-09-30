@@ -3,5 +3,6 @@
 # Reference: https://docs.vespa.ai/en/linguistics/query-rewriting.html
 # TODO: do we want this to inherit from documents.sr?  nz +> ?"net zero" exists there which affects this rule
 @language(en)
+@stemming(false)
 @include(documents)
 nz -> net zero;
