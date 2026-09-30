@@ -6,7 +6,9 @@ Throwaway: drop a documents feed op (one line of a
 ``uv run pytest tests/test_validate_document_e2e.py``.
 """
 
+import json
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
@@ -15,10 +17,21 @@ import requests as req
 from fastapi.testclient import TestClient
 from vespa.application import Vespa
 
-from tests.test_validate_document import _doc_id, feed_op  # noqa: F401
 from tests.vespa_e2e import _TEST_SETTINGS
 
 pytest_plugins = ["tests.vespa_e2e"]
+
+FEED_OP_PATH = Path(__file__).parent / "fixtures" / "validate_document_feed_op.json"
+DOC_ID_PREFIX = "id:documents:documents::"
+
+
+@pytest.fixture
+def feed_op() -> dict[str, Any]:
+    return json.loads(FEED_OP_PATH.read_text())
+
+
+def _doc_id(feed_op: dict[str, Any]) -> str:
+    return feed_op["update"].removeprefix(DOC_ID_PREFIX)
 
 
 def test_feed_op_is_accepted_and_served_by_the_api(
