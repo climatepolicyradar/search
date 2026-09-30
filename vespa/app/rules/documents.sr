@@ -21,7 +21,7 @@ necp +> ?"national energy climate plan";
 phaseout +> ?"phase out";
 
 # Many climate/energy laws are titled "... act ..."
-law +> ?act;
+law +> ?"act";
 
 # Geo synonyms (Lucene en/geo-synonyms.txt) resolve "nz" -> "new zealand".
 # Adding here only affects the default fieldset (title/description/passages).

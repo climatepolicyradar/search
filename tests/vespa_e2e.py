@@ -1,5 +1,6 @@
 import datetime
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Generator
@@ -110,3 +111,44 @@ def get_search_ids(filter_: Filter) -> set[str]:
         filters_json_string=filter_.model_dump_json(),
     )
     return {doc.id for doc in docs.results}
+
+
+def first_production_text(rhs: str) -> str:
+    """
+    Literal text for an RHS production list's first alternative.
+
+    Enough to feed as content that a rewritten query should match on at
+    least one alternative - doesn't need to reproduce the full production
+    list, quoted phrase or bare word alike.
+    """
+    quoted = re.match(r'\s*[?=+$-]?"([^"]*)"', rhs)
+    if quoted:
+        return quoted.group(1)
+    bare = re.match(r"\s*[?=+$-]?(\S+)", rhs)
+    return bare.group(1) if bare else rhs.strip()
+
+
+def rule_cases(*filenames: str) -> list[tuple[str, str, str]]:
+    """
+    Derive (case_id, query, rewrite_text) from every rule across the given .sr files.
+
+    Reads the actual files under `vespa/app/rules/` so a new rule is covered
+    automatically.
+    """
+    cases: dict[str, str] = {}
+    for filename in filenames:
+        path = VESPA_APP_DIR / "rules" / filename
+        for line in path.read_text().splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or stripped.startswith("@"):
+                continue
+            match = re.match(r"(?P<lhs>.*?)(?:->|\+>)(?P<rhs>.*);\s*$", stripped)
+            if match is None:
+                continue
+            lhs = match["lhs"].strip()
+            cases.setdefault(lhs, first_production_text(match["rhs"]))
+
+    return [
+        (re.sub(r"[^a-z0-9]+", "-", lhs.lower()).strip("-"), lhs, rewrite_text)
+        for lhs, rewrite_text in sorted(cases.items())
+    ]

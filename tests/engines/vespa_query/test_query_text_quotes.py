@@ -1,22 +1,35 @@
-"""Unit tests for stripping quotes to disable exact match search"""
+"""Unit tests for splitting a query into free text + exact phrases."""
 
 import pytest
 
-from search.engines.vespa_query.query_text_modifiers import _strip_quotes
+from search.engines.vespa_query.query_text_modifiers import _parse_query, _strip_quotes
 
 
 @pytest.mark.parametrize(
     ("query", "expected"),
     [
-        # Quotes removed and terms preserved.
+        ('UK "climate act"', ("UK", ["climate act"])),
+        ('"net zero" "by 2050"', ("", ["net zero", "by 2050"])),
+        ('"climate act', ("", ["climate act"])),  # unclosed trailing quote
+        ('"net zero"', ("", ["net zero"])),
+        ('"$100"', ("", ["$100"])),
+        ('brazil "net zero" policy', ("brazil policy", ["net zero"])),
+        ("climate change", ("climate change", [])),
+        ('"nature-based solutions"', ("", ["nature-based solutions"])),
+        ('"---"', ("", [])),
+        ("", ("", [])),
+    ],
+)
+def test_parse_query(query: str, expected: tuple[str, list[str]]) -> None:
+    assert _parse_query(query) == expected
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
         ('"powering past coal"', "powering past coal"),
-        ('"net zero"', "net zero"),
-        # Partial / multiple quotes are also stripped.
         ('brazil "net zero"', "brazil net zero"),
-        ('"first" and "second"', "first and second"),
-        # Unbalanced quotes are stripped too.
         ('"unterminated', "unterminated"),
-        # No quotes are unchanged.
         ("climate change", "climate change"),
         ("", ""),
     ],

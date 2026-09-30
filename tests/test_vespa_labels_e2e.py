@@ -35,7 +35,7 @@ from search.vespa.labels_feed_materializer import (
     VespaLabelLabelRelationship,
     _vespa_label_to_vespa_update,
 )
-from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids
+from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids, rule_cases
 
 pytest_plugins = ["tests.vespa_e2e"]
 
@@ -584,6 +584,46 @@ def test_label_field_filter_type_not_contains_returns_matching_type_only(
     result_ids = {label.id for label in results}
     assert "category::Law" not in result_ids
     assert "geography::Romania" in result_ids
+
+
+@pytest.mark.parametrize(
+    ("case_id", "query", "rewrite_text"), rule_cases("labels.sr", "documents.sr")
+)
+def test_label_rewrite_rule_does_not_bypass_filters(
+    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+):
+    """A rewrite rule's production must never let a filtered label search return a label outside the filter."""
+    inside_type = f"inside-{case_id}"
+    outside_type = f"outside-{case_id}"
+    _feed_label(
+        vespa_app,
+        _taxonomy_vespa_label(
+            f"e2e-inside-{case_id}", inside_type, "mangrove restoration"
+        ),
+    )
+    # Matches the rule's rewrite, but has a different `type` - must never
+    # come back once the filter is applied.
+    _feed_label(
+        vespa_app,
+        _taxonomy_vespa_label(f"e2e-outside-{case_id}", outside_type, rewrite_text),
+    )
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        filters_json_string=Filter(
+            op="and",
+            filters=[FieldFilter(field="type", op="contains", value=inside_type)],
+        ).model_dump_json(),
+    ).results
+
+    ids = {label.id for label in results}
+    assert ids == set(), (
+        f"query {query!r} with a type filter returned a label outside the "
+        f"filter - the rewrite rule likely bypassed the filter (FUS-588): {ids}"
+    )
 
 
 def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa):
