@@ -345,6 +345,12 @@ party = Label(
     type="author_type",
     labels=[LabelRelationship(type="subconcept_of", value=global_stocktake)],
 )
+gst_party_document_type = Label(
+    type="category",
+    id="category::Global Stocktake Document type",
+    value="Document type",
+    labels=[LabelRelationship(type="subconcept_of", value=party)],
+)
 
 # region un submission
 un_submission = Label(
@@ -363,7 +369,7 @@ nationally_determined_contribution = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 national_adaptation_plan = Label(
@@ -372,7 +378,7 @@ national_adaptation_plan = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 biennial_transparency_report = Label(
@@ -381,7 +387,7 @@ biennial_transparency_report = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 long_term_low_emission_development_strategy = Label(
@@ -390,7 +396,7 @@ long_term_low_emission_development_strategy = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 biennial_update_report = Label(
@@ -399,7 +405,7 @@ biennial_update_report = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 biennial_report = Label(
@@ -408,7 +414,7 @@ biennial_report = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 national_communication = Label(
@@ -417,7 +423,7 @@ national_communication = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 national_inventory_report = Label(
@@ -426,7 +432,7 @@ national_inventory_report = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 adaptation_communication = Label(
@@ -435,7 +441,7 @@ adaptation_communication = Label(
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=gst_party_document_type),
     ],
 )
 
@@ -551,4 +557,5 @@ labels_taxonomy = [
     global_stocktake,
     gst1,
     party,
+    gst_party_document_type,
 ]

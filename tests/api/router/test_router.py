@@ -133,10 +133,12 @@ def test_get_labels_taxonomy_includes_global_stocktake_category() -> None:
 
 def test_get_labels_taxonomy_includes_global_stocktake_party_branch() -> None:
     """
-    Party must nest under Global Stocktake.
+    Party must nest under Global Stocktake, with a Document type group beneath it.
 
-    The existing UNFCCC document types must also nest under Party (in addition
-    to their existing UNFCCC parent) so they render under both branches.
+    The existing UNFCCC document types must also nest under that Document type
+    group (in addition to their existing UNFCCC parent) so they render under
+    both branches: UN submission > UNFCCC, and Global Stocktake > Party >
+    Document type.
     """
     client = TestClient(app)
 
@@ -150,6 +152,12 @@ def test_get_labels_taxonomy_includes_global_stocktake_party_branch() -> None:
     assert party["value"] == "Party"
     assert party["labels"][0]["type"] == "subconcept_of"
     assert party["labels"][0]["value"]["id"] == "category::Global Stocktake"
+
+    document_type_group = results_by_id["category::Global Stocktake Document type"]
+    assert document_type_group["type"] == "category"
+    assert document_type_group["value"] == "Document type"
+    assert document_type_group["labels"][0]["type"] == "subconcept_of"
+    assert document_type_group["labels"][0]["value"]["id"] == "author_type::Party"
 
     document_type_ids = [
         "entity_type::Nationally Determined Contribution (NDC)",
@@ -165,7 +173,7 @@ def test_get_labels_taxonomy_includes_global_stocktake_party_branch() -> None:
     for document_type_id in document_type_ids:
         document_type = results_by_id[document_type_id]
         parent_ids = {relationship["value"]["id"] for relationship in document_type["labels"]}
-        assert parent_ids == {"un_convention::UNFCCC", "author_type::Party"}
+        assert parent_ids == {"un_convention::UNFCCC", "category::Global Stocktake Document type"}
 
 
 def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
