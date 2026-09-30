@@ -301,7 +301,7 @@ def get_latest_s3_export_prefix(bucket: str, prefix: str) -> str:
             # ]}
             #
             # `CommonPrefixes` has a `MaxKeys` of 1000 - which, given this buckets expires objects
-            # every 90, has very little risk of us hitting that.
+            # every 90 days, has very little risk of us hitting that.
             for common_prefix in page.get("CommonPrefixes", [])
         ),
         reverse=True,
