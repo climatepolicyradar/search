@@ -19,7 +19,7 @@ from search.engines.vespa_query.filters import (
 )
 from search.engines.vespa_query.query_text_modifiers import (
     _normalize_currency_symbols,
-    _strip_quotes,
+    _parse_query,
 )
 from search.engines.vespa_query.sorting import _ranking_overrides_for_passage_order_by
 from search.log import get_logger
@@ -41,6 +41,17 @@ passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
 
 _DEFAULT_TOPIC_WEIGHT = 1.0
 _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
+
+
+
+
+def _passage_phrase_yql(count: int) -> str:
+    """One in-order phrase clause per quoted phrase."""
+    return "".join(
+        " and content_not_stemmed contains "
+        f"({{grammar.composite:'phrase'}}text(@exact_phrase_{i}))"
+        for i in range(count)
+    )
 
 
 class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
@@ -79,8 +90,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         bolding: bool = False,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
-        if query:
-            query = _strip_quotes(query)
+        free_text, phrases = _parse_query(query) if query else ("", [])
 
         where = "true"
         filters: Filter | None = None
@@ -94,16 +104,22 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             )
 
         yql = f"select * from sources passages where {where}"
-        if query:
+        if free_text:
             yql += " and userQuery()"
+        yql += _passage_phrase_yql(len(phrases))
 
-        logger.info("🔎 Passage search query built (query=%r, yql=%s)", query, yql)
+        logger.info(
+            "🔎 Passage search query built (query=%r, free_text=%r, phrases=%r, yql=%s)",
+            query,
+            free_text,
+            phrases,
+            yql,
+        )
 
         sort_overrides = _ranking_overrides_for_passage_order_by(order_by)
 
         request_body: dict[str, Any] = {
             "yql": yql,
-            "query": _normalize_currency_symbols(query) if query else query,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
@@ -113,6 +129,11 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
+
+        if free_text:
+            request_body["query"] = _normalize_currency_symbols(free_text)
+        for i, phrase in enumerate(phrases):
+            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
 
         topic_ids = _topic_ids_from_filters(filters)
         if topic_ids and not sort_overrides:

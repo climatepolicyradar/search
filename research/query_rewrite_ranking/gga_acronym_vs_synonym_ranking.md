@@ -1,6 +1,9 @@
-# Query rewrite spike ("gga -> "global goal adaptation" example)
+# Query rewrite spike ("gga +> ?"global goal adaptation" example)
 
 Summary
+
+`+>` adds the rhs to the original term. `?` is an OR operator. the double quotes
+enforce adjacency as a phrase (see below)
 
 ranking:
 
@@ -268,12 +271,39 @@ gga-only: 0  phrase-only: 0  both: 50  neither: 0
   `CCLW.party.*`, or `UNFCCC.non-party.*` variants) — visible as adjacent rank
   pairs with identical scores throughout the table.
 
+## EQUIV as an alternative to OR
+
+`=` (EQUIV) instead of `?` (OR) avoids the additive double-counting above.
+Tested on `ndc +> ="nationally determined contribution";` against three
+synthetic passages (local Docker Vespa, not production):
+
+| passage               | OR (`?"..."`) | EQUIV (`="..."`) |
+| --------------------- | ------------: | ---------------: |
+| "ndc" only            |        0.4971 |    0.4971 (same) |
+| phrase only           |        0.9299 |           0.4649 |
+| both "ndc" and phrase |    **2.0716** |       **0.6274** |
+
+- EQUIV caps the "matches both forms" case near the single-match score instead
+  of summing — the double-counting goes away.
+- Tradeoff: it also lowers every individual match (phrase-only ≈ halved here).
+  Per the
+  [YQL docs](https://docs.vespa.ai/en/reference/querying/yql.html#equiv), items
+  inside `EQUIV` aren't visible to ranking features individually — they count as
+  one generic term match rather than getting their own IDF/term-frequency
+  contribution. Not a free fix, a different scoring tradeoff.
+- Gotcha: EQUIV throws a **runtime** query error (not a deploy-time one) if the
+  same LHS is also defined elsewhere as `?"..."` — e.g. `ndc` is defined
+  separately in both `documents.sr` and `passages.sr`, so both copies must be
+  changed together or the two compiled rules conflict.
+
 ## Pointers
 
 - Rewrite rules:
   [`vespa/app/rules/passages.sr`](../../vespa/app/rules/passages.sr),
   [`vespa/app/rules/documents.sr`](../../vespa/app/rules/documents.sr) (included
   by `passages.sr`, holds shared acronym rules)
+- YQL guide:
+  [https://docs.vespa.ai/en/reference/querying/yql.html#equiv](https://docs.vespa.ai/en/reference/querying/yql.html#equiv)
 - Rank profile:
   [`vespa/app/schemas/passages.sd`](../../vespa/app/schemas/passages.sd)
   (`bm25_multiplicative`)

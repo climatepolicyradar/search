@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import pytest
 import requests as req
 from cpr_contracts import (
     Document,
@@ -13,7 +14,7 @@ from vespa.application import Vespa
 
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, FieldFilter, Filter
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from tests.vespa_e2e import _TEST_SETTINGS
+from tests.vespa_e2e import _TEST_SETTINGS, rule_cases
 
 pytest_plugins = ["tests.vespa_e2e"]
 
@@ -59,6 +60,44 @@ def _feed_document(app: Vespa, document: Document) -> None:
         timeout=5,
     )
     r.raise_for_status()
+
+
+@pytest.mark.parametrize(("case_id", "query", "rewrite_text"), rule_cases("documents.sr"))
+def test_facets_rewrite_rule_does_not_bypass_filters(
+    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+):
+    """A rewrite rule's production must never let a filtered facet query count a label outside the filter."""
+    doc_inside = DocumentFactory.build(
+        title="mangrove restoration protects coastlines",
+        labels=[_label(f"category::inside-{case_id}", "Inside", "category")],
+    )
+    doc_outside = DocumentFactory.build(
+        title=rewrite_text,
+        labels=[_label(f"category::outside-{case_id}", "Outside", "category")],
+    )
+    _feed_document(vespa_app, doc_inside)
+    _feed_document(vespa_app, doc_outside)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    result = engine.labels_value_type_facets(
+        query=query,
+        filters_json_string=Filter(
+            op="and",
+            filters=[
+                FieldFilter(
+                    field="labels.value.id",
+                    op="contains",
+                    value=f"category::inside-{case_id}",
+                )
+            ],
+        ).model_dump_json(),
+    )
+
+    counted_ids = {c.value.id for group in result.values() for c in group}
+    assert f"category::outside-{case_id}" not in counted_ids, (
+        f"query {query!r} with a facet filter counted a label outside the "
+        f"filter - the rewrite rule likely bypassed the filter (FUS-588): {counted_ids}"
+    )
 
 
 def test_facets_no_filters_returns_counts_for_all_labels(vespa_app: Vespa):
