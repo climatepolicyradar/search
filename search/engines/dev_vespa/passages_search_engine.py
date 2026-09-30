@@ -8,8 +8,8 @@ from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
     Settings,
-    _execute_vespa_query,
     _get_total_count,
+    execute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
@@ -145,7 +145,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         if not bolding:
             request_body["presentation.bolding"] = "false"
 
-        response = _execute_vespa_query(
+        response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,

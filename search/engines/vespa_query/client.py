@@ -65,7 +65,7 @@ def _warn_if_degraded(response_json: dict[str, Any], request_context: str) -> No
     )
 
 
-def _execute_vespa_query(
+def execute_vespa_query(
     *,
     endpoint: str,
     token: str,

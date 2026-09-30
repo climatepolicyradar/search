@@ -23,8 +23,8 @@ from search.engines.vespa_query.client import (
     API_TIMEOUT,
     HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
     Settings,
-    _execute_vespa_query,
     _get_total_count,
+    execute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
@@ -249,7 +249,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         if not self.bolding:
             request_body["presentation.bolding"] = "false"
 
-        response = _execute_vespa_query(
+        response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -432,7 +432,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["geo_query"] = _resolve_geography_aliases(free_text)
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
-        response = _execute_vespa_query(
+        response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -511,7 +511,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["geo_query"] = _resolve_geography_aliases(free_text)
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
-        response = _execute_vespa_query(
+        response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,

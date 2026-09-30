@@ -51,7 +51,7 @@ failure, and it should never be the reason a response is empty.
 
 One tension worth knowing about: **"log and throw" is widely considered an
 anti-pattern** (it produces the same failure logged several times on the way
-up). We do it deliberately in `_execute_vespa_query` anyway, because the engine
+up). We do it deliberately in `execute_vespa_query` anyway, because the engine
 is the only layer that has the traceback and knows _which_ of the fanned-out
 queries died (`documents.search` vs `documents.aggregations`), while the
 boundary is the only layer that knows the request. Two logs, two different
@@ -95,7 +95,7 @@ review.
   single `VespaError` handler.
 - `search/engines/` — engine methods raise `VespaError`
   (`search/engines/__init__.py`) and never return an empty result set for a
-  failed query. See `_execute_vespa_query` in
+  failed query. See `execute_vespa_query` in
   `search/engines/vespa_query/client.py`.
 - `relevance_tests/` — the harness is a boundary too. It is the top of the call
   stack for a batch job, so it catches, and `TestResult.status` is the tagged
