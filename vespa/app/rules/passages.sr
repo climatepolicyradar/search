@@ -5,7 +5,6 @@
 # Includes the default documents rulebase
 
 @language(en)
-@stemming(false)
 @include(documents)
 
 # LHS +> ?"RHS" means LHS or RHS (RHS is tokenised ignoring punctuation

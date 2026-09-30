@@ -5,7 +5,6 @@
 # See https://docs.vespa.ai/en/linguistics/query-rewriting.html
 
 @language(en)
-@stemming(false)
 @default
 
 # Title acronyms & variants (formerly lucene-linguistics/en/title-synonyms.txt)
