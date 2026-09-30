@@ -1,4 +1,4 @@
-# Runs as a CI check that auto-fixes passages.sr, labels.sr. and documents.sr by removing stopwords from the right-hand side of the rules.
+# Checks and optionally auto-fixes passages.sr, labels.sr. and documents.sr by detecting and/or removing stopwords from the right-hand side of the rules and checking that the rule line is parseable and ends with ';'; runs as a CI check with --check flag.
 
 import re
 from dataclasses import dataclass
