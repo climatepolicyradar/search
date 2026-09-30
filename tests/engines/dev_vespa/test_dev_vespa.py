@@ -818,7 +818,7 @@ def test_passage_search_engine_quoted_query_builds_exact_phrase() -> None:
     engine = DevVespaPassageSearchEngine(settings=settings)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query='"net zero"',
@@ -844,7 +844,7 @@ def test_passage_search_engine_mixes_free_term_and_phrase() -> None:
     engine = DevVespaPassageSearchEngine(settings=settings)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query='brazil "net zero"',
@@ -868,7 +868,7 @@ def test_document_search_engine_quoted_query_builds_exact_phrase() -> None:
     engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
-        documents_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        documents_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query='"just transition"',
