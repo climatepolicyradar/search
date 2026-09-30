@@ -1,0 +1,136 @@
+{
+  "create": true,
+  "fields": {
+    "attributes_boolean": {
+      "assign": {}
+    },
+    "attributes_double": {
+      "assign": {}
+    },
+    "attributes_identifiers": {
+      "assign": {}
+    },
+    "attributes_published_date": {
+      "assign": 1580774400
+    },
+    "attributes_string": {
+      "assign": {
+        "deprecated_slug": "water-affairs-management-law_d5a46b",
+        "last_updated_date": "2026-09-29 13:42:22.000",
+        "published_date": "2020-02-04",
+        "status": "published",
+        "variant": "Original Language"
+      }
+    },
+    "concept_counts": {
+      "assign": {}
+    },
+    "concepts": {
+      "assign": []
+    },
+    "description": {
+      "assign": null
+    },
+    "document_source": {
+      "assign": "{\"attributes\":{\"deprecated_slug\":\"water-affairs-management-law_d5a46b\",\"last_updated_date\":\"2026-09-29 13:42:22.000\",\"published_date\":\"2020-02-04\",\"status\":\"published\",\"variant\":\"Original Language\"},\"description\":null,\"documents\":[{\"timestamp\":null,\"type\":\"is_version_of\",\"value\":{\"attributes\":{\"deprecated_slug\":\"water-affairs-management-law_075e05\",\"last_updated_date\":\"2026-09-29 13:42:22.000\",\"published_date\":\"2020-02-04\",\"status\":\"published\"},\"description\":null,\"id\":\"CPR-AFG-2020-ba900eaadde06422d9c5fe3e0e58dd73-law\",\"items\":[],\"labels\":[{\"timestamp\":null,\"type\":\"geography\",\"value\":{\"attributes\":{},\"id\":\"country::AFG\",\"labels\":[],\"type\":\"country\",\"value\":\"Afghanistan\"}},{\"timestamp\":null,\"type\":\"geography\",\"value\":{\"attributes\":{},\"id\":\"region::MEA\",\"labels\":[],\"type\":\"region\",\"value\":\"Middle East & North Africa\"}},{\"timestamp\":null,\"type\":\"domain\",\"value\":{\"attributes\":{},\"id\":\"domain::Nature\",\"labels\":[],\"type\":\"domain\",\"value\":\"Nature\"}},{\"timestamp\":null,\"type\":\"provider\",\"value\":{\"attributes\":{},\"id\":\"agent::Nature4Climate\",\"labels\":[],\"type\":\"agent\",\"value\":\"Nature4Climate\"}},{\"timestamp\":null,\"type\":\"category\",\"value\":{\"attributes\":{},\"id\":\"category::Law\",\"labels\":[],\"type\":\"category\",\"value\":\"Law\"}},{\"timestamp\":\"2020-02-04 00:00:00.000\",\"type\":\"activity_status\",\"value\":{\"attributes\":{},\"id\":\"activity_status::Passed/Approved\",\"labels\":[],\"type\":\"activity_status\",\"value\":\"Passed/Approved\"}},{\"timestamp\":null,\"type\":\"status\",\"value\":{\"attributes\":{},\"id\":\"status::Principal\",\"labels\":[],\"type\":\"status\",\"value\":\"Principal\"}}],\"title\":\"Water Affairs Management Law\"}}],\"id\":\"CPR-AFG-2020-ba900eaadde06422d9c5fe3e0e58dd73-law-01\",\"items\":[{\"type\":\"source\",\"url\":\"https://faolex.fao.org/docs/pdf/afg200669.pdf\"}],\"labels\":[{\"timestamp\":null,\"type\":\"geography\",\"value\":{\"attributes\":{},\"id\":\"country::AFG\",\"labels\":[],\"type\":\"country\",\"value\":\"Afghanistan\"}},{\"timestamp\":null,\"type\":\"geography\",\"value\":{\"attributes\":{},\"id\":\"region::MEA\",\"labels\":[],\"type\":\"region\",\"value\":\"Middle East & North Africa\"}},{\"timestamp\":null,\"type\":\"domain\",\"value\":{\"attributes\":{},\"id\":\"domain::Nature\",\"labels\":[],\"type\":\"domain\",\"value\":\"Nature\"}},{\"timestamp\":null,\"type\":\"provider\",\"value\":{\"attributes\":{},\"id\":\"agent::Nature4Climate\",\"labels\":[],\"type\":\"agent\",\"value\":\"Nature4Climate\"}},{\"timestamp\":null,\"type\":\"category\",\"value\":{\"attributes\":{},\"id\":\"category::Law\",\"labels\":[],\"type\":\"category\",\"value\":\"Law\"}},{\"timestamp\":\"2020-02-04 00:00:00.000\",\"type\":\"activity_status\",\"value\":{\"attributes\":{},\"id\":\"activity_status::Passed/Approved\",\"labels\":[],\"type\":\"activity_status\",\"value\":\"Passed/Approved\"}},{\"timestamp\":null,\"type\":\"role\",\"value\":{\"attributes\":{},\"id\":\"role::Main\",\"labels\":[],\"type\":\"role\",\"value\":\"Main\"}},{\"timestamp\":null,\"type\":\"entity_type\",\"value\":{\"attributes\":{},\"id\":\"entity_type::Law\",\"labels\":[],\"type\":\"entity_type\",\"value\":\"Law\"}},{\"timestamp\":null,\"type\":\"language\",\"value\":{\"attributes\":{},\"id\":\"language::fas\",\"labels\":[],\"type\":\"language\",\"value\":\"Persian\"}}],\"title\":\"Water Affairs Management Law\"}"
+    },
+    "geographies": {
+      "assign": [
+        "Afghanistan",
+        "Middle East & North Africa"
+      ]
+    },
+    "labels": {
+      "assign": [
+        {
+          "count": null,
+          "id": "country::AFG",
+          "passages_id": null,
+          "relationship": "geography",
+          "timestamp": null,
+          "type": "country",
+          "value": "Afghanistan"
+        },
+        {
+          "count": null,
+          "id": "region::MEA",
+          "passages_id": null,
+          "relationship": "geography",
+          "timestamp": null,
+          "type": "region",
+          "value": "Middle East & North Africa"
+        },
+        {
+          "count": null,
+          "id": "domain::Nature",
+          "passages_id": null,
+          "relationship": "domain",
+          "timestamp": null,
+          "type": "domain",
+          "value": "Nature"
+        },
+        {
+          "count": null,
+          "id": "agent::Nature4Climate",
+          "passages_id": null,
+          "relationship": "provider",
+          "timestamp": null,
+          "type": "agent",
+          "value": "Nature4Climate"
+        },
+        {
+          "count": null,
+          "id": "category::Law",
+          "passages_id": null,
+          "relationship": "category",
+          "timestamp": null,
+          "type": "category",
+          "value": "Law"
+        },
+        {
+          "count": null,
+          "id": "activity_status::Passed/Approved",
+          "passages_id": null,
+          "relationship": "activity_status",
+          "timestamp": 1580774400,
+          "type": "activity_status",
+          "value": "Passed/Approved"
+        },
+        {
+          "count": null,
+          "id": "role::Main",
+          "passages_id": null,
+          "relationship": "role",
+          "timestamp": null,
+          "type": "role",
+          "value": "Main"
+        },
+        {
+          "count": null,
+          "id": "entity_type::Law",
+          "passages_id": null,
+          "relationship": "entity_type",
+          "timestamp": null,
+          "type": "entity_type",
+          "value": "Law"
+        },
+        {
+          "count": null,
+          "id": "language::fas",
+          "passages_id": null,
+          "relationship": "language",
+          "timestamp": null,
+          "type": "language",
+          "value": "Persian"
+        }
+      ]
+    },
+    "passages": {
+      "assign": []
+    },
+    "title": {
+      "assign": "Water Affairs Management Law"
+    }
+  },
+  "update": "id:documents:documents::CPR-AFG-2020-ba900eaadde06422d9c5fe3e0e58dd73-law-01"
+}
