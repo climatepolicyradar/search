@@ -1,4 +1,4 @@
-# Runs as a CI check that auto-fixes passages.sr, labels.sr. and documents.sr by removing stopwords from the right-hand side of the rules.
+# Checks and optionally auto-fixes passages.sr, labels.sr. and documents.sr by detecting and/or removing stopwords from the right-hand side of the rules and checking that the rule line is parseable and ends with ';'; runs as a CI check with --check flag.
 
 import re
 from dataclasses import dataclass
@@ -31,6 +31,10 @@ class UnfixableRhsError(ValueError):
         super().__init__(message)
         self.words = words or []
 
+def _ends_with_semicolon(stripped_line: str) -> bool:
+    """Every rule line (not a comment/directive/blank) must end with ';'."""
+    return stripped_line.endswith(";")
+
 def remove_stopwords_from_line_rhs(
     line: str, stopwords: set[str]
 ) -> tuple[str, list[str]]:
@@ -40,6 +44,9 @@ def remove_stopwords_from_line_rhs(
     # pass through comments, empty lines, and @-directives unchanged
     if not stripped or stripped.startswith("#") or stripped.startswith("@"):
         return line, []
+
+    if not _ends_with_semicolon(stripped):
+        raise UnfixableRhsError(f"rule line does not end with ';': {line!r}")
 
     # match rule lines
     match = re.match(r"(?P<lhs>.*?)(?P<op>->|\+>)(?P<rhs>.*);\s*$", stripped)
@@ -187,6 +194,7 @@ def run(rules_dir: Path, stopwords_path: Path, check: bool, fix: bool) -> int:
         return 1
 
     return 0
+
 
 @app.command()
 def main(
