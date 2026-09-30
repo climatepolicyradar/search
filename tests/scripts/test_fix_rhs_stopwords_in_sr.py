@@ -92,7 +92,9 @@ def test_stopwords_are_removed_from_rhs(script, line, fixed_line, removed) -> No
 @pytest.mark.parametrize(
     "line",
     [
+        pytest.param("law +> act\n", id="missing-semicolon"),
         pytest.param("this is not a rule\n", id="unparsable-line"),
+        pytest.param("this is not a rule;\n", id="malformed-with-semicolon"),
         pytest.param('x +> ?"on the a";\n', id="all-stopword-phrase"),
         pytest.param("x +> [1];\n", id="unrecognised-term"),
     ],
@@ -101,6 +103,12 @@ def test_unfixable_lines_raise(script, line) -> None:
     """Lines the fixer can't safely handle raise rather than being silently skipped or mangled."""
     with pytest.raises(ValueError):
         script.remove_stopwords_from_line_rhs(line, STOPWORDS)
+
+
+def test_missing_semicolon_raises_a_specific_message(script) -> None:
+    """A rule line missing its trailing ';' gets a message naming that specifically."""
+    with pytest.raises(ValueError, match="does not end with ';'"):
+        script.remove_stopwords_from_line_rhs("law +> act\n", STOPWORDS)
 
 
 def test_fix_file_reports_no_violations_for_clean_file(script, tmp_path: Path) -> None:
@@ -135,7 +143,7 @@ def test_fix_file_collects_every_violation_instead_of_stopping_at_the_first(
     sr_path = tmp_path / "many_problems.sr"
     sr_path.write_text(
         'gga +> ?"global goal on adaptation";\n'
-        "not a rule\n"
+        "not a rule;\n"
         'ok +> ?"clean rule here";\n'
         'stopword +> ?"second on example";\n'
     )
