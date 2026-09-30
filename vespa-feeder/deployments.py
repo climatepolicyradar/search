@@ -7,11 +7,7 @@ Run with: uv run python vespa-feeder/deployments.py
 from dataclasses import dataclass
 
 import boto3
-from documents_flow import (
-    documents_concepts_feeder_flow,
-    documents_feeder_flow,
-    documents_principal_concepts_feeder_flow,
-)
+from documents_flow import documents_feeder_flow
 from labels_flow import labels_feeder_flow
 from passages_flow import (
     passages_feeder_flow,
@@ -31,6 +27,45 @@ class VespaFeederDeployment:
     flow: Flow
     cron: str | None = None
     job_variables: dict | None = None
+    # Adding a `variant` will deploy to `{flow.name}/{flow.name}::{variant}`
+    # which will allow you to a/b test flows.
+    variant: str | None = None
+    # e.g. parameters.sample_rate = 0.1 will get a determanist sample
+    # to avoid long running tests.
+    # e.g. parameters.s3_key = "20260922T190625Z" will ensure you always have the same
+    # data across tests.
+    # This will not work for labels
+    # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
+    parameters: dict | None = None
+    # an example of an a/b test could be
+    # VespaFeederDeployment(
+    #     flow=passages_feeder_flow,
+    #     variant="batch-1",
+    #     job_variables={
+    #         "cpu": 1024,
+    #         "memory": 4096,
+    #         "ephemeralStorage": {"sizeInGiB": 50},
+    #     },
+    #     parameters={
+    #         "batch_size": 1,
+    #         "sample_rate": 0.1,
+    #         "s3_key": "20260922T190625Z",
+    #     },
+    # ),
+    # VespaFeederDeployment(
+    #     flow=passages_feeder_flow,
+    #     variant="batch-5",
+    #     job_variables={
+    #         "cpu": 2048,
+    #         "memory": 8192,
+    #         "ephemeralStorage": {"sizeInGiB": 50},
+    #     },
+    #     parameters={
+    #         "batch_size": 5,
+    #         "sample_rate": 0.1,
+    #         "s3_key": "20260922T190625Z",
+    #     },
+    # )
 
 
 _FEEDS: list[VespaFeederDeployment] = [
@@ -40,25 +75,16 @@ _FEEDS: list[VespaFeederDeployment] = [
     VespaFeederDeployment(
         flow=documents_feeder_flow,
         job_variables={"cpu": 1024, "memory": 2048},
-        cron="0 5 * * *",
     ),
-    # we've removed the cron to stop these tasks running on a schedule,
-    # but keeping them as an escape hatch until we have had search running stable for a while.
-    # TODO: remove these once we're happy `documents_feeder_flow` is stable.
-    VespaFeederDeployment(flow=documents_concepts_feeder_flow),
-    VespaFeederDeployment(flow=documents_principal_concepts_feeder_flow),
     # Passages
-    # cpu=2048 was A/B tested against 1024 (same 8x2 connections default)
-    # and showed no measurable difference (~8.2s CLI feed time either
-    # way) - CPU isn't the constraint, so back to 1024. Combined with the
-    # 8x2 vs 4x4 connections result (4x4 was 15% slower despite the same
-    # total connection budget), the likely real ceiling is Vespa's
-    # server-side feedapi-handler capacity, which 8x2=16 connections was
-    # deliberately sized against.
     VespaFeederDeployment(
         flow=passages_feeder_flow,
-        job_variables={"cpu": 1024, "memory": 4096},
-        cron="0 5 * * *",
+        # 8 x 10 x 47MB x 2 = 7.5GB worst case.
+        job_variables={
+            "cpu": 2048,
+            "memory": 16384,
+            "ephemeralStorage": {"sizeInGiB": 50},
+        },
     ),
 ]
 
@@ -81,17 +107,19 @@ if __name__ == "__main__":
         # at 3am
         # TODO: actual data flows based on events
         flow = feed.flow
+        deployment_name = f"{flow.name}:{feed.variant}" if feed.variant else flow.name
         job_variables = {**default_job_variables, **(feed.job_variables or {})}
         flow.deploy(
-            flow.name,
+            name=deployment_name,
             work_pool_name=_WORK_POOL,
             image=DockerImage(
                 name=image_name,
                 tag="latest",
             ),
             job_variables=job_variables,
+            parameters=feed.parameters,
             cron=feed.cron,
             build=False,
             push=False,
         )
-        print(f"Deployed {flow.name}")
+        print(f"Deployed {deployment_name}")

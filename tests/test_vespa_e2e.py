@@ -11,6 +11,7 @@ Run with: uv run pytest tests/test_vespa_e2e.py
 """
 
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Generator
@@ -19,7 +20,7 @@ from typing import Any, Literal
 
 import pytest
 import requests as req
-from cpr_contracts import Document, DocumentLabelRelationship
+from cpr_contracts import Document, DocumentLabelRelationship, Label
 from polyfactory.factories.pydantic_factory import ModelFactory
 from pydantic import AnyHttpUrl
 from vespa.application import Vespa
@@ -29,6 +30,7 @@ from search.engines import OrderBy, Pagination, VespaError
 from search.engines.dev_vespa import (
     AttributesCondition,
     DevVespaDocumentSearchEngine,
+    DevVespaPrincipalDocumentSearchEngine,
     FieldFilter,
     Filter,
     Settings,
@@ -169,15 +171,25 @@ def _feed_document_with_id(app: Vespa, document: Document) -> None:
     r.raise_for_status()
 
 
-def _ids(filter_: Filter) -> set[str]:
+def _ids(filter_: Filter, query: str | None = None) -> set[str]:
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     docs = engine.search(
-        query=None,
+        query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
         filters_json_string=filter_.model_dump_json(),
     )
     return {doc.id for doc in docs.results}
+
+
+def _principal_label() -> DocumentLabelRelationship:
+    return DocumentLabelRelationship(
+        type="status",
+        value=Label(
+            id="status::Principal", type="status", value="Principal", labels=[]
+        ),
+        timestamp=None,
+    )
 
 
 # region Attributes
@@ -448,6 +460,118 @@ def test_field_filter_id_selects_exact_documents(vespa_app: Vespa):
         ],
     )
     assert _ids(f) == set(expected_ids)
+
+
+def _first_production_text(rhs: str) -> str:
+    """
+    Literal text for an RHS production list's first alternative.
+
+    Enough to feed as document content that the rewritten query should match
+    on at least one alternative - doesn't need to reproduce the full
+    production list, quoted phrase or bare word alike.
+    """
+    quoted = re.match(r'\s*[?=+$-]?"([^"]*)"', rhs)
+    if quoted:
+        return quoted.group(1)
+    bare = re.match(r"\s*[?=+$-]?(\S+)", rhs)
+    return bare.group(1) if bare else rhs.strip()
+
+
+_UNRELATED_TITLE = "mangrove restoration protects coastlines"
+
+
+def _document_rewrite_rule_cases() -> list[tuple[str, str, str]]:
+    """
+    Derive (case_id, query, rewrite_text) from every rule in documents.sr.
+
+    Document search never sets `rules.rulebase`, so only `documents.sr` (the
+    `@default` rulebase) ever applies here - unlike passages, `passages.sr`
+    is irrelevant to document search. Reads the actual file so a new rule is
+    covered automatically, with no test file edit required.
+    """
+    cases: dict[str, str] = {}
+    path = VESPA_APP_DIR / "rules" / "documents.sr"
+    for line in path.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("@"):
+            continue
+        match = re.match(r"(?P<lhs>.*?)(?:->|\+>)(?P<rhs>.*);\s*$", stripped)
+        if match is None:
+            continue
+        lhs = match["lhs"].strip()
+        cases.setdefault(lhs, _first_production_text(match["rhs"]))
+
+    return [
+        (re.sub(r"[^a-z0-9]+", "-", lhs.lower()).strip("-"), lhs, rewrite_text)
+        for lhs, rewrite_text in sorted(cases.items())
+    ]
+
+
+@pytest.mark.parametrize(
+    ("case_id", "query", "rewrite_text"), _document_rewrite_rule_cases()
+)
+def test_document_rewrite_rule_does_not_bypass_filters(
+    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+):
+    """A rewrite rule's production must never let a filtered document search return a document outside the filter."""
+
+    doc_inside_id = f"e2e-rewrite-inside-{case_id}"
+    doc_outside_id = f"e2e-rewrite-outside-{case_id}"
+    doc_inside = DocumentFactory.build(
+        id=doc_inside_id,
+        title=_UNRELATED_TITLE,
+        labels=[],
+    )
+    doc_outside = DocumentFactory.build(
+        id=doc_outside_id,
+        title=rewrite_text,
+        labels=[],
+    )
+    _feed_document_with_id(vespa_app, doc_inside)
+    _feed_document_with_id(vespa_app, doc_outside)
+
+    f = Filter(
+        op="and",
+        filters=[FieldFilter(field="id", op="contains", value=doc_inside_id)],
+    )
+    ids = _ids(f, query=query)
+
+    assert ids == set(), (
+        f"query {query!r} with an id filter returned a document outside the "
+        f"filter - the rewrite rule likely bypassed the filter (FUS-588): {ids}"
+    )
+
+
+def test_principal_search_rewrite_rule_does_not_bypass_status_filter(
+    vespa_app: Vespa,
+):
+    """A rewrite rule must never let principal search return a non-principal document."""
+
+    doc_principal = DocumentFactory.build(
+        id="e2e-principal-law",
+        title=_UNRELATED_TITLE,
+        labels=[_principal_label()],
+    )
+    doc_non_principal = DocumentFactory.build(
+        id="e2e-non-principal-law",
+        title="the emissions reduction act was passed",
+        labels=[],
+    )
+    _feed_document_with_id(vespa_app, doc_principal)
+    _feed_document_with_id(vespa_app, doc_non_principal)
+
+    engine = DevVespaPrincipalDocumentSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query="law",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+    ids = {d.id for d in results}
+
+    assert doc_non_principal.id not in ids, (
+        f"principal search for 'law' returned a non-principal document - the "
+        f"rewrite rule likely bypassed the status::Principal filter (FUS-588): {ids}"
+    )
 
 
 # endregion Attributes
@@ -1094,6 +1218,140 @@ def test_get_raises_vespa_error_when_unreachable():
     with pytest.raises(VespaError):
         engine.get("any-id")
 
+
+def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_app: Vespa):
+    """A fully-quoted document query phrase-matches title and description; order matters."""
+    doc_title = DocumentFactory.build(
+        id="doc-just-title",
+        title="A just transition framework for coal regions",
+        description="Unrelated summary text.",
+        labels=[],
+    )
+    doc_desc = DocumentFactory.build(
+        id="doc-just-desc",
+        title="National energy plan",
+        description="The plan is built on a just transition.",
+        labels=[],
+    )
+    doc_reordered = DocumentFactory.build(
+        id="doc-reordered",
+        title="A transition that is just and fair",
+        description="Nothing relevant here.",
+        labels=[],
+    )
+    for d in (doc_title, doc_desc, doc_reordered):
+        _feed_document(vespa_app, d)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    ids = {
+        d.id
+        for d in engine.search(
+            query='"just transition"',
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        ).results
+    }
+
+    assert "doc-just-title" in ids, f"phrase in title must match, got: {ids}"
+    assert "doc-just-desc" in ids, f"phrase in description must match, got: {ids}"
+    assert "doc-reordered" not in ids, f"out-of-order phrase must not match, got: {ids}"
+
+
+def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):
+    """`"$100"` matches a $100 title but not $1000 (exact_analysis currency charFilters)."""
+    doc_100 = DocumentFactory.build(
+        id="doc-100", title="Grant of $100 approved", description="d", labels=[]
+    )
+    doc_1000 = DocumentFactory.build(
+        id="doc-1000", title="Grant of $1000 approved", description="d", labels=[]
+    )
+    _feed_document(vespa_app, doc_100)
+    _feed_document(vespa_app, doc_1000)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    ids = {
+        d.id
+        for d in engine.search(
+            query='"$100"',
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        ).results
+    }
+
+    assert "doc-100" in ids, f"quoted $100 must match the $100 title, got: {ids}"
+    assert "doc-1000" not in ids, f"quoted $100 must not match $1000, got: {ids}"
+
+
+def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa):
+    """An unquoted query still stems and goes through userQuery()."""
+    doc = DocumentFactory.build(
+        id="doc-plain",
+        title="National strategy for climate change 2050",
+        description="d",
+        labels=[],
+    )
+    _feed_document(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    ids = {
+        d.id
+        for d in engine.search(
+            query="national strategies",  # plural, unquoted -> must still stem
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        ).results
+    }
+
+    assert "doc-plain" in ids, f"unquoted queries must still stem, got: {ids}"
+
+
+
+
+def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
+    """Partial quoted spans can be combined with unquoted ones"""
+    docs = [
+        DocumentFactory.build(
+            id="doc-mix-both",
+            title="Peatland strategy for blue carbon",
+            description="d",
+            labels=[],
+        ),
+        DocumentFactory.build(
+            id="doc-mix-free-only",
+            title="Peatland strategy",
+            description="Carbon that is blue.",
+            labels=[],
+        ),
+        DocumentFactory.build(
+            id="doc-mix-phrase-only",
+            title="Seagrass strategy for blue carbon",
+            description="d",
+            labels=[],
+        ),
+        DocumentFactory.build(
+            id="doc-mix-inflected",
+            title="Peatland strategy for blue carbons",
+            description="d",
+            labels=[],
+        ),
+    ]
+    for d in docs:
+        _feed_document(vespa_app, d)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    ids = {
+        d.id
+        for d in engine.search(
+            query='peatlands "blue carbon"',
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        ).results
+    }
+
+    assert "doc-mix-both" in ids, f"free term + phrase must match, got: {ids}"
+    assert "doc-mix-free-only" not in ids, f"phrase is required, got: {ids}"
+    assert "doc-mix-phrase-only" not in ids, f"free term is required, got: {ids}"
+    assert "doc-mix-inflected" not in ids, f"quoted part must stay literal, got: {ids}"
 
 # endregion
 

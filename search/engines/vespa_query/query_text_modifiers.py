@@ -33,11 +33,40 @@ def _strip_quotes(query: str) -> str:
     """
     Remove double-quote characters so the query is never parsed as an exact phrase.
 
-    This is needed as Vespa's query parser treats `"..."` as an exact phrase (exact
-    consecutive terms). We deliberately do not want to support exact match search, so
-    quotes are ignored.
+    Used by label search, which does not support exact phrases. Document and
+    passage search parse quotes into exact phrases instead - see `_parse_query`.
     """
     return query.replace('"', "")
+
+
+_QUOTED_PHRASE = re.compile(r'"([^"]*)"|"([^"]+)$')
+
+
+def _parse_query(query: str) -> tuple[str, list[str]]:
+    """
+    Split a raw query into (free_text, exact_phrases).
+
+    Every `"quoted span"` - and an unclosed trailing quote - becomes one phrase.
+    Text outside quotes is returned as free_text, to drive userQuery().
+    A phrase with no alphanumerics (e.g. '"---"') is dropped: the analyzer yields no
+    tokens and Vespa rejects an empty phrase.
+
+        'UK "climate act"'      -> ("UK", ["climate act"])
+        '"net zero" "by 2050"'  -> ("", ["net zero", "by 2050"])
+        '"climate act'          -> ("", ["climate act"])
+        'climate change'        -> ("climate change", [])
+    """
+    phrases: list[str] = []
+
+    def _collect(match: re.Match[str]) -> str:
+        raw = match.group(1) if match.group(1) is not None else match.group(2)
+        phrase = raw.strip()
+        if re.search(r"[^\W_]", phrase):
+            phrases.append(phrase)
+        return " "
+
+    free_text = re.sub(r"\s+", " ", _QUOTED_PHRASE.sub(_collect, query)).strip()
+    return free_text, phrases
 
 
 # Geography aliases, mapping what a user types to the canonical name carried by

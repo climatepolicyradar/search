@@ -38,8 +38,8 @@ from search.engines.vespa_query.filters import (
 )
 from search.engines.vespa_query.query_text_modifiers import (
     _normalize_currency_symbols,
+    _parse_query,
     _resolve_geography_aliases,
-    _strip_quotes,
 )
 from search.engines.vespa_query.sorting import _ranking_overrides_for_document_order_by
 from search.label import Label
@@ -71,6 +71,19 @@ _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
 _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS = 2000
 
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
+
+
+def _document_phrase_yql(count: int) -> str:
+    """One phrase clause per quoted phrase, each matching title OR description OR passages."""
+    out: list[str] = []
+    for i in range(count):
+        p = f"@exact_phrase_{i}"
+        out.append(
+            f" and (title_not_stemmed contains ({{grammar.composite:'phrase'}}text({p}))"
+            f" or description_not_stemmed contains ({{grammar.composite:'phrase'}}text({p}))"
+            f" or passages_text_not_stemmed contains ({{grammar.composite:'phrase'}}text({p})))"
+        )
+    return "".join(out)
 
 
 class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]):
@@ -175,9 +188,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
 
-        if query:
-            query = _strip_quotes(query)
-
         where = "true "
         filters: Filter | None = None
 
@@ -189,23 +199,24 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 struct_map=documents_filter_struct_field_to_vespa_field_map,
             )
 
+        free_text, phrases = _parse_query(query) if query else ("", [])
+
         yql = f"select * from sources documents where {where}"
-        if query:
+        if free_text:
             yql += self._userQuery
-        logger.info("🔎 Document search query built (query=%r, yql=%s)", query, yql)
+        yql += _document_phrase_yql(len(phrases))
+        logger.info(
+            "🔎 Document search query built (query=%r, free_text=%r, phrases=%r, yql=%s)",
+            query,
+            free_text,
+            phrases,
+            yql,
+        )
 
         sort_overrides = _ranking_overrides_for_document_order_by(order_by)
 
-        normalized_query = _normalize_currency_symbols(query) if query else query
-
         request_body: dict[str, Any] = {
             "yql": yql,
-            "query": normalized_query,
-            "geo_query": (
-                _resolve_geography_aliases(normalized_query)
-                if normalized_query
-                else normalized_query
-            ),
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
             "timeout": "5s",
@@ -213,6 +224,13 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
+
+        if free_text:
+            normalized_free_text = _normalize_currency_symbols(free_text)
+            request_body["query"] = normalized_free_text
+            request_body["geo_query"] = _resolve_geography_aliases(normalized_free_text)
+        for i, phrase in enumerate(phrases):
+            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
 
         topic_ids = _topic_ids_from_filters(filters)
         if topic_ids and not sort_overrides:
@@ -355,13 +373,14 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         filters_json_string: str | None = None,
     ) -> list[CountAggregation[Label]]:
         """Return aggregations (label/concept groups with counts) filtered by the search query."""
-        if query:
-            query = _strip_quotes(query)
         # Build the top-level where clause from the search query and any filters,
         # mirroring how `search()` constructs its YQL.
+        free_text, phrases = _parse_query(query) if query else ("", [])
+
         where = "true"
-        if query:
+        if free_text:
             where += self._userQuery
+        where += _document_phrase_yql(len(phrases))
 
         if filters_json_string:
             filters = Filter.model_validate_json(filters_json_string)
@@ -401,15 +420,18 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         groupby_str = str(grouping)
         yql = f"select {select_fields} from documents where {where} | {groupby_str}"
 
-        request_body = {
+        request_body: dict[str, Any] = {
             "yql": yql,
-            "query": query,
-            "geo_query": _resolve_geography_aliases(query) if query else query,
             "hits": 0,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
         }
+        if free_text:
+            request_body["query"] = free_text
+            request_body["geo_query"] = _resolve_geography_aliases(free_text)
+        for i, phrase in enumerate(phrases):
+            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
@@ -452,12 +474,12 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         group_attributes: list[str],
     ) -> dict[str, dict[tuple[str, str], tuple[Label, int]]]:
         """Run a Vespa grouping query and return label/concept buckets partitioned by attribute."""
-        if query:
-            query = _strip_quotes(query)
+        free_text, phrases = _parse_query(query) if query else ("", [])
 
         where = "true"
-        if query:
+        if free_text:
             where += self._userQuery
+        where += _document_phrase_yql(len(phrases))
         where += _build_filter_query(
             where_filter,
             field_map=documents_filter_field_to_vespa_field_map,
@@ -477,15 +499,18 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         grouping = G.all(*inner_groups)
         yql = f"select {', '.join(group_attributes)} from documents where {where} | {grouping}"
 
-        request_body = {
+        request_body: dict[str, Any] = {
             "yql": yql,
-            "query": query,
-            "geo_query": _resolve_geography_aliases(query) if query else query,
             "hits": 0,
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
         }
+        if free_text:
+            request_body["query"] = free_text
+            request_body["geo_query"] = _resolve_geography_aliases(free_text)
+        for i, phrase in enumerate(phrases):
+            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
         response = _execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
