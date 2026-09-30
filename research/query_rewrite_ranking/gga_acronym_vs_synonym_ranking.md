@@ -1,7 +1,5 @@
 # Query rewrite spike ("gga +> ?"global goal adaptation" example)
 
-# Query rewrite spike ("gga +> ?"global goal adaptation" example)
-
 Summary
 
 `+>` adds the rhs to the original term. `?` is an OR operator. the double quotes
