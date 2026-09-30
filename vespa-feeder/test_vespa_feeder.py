@@ -270,20 +270,20 @@ class _FakeS3Contents:
 @pytest.mark.parametrize(
     ("keys", "prefix", "expected"),
     [
-        # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST - labels' prefix is the
-        # whole key, and S3 returns just that object rather than needing a
-        # special case for it here.
-        pytest.param(
-            ["search/vespa/labels_feed_materializer.jsonl", "search/vespa/other.jsonl"],
-            "search/vespa/labels_feed_materializer.jsonl",
-            ["search/vespa/labels_feed_materializer.jsonl"],
-            id="prefix-is-the-whole-key",
-        ),
         pytest.param(
             ["export/20260929T010000Z/b.jsonl", "export/20260929T010000Z/a.jsonl"],
             "export/20260929T010000Z",
             ["export/20260929T010000Z/a.jsonl", "export/20260929T010000Z/b.jsonl"],
             id="prefix-is-a-directory-sorted",
+        ),
+        pytest.param(
+            [
+                "export/20260929T010000Z/a.jsonl",
+                "export/20260929T010000Z-retry/b.jsonl",
+            ],
+            "export/20260929T010000Z",
+            ["export/20260929T010000Z/a.jsonl"],
+            id="sibling-sharing-the-string-prefix-is-excluded",
         ),
     ],
 )

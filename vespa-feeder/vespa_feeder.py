@@ -319,6 +319,7 @@ def get_latest_s3_export_prefix(bucket: str, prefix: str) -> str:
 def list_s3_keys(bucket: str, prefix: str) -> list[str]:
     s3: S3Client = boto3.client("s3")
 
+    prefix = prefix.rstrip("/") + "/"
     paginator = s3.get_paginator("list_objects_v2")
     objects = sorted(
         [
