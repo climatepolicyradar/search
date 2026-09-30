@@ -12,6 +12,7 @@ Run with: uv run pytest tests/test_vespa_passages_e2e.py
 """
 
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Generator
@@ -472,6 +473,99 @@ def test_passage_document_id_filter_is_exact_and_covers_the_corpus(vespa_app: Ve
 
     assert sorted(p.document_id for p in response.results) == ["doc-fs-a", "doc-fs-c"]
     assert response.total_size == 2
+
+
+def _first_production_text(rhs: str) -> str:
+    """
+    Literal text for an RHS production list's first alternative.
+
+    Enough to feed as passage content that the rewritten query should match
+    on at least one alternative - doesn't need to reproduce the full
+    production list, quoted phrase or bare word alike.
+    """
+    quoted = re.match(r'\s*[?=+$-]?"([^"]*)"', rhs)
+    if quoted:
+        return quoted.group(1)
+    bare = re.match(r"\s*[?=+$-]?(\S+)", rhs)
+    return bare.group(1) if bare else rhs.strip()
+
+
+def _rewrite_rule_cases() -> list[tuple[str, str, str]]:
+    """
+    Derive (case_id, query, rewrite_text) from every rule in documents.sr and passages.sr.
+
+    These are the two rulebases `DevVespaPassageSearchEngine` exercises
+    (`documents.sr` is `@default`, always active; `passages.sr` adds its own
+    on top). Reads the actual files so a new rule is covered automatically,
+    with no test file edit required.
+    """
+    cases: dict[str, str] = {}  # lhs -> rewrite_text, first file wins on collision
+    for filename in ("documents.sr", "passages.sr"):
+        path = VESPA_APP_DIR / "rules" / filename
+        for line in path.read_text().splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or stripped.startswith("@"):
+                continue
+            match = re.match(r"(?P<lhs>.*?)(?:->|\+>)(?P<rhs>.*);\s*$", stripped)
+            if match is None:
+                continue
+            lhs = match["lhs"].strip()
+            cases.setdefault(lhs, _first_production_text(match["rhs"]))
+
+    return [
+        (re.sub(r"[^a-z0-9]+", "-", lhs.lower()).strip("-"), lhs, rewrite_text)
+        for lhs, rewrite_text in sorted(cases.items())
+    ]
+
+
+@pytest.mark.parametrize(("case_id", "query", "rewrite_text"), _rewrite_rule_cases())
+def test_rewrite_rule_does_not_bypass_filters(
+    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+):
+    """A rewrite rule's production must never let a filtered search return a passage outside the filter."""
+    principal = DocumentFactory.build(
+        id=f"principal-{case_id}", labels=[_principal_label()]
+    )
+    other = DocumentFactory.build(id=f"other-{case_id}", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_document(vespa_app, other)
+
+    # Matches the rule's rewrite, but lives outside the filter - must never
+    # come back once the filter is applied.
+    _feed_passage(
+        vespa_app,
+        _text_block(f"tb-outside-{case_id}", rewrite_text),
+        document_id=f"other-{case_id}",
+    )
+    # Inside the filter, but unrelated to the rule - the expected (empty) result.
+    _feed_passage(
+        vespa_app,
+        _text_block(f"tb-inside-{case_id}", "mangrove restoration protects coastlines"),
+        document_id=f"principal-{case_id}",
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    filters = Filter(
+        op="and",
+        filters=[
+            FieldFilter(
+                field="document_id", op="contains", value=f"principal-{case_id}"
+            )
+        ],
+    )
+
+    response = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters_json_string=filters.model_dump_json(),
+    )
+
+    assert response.results == [], (
+        f"query {query!r} with a document_id filter returned results outside "
+        f"the filter - the rewrite rule likely bypassed the filter (FUS-588): "
+        f"{[p.text_block_id for p in response.results]}"
+    )
 
 
 @pytest.mark.parametrize(
