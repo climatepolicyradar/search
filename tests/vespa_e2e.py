@@ -10,7 +10,6 @@ import pytest
 import requests as req
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
-from vespa.io import VespaQueryResponse
 
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
@@ -153,57 +152,3 @@ def rule_cases(*filenames: str) -> list[tuple[str, str, str]]:
         (re.sub(r"[^a-z0-9]+", "-", lhs.lower()).strip("-"), lhs, rewrite_text)
         for lhs, rewrite_text in sorted(cases.items())
     ]
-
-
-_RULEBASE_SOURCE = {None: "documents", "passages": "passages", "labels": "labels"}
-
-
-def _trace_messages(node: dict | list) -> Generator[str, None, None]:
-    if isinstance(node, dict):
-        message = node.get("message")
-        if isinstance(message, str):
-            yield message
-        for child in node.get("children", []):
-            yield from _trace_messages(child)
-    elif isinstance(node, list):
-        for child in node:
-            yield from _trace_messages(child)
-
-
-def get_rule_rewrite(vespa_app: Vespa, query: str, rulebase: str | None) -> str:
-    """
-    The query as the semantic rule engine leaves it, for `query` under `rulebase`.
-
-    Reads the `SemanticSearcher: Rewrote query: [...]` trace line, which is the
-    rule engine's own output before any later stage (stemming, lowercasing,
-    grouping) touches the query - so it reflects rule changes only, not noise
-    from those later stages. Falls back to the pre-rule-engine parsed query when
-    no rule matched, so "no rewrite happened" is still a stable, comparable value.
-    """
-    source = _RULEBASE_SOURCE[rulebase]
-    body: dict[str, object] = {
-        "yql": f"select * from sources {source} where userQuery()",
-        "query": query,
-        "hits": 0,
-        "timeout": "5s",
-        "model.language": "en",
-        "tracelevel": 4,
-    }
-    if rulebase is not None:
-        body["rules.rulebase"] = rulebase
-
-    response = vespa_app.query(body=body)
-    assert isinstance(response, VespaQueryResponse)
-    messages = list(_trace_messages(response.json.get("trace", {})))
-
-    for message in messages:
-        prefix = "SemanticSearcher: Rewrote query: ["
-        if message.startswith(prefix):
-            return message[len(prefix) : -1]
-
-    for message in messages:
-        prefix = "Query parsed to: "
-        if message.startswith(prefix):
-            return message[len(prefix) :]
-
-    raise AssertionError(f"no parsed-query trace line found for query={query!r}")
