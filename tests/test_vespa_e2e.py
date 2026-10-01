@@ -1353,6 +1353,42 @@ def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
     assert "doc-mix-phrase-only" not in ids, f"free term is required, got: {ids}"
     assert "doc-mix-inflected" not in ids, f"quoted part must stay literal, got: {ids}"
 
+
+def test_quoted_document_search_bolds_phrase_in_title_and_description(vespa_app: Vespa):
+    """
+    A quoted phrase is bolded in title and description, alongside the free text.
+
+    The phrase matches on `*_not_stemmed`, so it is bolded there (via the
+    `search-exact` summary) and merged with the free text bolded on the
+    stemmed fields.
+    """
+    doc = DocumentFactory.build(
+        id="doc-qbold",
+        title="A just transition framework",
+        description="Delivering a just transition for coal regions.",
+        labels=[],
+    )
+    _feed_document(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
+    results = engine.search(
+        query='"just transition"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+
+    assert [d.id for d in results] == ["doc-qbold"]
+    assert "<hi>just</hi> <hi>transition</hi>" in results[0].title
+    assert "<hi>just</hi> <hi>transition</hi>" in (results[0].description or "")
+
+    mixed = engine.search(
+        query='framework "just transition"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+    assert mixed[0].title == "A <hi>just</hi> <hi>transition</hi> <hi>framework</hi>"
+
+
 # endregion
 
 
