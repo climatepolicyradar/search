@@ -134,6 +134,8 @@ class VespaPassage(BaseModel):
 
     # Imported field (from document_ref) - inbound-only, never set on feed.
     principal_id: str | None = None
+    # Only in the `search-exact` summary; inbound-only, derived from `content`.
+    content_not_stemmed: str | None = None
     # Raw debug-summary shape for `text_tokens`; use `.tokens` for the flattened form.
     text_tokens: Any = None
 
