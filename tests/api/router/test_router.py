@@ -160,7 +160,7 @@ def test_get_labels_taxonomy_includes_global_stocktake_party_branch() -> None:
         "entity_type::Nationally Determined Contribution (NDC)",
         "entity_type::National Adaptation Plan (NAP)",
         "entity_type::Biennial Transparency Report (BTR)",
-        "entity_type::Long-term Low-emission Development Strategy (LT-LEDS)",
+        "entity_type::Long-term low-emission development strategy",
         "entity_type::Biennial Update Report (BUR)",
         "entity_type::Biennial Report (BR)",
         "entity_type::National Communication (NC)",

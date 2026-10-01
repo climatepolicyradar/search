@@ -385,8 +385,8 @@ biennial_transparency_report = Label(
     ],
 )
 long_term_low_emission_development_strategy = Label(
-    id="entity_type::Long-term Low-emission Development Strategy (LT-LEDS)",
-    value="Long-term Low-emission Development Strategy (LT-LEDS)",
+    id="entity_type::Long-term low-emission development strategy",
+    value="Long-term low-emission development strategy",
     type="entity_type",
     labels=[
         LabelRelationship(type="subconcept_of", value=unfccc),
