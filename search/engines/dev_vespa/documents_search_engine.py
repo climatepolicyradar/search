@@ -11,6 +11,7 @@ import requests
 from pydantic import TypeAdapter
 from vespa.querybuilder import Grouping as G
 
+from search.bolding import merge_bolded, render_bolded
 from search.data_in_models import Document, DocumentRelationship
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
 from search.engines.dev_vespa.labels import (
@@ -84,6 +85,20 @@ def _document_phrase_yql(count: int) -> str:
             f" or passages_text_not_stemmed contains ({{grammar.composite:'phrase'}}text({p})))"
         )
     return "".join(out)
+
+
+def _merge_exact_bolding(fields: dict[str, Any], field: str, default: str) -> str:
+    """
+    `field` with the quoted phrases bolded too.
+
+    The `search-exact` summary returns `<field>_not_stemmed`, bolded with the
+    phrases, next to `<field>`, bolded with the free text. Merge the two.
+    """
+    value = fields.get(field, default)
+    exact = fields.get(f"{field}_not_stemmed")
+    if exact is None:
+        return value
+    return render_bolded(merge_bolded(value, exact))
 
 
 class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]):
@@ -280,8 +295,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             documents.append(
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
-                    title=fields.get("title", MISSING_PLACEHOLDER),
-                    description=fields.get("description", MISSING_PLACEHOLDER),
+                    title=_merge_exact_bolding(fields, "title", MISSING_PLACEHOLDER),
+                    description=_merge_exact_bolding(
+                        fields, "description", MISSING_PLACEHOLDER
+                    ),
                     labels=labels,
                     attributes=source.get("attributes", {}),
                     documents=document_relationships,
