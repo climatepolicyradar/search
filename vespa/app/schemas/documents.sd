@@ -255,14 +255,16 @@ schema documents {
     }
 
     field title_not_stemmed type string {
-        indexing: input title | index
+        indexing: input title | index | summary
         index: enable-bm25
+        bolding: on
         stemming: none
         linguistics { profile: exact_analysis }
     }
     field description_not_stemmed type string {
-        indexing: input description | index
+        indexing: input description | index | summary
         index: enable-bm25
+        bolding: on
         stemming: none
         linguistics { profile: exact_analysis }
     }
@@ -466,6 +468,14 @@ schema documents {
         summary document_source {}
         summary attributes_published_date {}
         summary principal_id {}
+    }
+
+    # `search`, plus title and description bolded with the quoted phrases. Only
+    # requested when a bolded query has quotes: `title`/`description` bold the
+    # free text, these bold the phrases, and the engine merges the two.
+    document-summary search-exact inherits search {
+        summary title_not_stemmed {}
+        summary description_not_stemmed {}
     }
 
     # Search hits plus only the passages that matched the query, bolded. Used
