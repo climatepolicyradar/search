@@ -29,9 +29,7 @@ nz +> ?"net zero";
 # re-written to 'nz' or 'net' or 'zero' which was too vague.
 # "net zero" is still tokenised so that results include 'net-zero', for example.
 
-ndc +> ?"nationally determined contribution";
 nature based solution -> ?"nature based solution" ?"nbs";
-gga +> ?"global goal adaptation";
 evs, ev +> ?"electric car" ?"electric vehicle";
 
 adb +> ?"asian development bank";
