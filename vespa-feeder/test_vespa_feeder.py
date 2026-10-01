@@ -159,20 +159,145 @@ def displaced_sigterm_handler():
     feeder._vespa_feed_processes.clear()
 
 
+class _FakeS3CommonPrefixes:
+    """An S3 client whose `list_objects_v2` paginator yields `CommonPrefixes`."""
+
+    def __init__(self, pages: list[list[str]]) -> None:
+        self.pages = pages
+        self.paginate_kwargs: dict = {}
+
+    def get_paginator(self, operation_name: str) -> "_FakeS3CommonPrefixes":
+        assert operation_name == "list_objects_v2"
+        return self
+
+    def paginate(self, **kwargs) -> list[dict]:
+        self.paginate_kwargs = kwargs
+        return [
+            {
+                "CommonPrefixes": [
+                    {"Prefix": f"{kwargs['Prefix']}{name}"} for name in page
+                ]
+            }
+            for page in self.pages
+        ]
+
+
 @pytest.mark.parametrize(
-    "key",
+    ("pages", "expected"),
     [
-        pytest.param("search/vespa/labels_feed_materializer.jsonl", id="nested"),
-        pytest.param("one.jsonl", id="bucket-root"),
+        pytest.param(
+            [["20260922T190625Z/", "20260923T190625Z/"]],
+            "20260923T190625Z",
+            id="newest-of-two",
+        ),
+        pytest.param(
+            [["20260923T190625Z/", "20260922T190625Z/"]],
+            "20260923T190625Z",
+            id="listing-order-does-not-matter",
+        ),
+        pytest.param(
+            [["20260924T003000Z/", "20260924T010000Z/"]],
+            "20260924T010000Z",
+            id="same-day-later-time",
+        ),
+        pytest.param(
+            [["20260923T190625Z/", "latest/"]],
+            "20260923T190625Z",
+            id="ignores-latest",
+        ),
+        pytest.param(
+            [["20260923T190625Z/"], ["20260924T010000Z/"]],
+            "20260924T010000Z",
+            id="across-pages",
+        ),
     ],
 )
-def test_list_s3_keys_treats_a_jsonl_key_as_the_file_itself(monkeypatch, key):
-    def _no_s3(_):
-        raise AssertionError("a .jsonl key should not be listed as a prefix")
+def test_get_latest_s3_export_prefix_returns_the_newest_timestamped_prefix(
+    monkeypatch, pages, expected
+):
+    s3 = _FakeS3CommonPrefixes(pages)
+    monkeypatch.setattr(feeder.boto3, "client", lambda _: s3)
 
-    monkeypatch.setattr(feeder.boto3, "client", _no_s3)
+    assert (
+        feeder.get_latest_s3_export_prefix(bucket="bucket", prefix="a/prefix/")
+        == expected
+    )
+    # Delimiter is what keeps this to the prefix names rather than every
+    # object beneath them.
+    assert s3.paginate_kwargs == {
+        "Bucket": "bucket",
+        "Prefix": "a/prefix/",
+        "Delimiter": "/",
+    }
 
-    assert feeder.list_s3_keys(bucket="bucket", key=key) == [key]
+
+@pytest.mark.parametrize(
+    "pages",
+    [
+        pytest.param([], id="no-pages"),
+        pytest.param([[]], id="empty-page"),
+        pytest.param([["latest/"]], id="only-latest"),
+        pytest.param([["not-a-timestamp/"]], id="unrecognised-prefix"),
+        pytest.param([["20260923T190625/"]], id="timestamp-missing-the-z"),
+    ],
+)
+def test_get_latest_s3_export_prefix_raises_when_there_is_no_timestamped_prefix(
+    monkeypatch, pages
+):
+    monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3CommonPrefixes(pages))
+
+    with pytest.raises(FileNotFoundError, match="No timestamped snapshots"):
+        feeder.get_latest_s3_export_prefix(bucket="bucket", prefix="a/prefix/")
+
+
+class _FakeS3Contents:
+    """An S3 client whose `list_objects_v2` paginator yields `Contents`."""
+
+    def __init__(self, keys: list[str]) -> None:
+        self.keys = keys
+        self.paginate_kwargs: dict = {}
+
+    def get_paginator(self, operation_name: str) -> "_FakeS3Contents":
+        assert operation_name == "list_objects_v2"
+        return self
+
+    def paginate(self, **kwargs) -> list[dict]:
+        self.paginate_kwargs = kwargs
+        prefix = kwargs["Prefix"]
+        return [{"Contents": [{"Key": k} for k in self.keys if k.startswith(prefix)]}]
+
+
+@pytest.mark.parametrize(
+    ("keys", "prefix", "expected"),
+    [
+        pytest.param(
+            ["export/20260929T010000Z/b.jsonl", "export/20260929T010000Z/a.jsonl"],
+            "export/20260929T010000Z",
+            ["export/20260929T010000Z/a.jsonl", "export/20260929T010000Z/b.jsonl"],
+            id="prefix-is-a-directory-sorted",
+        ),
+        pytest.param(
+            [
+                "export/20260929T010000Z/a.jsonl",
+                "export/20260929T010000Z-retry/b.jsonl",
+            ],
+            "export/20260929T010000Z",
+            ["export/20260929T010000Z/a.jsonl"],
+            id="sibling-sharing-the-string-prefix-is-excluded",
+        ),
+    ],
+)
+def test_list_s3_keys(monkeypatch, keys, prefix, expected):
+    monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3Contents(keys))
+
+    assert feeder.list_s3_keys(bucket="bucket", prefix=prefix) == expected
+
+
+def test_list_s3_keys_raises_when_the_prefix_is_empty(monkeypatch):
+    monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3Contents([]))
+
+    with pytest.raises(FileNotFoundError, match="No objects found"):
+        feeder.list_s3_keys(bucket="bucket", prefix="nothing/here")
 
 
 @pytest.mark.parametrize(
@@ -715,8 +840,10 @@ class _FakeFeedBatch:
     def __init__(self, futures) -> None:
         self.futures = list(futures)
         self.submitted = 0
+        self.calls: list[dict] = []
 
     def submit(self, **kwargs):
+        self.calls.append(kwargs)
         future = self.futures[self.submitted]
         self.submitted += 1
         return future
@@ -748,7 +875,7 @@ def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
     routine. Collecting with `raise_on_failure=True` used to abandon the
     batches still in flight and skip the summary artifact entirely.
     """
-    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b", "c"])  # noqa: ARG005
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b", "c"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
@@ -762,7 +889,9 @@ def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
     )
 
     with pytest.raises(feeder.VespaFeederFailed) as exc_info:
-        feeder.vespa_feeder(s3_bucket="bucket", s3_key="latest", batch_size=1)
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+        )
 
     assert [str(crash) for crash in exc_info.value.crashes] == ["HeadObject: Not Found"]
     assert exc_info.value.failed_results == []
@@ -783,7 +912,7 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
     the `finally` exists for this: a run stopped part-way still reports what
     it fed.
     """
-    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
@@ -791,7 +920,9 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
     )
 
     with pytest.raises(KeyboardInterrupt):
-        feeder.vespa_feeder(s3_bucket="bucket", s3_key="latest", batch_size=1)
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+        )
 
     assert "| Files processed | 1 |" in summary_artifacts[0]["markdown"]
 
@@ -799,7 +930,7 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
 def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
     monkeypatch, summary_artifacts
 ):
-    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, key: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
@@ -811,8 +942,73 @@ def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
         ),
     )
 
-    feeder.vespa_feeder(s3_bucket="bucket", s3_key="latest", batch_size=1)
+    feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+    )
 
     markdown = summary_artifacts[0]["markdown"]
     assert "✅ **All files indexed successfully**" in markdown
     assert "| Batches that raised | 0 |" in markdown
+
+
+@pytest.mark.parametrize(
+    ("s3_prefix", "s3_export_prefix", "expected_resolved", "expected_fed"),
+    [
+        pytest.param(
+            "an/export/prefix/",
+            None,
+            True,
+            "an/export/prefix/20260929T010000Z/part.jsonl",
+            id="export-resolved",
+        ),
+        pytest.param(
+            "an/export/prefix/",
+            "20260922T190625Z",
+            False,
+            "an/export/prefix/20260922T190625Z/part.jsonl",
+            id="export-pinned",
+        ),
+        # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST - labels feeds one fixed
+        # JSONL from cpr-cache: the prefix is already the whole key, so there
+        # is no export to resolve and nothing to list.
+        pytest.param(
+            "search/vespa/labels_feed_materializer.jsonl",
+            None,
+            False,
+            "search/vespa/labels_feed_materializer.jsonl",
+            id="single-jsonl",
+        ),
+    ],
+)
+def test_vespa_feeder_resolves_the_export_prefix_only_when_there_is_one(
+    monkeypatch,
+    summary_artifacts,
+    s3_prefix,
+    s3_export_prefix,
+    expected_resolved,
+    expected_fed,
+):
+    resolved = []
+
+    def _resolve(bucket: str, prefix: str) -> str:  # noqa: ARG001
+        resolved.append(prefix)
+        return "20260929T010000Z"
+
+    monkeypatch.setattr(feeder, "get_latest_s3_export_prefix", _resolve)
+    monkeypatch.setattr(
+        feeder,
+        "list_s3_keys",
+        lambda bucket, prefix: [f"{prefix}/part.jsonl"],  # noqa: ARG005
+    )
+    feed_batch = _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl"))])
+    monkeypatch.setattr(feeder, "feed_batch", feed_batch)
+
+    feeder.vespa_feeder(
+        s3_bucket="bucket",
+        s3_prefix=s3_prefix,
+        s3_export_prefix=s3_export_prefix,
+        batch_size=1,
+    )
+
+    assert bool(resolved) is expected_resolved
+    assert [call["batched_s3_keys"] for call in feed_batch.calls] == [(expected_fed,)]
