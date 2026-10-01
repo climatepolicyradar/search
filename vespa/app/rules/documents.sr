@@ -155,7 +155,7 @@ ncar +> ?"national center atmospheric research";
 nccap +> ?"national climate change action plan";
 nccc +> ?"national climate change committee";
 nccp +> ?"national climate change policy";
-ndc +> ="nationally determined contribution";
+ndc +> ?"nationally determined contribution";
 ndp +> ?"national development plan";
 nds +> ?"national development strategy";
 neeap +> ?"national energy efficiency action plan";
