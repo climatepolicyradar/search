@@ -88,7 +88,7 @@ def test_document_search_never_requests_the_default_summary(
 
     with patch.object(
         documents_search_engine,
-        "_execute_vespa_query",
+        "execute_vespa_query",
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
@@ -128,7 +128,7 @@ def test_document_search_hits_carry_no_passages() -> None:
     }
 
     with patch.object(
-        documents_search_engine, "_execute_vespa_query", return_value=fake_response
+        documents_search_engine, "execute_vespa_query", return_value=fake_response
     ):
         result = engine.search(
             query="needle",
@@ -169,7 +169,7 @@ def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> N
         }
     }
 
-    with patch.object(passages_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(passages_search_engine, "execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
@@ -192,7 +192,7 @@ def test_passage_search_engine_applies_order_by_to_request_body() -> None:
     fake_response = {"root": {"children": []}}
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value=fake_response
+        passages_search_engine, "execute_vespa_query", return_value=fake_response
     ) as mock_execute:
         engine.search(
             query="some",
@@ -222,7 +222,7 @@ def test_passage_search_engine_order_by_wins_over_debug_mode_ranking_profile() -
     fake_response = {"root": {"children": []}}
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value=fake_response
+        passages_search_engine, "execute_vespa_query", return_value=fake_response
     ) as mock_execute:
         engine.search(
             query="some",
@@ -275,7 +275,7 @@ def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages
         }
     }
 
-    with patch.object(passages_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(passages_search_engine, "execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
@@ -344,7 +344,7 @@ def test_passage_search_engine_reads_labels_from_top_level_passages_schema() -> 
         }
     }
 
-    with patch.object(passages_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(passages_search_engine, "execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
@@ -499,7 +499,7 @@ def test_document_search_engine_sends_filtered_topics_as_a_query_tensor() -> Non
 
     with patch.object(
         documents_search_engine,
-        "_execute_vespa_query",
+        "execute_vespa_query",
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
@@ -528,7 +528,7 @@ def test_document_search_engine_omits_topic_inputs_without_topics_filter() -> No
 
     with patch.object(
         documents_search_engine,
-        "_execute_vespa_query",
+        "execute_vespa_query",
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
@@ -552,7 +552,7 @@ def test_document_search_engine_forwards_topic_weight() -> None:
 
     with patch.object(
         documents_search_engine,
-        "_execute_vespa_query",
+        "execute_vespa_query",
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
@@ -579,7 +579,7 @@ def test_document_search_engine_omits_topic_inputs_under_a_sort_override() -> No
 
     with patch.object(
         documents_search_engine,
-        "_execute_vespa_query",
+        "execute_vespa_query",
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
@@ -609,7 +609,7 @@ def test_passage_search_engine_sends_ranking_profile_without_debug() -> None:
     engine = DevVespaPassageSearchEngine(settings=settings)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query="some",
@@ -636,7 +636,7 @@ def test_passage_search_engine_requests_the_search_summary_unless_debugging(
     engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query="some",
@@ -657,7 +657,7 @@ def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor() -> None
     engine = DevVespaPassageSearchEngine(settings=settings)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query="some",
@@ -688,7 +688,7 @@ def test_passage_search_engine_sends_topic_inputs_without_a_text_query() -> None
     engine = DevVespaPassageSearchEngine(settings=settings)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query="",
@@ -711,7 +711,7 @@ def test_passage_search_engine_forwards_topic_weight() -> None:
     engine = DevVespaPassageSearchEngine(settings=settings, topic_weight=0.0)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query="some",
@@ -738,7 +738,7 @@ def test_passage_search_engine_omits_topic_inputs_under_a_sort_override() -> Non
     engine = DevVespaPassageSearchEngine(settings=settings)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query="some",
@@ -818,7 +818,7 @@ def test_passage_search_engine_quoted_query_builds_exact_phrase() -> None:
     engine = DevVespaPassageSearchEngine(settings=settings)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query='"net zero"',
@@ -844,7 +844,7 @@ def test_passage_search_engine_mixes_free_term_and_phrase() -> None:
     engine = DevVespaPassageSearchEngine(settings=settings)
 
     with patch.object(
-        passages_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query='brazil "net zero"',
@@ -868,7 +868,7 @@ def test_document_search_engine_quoted_query_builds_exact_phrase() -> None:
     engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
-        documents_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        documents_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query='"just transition"',
@@ -890,7 +890,7 @@ def _document_search_yql(engine: DevVespaDocumentSearchEngine) -> str:
     """Run a text search against a mocked Vespa and return the YQL it sent."""
     with patch.object(
         documents_search_engine,
-        "_execute_vespa_query",
+        "execute_vespa_query",
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
@@ -940,6 +940,113 @@ def test_document_search_engine_forwards_target_hits() -> None:
     assert engine.parameters["total_target_hits"] == 200
 
 
+# region Minimum Should Match
+
+
+def _document_search_request_body(
+    engine: DevVespaDocumentSearchEngine,
+    order_by: list[OrderBy] = [],  # noqa: B006 - read-only, never mutated
+) -> dict:
+    """Run a text search against a mocked Vespa and return the body it sent."""
+    with patch.object(
+        documents_search_engine,
+        "execute_vespa_query",
+        return_value={"root": {"children": []}},
+    ) as mock_execute:
+        engine.search(
+            query="parametric insurance act",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=order_by,
+        )
+
+    return mock_execute.call_args.kwargs["request_body"]
+
+
+def test_msm_defaults_to_off_and_changes_nothing() -> None:
+    """
+    MSM off must be byte-identical to the behaviour that predates it.
+
+    The default rank profile carries no `rank-score-drop-limit`, so sending
+    `query(msm)` to it would be a silent no-op rather than a filter.
+    """
+    engine = _document_engine()
+
+    body = _document_search_request_body(engine)
+
+    assert engine.msm == 0.0
+    assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
+    assert "input.query(msm)" not in body
+
+
+def test_msm_forwards_the_value_on_the_default_profile() -> None:
+    """`bm25-title-geo` declares query(msm), so no profile switch is needed."""
+    engine = _document_engine(msm=0.6)
+
+    body = _document_search_request_body(engine)
+
+    assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
+    assert body["input.query(msm)"] == 0.6
+    assert engine.parameters["msm"] == 0.6
+
+
+def test_msm_survives_a_sort() -> None:
+    """
+    A sorted listing must not return documents a relevance search would drop.
+
+    `unranked` declares query(msm) and carries the same guard, so a sort filters
+    without needing a profile of its own.
+    """
+    engine = _document_engine(msm=0.6)
+
+    body = _document_search_request_body(
+        engine, order_by=[OrderBy(field="attributes.published_date", direction="desc")]
+    )
+
+    assert body["ranking.profile"] == "unranked"
+    assert body["input.query(msm)"] == 0.6
+    assert body["ranking.sorting"]
+
+
+def test_msm_reaches_aggregations_and_facets() -> None:
+    """
+    Facet counts and results have to describe the same document set.
+
+    These run as separate Vespa queries; a facet counted over a wider set than
+    the results is the inconsistency FUS-475 was about.
+    """
+    engine = _document_engine(msm=0.6)
+
+    with patch.object(
+        documents_search_engine,
+        "execute_vespa_query",
+        return_value={"root": {"children": []}},
+    ) as mock_execute:
+        engine.aggregations(query="parametric insurance act")
+        engine.labels_type_facets(query="parametric insurance act")
+
+    for call in mock_execute.call_args_list:
+        body = call.kwargs["request_body"]
+        assert body["input.query(msm)"] == 0.6
+        assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
+
+
+@pytest.mark.parametrize("msm", [-0.1, 1.1, 2.0])
+def test_msm_out_of_range_raises(msm: float) -> None:
+    """An out-of-range msm is a caller error, not something to clamp silently."""
+    with pytest.raises(ValueError, match="between 0.0 and 1.0"):
+        _document_engine(msm=msm)
+
+
+def test_an_explicit_rank_profile_is_respected() -> None:
+    """Relevance sweeps pin a profile; nothing may override that."""
+    engine = _document_engine(ranking_profile="bm25")
+
+    assert engine.ranking_profile == "bm25"
+
+
+# endregion Minimum Should Match
+
+
 def _label_engine(**kwargs) -> DevVespaLabelSearchEngine:
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
@@ -964,7 +1071,7 @@ def test_label_search_engine_computes_offset_from_page_token(
     engine = _label_engine()
 
     with patch.object(
-        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query=None,
@@ -990,7 +1097,7 @@ def test_label_search_engine_applies_order_by_to_request_body() -> None:
     engine = _label_engine()
 
     with patch.object(
-        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query="some",
@@ -1007,7 +1114,7 @@ def test_label_search_engine_filters_by_label_type() -> None:
     engine = _label_engine()
 
     with patch.object(
-        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query=None,
@@ -1025,7 +1132,7 @@ def test_label_search_engine_omits_type_clause_without_label_type() -> None:
     engine = _label_engine()
 
     with patch.object(
-        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query=None,
@@ -1048,7 +1155,7 @@ def test_label_search_engine_applies_filters_json_string_to_yql() -> None:
     )
 
     with patch.object(
-        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query=None,
@@ -1066,7 +1173,7 @@ def test_label_search_engine_strips_quotes_from_query() -> None:
     engine = _label_engine()
 
     with patch.object(
-        labels_search_engine, "_execute_vespa_query", return_value={"root": {"children": []}}
+        labels_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
         engine.search(
             query='"Romania"',
@@ -1092,7 +1199,7 @@ def test_label_search_engine_parses_valid_label_source() -> None:
         }
     }
 
-    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1114,7 +1221,7 @@ def test_label_search_engine_skips_hits_with_malformed_label_source() -> None:
         }
     }
 
-    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1135,7 +1242,7 @@ def test_label_search_engine_skips_hits_with_empty_label_source() -> None:
         }
     }
 
-    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1165,7 +1272,7 @@ def test_label_search_engine_populates_debug_info_when_debugging() -> None:
         }
     }
 
-    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "execute_vespa_query", return_value=fake_response):
         engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1191,7 +1298,7 @@ def test_label_search_engine_omits_debug_info_by_default() -> None:
         }
     }
 
-    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "execute_vespa_query", return_value=fake_response):
         engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
@@ -1211,7 +1318,7 @@ def test_label_search_engine_reads_total_size_from_response() -> None:
         }
     }
 
-    with patch.object(labels_search_engine, "_execute_vespa_query", return_value=fake_response):
+    with patch.object(labels_search_engine, "execute_vespa_query", return_value=fake_response):
         result = engine.search(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),

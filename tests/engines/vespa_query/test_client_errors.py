@@ -3,7 +3,7 @@ Tests that a failed Vespa request is raised rather than turned into no results.
 
 "Vespa is broken" and "nothing matched your query" are different answers.
 Collapsing the first into the second leaves clients unable to tell them apart,
-so every failure mode of :func:`_execute_vespa_query` must raise
+so every failure mode of :func:`execute_vespa_query` must raise
 :class:`VespaError`, and no caller may catch it to return an empty result.
 """
 
@@ -52,7 +52,7 @@ def _response(
 
 
 def _execute(post_fn) -> dict:
-    return dev_vespa._execute_vespa_query(
+    return dev_vespa.execute_vespa_query(
         endpoint="http://localhost:8080/search",
         token="test-read-token",  # nosec B106
         request_body={"yql": "select * from sources documents where true"},
@@ -61,7 +61,7 @@ def _execute(post_fn) -> dict:
     )
 
 
-# region _execute_vespa_query failure modes
+# region execute_vespa_query failure modes
 
 
 def test_execute_raises_when_the_request_never_reaches_vespa() -> None:
@@ -125,7 +125,7 @@ def test_execute_returns_the_decoded_body_on_success() -> None:
     assert _execute(post_fn) == body
 
 
-# endregion _execute_vespa_query failure modes
+# endregion execute_vespa_query failure modes
 
 # region Callers must not swallow VespaError
 
@@ -136,22 +136,22 @@ def failing_query():
     with (
         patch.object(
             dev_vespa,
-            "_execute_vespa_query",
+            "execute_vespa_query",
             side_effect=VespaError("Vespa is down"),
         ) as mock_execute,
         patch.object(
             documents_search_engine,
-            "_execute_vespa_query",
+            "execute_vespa_query",
             side_effect=VespaError("Vespa is down"),
         ),
         patch.object(
             passages_search_engine,
-            "_execute_vespa_query",
+            "execute_vespa_query",
             side_effect=VespaError("Vespa is down"),
         ),
         patch.object(
             labels_search_engine,
-            "_execute_vespa_query",
+            "execute_vespa_query",
             side_effect=VespaError("Vespa is down"),
         ),
     ):
@@ -226,7 +226,7 @@ def _patch_http(response: MagicMock):
     """
     Intercept the real ``requests.post`` at the session layer.
 
-    ``_execute_vespa_query``'s ``post_fn`` default is bound to ``requests.post``
+    ``execute_vespa_query``'s ``post_fn`` default is bound to ``requests.post``
     at import time, so replacing the module attribute has no effect. Patching
     ``Session.request`` leaves the real ``requests.post`` in the path.
     """
@@ -271,7 +271,11 @@ def test_a_degraded_response_is_warned_about(caplog) -> None:
     """A partial answer is usable, so it warns - it does not raise."""
     body = {
         "root": {
-            "coverage": {"coverage": 42, "documents": 1000, "degraded": {"timeout": True}},
+            "coverage": {
+                "coverage": 42,
+                "documents": 1000,
+                "degraded": {"timeout": True},
+            },
             "children": [],
         }
     }
@@ -288,7 +292,11 @@ def test_a_full_coverage_response_is_not_warned_about(caplog) -> None:
     """The counterpart: a complete answer is silent."""
     body = {
         "root": {
-            "coverage": {"coverage": 100, "documents": 1000, "degraded": {"timeout": False}},
+            "coverage": {
+                "coverage": 100,
+                "documents": 1000,
+                "degraded": {"timeout": False},
+            },
             "children": [],
         }
     }

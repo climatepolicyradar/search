@@ -24,7 +24,7 @@ The general rule and its reasoning are in [../docs/errors.md](../docs/errors.md)
 
 ## How it is wired up
 
-`VespaError` (`search/engines/__init__.py`) is raised by `_execute_vespa_query`
+`VespaError` (`search/engines/__init__.py`) is raised by `execute_vespa_query`
 on transport failure, a non-2xx status, or an unparsable body.
 `api.main.handle_vespa_error` is the single boundary that turns it into a `503`
 with a fixed `{"detail": ...}` body, so routes let it propagate rather than

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from search.engines.dev_vespa.documents_search_engine import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
+    _DEFAULT_MSM,
     DevVespaDocumentSearchEngine,
     DevVespaPrincipalDocumentSearchEngine,
     documents_filter_field_to_vespa_field_map,
@@ -39,7 +40,7 @@ from search.engines.dev_vespa.passages_search_engine import (
 from search.engines.vespa_query.client import (
     HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
     Settings,
-    _execute_vespa_query,
+    execute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
     TOPIC_FILTER_FIELD,
@@ -81,9 +82,9 @@ __all__ = [
     "Settings",
     "TOPIC_FILTER_FIELD",
     "_DEFAULT_DOCUMENT_RANK_PROFILE",
+    "_DEFAULT_MSM",
     "_build_filter_query",
     "_build_filter_yql",
-    "_execute_vespa_query",
     "_facet_filter_label_type",
     "_get_label_types_from_filters",
     "_prune_filter",
@@ -92,6 +93,7 @@ __all__ = [
     "_topic_ids_from_filters",
     "documents_filter_field_to_vespa_field_map",
     "documents_filter_struct_field_to_vespa_field_map",
+    "execute_vespa_query",
     "labels_filter_field_to_vespa_field_map",
     "labels_filter_struct_field_to_vespa_field_map",
     "normalise_topic_id",
