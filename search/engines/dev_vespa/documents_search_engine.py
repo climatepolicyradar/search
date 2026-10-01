@@ -257,8 +257,12 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 self.passages_breadth_weight
             )
 
+        # `search-exact` adds the `*_not_stemmed` fields, which is where quoted
+        # phrases match and so the only place they get bolded.
         if self.debug:
             request_body["presentation.summary"] = "debug-summary"
+        elif self.bolding and phrases:
+            request_body["presentation.summary"] = "search-exact"
         else:
             request_body["presentation.summary"] = "search"
         if not self.bolding:
