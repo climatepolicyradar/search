@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from search.engines.dev_vespa.documents_search_engine import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
+    _DEFAULT_MSM,
     DevVespaDocumentSearchEngine,
     DevVespaPrincipalDocumentSearchEngine,
     documents_filter_field_to_vespa_field_map,
@@ -81,6 +82,7 @@ __all__ = [
     "Settings",
     "TOPIC_FILTER_FIELD",
     "_DEFAULT_DOCUMENT_RANK_PROFILE",
+    "_DEFAULT_MSM",
     "_build_filter_query",
     "_build_filter_yql",
     "_facet_filter_label_type",
