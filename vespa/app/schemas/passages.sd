@@ -152,8 +152,9 @@ schema passages {
     import field principal_document_ref.title_attribute as principal_title {}
 
     field content_not_stemmed type string {
-        indexing: input content | index
+        indexing: input content | index | summary
         index: enable-bm25
+        bolding: on
         stemming: none
         linguistics {
             profile: exact_analysis
@@ -266,6 +267,14 @@ schema passages {
         summary heading_id {}
         summary labels {}
         summary heading_text {}
+    }
+
+    # `search`, plus `content_not_stemmed` bolded with the quoted phrases. Only
+    # requested when a bolded query has quotes: `content` bolds the free text,
+    # this bolds the phrases, and `Passage.from_vespa_passage` merges the two.
+    document-summary search-exact inherits search {
+        summary content_not_stemmed {}
+        from-disk
     }
 
     document-summary debug-summary inherits search {
