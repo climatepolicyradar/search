@@ -12,10 +12,7 @@
 # adjacent) and is analysed at query time by `passage_analysis` (services.xml),
 # which lowercases, strips punctuation, removes stopwords (en/stopwords.txt) and
 # stems, hence the RHS is written without stopwords ("...on...", "...and...").
-tcfd +> ?"task force climate related financial disclosures";
-fca +> ?"financial conduct authority";
-ira +> ?"inflation reduction act";
-sfdr +> ?"sustainable finance disclosure regulation";
+
 erp +> ?"emissions reduction plan";
 necp +> ?"national energy climate plan";
 phaseout +> ?"phase out";
@@ -32,6 +29,11 @@ nz +> ?"net zero";
 # re-written to 'nz' or 'net' or 'zero' which was too vague.
 # "net zero" is still tokenised so that results include 'net-zero', for example.
 
+ndc +> ?"nationally determined contribution";
+nature based solution -> ?"nature based solution" ?"nbs";
+gga +> ?"global goal adaptation";
+evs, ev +> ?"electric car" ?"electric vehicle";
+
 adb +> ?"asian development bank";
 afolu +> ?"agriculture forestry other land use";
 amoc +> ?"atlantic meridional overturning circulation";
@@ -39,7 +41,7 @@ amrut +> ?"atal mission rejuvenation urban transformation";
 aws +> ?"automatic weather stations";
 bbnj +> ?"biodiversity beyond national jurisdiction";
 bccsap +> ?"bangladesh climate change strategy action plan";
-beccs +> ?"bioenergy carbon capture storage";
+beccs +> ?"bioenergy carbon capture and storage";
 bil +> ?"bipartisan infrastructure law";
 btr +> ?"biennial transparency report";
 bur +> ?"biennial update report";
@@ -93,6 +95,7 @@ ets +> ?"emissions trading system";
 ews +> ?"early warning systems";
 fao +> ?"food agriculture organization";
 fata +> ?"federally administered tribal areas";
+fca +> ?"financial conduct authority";
 fdi +> ?"foreign direct investment";
 fema +> ?"federal emergency management agency";
 ferc +> ?"federal energy regulatory commission";
@@ -131,6 +134,7 @@ indc +> ?"intended nationally determined contribution";
 ioc +> ?"indian ocean commission";
 ipbes +> ?"intergovernmental science policy platform biodiversity ecosystem services";
 ipcc +> ?"intergovernmental panel climate change";
+ira +> ?"inflation reduction act";
 iso +> ?"international standards organization";
 itpgrfa +> ?"international treaty plant genetic resources food agriculture";
 iucn +> ?"international union conservation nature";
@@ -193,11 +197,13 @@ sbti +> ?"science based targets initiative";
 scaqmd +> ?"south coast air quality management district";
 sdg +> ?"sustainable development goal";
 serac +> ?"social economic rights action center";
+sfdr +> ?"sustainable finance disclosure regulation";
 sids +> ?"small island developing states";
 slr +> ?"sea level rise";
 sme +> ?"small medium sized enterprises";
 sprep +> ?"secretariat pacific regional environment programme";
 sri +> ?"system rice intensification";
+tcfd +> ?"task force climate related financial disclosures";
 tec +> ?"technology executive committee";
 tna +> ?"technology needs assessment";
 tossd +> ?"total official support sustainable development";
@@ -222,3 +228,4 @@ wmo +> ?"world meteorological organization";
 wri +> ?"world resources institute";
 wto +> ?"world trade organization";
 wwf +> ?"world wildlife fund";
+
