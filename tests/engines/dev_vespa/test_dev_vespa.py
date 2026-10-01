@@ -950,7 +950,7 @@ def _document_search_request_body(
     """Run a text search against a mocked Vespa and return the body it sent."""
     with patch.object(
         documents_search_engine,
-        "_execute_vespa_query",
+        "execute_vespa_query",
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
@@ -1018,7 +1018,7 @@ def test_msm_reaches_aggregations_and_facets() -> None:
 
     with patch.object(
         documents_search_engine,
-        "_execute_vespa_query",
+        "execute_vespa_query",
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.aggregations(query="parametric insurance act")
