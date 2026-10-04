@@ -1445,3 +1445,207 @@ def test_search_summaries_never_fetch_passage_fields(vespa_app: Vespa):
 
 
 # endregion Search summaries
+
+
+# region Minimum Should Match (MSM)
+#
+# The behaviour under test: typing MORE words must not return MORE documents.
+# `userInput()` builds a weakAnd, which is an OR, so every term is optional and
+# a longer query matches more. `msm` is the fraction of the query's terms a
+# document has to cover to survive at all.
+
+
+def _msm_corpus(app: Vespa) -> dict[str, str]:
+    """
+    Four documents that cover the query "parametric insurance" differently.
+
+    :return: name -> document id, for asserting on which survive.
+    """
+    # Both terms in the title -> coverage 1.0 via fieldMatch(title_geo).
+    title_doc = DocumentFactory.build(
+        title="Parametric Insurance Act 2019",
+        description="An act",
+        labels=[],
+    )
+    # One term in one passage, the other in a different passage, neither in the
+    # title -> best single passage covers 0.5. This is the document plain AND
+    # would keep and MSM must drop: the two words are unrelated to each other.
+    split_doc = DocumentFactory.build(
+        title="National Climate Strategy",
+        description="A strategy",
+        labels=[],
+    )
+    # Both terms in one passage -> coverage 1.0 without the title helping.
+    passage_doc = DocumentFactory.build(
+        title="Disaster Risk Finance Report",
+        description="A report",
+        labels=[],
+    )
+    # Both terms in the description only, with no passages at all. `description`
+    # is in the `default` fieldset, so this document matches - but it scored 0
+    # coverage until description joined coverage(), and was dropped at any msm.
+    description_doc = DocumentFactory.build(
+        title="Sixth National Communication",
+        description="Establishes parametric insurance for smallholder farmers.",
+        labels=[],
+    )
+
+    for document in (title_doc, split_doc, passage_doc, description_doc):
+        _feed_document(app, document)
+
+    _feed_passages(
+        app,
+        split_doc.id,
+        [
+            "A parametric approach to modelling rainfall.",
+            "Nothing to see here.",
+            "Insurance markets in the region are thin.",
+        ],
+    )
+    _feed_passages(
+        app,
+        passage_doc.id,
+        [
+            "Nothing to see here.",
+            "Parametric insurance schemes pay out on a trigger.",
+        ],
+    )
+
+    return {
+        "title": title_doc.id,
+        "split": split_doc.id,
+        "passage": passage_doc.id,
+        "description": description_doc.id,
+    }
+
+
+def _msm_search(msm: float):
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=msm)
+    return engine.search(
+        query="parametric insurance",
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+
+
+def _msm_hit_ids(msm: float) -> set[str]:
+    return {d.id for d in _msm_search(msm).results}
+
+
+def test_msm_off_returns_every_partial_match(vespa_app: Vespa):
+    """`msm=0` is today's behaviour: one term out of two is enough."""
+    ids = _msm_corpus(vespa_app)
+
+    hits = _msm_hit_ids(0.0)
+
+    assert set(ids.values()) <= hits
+
+
+def test_msm_drops_documents_whose_terms_never_co_occur(vespa_app: Vespa):
+    """
+    The point of the feature.
+
+    `split` contains both query terms, so a document-level AND would keep it -
+    but they are in different passages and have nothing to do with each other.
+    Coverage is measured per passage, so it scores 0.5 and is dropped at 0.6.
+    """
+    ids = _msm_corpus(vespa_app)
+
+    hits = _msm_hit_ids(0.6)
+
+    assert ids["title"] in hits, "both terms in the title must survive"
+    assert ids["passage"] in hits, "both terms in one passage must survive"
+    assert ids["split"] not in hits, (
+        "terms split across unrelated passages must not survive"
+    )
+
+
+def test_msm_reduces_the_reported_total(vespa_app: Vespa):
+    """
+    Dropped documents must leave `total_size`, not just the current page.
+
+    If they only left the page, MSM would reorder results without fixing the
+    headline count the ticket is about.
+    """
+    _msm_corpus(vespa_app)
+
+    total_off = _msm_search(0.0).total_size
+    total_on = _msm_search(0.6).total_size
+
+    assert total_off is not None and total_on is not None
+    assert total_on < total_off, (
+        f"total_size did not fall when MSM was applied ({total_off} -> {total_on})"
+    )
+
+
+def test_msm_full_requires_every_term(vespa_app: Vespa):
+    """`msm=1.0` keeps only documents covering the whole query in one place."""
+    ids = _msm_corpus(vespa_app)
+
+    hits = _msm_hit_ids(1.0)
+
+    assert ids["title"] in hits
+    assert ids["passage"] in hits
+    assert ids["split"] not in hits
+
+
+def test_msm_counts_the_description(vespa_app: Vespa):
+    """
+    A document matching only in its description must survive.
+
+    `description` is searchable, so it brings documents into the results, but it
+    was left out of `coverage()` - meaning such a document scored 0 and was
+    dropped at any msm above 0. Raised in review on FUS-421.
+    """
+    ids = _msm_corpus(vespa_app)
+
+    hits = _msm_hit_ids(1.0)
+
+    assert ids["description"] in hits, (
+        "a document whose description contains the whole query must survive msm=1.0"
+    )
+
+
+def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa):
+    """
+    With no query text there is nothing for MSM to be a fraction of.
+
+    `coverage()` is 0 for every document when no terms were searched, so any
+    threshold above 0 would empty the corpus. Browsing by filter alone must not
+    be affected by a setting about query terms.
+    """
+    ids = _msm_corpus(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=1.0)
+    response = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+
+    assert {d.id for d in response.results} >= set(ids.values())
+
+
+def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
+    """
+    A date sort switches to `unranked`, which would otherwise skip the guard.
+
+    Sorting must not quietly widen the result set for the same query.
+    """
+    ids = _msm_corpus(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.6)
+    response = engine.search(
+        query="parametric insurance",
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="attributes.published_date", direction="desc")],
+    )
+    hits = {d.id for d in response.results}
+
+    assert ids["split"] not in hits, (
+        "sorting by date returned a document the same query, sorted by relevance, drops"
+    )
+
+
+# endregion Minimum Should Match (MSM)
+

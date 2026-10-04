@@ -16,6 +16,7 @@ jobs:
       run-test: ${{ steps.filter.outputs.run-test }}
       run-test-vespa-feeder: ${{ steps.filter.outputs.run-test-vespa-feeder }}
       run-check-scripts-structure: ${{ steps.filter.outputs.run-check-scripts-structure }}
+      run-check-vespa-rules-stopwords: ${{ steps.filter.outputs.run-check-vespa-rules-stopwords }}
       run-search-pulumi-preview: ${{ steps.filter.outputs.run-search-pulumi-preview }}
       run-k6-pulumi-preview: ${{ steps.filter.outputs.run-k6-pulumi-preview }}
     steps:
@@ -27,6 +28,7 @@ jobs:
             run-test:
               - 'api/**'
               - 'relevance_tests/**'
+              - 'scripts/vespa_rules/**'
               - 'search/**'
               - 'tests/**'
               - 'vespa/**'
@@ -36,6 +38,10 @@ jobs:
               - 'vespa-feeder/**'
             run-check-scripts-structure:
               - 'scripts/**'
+            run-check-vespa-rules-stopwords:
+              - 'vespa/app/rules/*.sr'
+              - 'vespa/app/lucene-linguistics/en/stopwords.txt'
+              - 'scripts/vespa_rules/**'
             run-search-pulumi-preview:
               - 'infra/**'
             run-k6-pulumi-preview:
@@ -102,6 +108,24 @@ jobs:
           else
             echo "✅ No .py files found in scripts/ root directory"
           fi
+
+  check-vespa-rules-stopwords:
+    runs-on: ubuntu-latest
+    name: Check RHS rule entries exclude stopwords
+    needs: [changes]
+    if: needs.changes.outputs.run-check-vespa-rules-stopwords == 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - uses: extractions/setup-just@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: pyproject.toml
+      - run: just install
+      - name: Check .sr RHS entries don't spell out stopwords
+        run: just check-vespa-rules-stopwords
 
   test:
     runs-on: ubuntu-latest
