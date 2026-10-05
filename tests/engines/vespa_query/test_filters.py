@@ -256,28 +256,54 @@ def _labels_yql(filter_group: Filter) -> str:
     )
 
 
-def test_labels_field_filter_expands_to_labels_and_concepts() -> None:
-    """Ensure mapped label field generates a two-field OR expression."""
-    condition = FieldFilter(
-        field="labels.value.value",
-        op="contains",
-        value="Romania",
-    )
-    assert _documents_condition_yql(condition) == (
-        '(labels.value contains "Romania" or concepts.value contains "Romania")'
-    )
-
-
-def test_labels_not_contains_wraps_mapped_or_expression() -> None:
-    """Ensure not_contains negates the expanded OR expression."""
-    condition = FieldFilter(
-        field="labels.value.value",
-        op="not_contains",
-        value="Romania",
-    )
-    assert _documents_condition_yql(condition) == (
-        '!(labels.value contains "Romania" or concepts.value contains "Romania")'
-    )
+@pytest.mark.parametrize(
+    ("field", "op", "value", "expected"),
+    [
+        (
+            "labels.value.id",
+            "contains",
+            "geography::USA",
+            '(labels.id contains "geography::USA" '
+            'or concepts.id contains "geography::USA")',
+        ),
+        (
+            "labels.value.value",
+            "contains",
+            "Romania",
+            '(labels.value contains "Romania" or concepts.value contains "Romania")',
+        ),
+        (
+            "labels.value.value",
+            "not_contains",
+            "Romania",
+            '!(labels.value contains "Romania" or concepts.value contains "Romania")',
+        ),
+        (
+            "labels.value.type",
+            "contains",
+            "geography",
+            '(labels.type contains "geography" or concepts.type contains "geography")',
+        ),
+        (
+            "labels.value.type",
+            "not_contains",
+            "geography",
+            '!(labels.type contains "geography" or concepts.type contains "geography")',
+        ),
+        (
+            "labels.type",
+            "contains",
+            "subconcept_of",
+            'labels.relationship contains "subconcept_of"',
+        ),
+    ],
+)
+def test_documents_label_fields_expand_to_mapped_vespa_fields(
+    field: str, op: str, value: str, expected: str
+) -> None:
+    """Each documents field-map entry expands to the Vespa fields it names."""
+    condition = FieldFilter(field=field, op=op, value=value)  # type: ignore[arg-type]
+    assert _documents_condition_yql(condition) == expected
 
 
 def test_labels_struct_map_groups_and_conditions_into_same_element() -> None:

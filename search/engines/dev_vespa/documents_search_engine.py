@@ -50,6 +50,7 @@ logger = get_logger(__name__)
 documents_filter_field_to_vespa_field_map = {
     "labels.value.id": ["labels.id", "concepts.id"],
     "labels.value.value": ["labels.value", "concepts.value"],
+    "labels.value.type": ["labels.type", "concepts.type"],
     "labels.type": ["labels.relationship"],
 }
 documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
