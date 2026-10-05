@@ -6,6 +6,7 @@ import math
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 
+from api.download_templates import FieldFunc
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
@@ -123,9 +124,7 @@ def fetch_documents_for_download(
         return response.results
 
     with ThreadPoolExecutor(max_workers=page_count) as pool:
-        pages = list(
-            pool.map(fetch_page, range(1, page_count + 1), page_sizes)
-        )
+        pages = list(pool.map(fetch_page, range(1, page_count + 1), page_sizes))
 
     results: list[Document] = []
     for page, page_size in zip(pages, page_sizes):
@@ -151,4 +150,26 @@ def generate_csv(documents: list[Document]) -> Iterator[str]:
         buffer.seek(0)
         buffer.truncate(0)
         writer.writerow(row)
+        yield buffer.getvalue()
+
+
+def generate_templated_csv(
+    documents: list[Document], template: dict[str, FieldFunc]
+) -> Iterator[str]:
+    """
+    Yield CSV text chunks for ``documents`` in ``template``'s fixed shape.
+
+    Unlike ``generate_csv``, the header is the template's own columns rather
+    than whatever attributes and label types this particular result set
+    happens to carry, so the same request always returns the same columns in
+    the same order - which is what makes the output safe to parse downstream.
+    """
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(template.keys())
+    yield buffer.getvalue()
+    for document in documents:
+        buffer.seek(0)
+        buffer.truncate(0)
+        writer.writerow([render(document) for render in template.values()])
         yield buffer.getvalue()

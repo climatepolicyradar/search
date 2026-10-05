@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic_settings import SettingsConfigDict
 
-from api.download import DEFAULT_MAX_RESULTS, fetch_documents_for_download, generate_csv
+from api.download import (
+    DEFAULT_MAX_RESULTS,
+    fetch_documents_for_download,
+    generate_csv,
+    generate_templated_csv,
+)
+from api.download_templates import CSV_TEMPLATES, TemplateName
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.utils import (
@@ -103,6 +109,14 @@ def download_documents(
             f"Defaults to {DEFAULT_MAX_RESULTS}."
         ),
     ),
+    template: TemplateName | None = Query(
+        None,
+        description=(
+            "Return a product's fixed column set instead of the default wide "
+            "format, whose columns vary with whatever the results happen to "
+            f"carry. One of: {', '.join(CSV_TEMPLATES)}."
+        ),
+    ),
 ):
     """
     Stream the current search's results as a CSV, one row per document.
@@ -113,10 +127,11 @@ def download_documents(
     """
     logger.info(
         "Downloading document search as CSV "
-        "(query=%r, max_results=%s, filters_present=%s)",
+        "(query=%r, max_results=%s, filters_present=%s, template=%r)",
         query,
         max_results,
         bool(filters_json_string),
+        template,
     )
 
     normalised_filters = normalise_filters(filters_json_string)
@@ -143,8 +158,13 @@ def download_documents(
         len(documents),
     )
 
+    rows = (
+        generate_csv(documents)
+        if template is None
+        else generate_templated_csv(documents, CSV_TEMPLATES[template])
+    )
     return StreamingResponse(
-        generate_csv(documents),
+        rows,
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=search-results.csv"},
     )

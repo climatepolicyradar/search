@@ -2,7 +2,9 @@
 
 import csv
 import io
+from collections.abc import Iterator
 from datetime import datetime
+from typing import NamedTuple, get_args
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +15,14 @@ from api.download import (
     build_csv_rows,
     fetch_documents_for_download,
     generate_csv,
+    generate_templated_csv,
+)
+from api.download_templates import (
+    CSV_TEMPLATES,
+    TemplateName,
+    attributes_field,
+    field,
+    labels_field,
 )
 from search.data_in_models import Document, Label, LabelRelationship
 from search.engines import ListResponse, Pagination, VespaError
@@ -152,6 +162,90 @@ def test_generate_csv_with_no_documents_produces_just_a_header() -> None:
     reader = csv.DictReader(io.StringIO(csv_text))
     assert list(reader) == []
     assert reader.fieldnames == ["document_id", "title", "description"]
+
+
+class _ParsedCsv(NamedTuple):
+    fieldnames: list[str]
+    rows: list[dict[str, str]]
+
+
+def _parse(chunks: Iterator[str]) -> _ParsedCsv:
+    """Parse generated CSV chunks back into its header and rows."""
+    reader = csv.DictReader(io.StringIO("".join(chunks)))
+    rows = list(reader)
+    return _ParsedCsv(fieldnames=list(reader.fieldnames or []), rows=rows)
+
+
+def test_generate_templated_csv_applies_the_template_to_each_document() -> None:
+    """Columns are the template's keys, cells its funcs, both in its order."""
+    template = {
+        "identifier": field("id"),
+        "name": field("title"),
+        "categories": labels_field("category"),
+    }
+    docs = [
+        Document(
+            id="doc-1",
+            title="First",
+            labels=[_label("has_category", "category", "Law")],
+        ),
+        Document(id="doc-2", title="Second"),
+    ]
+
+    csv_text = "".join(generate_templated_csv(docs, template))
+
+    reader = csv.DictReader(io.StringIO(csv_text))
+    assert reader.fieldnames == ["identifier", "name", "categories"]
+    assert list(reader) == [
+        {"identifier": "doc-1", "name": "First", "categories": "Law"},
+        {"identifier": "doc-2", "name": "Second", "categories": ""},
+    ]
+
+
+def test_templated_csv_columns_do_not_vary_with_the_documents() -> None:
+    """
+    The point of a template: one fixed shape, whatever the results hold.
+
+    `build_csv_rows` derives its columns from the attributes and label types
+    the result set happens to carry, so two searches can return two different
+    shapes. A template fixes them, so a downstream parser can rely on the
+    header - an absent value is an empty cell, not a missing column, and an
+    attribute nobody asked for stays out entirely.
+    """
+    template = {"identifier": field("id"), "status": attributes_field("status")}
+    sparse = Document(id="doc-1", title="First")
+    rich = Document(
+        id="doc-2",
+        title="Second",
+        attributes={"status": "published", "unasked_for": "extra"},
+        labels=[_label("has_category", "category", "Law")],
+    )
+
+    sparse_rows = _parse(generate_templated_csv([sparse], template))
+    rich_rows = _parse(generate_templated_csv([rich], template))
+
+    assert sparse_rows.fieldnames == rich_rows.fieldnames == ["identifier", "status"]
+    assert sparse_rows.rows == [{"identifier": "doc-1", "status": ""}]
+    assert rich_rows.rows == [{"identifier": "doc-2", "status": "published"}]
+
+
+def test_generate_templated_csv_with_no_documents_produces_just_a_header() -> None:
+    template = {"identifier": field("id")}
+
+    parsed = _parse(generate_templated_csv([], template))
+
+    assert parsed.fieldnames == ["identifier"]
+    assert parsed.rows == []
+
+
+def test_every_template_name_resolves_to_a_template() -> None:
+    """
+    `TemplateName` is the API surface and `CSV_TEMPLATES` the implementation.
+
+    A name in the `Literal` with no entry in the registry passes validation
+    and then `KeyError`s into a 500; an entry with no name is unreachable.
+    """
+    assert set(CSV_TEMPLATES) == set(get_args(TemplateName))
 
 
 def _make_engine(pages: list[list[Document]]) -> MagicMock:
