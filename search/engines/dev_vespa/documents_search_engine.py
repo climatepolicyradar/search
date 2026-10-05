@@ -374,13 +374,14 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 headers={"Authorization": f"Bearer {self.settings.vespa_read_token}"},
             )
         except Exception as exc:
-            raise VespaError("Vespa request failed") from exc
+            raise VespaError("Vespa request failed", status_code=None) from exc
         if response.status_code == HTTPStatus.NOT_FOUND:
             return None
         if response.status_code != HTTPStatus.OK:
             body_preview = (response.text or "")[:HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS]
             raise VespaError(
-                f"Vespa returned status {response.status_code}: {body_preview}"
+                f"Vespa returned status {response.status_code}: {body_preview}",
+                status_code=response.status_code,
             )
 
         fields = response.json().get("fields", {})

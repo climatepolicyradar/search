@@ -81,29 +81,43 @@ app.add_middleware(
 )
 
 
-VESPA_UNAVAILABLE_DETAIL = "Search service unavailable"
-
-
 @app.exception_handler(VespaError)
 async def handle_vespa_error(request: Request, exc: VespaError) -> JSONResponse:
     """
-    Surface a failed Vespa request to the client as HTTP 503.
+    Surface a failed Vespa request to the client.
 
-    Registered once, application-wide, so that every route - including ones
-    added later - reports backend failure rather than an empty result set. The
-    exception detail is logged but not returned: it can contain the Vespa
-    response body.
+    503: Vespa was unreachable, answered 5xx, or returned a body we could not parse.
+    500: Vespa refused the query we built.
+    429: Vespa throttled the query.
+    404: This document is missing
     """
+    status_code = HTTPStatus.SERVICE_UNAVAILABLE
+    if exc.status_code is None:
+        # retry: We don't know what the error was and will likely fix itself
+        status_code = HTTPStatus.SERVICE_UNAVAILABLE
+    elif (exc.status_code == HTTPStatus.TOO_MANY_REQUESTS):
+        # retry: if you slow down, you can retry in a bit
+        status_code = HTTPStatus.TOO_MANY_REQUESTS
+    elif (exc.status_code == HTTPStatus.NOT_FOUND):
+        # no-retry: this document is not there
+        status_code = HTTPStatus.NOT_FOUND
+    elif exc.status_code >= HTTPStatus.BAD_REQUEST and exc.status_code < HTTPStatus.INTERNAL_SERVER_ERROR:
+        # no-retry: this is a search application error, and retrying will not fix it and potentially make it worse
+        status_code = HTTPStatus.INTERNAL_SERVER_ERROR
+    elif exc.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
+        # retry: Vespa is having a bad day, and retrying later may work
+        status_code = HTTPStatus.SERVICE_UNAVAILABLE
+    
     logger.error(
-        "Error: Vespa unavailable while serving request method=%s path=%s: %s",
+        "Error: Vespa request failed while serving request method=%s path=%s "
+        "(vespa_status=%s, returned_status=%s): %s",
         request.method,
         request.url.path,
+        exc.status_code,
+        status_code,
         exc,
     )
-    return JSONResponse(
-        status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-        content={"detail": VESPA_UNAVAILABLE_DETAIL},
-    )
+    return JSONResponse(status_code=status_code, content={"detail": str(exc)})
 
 
 @app.middleware("http")

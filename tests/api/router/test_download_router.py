@@ -72,14 +72,14 @@ def test_download_respects_max_results_query_param(document_client) -> None:
 
 def test_download_returns_503_on_vespa_error(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.search.side_effect = VespaError("Vespa is down")
+    mock_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
 
     response = client.get(
         "/search/documents:download", params={"query": "toxic"}
     )
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    assert response.json()["detail"] == "Search service unavailable"
+    assert response.json()["detail"] == "Vespa is down"
 
 
 def test_download_rejects_non_positive_max_results(document_client) -> None:

@@ -46,7 +46,7 @@ def test_get_document_returns_404_when_not_found(document_client) -> None:
 
 def test_get_document_returns_503_on_vespa_error(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.get.side_effect = VespaError("Vespa is down")
+    mock_engine.get.side_effect = VespaError("Vespa is down", status_code=None)
 
     response = client.get("/search/documents/doc-1")
 

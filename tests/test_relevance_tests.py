@@ -283,7 +283,12 @@ def test_the_loop_tags_a_vespa_error_as_errored_and_still_writes_the_report(
     The operator needs a red run *and* something to read: the artefacts are
     written before the run is failed.
     """
-    engine = StubEngine([VespaError("Vespa request failed"), VespaError("again")])
+    engine = StubEngine(
+        [
+            VespaError("Vespa request failed", status_code=None),
+            VespaError("again", status_code=None),
+        ]
+    )
 
     with pytest.raises(RelevanceRunIncompleteError):
         _run(engine, [simple_test_case])
@@ -298,7 +303,7 @@ def test_the_loop_tags_a_vespa_error_as_errored_and_still_writes_the_report(
 
 def test_a_transient_vespa_error_is_retried_once(harness, simple_test_case):
     """The failure this exists for is transient; one retry clears it."""
-    engine = StubEngine([VespaError("Vespa request failed"), []])
+    engine = StubEngine([VespaError("Vespa request failed", status_code=None), []])
 
     _run(engine, [simple_test_case])
 
@@ -346,7 +351,13 @@ def test_an_errored_result_carries_no_stale_debug_info(harness, simple_test_case
     `engine.last_debug_info` still holds the previous case's query, so copying
     it onto an errored result would show another query's ranking scores.
     """
-    engine = StubEngine([[], VespaError("down"), VespaError("still down")])
+    engine = StubEngine(
+        [
+            [],
+            VespaError("down", status_code=None),
+            VespaError("still down", status_code=None),
+        ]
+    )
     engine.last_debug_info = [{"relevance": 1.0}]
 
     with pytest.raises(RelevanceRunIncompleteError):
