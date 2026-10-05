@@ -55,19 +55,19 @@ def label_engine():
 
 def _assert_unavailable(response) -> None:
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    # The Vespa error text can contain the upstream response body, so the
-    # client gets a fixed message rather than the exception detail.
-    assert response.json()["detail"] == "Search service unavailable"
+    # A VespaError with no upstream status - no response arrived - falls back
+    # to 503. The message is passed through verbatim.
+    assert response.json()["detail"] == "Vespa is down"
 
 
 def test_get_document_returns_503(client, document_engine) -> None:
-    document_engine.get.side_effect = VespaError("Vespa is down")
+    document_engine.get.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(client.get("/search/documents/doc-1"))
 
 
 def test_search_documents_returns_503(client, document_engine) -> None:
-    document_engine.search.side_effect = VespaError("Vespa is down")
+    document_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(client.get("/search/documents", params={"query": "toxic"}))
 
@@ -79,7 +79,9 @@ def test_search_documents_returns_503_when_only_aggregations_fail(
     document_engine.search.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
-    document_engine.aggregations.side_effect = VespaError("Vespa is down")
+    document_engine.aggregations.side_effect = VespaError(
+        "Vespa is down", status_code=None
+    )
 
     _assert_unavailable(
         client.get(
@@ -96,7 +98,9 @@ def test_search_documents_returns_503_when_only_facets_fail(
         results=[], total_size=0, next_page_token=None
     )
     document_engine.aggregations.return_value = []
-    document_engine.labels_value_type_facets.side_effect = VespaError("Vespa is down")
+    document_engine.labels_value_type_facets.side_effect = VespaError(
+        "Vespa is down", status_code=None
+    )
 
     _assert_unavailable(
         client.get(
@@ -107,15 +111,69 @@ def test_search_documents_returns_503_when_only_facets_fail(
 
 
 def test_search_passages_returns_503(client, passage_engine) -> None:
-    passage_engine.search.side_effect = VespaError("Vespa is down")
+    passage_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(client.get("/search/passages", params={"query": "toxic"}))
 
 
 def test_search_labels_returns_503(client, label_engine) -> None:
-    label_engine.search.side_effect = VespaError("Vespa is down")
+    label_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(client.get("/search/labels", params={"query": "toxic"}))
+
+
+@pytest.fixture
+def engine_for(request, document_engine, passage_engine, label_engine):
+    """Resolve a route to the engine that serves it."""
+    return {
+        "/search/documents": document_engine,
+        "/search/passages": passage_engine,
+        "/search/labels": label_engine,
+    }[request.param]
+
+
+@pytest.mark.parametrize(
+    "engine_for",
+    ["/search/documents", "/search/passages", "/search/labels"],
+    indirect=True,
+)
+@pytest.mark.parametrize(
+    ("upstream", "expected"),
+    [
+        (None, HTTPStatus.SERVICE_UNAVAILABLE),
+        (500, HTTPStatus.SERVICE_UNAVAILABLE),
+        (502, HTTPStatus.SERVICE_UNAVAILABLE),
+        (504, HTTPStatus.SERVICE_UNAVAILABLE),
+        (400, HTTPStatus.INTERNAL_SERVER_ERROR),
+        (401, HTTPStatus.INTERNAL_SERVER_ERROR),
+        (403, HTTPStatus.INTERNAL_SERVER_ERROR),
+        (499, HTTPStatus.INTERNAL_SERVER_ERROR),
+        (404, HTTPStatus.NOT_FOUND),
+        (429, HTTPStatus.TOO_MANY_REQUESTS),
+        # Not reachable today, but the handler must never answer a failure with
+        # a success code if a new raise site ever passes one.
+        (200, HTTPStatus.SERVICE_UNAVAILABLE),
+        (204, HTTPStatus.SERVICE_UNAVAILABLE),
+    ],
+)
+def test_the_upstream_status_maps_to_the_status_we_return(
+    client, engine_for, request, upstream, expected
+) -> None:
+    """
+    Vespa's status is its verdict on our request, not ours on the caller's.
+
+    A 4xx means we built something Vespa refused, which is a 500 to the caller.
+    404 and 429 mean the same thing to both, so they pass through.
+    """
+    route = request.node.callspec.params["engine_for"]
+    engine_for.search.side_effect = VespaError(
+        "Vespa returned status [ctx]: upstream detail", status_code=upstream
+    )
+
+    response = client.get(route, params={"query": "toxic"})
+
+    assert response.status_code == expected
+    assert response.json()["detail"] == "Vespa returned status [ctx]: upstream detail"
 
 
 def test_a_503_is_not_logged_as_a_success(client, document_engine, caplog) -> None:
@@ -126,7 +184,7 @@ def test_a_503_is_not_logged_as_a_success(client, document_engine, caplog) -> No
     grepping and error alerting - the same blind spot, one layer up, as
     answering a failed query with a 200.
     """
-    document_engine.search.side_effect = VespaError("Vespa is down")
+    document_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
 
     with caplog.at_level(logging.INFO, logger="api.main"):
         client.get("/search/documents", params={"query": "toxic"})

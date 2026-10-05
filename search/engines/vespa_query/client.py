@@ -10,7 +10,6 @@ import requests
 from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings
 
-from search.engines import VespaError
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -63,6 +62,14 @@ def _warn_if_degraded(response_json: dict[str, Any], request_context: str) -> No
         coverage.get("documents"),
         reasons or None,
     )
+
+
+class VespaError(Exception):
+    """A Vespa request did not produce a usable answer."""
+
+    def __init__(self, message: str, *, status_code: int | None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def execute_vespa_query(
@@ -124,7 +131,8 @@ def execute_vespa_query(
             (time.perf_counter() - started) * 1000,
         )
         raise VespaError(
-            f"Vespa request failed before a response was received [{request_context}]"
+            f"Vespa request failed before a response was received [{request_context}]",
+            status_code=None,
         ) from exc
 
     if response.status_code >= 400:
@@ -138,14 +146,19 @@ def execute_vespa_query(
         )
         raise VespaError(
             f"Vespa returned status {response.status_code} [{request_context}]: "
-            f"{body_preview}"
+            f"{body_preview}",
+            status_code=response.status_code,
         )
 
     try:
         response_json = response.json()
     except ValueError as exc:
         logger.exception("Error: Vespa returned invalid JSON [%s]", request_context)
-        raise VespaError(f"Vespa returned invalid JSON [{request_context}]") from exc
+        raise VespaError(
+            f"Vespa returned invalid JSON [{request_context}] "
+            f"(status={response.status_code})",
+            status_code=None,
+        ) from exc
 
     _warn_if_degraded(response_json, request_context)
 

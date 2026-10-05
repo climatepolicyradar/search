@@ -92,6 +92,9 @@ def test_execute_raises_on_a_non_success_status_code(status_code: int) -> None:
     message = str(exc_info.value)
     assert str(status_code) in message
     assert "upstream detail" in message
+    # The API boundary returns this verbatim, so it has to be a status a client
+    # can be given.
+    assert exc_info.value.status_code == status_code
 
 
 def test_execute_truncates_the_error_body_it_reports() -> None:
@@ -106,16 +109,26 @@ def test_execute_truncates_the_error_body_it_reports() -> None:
     )
 
 
-def test_execute_raises_when_the_body_is_not_json() -> None:
-    """A 200 with an unparsable body is a failure, not an empty result set."""
+@pytest.mark.parametrize("status_code", [200, 201, 204, 206])
+def test_execute_raises_when_the_body_is_not_json(status_code: int) -> None:
+    """
+    A 2xx with an unparsable body is a failure, not an empty result set.
+
+    ``status_code`` is None rather than the 2xx Vespa sent, because the API
+    boundary returns it verbatim and would otherwise answer a request it could
+    not serve with a success code. The status is kept in the message, where it
+    is diagnostic rather than load-bearing.
+    """
     post_fn = MagicMock(
-        return_value=_response(200, json_error=ValueError("not json")),
+        return_value=_response(status_code, json_error=ValueError("not json")),
     )
 
     with pytest.raises(VespaError) as exc_info:
         _execute(post_fn)
 
     assert "invalid JSON" in str(exc_info.value)
+    assert str(status_code) in str(exc_info.value)
+    assert exc_info.value.status_code is None
 
 
 def test_execute_returns_the_decoded_body_on_success() -> None:
@@ -137,22 +150,22 @@ def failing_query():
         patch.object(
             dev_vespa,
             "execute_vespa_query",
-            side_effect=VespaError("Vespa is down"),
+            side_effect=VespaError("Vespa is down", status_code=None),
         ) as mock_execute,
         patch.object(
             documents_search_engine,
             "execute_vespa_query",
-            side_effect=VespaError("Vespa is down"),
+            side_effect=VespaError("Vespa is down", status_code=None),
         ),
         patch.object(
             passages_search_engine,
             "execute_vespa_query",
-            side_effect=VespaError("Vespa is down"),
+            side_effect=VespaError("Vespa is down", status_code=None),
         ),
         patch.object(
             labels_search_engine,
             "execute_vespa_query",
-            side_effect=VespaError("Vespa is down"),
+            side_effect=VespaError("Vespa is down", status_code=None),
         ),
     ):
         yield mock_execute

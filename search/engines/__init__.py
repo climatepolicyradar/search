@@ -6,9 +6,12 @@ from pydantic import BaseModel
 from search.data_in_models import Document as DocumentModel
 from search.data_in_models import Label as LabelModel
 from search.document import Document
+from search.engines.vespa_query.client import VespaError
 from search.identifiers import Identifier, generate_id
 from search.label import Label
 from search.passage import Passage
+
+__all__ = ["VespaError"]
 
 TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel, LabelModel)
 
@@ -108,7 +111,3 @@ class SearchEngine(ABC, Generic[TModel]):
 
         # Sorted so the id doesn't depend on the order parameters were declared in.
         return generate_id(str(self), *sorted(self.parameters.items()))
-
-
-class VespaError(Exception):
-    """Raised when a Vespa request fails (non-404 HTTP error or network failure)."""
