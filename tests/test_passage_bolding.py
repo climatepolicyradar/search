@@ -1,6 +1,7 @@
 import pytest
 
-from search.passage import Passage, _bolding_to_labels
+from search.bolding import bolding_to_labels, merge_bolded, render_bolded
+from search.passage import Passage
 from search.vespa.passage import VespaPassage
 
 
@@ -34,7 +35,7 @@ def test_bolding_to_labels_indexes_the_untagged_text(
     expected_boldings: list[tuple[int, int, str]],
 ) -> None:
     """Indices relate to the tag-free text, because that is what the client is sent."""
-    bolded = _bolding_to_labels(bolded_text)
+    bolded = bolding_to_labels(bolded_text)
 
     assert bolded.text == expected_text
     assert [
@@ -83,3 +84,66 @@ def test_from_vespa_passage_strips_tags_and_records_spans_when_bolding_is_on() -
     assert [
         (h.start_index, h.end_index, h.labelled_text) for h in passage.boldings
     ] == [(4, 10, "carbon"), (28, 37, "emissions")]
+
+
+@pytest.mark.parametrize(
+    ("bolded_texts", "expected_boldings"),
+    [
+        pytest.param(
+            [
+                "<hi>Brazil</hi> plans a carbon tax.",
+                "Brazil plans a <hi>carbon</hi> <hi>tax</hi>.",
+            ],
+            [(0, 6, "Brazil"), (15, 21, "carbon"), (22, 25, "tax")],
+            id="disjoint",
+        ),
+        pytest.param(
+            ["A <hi>carbon</hi> tax.", "A <hi>carbon</hi> <hi>tax</hi>."],
+            [(2, 8, "carbon"), (9, 12, "tax")],
+            id="same-span-once",
+        ),
+        pytest.param(
+            ["<hi>nature-based</hi> fund", "<hi>nature</hi>-<hi>based</hi> fund"],
+            [(0, 12, "nature-based")],
+            id="overlapping-joined",
+        ),
+        pytest.param(["no tags", "no tags"], [], id="none"),
+    ],
+)
+def test_merge_bolded_unions_spans(
+    bolded_texts: list[str], expected_boldings: list[tuple[int, int, str]]
+) -> None:
+    """Spans from each bolded copy are unioned against the shared untagged text."""
+    merged = merge_bolded(*bolded_texts)
+
+    assert [
+        (h.start_index, h.end_index, h.labelled_text) for h in merged.boldings
+    ] == expected_boldings
+
+
+def test_merge_bolded_raises_when_texts_differ() -> None:
+    """Copies with different text would misalign spans, so it fails loudly."""
+    with pytest.raises(ValueError):
+        merge_bolded("a <hi>b</hi>", "a <hi>c</hi>")
+
+
+def test_render_bolded_round_trips() -> None:
+    text = "<hi>Brazil</hi> plans a <hi>carbon</hi> <hi>tax</hi>."
+    assert render_bolded(merge_bolded(text)) == text
+
+
+def test_from_vespa_passage_merges_exact_bolding() -> None:
+    """A quoted query's phrase spans from `content_not_stemmed` are merged in."""
+    vespa_passage = VespaPassage.model_validate(
+        {
+            "id": "tb-0",
+            "content": "<hi>Brazil</hi> plans a carbon tax.",
+            "content_not_stemmed": "Brazil plans a <hi>carbon</hi> <hi>tax</hi>.",
+            "document_id": "doc-0",
+        }
+    )
+
+    passage = Passage.from_vespa_passage(vespa_passage, bolding=True)
+
+    assert passage.text == "Brazil plans a carbon tax."
+    assert [h.labelled_text for h in passage.boldings] == ["Brazil", "carbon", "tax"]
