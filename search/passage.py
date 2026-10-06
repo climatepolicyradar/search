@@ -3,6 +3,8 @@ from collections.abc import Callable
 
 from pydantic import BaseModel, Field, computed_field
 
+from search.bolding import BoldedText, Bolding, bolding_to_labels, merge_bolded
+from search.span import BaseSpan
 from search.vespa.passage import VespaPassage
 
 
@@ -34,15 +36,6 @@ class Label(BaseModel):
     value: str = Field(default="")
 
 
-class BaseSpan[T](BaseModel):
-    """A span is a class that allows you to wrap text from start_index:end_index in value T"""
-
-    start_index: int
-    end_index: int
-    labelled_text: str
-    value: T
-
-
 class PassageLabelRelationship(BaseSpan[Label]):
     """A label applied to a passage, with the fields describing that relationship."""
 
@@ -50,63 +43,6 @@ class PassageLabelRelationship(BaseSpan[Label]):
     labellers: list[str] = Field(default_factory=list)
     prediction_probability: float = Field(default=0.0)
     timestamps: list[str] = Field(default_factory=list)
-
-
-_HI_OPEN = "<hi>"
-_HI_CLOSE = "</hi>"
-
-
-class Bolding(BaseSpan[None]):
-    """
-    A span of a passage's text that Vespa matched against the query.
-
-    @see: https://docs.vespa.ai/en/reference/schemas/schemas.html#bolding
-    """
-
-    # There is nothing to wrap the matched text in as it is just freetext.
-    value: None = None
-
-
-class BoldedText(BaseModel):
-    """Text stripped of Vespa's `<hi>` tags, with the spans they marked."""
-
-    text: str  # the text stripped of <hi> tags
-    boldings: list[Bolding]
-
-
-def _bolding_to_labels(bolded_text: str) -> BoldedText:
-    """
-    Convert Vespa's `<hi>` tags to the stripped text plus a list of Boldings.
-
-    Indices relate the text with the tags stripped out as this is the text
-    the client is sent - so `labelled_text == text[start_index:end_index]`.
-    """
-    boldings: list[Bolding] = []
-    current_index = 0
-    tag_characters_removed = 0
-    while True:
-        start_tag_index = bolded_text.find(_HI_OPEN, current_index)
-        if start_tag_index == -1:
-            break
-        end_tag_index = bolded_text.find(_HI_CLOSE, start_tag_index)
-        if end_tag_index == -1:
-            break
-        labelled_text = bolded_text[start_tag_index + len(_HI_OPEN) : end_tag_index]
-        start_index = start_tag_index - tag_characters_removed
-        boldings.append(
-            Bolding(
-                start_index=start_index,
-                end_index=start_index + len(labelled_text),
-                labelled_text=labelled_text,
-            )
-        )
-        tag_characters_removed += len(_HI_OPEN) + len(_HI_CLOSE)
-        current_index = end_tag_index + len(_HI_CLOSE)
-
-    return BoldedText(
-        text=bolded_text.replace(_HI_OPEN, "").replace(_HI_CLOSE, ""),
-        boldings=boldings,
-    )
 
 
 class Passage(BaseModel):
@@ -148,13 +84,16 @@ class Passage(BaseModel):
         :param bolding: Whether the query asked Vespa to bold matched terms. When
             it did, `content` arrives wrapped in `<hi>` tags; `text` is the content
             with those tags stripped and `boldings` carries the spans they marked.
+            A quoted query also returns `content_not_stemmed`, bolded with the
+            phrases, and its spans are merged in.
         """
         data = vespa_passage.model_dump()
-        bolded = (
-            _bolding_to_labels(data["content"])
-            if bolding
-            else BoldedText(text=data["content"], boldings=[])
-        )
+        if not bolding:
+            bolded = BoldedText(text=data["content"], boldings=[])
+        elif data["content_not_stemmed"] is not None:
+            bolded = merge_bolded(data["content"], data["content_not_stemmed"])
+        else:
+            bolded = bolding_to_labels(data["content"])
         return cls(
             text_block_id=data["id"],
             idx=data["idx"],

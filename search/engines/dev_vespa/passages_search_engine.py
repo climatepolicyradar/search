@@ -43,8 +43,6 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 
 
-
-
 def _passage_phrase_yql(count: int) -> str:
     """One in-order phrase clause per quoted phrase."""
     return "".join(
@@ -52,6 +50,21 @@ def _passage_phrase_yql(count: int) -> str:
         f"({{grammar.composite:'phrase'}}text(@exact_phrase_{i}))"
         for i in range(count)
     )
+
+
+def _passage_summary(*, debug: bool, bolding: bool, has_phrases: bool) -> str:
+    """
+    The summary class to request.
+
+    `search-exact` adds `content_not_stemmed`, which is where quoted phrases match
+    and so the only place they get bolded. It costs a second copy of the text per
+    hit, so it is only requested when there is a phrase to bold.
+    """
+    if debug:
+        return "debug-summary"
+    if bolding and has_phrases:
+        return "search-exact"
+    return "search"
 
 
 class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
@@ -125,7 +138,9 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "timeout": "5s",
             "model.language": "en",
             "rules.rulebase": "passages",
-            "presentation.summary": "debug-summary" if self.debug else "search",
+            "presentation.summary": _passage_summary(
+                debug=self.debug, bolding=bolding, has_phrases=bool(phrases)
+            ),
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
