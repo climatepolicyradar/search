@@ -12,9 +12,14 @@ The query rewrites are located in `vespa/app/rules`: `documents.sr`,
 purposes of adding synonyms, we only want to edit `documents.sr` and
 `passages.sr`.
 
-To add a new synonym, add a new line to the file with the original term (most
-likely an acronym) on the left side, followed by `+>`, and the synonym/expanded
-acronym on the left side as `?"what acronym stands for";`. For example:
+Since `passages.sr` inherits from `documents.sr`, we only need to edit
+`documents.sr` as long as we want the to apply to both document and passage
+search.
+
+To add a new synonym, add a new line to `documents.sr` with the original term
+(most likely an acronym) on the left side, followed by `+>`, and the
+synonym/expanded acronym on the left side as `?"what acronym stands for";`. For
+example:
 
 ```text
 `ndc +> ?"nationally determined contribution";`
@@ -32,9 +37,6 @@ NOT contain any of the words in `vespa/app/lucene-linguistics/en/stopwords.txt`
 as they are removed during indexing and therefore the rule won't match correctly
 if you put them here. For example, `gga +> ?"global goal adaptation";` and not
 `gga +> ?"global goal on adaptation";`
-
-Generally, add the same line in BOTH `documents.sr` and `passages.sr`. This
-means the rule will apply both in main search and within a document.
 
 Commit the change. There is an automatic CI check that will tell you if and
 where any stopwords were detected. When your branch is merged to main, the

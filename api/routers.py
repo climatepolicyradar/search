@@ -61,9 +61,16 @@ Fields = AggregationField | FacetField
 LLMS_TXT_PATH = Path(__file__).parent / "llms.txt"
 
 _VESPA_UNAVAILABLE_RESPONSE: dict[int | str, dict[str, Any]] = {
+    HTTPStatus.TOO_MANY_REQUESTS: {"description": "Vespa throttled the query."},
+    HTTPStatus.INTERNAL_SERVER_ERROR: {
+        "description": "Vespa refused the query we built."
+    },
     HTTPStatus.SERVICE_UNAVAILABLE: {
-        "description": ("Vespa is unavailable, or rejected the query.")
-    }
+        "description": (
+            "Vespa was unreachable, answered 5xx, or returned a body we could "
+            "not parse."
+        )
+    },
 }
 SEARCH_RESPONSES: dict[int | str, dict[str, Any]] = {
     HTTPStatus.BAD_REQUEST: {"description": ("Malformed `filters` JSON")},

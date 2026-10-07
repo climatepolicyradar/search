@@ -46,7 +46,7 @@ def test_get_document_returns_404_when_not_found(document_client) -> None:
 
 def test_get_document_returns_503_on_vespa_error(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.get.side_effect = VespaError("Vespa is down")
+    mock_engine.get.side_effect = VespaError("Vespa is down", status_code=None)
 
     response = client.get("/search/documents/doc-1")
 
@@ -113,27 +113,46 @@ def test_get_labels_taxonomy_returns_non_empty_list() -> None:
     assert len(body["results"]) > 0
 
 
-def test_get_labels_taxonomy_includes_global_stocktake_category() -> None:
-    """GST1 must nest under the Global Stocktake category so the frontend filter tree renders it correctly."""
+def test_get_labels_taxonomy_exposes_every_category() -> None:
+    """
+    The categories are the roots of the frontend filter tree, pinned exhaustively.
+
+    An equality assertion rather than a membership one: a category silently
+    dropped from `labels_taxonomy` loses a whole branch of the tree, and a
+    category added without the frontend expecting it is just as much a change
+    worth making someone acknowledge here.
+
+    Every category is a root -- it has no `subconcept_of` parent -- which is
+    what makes it a category rather than a label nested under one.
+    """
     client = TestClient(app)
 
     response = client.get("/search/labels-taxonomy")
 
-    body = response.json()
-    results_by_id = {result["id"]: result for result in body["results"]}
+    assert response.status_code == HTTPStatus.OK
+    categories = [
+        result for result in response.json()["results"] if result["type"] == "category"
+    ]
 
-    assert "category::Global Stocktake" in results_by_id
+    assert {category["id"] for category in categories} == {
+        "category::Corporate Disclosure",
+        "category::Global Stocktake",
+        "category::Law",
+        "category::Litigation",
+        "category::Multilateral Climate Fund project",
+        "category::Policy",
+        "category::Report",
+        "category::UN submission",
+    }
+    for category in categories:
+        assert category["labels"] == [], (
+            f"{category['id']} is nested under another label"
+        )
 
-    gst1 = results_by_id["process::GST1"]
-    assert gst1["type"] == "process"
-    assert gst1["value"] == "GST1 Submission"
-    assert gst1["labels"][0]["type"] == "subconcept_of"
-    assert gst1["labels"][0]["value"]["id"] == "category::Global Stocktake"
 
-
-def test_get_labels_taxonomy_includes_global_stocktake_party_branch() -> None:
+def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     """
-    Party must nest under Global Stocktake.
+    GST1 and Party must nest under Global Stocktake.
 
     The existing UNFCCC document types must also nest under Party (in addition
     to their existing UNFCCC parent) so they render under both branches. They
@@ -149,6 +168,12 @@ def test_get_labels_taxonomy_includes_global_stocktake_party_branch() -> None:
 
     body = response.json()
     results_by_id = {result["id"]: result for result in body["results"]}
+
+    gst1 = results_by_id["process::GST1"]
+    assert gst1["type"] == "process"
+    assert gst1["value"] == "GST1 Submission"
+    assert gst1["labels"][0]["type"] == "subconcept_of"
+    assert gst1["labels"][0]["value"]["id"] == "category::Global Stocktake"
 
     party = results_by_id["author_type::Party"]
     assert party["type"] == "author_type"
@@ -169,7 +194,9 @@ def test_get_labels_taxonomy_includes_global_stocktake_party_branch() -> None:
     ]
     for document_type_id in document_type_ids:
         document_type = results_by_id[document_type_id]
-        parent_ids = {relationship["value"]["id"] for relationship in document_type["labels"]}
+        parent_ids = {
+            relationship["value"]["id"] for relationship in document_type["labels"]
+        }
         assert parent_ids == {"un_convention::UNFCCC", "author_type::Party"}
 
 

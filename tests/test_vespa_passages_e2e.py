@@ -338,6 +338,42 @@ def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
     assert plain.results[0].boldings == []
 
 
+def test_passage_bolding_covers_quoted_phrases(vespa_app: Vespa):
+    """
+    A quoted phrase is bolded, alone or alongside free text.
+
+    The phrase matches on `content_not_stemmed`, so it is bolded there (via the
+    `search-exact` summary) and merged with the free text bolded on `content`.
+    That keeps stop words in the phrase and leaves stemmed variants unbolded.
+    """
+    principal = DocumentFactory.build(id="principal-qbold", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-qbold", "Brazil plans a carbon tax on crude emissions."),
+        document_id="principal-qbold",
+    )
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-qbold-ld", "A loss and damage fund, not damage and losses."),
+        document_id="principal-qbold",
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    pagination = Pagination(page_token=1, page_size=10)
+
+    for query, block_id, expected in [
+        ('"carbon tax"', "tb-qbold", ["carbon", "tax"]),
+        ('brazil "carbon tax"', "tb-qbold", ["Brazil", "carbon", "tax"]),
+        ('"loss and damage"', "tb-qbold-ld", ["loss", "and", "damage"]),
+    ]:
+        results = engine.search(
+            query=query, pagination=pagination, order_by=[], bolding=True
+        )
+        assert [p.text_block_id for p in results.results] == [block_id], query
+        assert [h.labelled_text for h in results.results[0].boldings] == expected, query
+
+
 def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: Vespa):
     """
     A passage's principal_title resolves via principal_document_ref.

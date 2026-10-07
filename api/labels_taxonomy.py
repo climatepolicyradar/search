@@ -53,6 +53,11 @@ framework_law = Label(
     labels=[LabelRelationship(type="subconcept_of", value=law)],
 )
 
+# region Litigation
+litigation = Label(
+    type="category", id="category::Litigation", value="Litigation", labels=[]
+)
+
 # region policy
 policy = Label(type="category", id="category::Policy", value="Policy", labels=[])
 mitigation = Label(
@@ -331,7 +336,10 @@ other = Label(
 
 # region global stocktake
 global_stocktake = Label(
-    type="category", id="category::Global Stocktake", value="Global Stocktake", labels=[]
+    type="category",
+    id="category::Global Stocktake",
+    value="Global Stocktake",
+    labels=[],
 )
 gst1 = Label(
     id="process::GST1",
@@ -498,6 +506,7 @@ labels_taxonomy = [
     corporate_voluntary_filing,
     law,
     framework_law,
+    litigation,
     policy,
     mitigation,
     adaptation,

@@ -220,7 +220,7 @@ def test_fetch_propagates_a_page_failure() -> None:
     doesn't swallow a `VespaError` raised by one of the underlying calls.
     """
     engine = MagicMock()
-    engine.search.side_effect = VespaError("Vespa request failed")
+    engine.search.side_effect = VespaError("Vespa request failed", status_code=None)
 
     with pytest.raises(VespaError):
         fetch_documents_for_download(
