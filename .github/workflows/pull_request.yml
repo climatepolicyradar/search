@@ -176,14 +176,14 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions
           role-session-name: GitHub_Pulumi_up_${{ matrix.environment }}
           aws-region: eu-west-1
+          aws-profile: ${{ matrix.environment }}
       - uses: astral-sh/setup-uv@v7
       - uses: extractions/setup-just@v4
       - run: just install
       - uses: pulumi/actions@v7
       - working-directory: ./infra
-        # we reset the aws:profile as the above uses AWS env variables set in the `aws-actions/configure-aws-credentials@v5` step
         run: |
-          pulumi preview --stack climatepolicyradar/search/${{ matrix.environment }} --suppress-outputs --config aws:profile=
+          pulumi preview --stack climatepolicyradar/search/${{ matrix.environment }} --suppress-outputs
 
   k6-pulumi-preview:
     runs-on: ubuntu-latest
