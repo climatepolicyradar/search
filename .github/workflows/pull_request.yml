@@ -176,7 +176,6 @@ jobs:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions
           role-session-name: GitHub_Pulumi_up_${{ matrix.environment }}
           aws-region: eu-west-1
-          # trunk-ignore(actionlint/action): aws-profile is a valid v6 input; actionlint's popular-actions metadata is stale
           aws-profile: ${{ matrix.environment }}
       - uses: astral-sh/setup-uv@v7
       - uses: extractions/setup-just@v4
