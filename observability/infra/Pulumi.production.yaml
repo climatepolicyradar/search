@@ -1,0 +1,17 @@
+config:
+  search-observability:api_base_url: https://api.climatepolicyradar.org/search
+  # Grafana's alerting guidance is to run checks from "multiple locations,
+  # preferably three or more", and its reachability metric exists to surface
+  # regional problems — which it can only do if the locations are in different
+  # regions. These mirror the frontend's choice, since the frontend is this
+  # API's largest caller.
+  # @see: https://grafana.com/docs/grafana-cloud/testing/synthetic-monitoring/configure-alerts/synthetic-monitoring-alerting/
+  # @see: https://synthetic-monitoring-api-gb-south.grafana.net/api/v1/probe/list
+  search-observability:grafana_probe_locations:
+    - London
+    - NorthVirginia
+    - Tokyo
+
+  search-observability:grafana_sm_url: https://synthetic-monitoring-api-gb-south.grafana.net
+  search-observability:grafana_sm_access_token:
+    secure: AAABAF4C/Jm88CJE1Hpxi1ir1DQ6V6sURcOwKsq7ra2TWTaP1zzME4zb/NMWeiuapEK391fmnxO9bTbw3j6bHdXBbP4nLXrdqhcAXLuGdN7qVGGB4Y28C2K0OQmqCyFy0VKoMFEWa/WBokUNhT2aC7YZK/Ja5zZ6I3VonML9l4Q7ii/5oYK5G8fk9uZEofqqResPsLQA3OAecL/bphNdBg==

@@ -1,0 +1,6 @@
+name: search-observability
+description: Grafana Synthetic Monitoring uptime checks for the search-api health probes
+runtime:
+  name: python
+  options:
+    toolchain: uv
