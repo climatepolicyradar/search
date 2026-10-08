@@ -25,6 +25,7 @@ jobs:
       run-test: ${{ steps.filter.outputs.run-test }}
       run-search-pulumi-up: ${{ steps.filter.outputs.run-search-pulumi-up }}
       run-k6-pulumi-up: ${{ steps.filter.outputs.run-k6-pulumi-up }}
+      run-observability-pulumi-up: ${{ steps.filter.outputs.run-observability-pulumi-up }}
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
       run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
       run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
@@ -48,6 +49,8 @@ jobs:
               - 'infra/**'
             run-k6-pulumi-up:
               - 'k6/**'
+            run-observability-pulumi-up:
+              - 'observability/**'
             run-deploy:
               - 'api/**'
               - 'search/**'
@@ -176,6 +179,27 @@ jobs:
       environment: production
       working-directory: ./k6/infra
       stack: climatepolicyradar/search-k6
+      # No AWS resources here (Grafana Cloud only) - skip the AWS credentials
+      # step entirely rather than requiring an unused IAM role.
+      aws-role: ""
+
+  observability-pulumi-up:
+    uses: ./.github/workflows/pulumi_up.yml
+    secrets: inherit
+    # The synthetic checks target the deployed API, so provisioning them before
+    # a change to /search/health has shipped would point them at routes that do
+    # not exist yet. always() keeps this running when deploy-api is skipped
+    # (observability/** changed on its own), where its result is 'skipped'
+    # rather than 'success'.
+    needs: [changes, deploy-api]
+    if: |
+      always() &&
+      needs.changes.outputs.run-observability-pulumi-up == 'true' &&
+      needs.deploy-api.result != 'failure'
+    with:
+      environment: production
+      working-directory: ./observability/infra
+      stack: climatepolicyradar/search-observability
       # No AWS resources here (Grafana Cloud only) - skip the AWS credentials
       # step entirely rather than requiring an unused IAM role.
       aws-role: ""
