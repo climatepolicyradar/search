@@ -343,10 +343,8 @@ schema documents {
             expression: query(topic_weight) * sum(map(attribute(concept_counts), f(x)(log(1 + x))) * query(topic_q))
         }
 
-        inputs {
-            query(topic_q) tensor<float>(concept{})
-            query(topic_weight) double: 1.0
-            query(exact_weight) double: 1.0
+        function exact_phrase_score() {
+            expression: query(exact_weight) * (bm25(title_not_stemmed) + bm25(description_not_stemmed) + bm25(passages_text_not_stemmed))
         }
 
         first-phase {
