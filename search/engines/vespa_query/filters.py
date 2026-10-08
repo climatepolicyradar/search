@@ -259,15 +259,38 @@ def _build_filter_yql(
     filter_group: Filter,
     field_map: dict[str, list[str]],
     struct_map: dict[str, ArrayStructField],
-) -> str:
-    """Recursively build YQL for a filter group"""
+) -> str | None:
+    """
+    Recursively build YQL for a filter group, or None if it constrains nothing.
+    
+    `None` is representative of an empty filter - which is odd, but valid. e.g.
+    [
+        {
+            "op": "or",
+            "filters": [] <-- empty filters list
+        },
+        {
+            "op": "or",
+            "filters": [
+                {
+                    "field": "labels.value.id",
+                    "op": "contains",
+                    "value": "concept::Q1274",
+                    "checked": true
+                }
+            ]
+        }
+    ]
+    """
     parts: list[str] = []
     # `contains` conditions grouped by struct to allow us to filter on more than 1 field of a struct.
     struct_operands: dict[str, list[str]] = {}
 
     for item in filter_group.filters:
         if isinstance(item, Filter):
-            parts.append(_build_filter_yql(item, field_map, struct_map))
+            nested = _build_filter_yql(item, field_map, struct_map)
+            if nested is not None:
+                parts.append(nested)
         elif isinstance(item, FieldFilter) and item.field in struct_map:
             struct = struct_map[item.field]
             operand = f"{struct.subfield} contains {_format_value(item.value)}"
@@ -289,7 +312,7 @@ def _build_filter_yql(
             )
 
     if not parts:
-        return ""
+        return None
 
     joined = f" {filter_group.op} ".join(parts)
 
@@ -306,7 +329,7 @@ def _build_filter_query(
     if filter_group is None:
         return ""
     yql = _build_filter_yql(filter_group, field_map, struct_map)
-    return f" and {yql}" if yql else ""
+    return f" and {yql}" if yql is not None else ""
 
 
 def _facet_filter_label_type(condition: Condition) -> str | None:
