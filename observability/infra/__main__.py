@@ -85,7 +85,7 @@ for probe_name in PROBE_NAMES:
         enabled=True,
         frequency=60000,  # ms
         timeout=TIMEOUT_MS,
-        labels={"service": "search-api", "environment": env, "probe": probe_name},
+        labels={"service": "search", "environment": env, "probe": probe_name},
         settings=grafana.syntheticmonitoring.CheckSettingsArgs(
             http=grafana.syntheticmonitoring.CheckSettingsHttpArgs(
                 method="GET",
