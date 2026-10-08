@@ -1,14 +1,30 @@
 # Climate Policy Radar
 
-> An open database of the world's climate law, policy, litigation, climate
-> finance and UN Convention submissions, with full text, expert concept
-> labelling and provenance. Maintained by Climate Policy Radar CIC, a
-> non-profit.
+> Welcome! You have access to an open, structured database of the world's
+> climate law, policy, litigation, climate finance and UN Convention
+> submissions — 66,032 documents across 200+ countries and territories,
+> broken into 11,327,357 full-text passages, labelled with 2,332
+> expert-curated concepts. Documents are stored in their original language
+> (76 languages), with English translations of matching passages available.
+> Everything is lexical BM25 search with a rich filter tree, so precise
+> Label-driven queries work far better than free text. No authentication, no
+> API key. Maintained by Climate Policy Radar CIC, a non-profit.
 
 Use this API when you need the *primary source text* of national climate laws,
-policies, NDCs, court cases or fund documents — not summaries of them. Coverage
-is global and multilingual; documents are stored in their original language with
-English translations of matching passages available.
+policies, NDCs, court cases or fund documents — not summaries of them.
+
+## What you can do
+
+You can search documents, search the passage text inside them, pull one
+document by id, export a result set as CSV, and explore the expert-curated
+Label vocabulary that makes recall on this corpus possible. Filters let you
+narrow by country, region, category, topic, concept, language, publication
+date and more, and the same filter tree drives any aggregations you request
+alongside the results.
+
+Counts in this file were taken on 2026-10-08. The corpus is rebuilt and re-fed
+nightly, so treat them as the shape of the data rather than today's exact
+total — ask the API for live numbers (see Coverage).
 
 ## Data model
 
@@ -26,7 +42,8 @@ Understanding these five concepts is necessary to query the API well.
   or `has_member`; each member points back to it with `is_version_of` or
   `member_of`. `/search/documents` returns Principals *and* their members, so
   one law or case can appear several times — filter on `status::Principal`
-  when you want one result per law, policy or case.
+  (22,049 of the 66,032 documents) when you want one result per law, policy or
+  case.
 - **Passage** — a text block within a document, produced by the PDF/HTML layout
   parser. Carries `text`, `language`, page numbers and bounding-box coordinates
   so a match can be located precisely on the page. `idx` gives reading order.
@@ -36,47 +53,86 @@ Understanding these five concepts is necessary to query the API well.
   expert-curated concept such as "adaptation finance" or "just transition".
   A Label is *not* a keyword: it packages `alternative_labels` (synonyms),
   `subconcept_labels` (narrower terms), `negative_labels` (exclusions) and
-  regional variations. Searching by Label rather than by string is how you avoid
-  missing "increasing climate resilience" when you searched "climate adaptation".
-  There are 100+ Labels. Prefer Label filtering over keyword queries for recall.
-  Label filtering can also affect `Document` and `Passage` ranking.
+  regional variations. Searching by Label rather than by string is how you
+  avoid missing "increasing climate resilience" when you searched "climate
+  adaptation". There are 9,506 Labels across 36 types. Prefer Label filtering
+  over keyword queries for recall. Label filtering can also affect `Document`
+  and `Passage` ranking.
 
-## Querying
+A Label id is always `{type}::{name}` — `country::USA`, `category::Law`,
+`topic::Adaptation`, `concept::Q557`, `status::Principal`. Resolve names to ids
+with `/search/labels` rather than guessing them.
 
-Every path below is relative to `https://api.climatepolicyradar.org`, so
-`/search/documents` is `https://api.climatepolicyradar.org/search/documents`.
-No authentication — see Limits and etiquette.
+## REST API
 
-- `GET /search/documents` — search and filter documents.
-- `GET /search/documents:download` — the current document search (same
-  `query`/`filters`/`order_by` as above) as a CSV, one row per document,
-  capped at `max_results` (default 500). No `page_token`/`page_size`/`fields`/
-  `debug`/`bolding` — pagination is internal. Columns: `document_id`, `title`,
-  `description`, one `attributes.<key>` per attribute present, one
-  `labels.<type>` per non-classifier label type present. Topic and concept
-  labels are never included.
-- `GET /search/documents/{document_id}` — retrieve one document.
-- `GET /search/passages` — search passage text. Defaults to `idx asc` (reading
-  order); pass `order_by=relevance desc` for best-match-first.
-- `GET /search/labels` — look up available Labels/Topics by name or type.
-- `GET /search/labels-taxonomy` — the Label hierarchy.
+All endpoints are under `https://api.climatepolicyradar.org/search`, so
+`/documents` is `https://api.climatepolicyradar.org/search/documents`.
+Every endpoint is a `GET`. Shared optional parameters: `query`, `filters`,
+`order_by`, `page_token`, `page_size`.
 
-Shared parameters: `query`, `filters`, `order_by`, `page_token`, `page_size`.
+`query` runs exclusively on lexical search, ranked with BM25 — there is no
+semantic or hybrid mode. Rank profiles live in
+[documents.sd](https://github.com/climatepolicyradar/search/blob/main/vespa/app/schemas/documents.sd)
+and
+[passages.sd](https://github.com/climatepolicyradar/search/blob/main/vespa/app/schemas/passages.sd).
 
-`query` runs exclusively on lexical search, ranked with `BM25`.
+### Document search
+- GET /search/documents — search and filter documents
+  - Optional: `query` (text), `filters` (URL-encoded JSON tree), `order_by`
+    (`relevance`, `attributes.published_date`, `title`), `page_token` (1-based),
+    `page_size`, `fields` (request `aggregations.labels`,
+    `facets.labels.value.type`, `facets.labels.type`), `msm` (0-1, Minimum
+    Should Match: the fraction of query terms a document must contain; 0
+    default leaves every term optional, 1 requires all), `bolding`, `debug`
+  - Returns Principals *and* their member documents; never returns passage text
 
-- `/documents` — rank profile in [documents.sd](https://github.com/climatepolicyradar/search/blob/main/vespa/app/schemas/documents.sd)
-- `/passages` — rank profile in [passages.sd](https://github.com/climatepolicyradar/search/blob/main/vespa/app/schemas/passages.sd)
+### Document download
+- GET /search/documents:download — the current document search as a CSV
+  - Optional: `query`, `filters`, `order_by`, `max_results` (default 500)
+  - No `page_token`/`page_size`/`fields`/`debug`/`bolding` — pagination is
+    internal
+  - Columns: `document_id`, `title`, `description`, one `attributes.<key>` per
+    attribute present, one `labels.<type>` per non-classifier label type
+    present. Topic and concept labels are never included.
 
-`GET /search/openapi.json` is the machine-readable contract for all of the
-above — exact response shapes, enum values and parameter types. Read it when
-you need the precise schema of a response; read this file for how the pieces
-fit together and which query to reach for. The two are complementary, and the
-OpenAPI schema is generated from the running service, so where they disagree
-it is right about shapes and this file is right about meaning. Browsable docs
-are at `/search/docs`.
+### Document retrieval
+- GET /search/documents/{document_id} — one document by id, e.g.
+  `/search/documents/CCLW.family.4355.0`. `404` if it does not exist.
 
-### `filters`
+### Passage search
+- GET /search/passages — search the text inside documents
+  - Optional: `query`, `filters`, `order_by` (`relevance`, `idx`),
+    `page_token`, `page_size`, `bolding`
+  - Defaults to `idx asc` (reading order); pass `order_by=relevance desc` for
+    best-match-first
+  - Every passage carries `document_id` (the member it came from) and
+    `principal_id`, and both are filterable
+
+### Labels
+- GET /search/labels — look up Labels/Topics by name or type
+  - Optional: `query`, `filters`, `type` (e.g. `concept`, `category`, `topic`),
+    `order_by`, `page_token`, `page_size`
+- GET /search/labels-taxonomy — the 61-entry Label hierarchy used by the
+  sidebar filters. Takes no parameters.
+
+### Machine-readable contract
+- GET /search/openapi.json — exact response shapes, enum values and parameter
+  types for everything above. Read it when you need the precise schema of a
+  response; read this file for how the pieces fit together and which query to
+  reach for. The two are complementary, and the OpenAPI schema is generated
+  from the running service, so where they disagree it is right about shapes and
+  this file is right about meaning.
+- GET /search/docs — browsable Swagger UI.
+- GET /search/llms.txt — this file.
+
+## Authentication
+
+There is none. No API key, no auth header, no sign-up — every endpoint is open
+and any origin may call it. Please be proportionate with request volume: this
+is a non-profit's infrastructure, and the bulk dataset under Other access is
+the right tool for anything resembling a full crawl.
+
+## Filters
 
 `filters` is a URL-encoded JSON filter tree, ANDed with `query` and applied to
 any `aggregations`/`facets` requested alongside the results.
@@ -90,8 +146,8 @@ worked examples below show the shape.
 Three things the schema cannot tell you:
 
 - `contains` is index matching, not substring matching.
-- A Label id is always `{type}::{name}`: `geography::USA`, `category::Law`,
-  `topic::Adaptation`, `concept::Q1343`.
+- A Label id is always `{type}::{name}`. Countries are ISO-3166 alpha-3:
+  `country::USA`, not `country::United States of America`.
 - An unrecognised field name is passed to the index rather than rejected,
   which is also the only way to reach an unaliased field — `id`, `title`,
   `description` and `geographies` on `/documents`.
@@ -108,11 +164,10 @@ accumulated from every member onto the Principal. So full-text search on
 `status::Principal` filter mostly removes members that matched on title,
 description or a Label filter.
 
-`/search/documents` results never include passage text, whatever the
-document. To read the passages, use `/search/passages`. Every passage carries
-both `document_id` (the member it came from) and `principal_id`, and both are
-filterable. Filter on `principal_id` for every passage across a law's versions
-or a case's filings, or on `document_id` for one member:
+`/search/documents` results never include passage text, whatever the document.
+To read the passages, use `/search/passages`. Filter on `principal_id` for
+every passage across a law's versions or a case's filings, or on `document_id`
+for one member:
 
 ```json
 {"op": "and", "filters": [
@@ -129,64 +184,15 @@ require two different Labels on the same passage, give each its own group:
 ```json
 {"op": "and", "filters": [
   {"op": "and", "filters": [
-    {"field": "labels.value.id", "op": "contains", "value": "concept::Q1343"}]},
+    {"field": "labels.value.id", "op": "contains", "value": "concept::Q557"}]},
   {"op": "and", "filters": [
-    {"field": "labels.value.id", "op": "contains", "value": "concept::Q7987"}]}]}
+    {"field": "labels.value.id", "op": "contains", "value": "concept::Q1830"}]}]}
 ```
 
 Same-element matching is what you want when the conditions describe one Label:
 `labels.type` and `labels.value.id` in a single group pin the relationship and
 its target together. `/documents` does no array-struct filtering, so its label
 conditions are always independent of one another.
-
-### Worked examples
-
-Documents for a geography — URL-encode the JSON in a real request:
-
-```
-GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"geography::USA"}]}
-```
-
-Principals only — one result per law, policy or case rather than one per
-member document:
-
-```
-GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"status::Principal"}]}
-```
-
-Documents published in a closed date range. `published_date` is stored as a
-Unix timestamp; ISO-8601 strings are converted at the boundary, and `key` must
-be `published_date`:
-
-```json
-{"op": "and", "filters": [
-  {"field": "attributes.published_date", "key": "published_date",
-   "op": "gte", "value": "2019-01-01T00:00:00Z"},
-  {"field": "attributes.published_date", "key": "published_date",
-   "op": "lte", "value": "2023-12-31T23:59:59Z"}]}
-```
-
-A Label query using all three combinators — US laws or policies, excluding one
-concept:
-
-```json
-{"op": "and", "filters": [
-  {"op": "or", "filters": [
-    {"field": "labels.value.id", "op": "contains", "value": "category::Law"},
-    {"field": "labels.value.id", "op": "contains", "value": "category::Policy"}]},
-  {"field": "labels.value.id", "op": "contains", "value": "geography::USA"},
-  {"field": "labels.value.id", "op": "not_contains", "value": "concept::Q1343"}]}
-```
-
-Filtering `/documents` by a `concept::` Label also affects ranking: when you
-order by `relevance`, matching documents are reordered by how often they
-mention that concept, so the most substantive treatment comes first. An
-explicit `order_by` on any other field disables that reordering, and
-`not_contains` never contributes to it — excluding a concept must not boost it.
-
-`order_by` takes comma-separated `<field> <direction>` clauses (AIP-132).
-Documents support `relevance`, `attributes.published_date`, `title`. Passages
-support `relevance`, `idx`.
 
 ### Dates
 
@@ -222,6 +228,57 @@ the first `order_by` clause is applied.
 
 The rest of the `attributes` bag varies by corpus and is not enumerated here.
 
+### Ordering
+
+`order_by` takes comma-separated `<field> <direction>` clauses (AIP-132).
+Documents support `relevance`, `attributes.published_date`, `title`. Passages
+support `relevance`, `idx`.
+
+Filtering `/documents` by a `concept::` Label also affects ranking: when you
+order by `relevance`, matching documents are reordered by how often they
+mention that concept, so the most substantive treatment comes first. An
+explicit `order_by` on any other field disables that reordering, and
+`not_contains` never contributes to it — excluding a concept must not boost it.
+
+## Worked examples
+
+URL-encode the JSON in a real request; it is shown raw here for readability.
+
+Documents for a country:
+
+```
+GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"country::USA"}]}
+```
+
+Principals only — one result per law, policy or case rather than one per
+member document:
+
+```
+GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"status::Principal"}]}
+```
+
+Documents published in a closed date range:
+
+```json
+{"op": "and", "filters": [
+  {"field": "attributes.published_date", "key": "published_date",
+   "op": "gte", "value": "2019-01-01T00:00:00Z"},
+  {"field": "attributes.published_date", "key": "published_date",
+   "op": "lte", "value": "2023-12-31T23:59:59Z"}]}
+```
+
+A Label query using all three combinators — US laws or policies, excluding one
+concept:
+
+```json
+{"op": "and", "filters": [
+  {"op": "or", "filters": [
+    {"field": "labels.value.id", "op": "contains", "value": "category::Law"},
+    {"field": "labels.value.id", "op": "contains", "value": "category::Policy"}]},
+  {"field": "labels.value.id", "op": "contains", "value": "country::USA"},
+  {"field": "labels.value.id", "op": "not_contains", "value": "concept::Q557"}]}
+```
+
 ## Recommended query strategy
 
 1. Resolve the user's concept to a Label via `/search/labels` before searching.
@@ -232,12 +289,78 @@ The rest of the `attributes` bag varies by corpus and is not enumerated here.
 3. Check `documents[].type` relationships before asserting that a law is current.
 4. Cite the document `id` and passage page number; both are stable.
 
-## Limits and etiquette
+## Coverage
 
-No authentication. There is no API key and no auth header — every endpoint is
-open, and any origin may call it. Please be proportionate with request volume:
-this is a non-profit's infrastructure, and the bulk dataset below is the right
-tool for anything resembling a full crawl.
+For live counts, request facets rather than trusting this list:
+`GET /search/documents?page_size=1&fields=facets.labels.value.type` returns
+every label type with its document counts, and honours any `filters` you send
+alongside it.
+
+By category (66,032 documents):
+- Litigation: 23,399
+- Policy: 13,438
+- Multilateral Climate Fund project: 9,462
+- UN submission: 8,710
+- Law: 5,604
+- Global Stocktake: 3,655
+- Corporate Disclosure: 1,929
+- Report: 408
+
+By region:
+- North America: 19,878
+- Europe & Central Asia: 12,841
+- Latin America & Caribbean: 8,335
+- East Asia & Pacific: 8,019
+- Sub-Saharan Africa: 7,027
+- Middle East & North Africa: 2,563
+- South Asia: 1,914
+
+By topic:
+- Mitigation: 5,719
+- Adaptation: 2,866
+- Disaster risk management: 1,164
+- Loss and damage: 94
+
+By domain:
+- Climate: 60,855
+- Nature: 6,573
+
+Top countries, as `country::` Label ids:
+- USA (United States of America): 19,116
+- XAB (International): 2,195
+- BRA (Brazil): 2,192
+- AUS (Australia): 1,116
+- GBR (United Kingdom): 1,044
+- IND (India): 848
+- DEU (Germany): 765
+- CAN (Canada): 762
+- CHN (China): 749
+- IDN (Indonesia): 728
+- EUR (European Union): 726
+- JPN (Japan): 696
+- FRA (France): 676
+- MEX (Mexico): 670
+- COL (Colombia): 577
+- VNM (Viet Nam): 570
+- PER (Peru): 525
+- CHL (Chile): 518
+- KEN (Kenya): 494
+- TUR (Türkiye): 476
+- ARG (Argentina): 465
+- ZAF (South Africa): 456
+- KOR (South Korea): 447
+- PHL (Philippines): 437
+- NZL (New Zealand): 432
+- ESP (Spain): 405
+- DNK (Denmark): 392
+- ITA (Italy): 390
+- ECU (Ecuador): 388
+- NGA (Nigeria): 367
+
+…and 170+ more. The US skew is litigation: the Sabin Center case collection is
+the single largest corpus.
+
+## Limits and etiquette
 
 **Paginate on the request, not the response.** `page_token` (1-based) and
 `page_size` work as offset and limit. The `page`, `page_size`, `total_pages`,
@@ -265,6 +388,15 @@ behind the upstream sources.
 - Loading and analysis examples: https://github.com/ClimatePolicyRadar/open-data
 - Human-facing search: https://app.climatepolicyradar.org/search
 - Terms of use, including commercial-use terms: contact partners@climatepolicyradar.org
+
+## Links
+
+- API base: https://api.climatepolicyradar.org/search
+- OpenAPI schema: https://api.climatepolicyradar.org/search/openapi.json
+- Interactive Swagger: https://api.climatepolicyradar.org/search/docs
+- This file: https://api.climatepolicyradar.org/search/llms.txt
+- Source: https://github.com/climatepolicyradar/search
+- Website: https://climatepolicyradar.org
 
 ## Citation
 
