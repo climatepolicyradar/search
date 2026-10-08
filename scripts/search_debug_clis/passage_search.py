@@ -1,4 +1,5 @@
 import json
+import re
 
 import typer
 from rich.console import Console, Group
@@ -97,17 +98,36 @@ def search(
         help="Match passages carrying ANY of the given --topic values. "
         "Default is to require all of them i.e. AND",
     ),
+    exact_weight: float | None = typer.Option(
+        None,
+        "--exact-weight",
+        help="Option B: also score unquoted terms against the unstemmed field, scaled by this.",
+    ),
+    stem_variant: str | None = typer.Option(
+        None,
+        "--stem-variant",
+        help="Option C: porter | kstem | minimal (semantic rules are off for all three).",
+    ),
+    order: str = typer.Option(
+        "relevance", "--order", help="relevance | idx (idx = the API's in-document default)."
+    ),
 ):
     """Search for passages."""
-    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings, debug=debug, exact_weight=exact_weight, stem_variant=stem_variant
+    )
     results = engine.search(
         query=query,
         filters_json_string=_build_filters(document_id, filters, topic, topic_or),
         pagination=Pagination(page_token=page, page_size=page_size),
-        order_by=[OrderBy(field="relevance", direction="desc")],
+        order_by=[OrderBy(field=order, direction="desc" if order == "relevance" else "asc")],
+    )
+    console.print(
+        f"[bold magenta]{query!r}  {engine.parameters}  order={order}  "
+        f"total={results.total_size}[/bold magenta]"
     )
 
-    words = query.split()
+    words = query.replace('"', " ").split()
 
     for i, passage in enumerate(results.results):
         relevance = None
@@ -149,8 +169,12 @@ def search(
             )
         text_display = truncate(passage.text, max_len)
         table.add_row("text", highlight(text_display, words))
-        if passage.tokens:
-            table.add_row("tokens", str(passage.tokens))
+        literal = [
+            w for w in words if re.search(rf"\b{re.escape(w)}\b", passage.text, re.IGNORECASE)
+        ]
+        table.add_row(
+            "literal words", ", ".join(literal) or "[red]none – stem-only match[/red]"
+        )
         if relevance is not None:
             table.add_row("relevance", str(relevance))
         if text_tokens:

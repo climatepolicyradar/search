@@ -176,6 +176,96 @@
                             </item>
                         </tokenFilters>
                     </item>
+                    <!-- RESEARCH (stemming demo): passage_analysis with Krovetz
+                         (dictionary-based) stemming in place of Porter. -->
+                    <item key="profile=passage_analysis_kstem;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <charFilters>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[$]</item>
+                                    <item key="replacement">dollar</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[€]</item>
+                                    <item key="replacement">euro</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[£]</item>
+                                    <item key="replacement">pound</item>
+                                </conf>
+                            </item>
+                        </charFilters>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>stop</name>
+                                <conf>
+                                    <item key="words">en/stopwords.txt</item>
+                                    <item key="ignoreCase">true</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>kStem</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
+                    <!-- RESEARCH (stemming): passage_analysis with plural-only
+                         stemming in place of Porter. -->
+                    <item key="profile=passage_analysis_minimal;language=en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <charFilters>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[$]</item>
+                                    <item key="replacement">dollar</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[€]</item>
+                                    <item key="replacement">euro</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>patternReplace</name>
+                                <conf>
+                                    <item key="pattern">[£]</item>
+                                    <item key="replacement">pound</item>
+                                </conf>
+                            </item>
+                        </charFilters>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>stop</name>
+                                <conf>
+                                    <item key="words">en/stopwords.txt</item>
+                                    <item key="ignoreCase">true</item>
+                                </conf>
+                            </item>
+                            <item>
+                                <name>englishMinimalStem</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
                     <!-- exact_analysis: for quoted/exact-phrase matching. Same
                          charFilters as passage_analysis (so "$100" -> dollar100 on
                          both sides), lowercase only - NO stop-words, NO stemming. -->

@@ -32,16 +32,33 @@ def search(
     filters: str | None = None,
     labels: bool = False,
     bolding: bool = False,
+    topic: str | None = typer.Option(None, "--topic", help="e.g. Q1234 or concept::Q1234"),
+    exact_weight: float | None = typer.Option(
+        None,
+        "--exact-weight",
+        help="Option B: also score unquoted terms against the unstemmed fields, scaled by this.",
+    ),
 ):
     """Search for documents."""
+    conditions: list[dict] = []
+    if topic:
+        value = topic if topic.startswith("concept::") else f"concept::{topic}"
+        conditions.append({"field": "labels.value.id", "op": "contains", "value": value})
+    if filters:
+        conditions.append(json.loads(filters))
+    filters_json = json.dumps({"op": "and", "filters": conditions}) if conditions else None
+
     engine = DevVespaDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=bolding
+        settings=settings, debug=debug, bolding=bolding, exact_weight=exact_weight
     )
     results = engine.search(
         query=query,
-        filters_json_string=filters,
+        filters_json_string=filters_json,
         pagination=Pagination(page_token=page_token, page_size=page_size),
         order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+    console.print(
+        f"[bold magenta]{query!r}  {engine.parameters}  total={results.total_size}[/bold magenta]"
     )
 
     words = query.split()

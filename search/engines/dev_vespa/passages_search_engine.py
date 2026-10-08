@@ -43,6 +43,14 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 
 
+# RESEARCH (stemming)
+_STEM_VARIANTS: dict[str, tuple[str, str]] = {
+    "porter": ("default", "bm25_multiplicative"),
+    "kstem": ("kstem", "bm25_multiplicative_kstem"),
+    "minimal": ("minimal", "bm25_multiplicative_minimal"),
+}
+
+
 def _passage_phrase_yql(count: int) -> str:
     """One in-order phrase clause per quoted phrase."""
     return "".join(
@@ -78,21 +86,60 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         debug: bool = False,
         ranking_profile: str = _DEFAULT_PASSAGE_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
+        exact_weight: float | None = None,
+        stem_variant: str | None = None,
     ) -> None:
         """Initialise the search engine."""
+        if stem_variant is not None and stem_variant not in _STEM_VARIANTS:
+            raise ValueError(
+                f"stem_variant must be one of {sorted(_STEM_VARIANTS)}, got {stem_variant!r}"
+            )
+        if exact_weight is not None and exact_weight < 0:
+            raise ValueError(f"exact_weight must be >= 0, got {exact_weight!r}")
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
-        self.ranking_profile = ranking_profile
+        self.ranking_profile = (
+            _STEM_VARIANTS[stem_variant][1] if stem_variant else ranking_profile
+        )
         self.topic_weight = topic_weight
+        self.exact_weight = exact_weight
+        self.stem_variant = stem_variant
 
     @property
     def parameters(self) -> dict[str, Any]:
         """Tuning parameters, surfaced in relevance-test logging."""
-        return {
+        parameters: dict[str, Any] = {
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
         }
+        # Only when set, so the default engine's id (derived from these) is unchanged.
+        if self.exact_weight is not None:
+            parameters["exact_weight"] = self.exact_weight
+        if self.stem_variant is not None:
+            parameters["stem_variant"] = self.stem_variant
+        return parameters
+
+    def _free_text_yql(self) -> str:
+        """
+        The free-text half of the YQL.
+
+        For stemming research: with `exact_weight` it is wrapped in `rank()` and
+        the query is matched against the unstemmed `exact` fieldset for scoring only, so
+        a literal e.g. "informal" outscores a passage that only shares its stem
+        e.g. "information". Which passages match is unchanged.
+        """
+        if self.stem_variant is None:
+            match = "userQuery()"
+        else:
+            fieldset = _STEM_VARIANTS[self.stem_variant][0]
+            match = f'({{defaultIndex: "{fieldset}"}}userInput(@query))'
+        if self.exact_weight is None:
+            return f" and {match}"
+        return (
+            f" and rank({match}, "
+            '({defaultIndex: "exact", grammar: "any"}userInput(@query)))'
+        )
 
     def search(
         self,
@@ -118,7 +165,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
 
         yql = f"select * from sources passages where {where}"
         if free_text:
-            yql += " and userQuery()"
+            yql += self._free_text_yql()
         yql += _passage_phrase_yql(len(phrases))
 
         logger.info(
@@ -144,6 +191,11 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
+
+        if free_text and self.exact_weight is not None and not sort_overrides:
+            request_body["input.query(exact_weight)"] = self.exact_weight
+        if self.stem_variant is not None:
+            request_body["rules.off"] = True
 
         if free_text:
             request_body["query"] = _normalize_currency_symbols(free_text)
