@@ -334,26 +334,6 @@ other = Label(
 )
 
 
-# region global stocktake
-global_stocktake = Label(
-    type="category",
-    id="category::Global Stocktake",
-    value="Global Stocktake",
-    labels=[],
-)
-gst1 = Label(
-    id="process::GST1",
-    value="GST1 Submission",
-    type="process",
-    labels=[LabelRelationship(type="subconcept_of", value=global_stocktake)],
-)
-party = Label(
-    id="author_type::Party",
-    value="Party",
-    type="author_type",
-    labels=[LabelRelationship(type="subconcept_of", value=global_stocktake)],
-)
-
 # region un submission
 un_submission = Label(
     type="category", id="category::UN submission", value="UN submission", labels=[]
@@ -369,82 +349,55 @@ nationally_determined_contribution = Label(
     id="entity_type::Nationally Determined Contribution (NDC)",
     value="Nationally Determined Contribution (NDC)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 national_adaptation_plan = Label(
     id="entity_type::National Adaptation Plan (NAP)",
     value="National Adaptation Plan (NAP)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 biennial_transparency_report = Label(
     id="entity_type::Biennial Transparency Report (BTR)",
     value="Biennial Transparency Report (BTR)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 long_term_low_emission_development_strategy = Label(
     id="entity_type::Long-term low-emission development strategy",
     value="Long-term low-emission development strategy",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 biennial_update_report = Label(
     id="entity_type::Biennial Update Report (BUR)",
     value="Biennial Update Report (BUR)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 biennial_report = Label(
     id="entity_type::Biennial Report (BR)",
     value="Biennial Report (BR)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 national_communication = Label(
     id="entity_type::National Communication (NC)",
     value="National Communication (NC)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 national_inventory_report = Label(
     id="entity_type::National Inventory Report (NIR)",
     value="National Inventory Report (NIR)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 adaptation_communication = Label(
     id="entity_type::Adaptation Communication (AC)",
     value="Adaptation Communication (AC)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 
 cbd = Label(
@@ -495,6 +448,17 @@ national_drought_plan = Label(
     value="National Drought Plan (NDP)",
     type="document_type",
     labels=[LabelRelationship(type="subconcept_of", value=unccd)],
+)
+
+# region global stocktake
+global_stocktake = Label(
+    type="category", id="category::Global Stocktake", value="Global Stocktake", labels=[]
+)
+gst1 = Label(
+    id="process::GST1",
+    value="GST1 Submission",
+    type="process",
+    labels=[LabelRelationship(type="subconcept_of", value=global_stocktake)],
 )
 
 
@@ -559,5 +523,4 @@ labels_taxonomy = [
     national_drought_plan,
     global_stocktake,
     gst1,
-    party,
 ]

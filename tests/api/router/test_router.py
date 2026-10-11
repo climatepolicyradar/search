@@ -175,30 +175,6 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     assert gst1["labels"][0]["type"] == "subconcept_of"
     assert gst1["labels"][0]["value"]["id"] == "category::Global Stocktake"
 
-    party = results_by_id["author_type::Party"]
-    assert party["type"] == "author_type"
-    assert party["value"] == "Party"
-    assert party["labels"][0]["type"] == "subconcept_of"
-    assert party["labels"][0]["value"]["id"] == "category::Global Stocktake"
-
-    document_type_ids = [
-        "entity_type::Nationally Determined Contribution (NDC)",
-        "entity_type::National Adaptation Plan (NAP)",
-        "entity_type::Biennial Transparency Report (BTR)",
-        "entity_type::Long-term low-emission development strategy",
-        "entity_type::Biennial Update Report (BUR)",
-        "entity_type::Biennial Report (BR)",
-        "entity_type::National Communication (NC)",
-        "entity_type::National Inventory Report (NIR)",
-        "entity_type::Adaptation Communication (AC)",
-    ]
-    for document_type_id in document_type_ids:
-        document_type = results_by_id[document_type_id]
-        parent_ids = {
-            relationship["value"]["id"] for relationship in document_type["labels"]
-        }
-        assert parent_ids == {"un_convention::UNFCCC", "author_type::Party"}
-
 
 def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
     """The root response is how an agent with no prior knowledge finds the docs."""
