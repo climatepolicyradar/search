@@ -262,25 +262,15 @@ def _build_filter_yql(
 ) -> str | None:
     """
     Recursively build YQL for a filter group, or None if it constrains nothing.
-    
-    `None` is representative of an empty filter - which is odd, but valid. e.g.
-    [
-        {
-            "op": "or",
-            "filters": [] <-- empty filters list
-        },
-        {
-            "op": "or",
-            "filters": [
-                {
-                    "field": "labels.value.id",
-                    "op": "contains",
-                    "value": "concept::Q1274",
-                    "checked": true
-                }
-            ]
-        }
-    ]
+
+    An empty group contributes no operand, so joining it with its siblings
+    cannot leave a dangling `( and ...)` that Vespa rejects with a 400.
+
+    Empty groups are refused at the API boundary (`api.utils.normalise_filters`),
+    because a group that constrains nothing is indistinguishable from an absent
+    filter once it reaches here - a caller that loses a scope would otherwise
+    get the whole corpus back and no error. This stays tolerant so the builder
+    is safe for internal callers that construct groups directly.
     """
     parts: list[str] = []
     # `contains` conditions grouped by struct to allow us to filter on more than 1 field of a struct.

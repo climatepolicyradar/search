@@ -127,3 +127,85 @@ def test_normalise_filters_rejects_invalid_published_date() -> None:
         )
     assert exc_info.value.status_code == 400
     assert "ISO 8601" in str(exc_info.value.detail)
+
+
+def test_normalise_filters_rejects_empty_filter_group() -> None:
+    """
+    Ensure an empty filter group is rejected rather than silently dropped.
+
+    An empty group is indistinguishable from "no constraint" once it reaches
+    the YQL builder, so a caller that loses a scope gets the whole corpus back
+    and no error. Rejecting it at the boundary makes that failure visible.
+
+    :raises HTTPException: when a group contains no filters.
+    :return: ``None``.
+    :rtype: None
+    """
+    with pytest.raises(HTTPException) as exc_info:
+        normalise_filters(
+            """
+            {
+              "op": "and",
+              "filters": [
+                {"op": "or", "filters": []},
+                {
+                  "op": "or",
+                  "filters": [
+                    {
+                      "field": "labels.value.id",
+                      "op": "contains",
+                      "value": "concept::Q226"
+                    }
+                  ]
+                }
+              ]
+            }
+            """
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "empty" in str(exc_info.value.detail).lower()
+
+
+def test_normalise_filters_rejects_empty_top_level_group() -> None:
+    """
+    Ensure a top-level group with no filters is rejected too.
+
+    :raises HTTPException: when the top-level group contains no filters.
+    :return: ``None``.
+    :rtype: None
+    """
+    with pytest.raises(HTTPException) as exc_info:
+        normalise_filters('{"op": "and", "filters": []}')
+
+    assert exc_info.value.status_code == 400
+
+
+def test_normalise_filters_allows_a_fully_populated_group() -> None:
+    """
+    Ensure the rejection does not catch ordinary populated filters.
+
+    :return: ``None``.
+    :rtype: None
+    """
+    normalised = normalise_filters(
+        """
+        {
+          "op": "and",
+          "filters": [
+            {
+              "op": "or",
+              "filters": [
+                {
+                  "field": "labels.value.id",
+                  "op": "contains",
+                  "value": "concept::Q226"
+                }
+              ]
+            }
+          ]
+        }
+        """
+    )
+
+    assert normalised is not None

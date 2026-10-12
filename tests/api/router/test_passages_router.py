@@ -135,3 +135,31 @@ def test_read_passages_order_by_unsupported_field_returns_400(passages_client) -
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     mock_engine.search.assert_not_called()
+
+
+def test_read_passages_rejects_an_empty_filter_group(passages_client) -> None:
+    """
+    An empty scope group is refused rather than searched unscoped.
+
+    This is the FUS-683 request shape: the panel meant to scope to a family's
+    documents, found none to enumerate, and sent an empty group alongside a
+    topic filter. The group was dropped and the topic ran over every passage in
+    the index, which reads as a successful search.
+    """
+    client, mock_engine = passages_client
+
+    response = client.get(
+        "/search/passages",
+        params={
+            "query": "",
+            "filters": (
+                '{"op":"and","filters":['
+                '{"op":"or","filters":[]},'
+                '{"op":"or","filters":[{"field":"labels.value.id",'
+                '"op":"contains","value":"concept::Q226"}]}]}'
+            ),
+        },
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    mock_engine.search.assert_not_called()

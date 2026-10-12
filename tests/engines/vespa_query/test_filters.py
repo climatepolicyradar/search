@@ -344,9 +344,12 @@ def test_empty_nested_group_contributes_no_operand() -> None:
     """
     A group with no filters drops out instead of leaving a dangling operand.
 
-    The UI sends one group per facet, so an untouched facet arrives as
-    ``{"op": "or", "filters": []}``. Joining its empty YQL with its siblings
-    used to produce ``( and ...)``, which Vespa rejects with a 400.
+    Joining an empty group's YQL with its siblings used to produce
+    ``( and ...)``, which Vespa rejects with a 400.
+
+    The API boundary now refuses empty groups outright (see
+    ``normalise_filters``), so this covers the builder's own tolerance for
+    internal callers rather than anything the UI sends.
     """
     filter_group = Filter(
         op="and",

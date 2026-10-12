@@ -275,6 +275,29 @@ def _normalise_filter_group(filter_group: Filter) -> None:
                 ) from exc
 
 
+def _reject_empty_filter_groups(filter_group: Filter, path: str = "filters") -> None:
+    """
+    Reject any group that contains no filters.
+
+    An empty group carries no constraint, and the YQL builder drops it. That
+    makes it indistinguishable from "no filter was asked for", so a caller that
+    means to scope a search but sends an empty group gets the whole corpus back
+    and no indication anything went wrong. Refusing it here keeps a lost scope
+    loud rather than silent.
+    """
+    if not filter_group.filters:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{path} contains an empty filter group. An empty group matches "
+                "nothing and is most likely a lost filter - omit it instead."
+            ),
+        )
+    for index, item in enumerate(filter_group.filters):
+        if isinstance(item, Filter):
+            _reject_empty_filter_groups(item, f"{path}[{index}]")
+
+
 def normalise_filters(filters_json_string: str | None) -> str | None:
     """
     Parse and normalise filter JSON before it reaches the search engine.
@@ -291,5 +314,6 @@ def normalise_filters(filters_json_string: str | None) -> str | None:
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
 
+    _reject_empty_filter_groups(filters)
     _normalise_filter_group(filters)
     return filters.model_dump_json()

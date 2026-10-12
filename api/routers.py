@@ -59,7 +59,13 @@ _VESPA_UNAVAILABLE_RESPONSE: dict[int | str, dict[str, Any]] = {
     },
 }
 SEARCH_RESPONSES: dict[int | str, dict[str, Any]] = {
-    HTTPStatus.BAD_REQUEST: {"description": ("Malformed `filters` JSON")},
+    HTTPStatus.BAD_REQUEST: {
+        "description": (
+            "Malformed `filters` JSON, or a `filters` group containing no "
+            "filters. An empty group constrains nothing and is rejected so a "
+            "lost filter cannot silently widen the search."
+        )
+    },
     **_VESPA_UNAVAILABLE_RESPONSE,
 }
 ITEM_RESPONSES: dict[int | str, dict[str, Any]] = {
