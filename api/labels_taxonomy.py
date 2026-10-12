@@ -387,10 +387,7 @@ biennial_transparency_report = Label(
     id="entity_type::Biennial Transparency Report (BTR)",
     value="Biennial Transparency Report (BTR)",
     type="entity_type",
-    labels=[
-        LabelRelationship(type="subconcept_of", value=unfccc),
-        LabelRelationship(type="subconcept_of", value=party),
-    ],
+    labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 long_term_low_emission_development_strategy = Label(
     id="entity_type::Long-term low-emission development strategy",
