@@ -50,7 +50,7 @@ dev = [
   "pulumi>=3.267.0,<4.0.0",
   "pytest>=9.1.1",
   "hypothesis>=6.168.3",
-  "boto3-stubs[s3,ssm]>=1.43.102",
+  "boto3-stubs[s3,ssm]>=1.43.107",
   "pulumiverse-grafana>=2.41.0",
 ]
 
