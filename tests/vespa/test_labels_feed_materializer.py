@@ -8,11 +8,13 @@ materialiser must store it in the same shape.
 
 from typing import Any
 
+import pytest
 from cpr_contracts import DocumentLabelRelationship, Label
 
 from search.data_in_models import Label as DataInLabel
 from search.vespa.labels_feed_materializer import (
     _source_label_relationship_to_vespa_label,
+    _vespa_label_to_vespa_update,
     _wikibase_concept_to_vespa_label,
 )
 from search.vespa.sources.wikibase import (
@@ -67,6 +69,39 @@ def test_wikibase_concept_to_vespa_label_returns_vespa_label_shape() -> None:
     parsed = DataInLabel.model_validate_json(vespa_label["label_source"])
     assert parsed.id == "concept::Q123"
     assert parsed.value == "Climate adaptation"
+
+
+@pytest.mark.parametrize("has_preferred_classifier", [True, False])
+def test_wikibase_concept_to_vespa_label_active_follows_preferred_classifier(
+    has_preferred_classifier: bool,
+) -> None:
+    concept: WikibaseConcept = {
+        "wikibase_id": "Q778",
+        "preferred_label": "real estate sector",
+        "alternative_labels": [],
+        "description": None,
+        "negative_labels": [],
+        "subconcept_labels": [],
+        "label_relationships": [],
+        "has_preferred_classifier": has_preferred_classifier,
+    }
+
+    vespa_label = _wikibase_concept_to_vespa_label(concept)
+    update = _vespa_label_to_vespa_update(vespa_label)
+
+    assert vespa_label["active"] is has_preferred_classifier
+    assert update["fields"]["active"] == {"assign": has_preferred_classifier}
+
+
+def test_source_label_relationship_to_vespa_label_is_active() -> None:
+    label_rel = DocumentLabelRelationship(
+        value=Label(id="category::Law", type="category", value="Law", labels=[]),
+        timestamp=None,
+        type="related",
+    )
+
+    vespa_label = _source_label_relationship_to_vespa_label(label_rel)
+    assert vespa_label["active"] is True
 
 
 def test_wikibase_concept_to_vespa_label_propagates_label_relationships() -> None:

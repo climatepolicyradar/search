@@ -43,6 +43,7 @@ class VespaLabel(TypedDict):
     negative_labels: list[str]
     label_source: str
     labels: list[VespaLabelLabelRelationship]
+    active: bool
 
 
 class VespaLabelUpdate(TypedDict):
@@ -55,6 +56,7 @@ class VespaLabelUpdate(TypedDict):
     negative_labels: VespaAssign[list[str]]
     label_source: VespaAssign[str]
     labels: VespaAssign[list[VespaLabelLabelRelationship]]
+    active: VespaAssign[bool]
 
 
 def _label_relationship_to_vespa_label_relationship(
@@ -90,6 +92,7 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
             "negative_labels": {"assign": label["negative_labels"]},
             "label_source": {"assign": label["label_source"]},
             "labels": {"assign": label["labels"]},
+            "active": {"assign": label["active"]},
         },
     }
 
@@ -116,6 +119,7 @@ def _source_label_relationship_to_vespa_label(
         "negative_labels": [],
         "label_source": value.model_dump_json(),
         "labels": [_label_relationship_to_vespa_label_relationship(label_relationship) for label_relationship in value.labels],
+        "active": True,
     }
     return vespa_label
 
@@ -136,12 +140,13 @@ def _wikibase_label_relationship_to_label_label_relationship(
 
 
 def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
-    """Convert a Wikibase concept into a ``VespaLabel`` row."""
     identifier = f"concept::{concept['wikibase_id']}"
+
     label_rels = [
         _wikibase_label_relationship_to_label_label_relationship(rel)
         for rel in concept["label_relationships"]
     ]
+
     source_label = Label(
         id=identifier,
         type="concept",
@@ -157,6 +162,7 @@ def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
         "description": concept["description"] or "",
         "negative_labels": concept["negative_labels"],
         "label_source": source_label.model_dump_json(),
+        "active": concept["has_preferred_classifier"],
         "labels": [
             _label_relationship_to_vespa_label_relationship(lr) for lr in label_rels
         ],

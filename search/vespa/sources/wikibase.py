@@ -389,12 +389,8 @@ async def fetch_concepts_at_timestamps(
 
             results = await asyncio.gather(*tasks)
             for concept in results:
-                if concept is not None and concept["has_preferred_classifier"]:
+                if concept is not None:
                     all_concepts.append(concept)
-                elif concept is not None:
-                    logger.info(
-                        f"Skipping {concept['preferred_label']} - no preferred classifiers"
-                    )
 
             logger.info(
                 "Batch %d/%d: fetched %d concepts",
