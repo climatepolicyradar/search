@@ -387,9 +387,6 @@ biennial_transparency_report = Label(
     id="entity_type::Biennial Transparency Report (BTR)",
     value="Biennial Transparency Report (BTR)",
     type="entity_type",
-    # Not nested under Party: a BTR is a UN submission but never a GST1
-    # submission, and GST1 is the only Global Stocktake process we hold
-    # documents for currently.
     labels=[LabelRelationship(type="subconcept_of", value=unfccc)],
 )
 long_term_low_emission_development_strategy = Label(
