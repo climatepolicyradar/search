@@ -6,6 +6,8 @@ engine parses ``label_source`` as a flat :class:`DataInLabel`, so the
 materialiser must store it in the same shape.
 """
 
+from typing import Any
+
 from cpr_contracts import DocumentLabelRelationship, Label
 
 from search.data_in_models import Label as DataInLabel
@@ -16,6 +18,7 @@ from search.vespa.labels_feed_materializer import (
 from search.vespa.sources.wikibase import (
     WikibaseConcept,
     _compute_label_relationships,
+    _parse_entity,
 )
 
 
@@ -34,9 +37,9 @@ def test_source_label_relationship_to_vespa_label_label_source_round_trips() -> 
             id="principal_law::Bavaria Climate Protection Act",
             type="principal_law",
             value="Bavaria Climate Protection Act",
-            labels=[]
+            labels=[],
         ),
-        timestamp= None,
+        timestamp=None,
     )
 
     vespa_label = _source_label_relationship_to_vespa_label(label_rel)
@@ -45,8 +48,6 @@ def test_source_label_relationship_to_vespa_label_label_source_round_trips() -> 
     assert parsed.id == "principal_law::Bavaria Climate Protection Act"
     assert parsed.type == "principal_law"
     assert parsed.value == "Bavaria Climate Protection Act"
-
-
 
 
 def test_wikibase_concept_to_vespa_label_returns_vespa_label_shape() -> None:
@@ -58,6 +59,7 @@ def test_wikibase_concept_to_vespa_label_returns_vespa_label_shape() -> None:
         "negative_labels": [],
         "subconcept_labels": [],
         "label_relationships": [],
+        "has_preferred_classifier": True,
     }
     vespa_label = _wikibase_concept_to_vespa_label(concept)
     assert vespa_label["id"] == "concept::Q123"
@@ -83,6 +85,7 @@ def test_wikibase_concept_to_vespa_label_propagates_label_relationships() -> Non
         "description": None,
         "negative_labels": [],
         "subconcept_labels": [],
+        "has_preferred_classifier": True,
         "label_relationships": [
             {
                 "wikibase_id": "Q123",
@@ -132,6 +135,7 @@ def test_compute_label_relationships_derives_direct_parents() -> None:
             "negative_labels": [],
             "subconcept_labels": [],
             "label_relationships": [],
+            "has_preferred_classifier": True,
         },
         "Q2": {
             "wikibase_id": "Q2",
@@ -141,6 +145,7 @@ def test_compute_label_relationships_derives_direct_parents() -> None:
             "negative_labels": [],
             "subconcept_labels": [],
             "label_relationships": [],
+            "has_preferred_classifier": True,
         },
     }
 
@@ -148,11 +153,83 @@ def test_compute_label_relationships_derives_direct_parents() -> None:
 
     # Q2 (Renewable Energy) is a direct subconcept_of Q1 (Energy)
     assert result["Q2"] == [
-        {"wikibase_id": "Q1", "preferred_label": "Energy", "relationship_type": "subconcept_of"}
+        {
+            "wikibase_id": "Q1",
+            "preferred_label": "Energy",
+            "relationship_type": "subconcept_of",
+        }
     ]
     # Q3 (Solar Energy) is a direct subconcept_of Q2 (Renewable Energy), not Q1
     assert result["Q3"] == [
-        {"wikibase_id": "Q2", "preferred_label": "Renewable Energy", "relationship_type": "subconcept_of"}
+        {
+            "wikibase_id": "Q2",
+            "preferred_label": "Renewable Energy",
+            "relationship_type": "subconcept_of",
+        }
     ]
     # Q1 has no parents
     assert "Q1" not in result
+
+
+def _classifier(classifier_id: str, rank: str) -> dict[str, Any]:
+    return {
+        "mainsnak": {
+            "snaktype": "value",
+            "property": "P20",
+            "datavalue": {"value": classifier_id, "type": "string"},
+        },
+        "type": "statement",
+        "rank": rank,
+    }
+
+
+def _entity(preferred_label: str, classifiers: list[dict[str, Any]]) -> dict[str, Any]:
+    claims = {"P20": classifiers} if classifiers else {}
+    return {
+        "type": "item",
+        "labels": {"en": {"language": "en", "value": preferred_label}},
+        "claims": claims,
+    }
+
+
+def test_parse_entity_has_preferred_classifier_when_p20_is_preferred() -> None:
+    entity = _entity(
+        preferred_label="greenhouse gas",
+        classifiers=[
+            _classifier("3p7eyng3", "deprecated"),
+            _classifier("v4zb3vgn", "preferred"),
+        ],
+    )
+
+    concept = _parse_entity("Q218", entity)
+    assert concept and concept["has_preferred_classifier"]
+
+
+def test_parse_entity_has_no_preferred_classifier_when_p20_is_normal() -> None:
+    entity = _entity(
+        preferred_label="real estate sector",
+        classifiers=[_classifier("bgrd72hx", "normal")],
+    )
+
+    concept = _parse_entity("Q778", entity)
+    assert concept and not concept["has_preferred_classifier"]
+
+
+def test_parse_entity_has_no_preferred_classifier_when_p20_is_only_deprecated() -> None:
+    entity = _entity(
+        preferred_label="greenhouse gas",
+        classifiers=[_classifier("3p7eyng3", "deprecated")],
+    )
+
+    concept = _parse_entity("Q218", entity)
+    assert concept and not concept["has_preferred_classifier"]
+
+
+def test_parse_entity_has_no_preferred_classifier_without_p20() -> None:
+    entity = _entity(
+        preferred_label="real estate sector",
+        classifiers=[],
+    )
+
+    concept = _parse_entity("Q778", entity)
+    assert concept and not concept["has_preferred_classifier"]
