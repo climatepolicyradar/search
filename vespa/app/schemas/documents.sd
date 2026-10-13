@@ -70,6 +70,11 @@ schema documents {
 
         struct concept {
             field id type string {}
+            # We store the document_id for when concepts
+            # are aggregated onto a Principal document from
+            # related documents. If this is null, this is
+            # not a Principal.
+            field document_id type string {}
             field type type string {}
             field value type string {}
             field timestamp type long {}
@@ -134,8 +139,10 @@ schema documents {
 
         struct passage {
             field id type string {}
-            # we store the document ID for principal documents 
-            # if this is null, this is not a Principal
+            # We store the document_id for when passages
+            # are aggregated onto a Principal document from
+            # related documents. If this is null, this is
+            # not a Principal.
             field document_id type string {}
             field text_block_id type string {}
             field language type string {}
