@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from search.data_in_models import Label as DataInLabel
-from search.data_in_models import LabelRelationship
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
