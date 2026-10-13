@@ -177,7 +177,7 @@ def _ids(filter_: Filter, query: str | None = None) -> set[str]:
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-        filters_json_string=filter_.model_dump_json(),
+        filters=filter_,
     )
     return {doc.id for doc in docs.results}
 
@@ -1115,7 +1115,7 @@ def _topic_ranked_titles(topic_weight: float) -> list[str]:
         query="climate finance",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-        filters_json_string=_TOPIC_FILTER.model_dump_json(),
+        filters=_TOPIC_FILTER,
     ).results
     return [d.title for d in results]
 

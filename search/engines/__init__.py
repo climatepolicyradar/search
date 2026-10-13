@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -10,6 +12,9 @@ from search.engines.vespa_query.client import VespaError
 from search.identifiers import Identifier, generate_id
 from search.label import Label
 from search.passage import Passage
+
+if TYPE_CHECKING:
+    from search.engines.vespa_query.filters import Filter
 
 __all__ = ["VespaError"]
 
@@ -56,13 +61,13 @@ class SearchEngine(ABC, Generic[TModel]):
         query: str,
         pagination: Pagination,
         order_by: list[OrderBy],
-        filters_json_string: str | None,
+        filters: Filter | None,
     ) -> ListResponse[TModel]:
         """
         Fetch a list of relevant search results.
 
         :param query: Search query to match against
-        :param filters_json_string: JSON string of AND/OR filters
+        :param filters: AND/OR filter tree
         :param limit: Maximum number of results to return
         :param offset: Number of results to skip (for pagination)
         :return: List of matching items

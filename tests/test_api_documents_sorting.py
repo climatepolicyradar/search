@@ -3,7 +3,9 @@
 import pytest
 from fastapi import HTTPException
 
-from api.utils import documents_order_by, normalise_filters, parse_order_by_clauses
+from api.filters import documents_filters
+from api.utils import documents_order_by, parse_order_by_clauses
+from search.engines.dev_vespa import AttributesCondition, Filter
 
 
 def test_parse_order_by_defaults_to_desc_direction() -> None:
@@ -82,7 +84,7 @@ def test_normalise_filters_converts_published_date_iso_to_epoch() -> None:
     :return: ``None``.
     :rtype: None
     """
-    normalised = normalise_filters(
+    normalised = documents_filters(
         """
         {
           "op": "and",
@@ -97,8 +99,17 @@ def test_normalise_filters_converts_published_date_iso_to_epoch() -> None:
         }
         """
     )
-    assert normalised is not None
-    assert '"value":1577836800' in normalised
+    assert normalised == Filter(
+        op="and",
+        filters=[
+            AttributesCondition(
+                field="attributes.published_date",
+                key="published_date",
+                op="gte",
+                value=1577836800,
+            )
+        ],
+    )
 
 
 def test_normalise_filters_rejects_invalid_published_date() -> None:
@@ -110,7 +121,7 @@ def test_normalise_filters_rejects_invalid_published_date() -> None:
     :rtype: None
     """
     with pytest.raises(HTTPException) as exc_info:
-        normalise_filters(
+        documents_filters(
             """
             {
               "op": "and",
