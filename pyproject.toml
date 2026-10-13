@@ -3,7 +3,7 @@ name = "search"
 version = "0.1.0"
 description = "Tests for measuring the relevance of our search results"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
   "boto3>=1.43.107",
   "duckdb>=1.5.6",
