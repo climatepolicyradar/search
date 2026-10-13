@@ -154,13 +154,19 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     """
     GST1 and Party must nest under Global Stocktake.
 
-    The existing UNFCCC document types must also nest under Party (in addition
     to their existing UNFCCC parent) so they render under both branches. They
     nest directly under Party, not under any further grouping label, because
     no document is ever tagged with a "document type" label at this position
     -- an intermediate grouping label here would be unfilterable, since the
     frontend's path-based query-building would AND it into every query even
     though it matches zero real documents.
+
+    BTR is the exception: it is a UN submission but never a GST1 submission,
+    so it hangs off UNFCCC alone and must not appear under the Global
+    Stocktake branch. GST1 is the only Global Stocktake process we currently
+    hold documents for. When we stop relying on the hardcoded labels taxonomy,
+    this exception will no longer be true and we accept that BTR will show under
+    Global Stocktake and not return results until we ingest GST2 docs.
     """
     client = TestClient(app)
 
@@ -184,7 +190,6 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     document_type_ids = [
         "entity_type::Nationally Determined Contribution (NDC)",
         "entity_type::National Adaptation Plan (NAP)",
-        "entity_type::Biennial Transparency Report (BTR)",
         "entity_type::Long-term low-emission development strategy",
         "entity_type::Biennial Update Report (BUR)",
         "entity_type::Biennial Report (BR)",
@@ -198,6 +203,10 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
             relationship["value"]["id"] for relationship in document_type["labels"]
         }
         assert parent_ids == {"un_convention::UNFCCC", "author_type::Party"}
+
+    btr = results_by_id["entity_type::Biennial Transparency Report (BTR)"]
+    btr_parent_ids = {relationship["value"]["id"] for relationship in btr["labels"]}
+    assert btr_parent_ids == {"un_convention::UNFCCC"}
 
 
 def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
