@@ -140,42 +140,6 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         total_size = _get_total_count(response)
         return ListResponse(results=labels, total_size=total_size, next_page_token=None)
 
-    def all_label_types(self) -> list[str]:
-        """Fetch all distinct label types from the labels source."""
-        yql = (
-            "select * from sources labels where true "
-            "| all(group(type) order(-count()) each(output(count())))"
-        )
-
-        request_body = {
-            "yql": yql,
-            "hits": 0,
-            "timeout": "5s",
-        }
-        response = execute_vespa_query(
-            endpoint=f"{self.settings.vespa_endpoint}/search",
-            token=self.settings.vespa_read_token,
-            request_body=request_body,
-            request_context="labels.all_label_types",
-        )
-        types: list[str] = []
-
-        root = response.get("root", {})
-        children = root.get("children", [{}])[0].get("children", [])
-        group_list = next(
-            (
-                item.get("children", [])
-                for item in children
-                if item.get("label") == "type"
-            ),
-            [],
-        )
-
-        for group in group_list:
-            types.append(group.get("value", ""))
-
-        return types
-
     def tmp_labels(self) -> ListResponse[DataInLabel]:
         """Labels for UI testing"""
         return ListResponse(
