@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from api.download import DEFAULT_MAX_RESULTS, fetch_documents_for_download, generate_csv
-from api.filters import DocumentsFilterDep, PassagesFilterDep
+from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
@@ -294,7 +294,7 @@ def read_documents(
     responses=SEARCH_RESPONSES,
 )
 def read_labels(
-    filters: DocumentsFilterDep,
+    filters: LabelsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
     pagination: Pagination = Depends(pagination),

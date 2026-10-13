@@ -13,6 +13,8 @@ from search.engines.dev_vespa import (
     Filter,
     documents_filter_field_to_vespa_field_map,
     documents_filter_struct_field_to_vespa_field_map,
+    labels_filter_field_to_vespa_field_map,
+    labels_filter_struct_field_to_vespa_field_map,
     passages_filter_field_to_vespa_field_map,
     passages_filter_struct_field_to_vespa_field_map,
 )
@@ -124,6 +126,13 @@ _documents_filters = _filters_dependency(
     )
 )
 
+_labels_filters = _filters_dependency(
+    _filters_description(
+        labels_filter_field_to_vespa_field_map,
+        labels_filter_struct_field_to_vespa_field_map,
+    )
+)
+
 _passages_filters = _filters_dependency(
     _filters_description(
         passages_filter_field_to_vespa_field_map,
@@ -131,5 +140,6 @@ _passages_filters = _filters_dependency(
     )
 )
 
+LabelsFilterDep = Annotated[Filter | None, Depends(_labels_filters)]
 DocumentsFilterDep = Annotated[Filter | None, Depends(_documents_filters)]
 PassagesFilterDep = Annotated[Filter | None, Depends(_passages_filters)]
