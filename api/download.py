@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import DevVespaDocumentSearchEngine
+from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter
 
 EXCLUDED_LABEL_TYPES = {"topic", "concept"}
 
@@ -95,7 +95,7 @@ def fetch_documents_for_download(
     engine: DevVespaDocumentSearchEngine,
     query: str | None,
     order_by: list[OrderBy],
-    filters_json_string: str | None,
+    filters: Filter | None,
     max_results: int,
 ) -> list[Document]:
     """
@@ -118,7 +118,7 @@ def fetch_documents_for_download(
             query=query,
             pagination=Pagination(page_token=page_token, page_size=page_size),
             order_by=order_by,
-            filters_json_string=filters_json_string,
+            filters=filters,
         )
         return response.results
 

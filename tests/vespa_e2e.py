@@ -108,7 +108,7 @@ def get_search_ids(filter_: Filter) -> set[str]:
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-        filters_json_string=filter_.model_dump_json(),
+        filters=filter_,
     )
     return {doc.id for doc in docs.results}
 

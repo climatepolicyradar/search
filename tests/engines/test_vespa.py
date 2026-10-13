@@ -162,7 +162,7 @@ def _topic(wikibase_id: str) -> FieldFilter:
             ),
             f'!(document_import_id contains "{DOCUMENT_ID}")',
         ),
-        # Nested groups, as `TestCase.filters_json_string` produces for topics.
+        # Nested groups, as `TestCase.filters` produces for topics.
         (
             Filter(
                 op="and",
@@ -224,7 +224,7 @@ def test_exact_request_combines_filters_and_terms() -> None:
             _topic("Q1829"),
             FieldFilter(field="document_id", op="contains", value=DOCUMENT_ID),
         ],
-    ).model_dump_json()
+    )
 
     request = engine._build_request(
         "flooding", Pagination(page_size=5, page_token=1), filters
@@ -241,7 +241,7 @@ def test_exact_request_combines_filters_and_terms() -> None:
 def test_exact_request_filters_only() -> None:
     """A topic-only test case searches on its filters alone."""
     engine = ExactVespaPassageSearchEngine()
-    filters = Filter(op="and", filters=[_topic("Q1829")]).model_dump_json()
+    filters = Filter(op="and", filters=[_topic("Q1829")])
 
     request = engine._build_request("", Pagination(page_size=5, page_token=1), filters)
 

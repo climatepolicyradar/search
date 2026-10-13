@@ -81,7 +81,7 @@ def test_facets_rewrite_rule_does_not_bypass_filters(
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_value_type_facets(
         query=query,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
@@ -90,7 +90,7 @@ def test_facets_rewrite_rule_does_not_bypass_filters(
                     value=f"category::inside-{case_id}",
                 )
             ],
-        ).model_dump_json(),
+        ),
     )
 
     counted_ids = {c.value.id for group in result.values() for c in group}
@@ -115,7 +115,7 @@ def test_facets_no_filters_returns_counts_for_all_labels(vespa_app: Vespa):
     _feed_document(vespa_app, doc_policy_2)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_value_type_facets(query=None, filters_json_string=None)
+    result = engine.labels_value_type_facets(query=None, filters=None)
 
     counts = {c.value.id: c.count for c in result["category"]}
     assert counts == {"category::Law": 1, "category::Policy": 2}
@@ -138,14 +138,14 @@ def test_facets_active_filter_keeps_all_options_in_that_group_visible(vespa_app:
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_value_type_facets(
         query=None,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
                     field="labels.value.id", op="contains", value="category::Law"
                 )
             ],
-        ).model_dump_json(),
+        ),
     )
 
     counts = {c.value.id: c.count for c in result["category"]}
@@ -178,14 +178,14 @@ def test_facets_active_filter_narrows_other_groups(vespa_app: Vespa):
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_value_type_facets(
         query=None,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
                     field="labels.value.id", op="contains", value="category::Law"
                 )
             ],
-        ).model_dump_json(),
+        ),
     )
 
     geography_counts = {c.value.id: c.count for c in result["geography"]}
@@ -220,7 +220,7 @@ def test_facets_two_active_groups_drops_each_filter_independently(vespa_app: Ves
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_value_type_facets(
         query=None,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
@@ -230,7 +230,7 @@ def test_facets_two_active_groups_drops_each_filter_independently(vespa_app: Ves
                     field="labels.value.id", op="contains", value="geography::USA"
                 ),
             ],
-        ).model_dump_json(),
+        ),
     )
 
     # `category` filter dropped with `geography::USA` still applied Law+USA and Policy+USA match
@@ -259,14 +259,14 @@ def test_facets_not_contains_filter_is_dropped_from_active_group(vespa_app: Vesp
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_value_type_facets(
         query=None,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
                     field="labels.value.id", op="not_contains", value="category::Policy"
                 )
             ],
-        ).model_dump_json(),
+        ),
     )
 
     # `category` is active via `not_contains` so we drop the filter.
@@ -290,7 +290,7 @@ def test_relationship_facets_no_filters_returns_counts_for_all_labels(vespa_app:
     _feed_document(vespa_app, doc_policy_2)
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_type_facets(query=None, filters_json_string=None)
+    result = engine.labels_type_facets(query=None, filters=None)
 
     counts = {c.value.id: c.count for c in result["part_of"]}
     assert counts == {"category::Law": 1, "category::Policy": 2}
@@ -313,14 +313,14 @@ def test_relationship_facets_active_filter_narrows_the_group(vespa_app: Vespa):
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_type_facets(
         query=None,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
                     field="labels.value.id", op="contains", value="category::Law"
                 )
             ],
-        ).model_dump_json(),
+        ),
     )
 
     # The filter prefix ("category") does not match the facet group key ("part_of"),
@@ -355,14 +355,14 @@ def test_relationship_facets_active_filter_narrows_other_groups(vespa_app: Vespa
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_type_facets(
         query=None,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
                     field="labels.value.id", op="contains", value="category::Law"
                 )
             ],
-        ).model_dump_json(),
+        ),
     )
 
     submitted_to_counts = {c.value.id: c.count for c in result["submitted_to"]}
@@ -397,7 +397,7 @@ def test_relationship_facets_two_active_filters_narrow_all_groups(vespa_app: Ves
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_type_facets(
         query=None,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
@@ -407,7 +407,7 @@ def test_relationship_facets_two_active_filters_narrow_all_groups(vespa_app: Ves
                     field="labels.value.id", op="contains", value="geography::GBR"
                 ),
             ],
-        ).model_dump_json(),
+        ),
     )
 
     # Filter prefixes ("category", "geography") don't match relationship group keys,
@@ -436,14 +436,14 @@ def test_relationship_facets_not_contains_filter_narrows_the_group(vespa_app: Ve
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
     result = engine.labels_type_facets(
         query=None,
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(
                     field="labels.value.id", op="not_contains", value="category::Policy"
                 )
             ],
-        ).model_dump_json(),
+        ),
     )
 
     # The filter prefix ("category") does not match the facet group key ("part_of"),

@@ -9,7 +9,7 @@ from rich.table import Table
 from rich.text import Text
 
 from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Settings
+from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter, Settings
 
 app = typer.Typer()
 console = Console()
@@ -39,7 +39,7 @@ def search(
     )
     results = engine.search(
         query=query,
-        filters_json_string=filters,
+        filters=Filter.model_validate_json(filters) if filters else None,
         pagination=Pagination(page_token=page_token, page_size=page_size),
         order_by=[OrderBy(field="relevance", direction="desc")],
     )

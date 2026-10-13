@@ -47,7 +47,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         query: str | None,
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None = None,  # noqa: ARG002
+        filters: Filter | None = None,
         label_type: str | None = None,
     ) -> ListResponse[DataInLabel]:
         """Fetch a list of relevant label search results."""
@@ -56,8 +56,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
 
         where = " true "
 
-        if filters_json_string:
-            filters = Filter.model_validate_json(filters_json_string)
+        if filters is not None:
             where += _build_filter_query(
                 filters,
                 field_map=labels_filter_field_to_vespa_field_map,

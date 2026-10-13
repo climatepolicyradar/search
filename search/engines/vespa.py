@@ -132,13 +132,13 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
         query: str,
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None = None,
+        filters: Filter | None = None,
     ) -> ListResponse[TModel]:
         """
         Search Vespa using the configured search strategy.
 
         :param query: Search query from the user
-        :param filters_json_string: Filters JSON string
+        :param filters: Filter tree
         :param pagination: Pagination
         :return: List of model objects matching the search.
         """
@@ -146,7 +146,7 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
             self.connect_to_vespa()
             assert self.client is not None  # nosec
 
-        request_body = self._build_request(query, pagination, filters_json_string)
+        request_body = self._build_request(query, pagination, filters)
 
         try:
             vespa_response = cast(
@@ -164,7 +164,7 @@ class VespaSearchEngine(SearchEngine, ABC, Generic[TModel]):
 
     @abstractmethod
     def _build_request(
-        self, query: str, pagination: Pagination, filters_json_string: str | None
+        self, query: str, pagination: Pagination, filters: Filter | None
     ) -> dict[str, Any]:
         """
         Build the Vespa query request body.
@@ -320,15 +320,11 @@ class VespaPassageSearchEngine(VespaSearchEngine[Passage], ABC):
     model_class = Passage
 
     @staticmethod
-    def _build_where_clause(
-        search_term_yql: str, filters_json_string: str | None
-    ) -> str:
+    def _build_where_clause(search_term_yql: str, filters: Filter | None) -> str:
         """Combine the search-term clause with any filters."""
         parts = [search_term_yql] if search_term_yql else []
-        if filters_json_string:
-            filter_yql = _build_passage_filter_yql(
-                Filter.model_validate_json(filters_json_string)
-            )
+        if filters is not None:
+            filter_yql = _build_passage_filter_yql(filters)
             if filter_yql:
                 parts.append(filter_yql)
         # A query with neither terms nor filters still needs a match-all clause.
@@ -388,7 +384,7 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
         self,
         query: str,
         pagination: Pagination,
-        filters_json_string: str | None,
+        filters: Filter | None,
     ) -> dict[str, Any]:
         """
         Build request body for exact match search.
@@ -396,7 +392,7 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
         :param query: Search query from the user. May be empty, for a
             filters-only search.
         :param pagination: Pagination
-        :param filters_json_string: Filters JSON string
+        :param filters: Filter tree
         :return: Dictionary containing the Vespa query request body
         """
         search_term = (
@@ -404,7 +400,7 @@ class ExactVespaPassageSearchEngine(VespaPassageSearchEngine):
             if query
             else ""
         )
-        where = self._build_where_clause(search_term, filters_json_string)
+        where = self._build_where_clause(search_term, filters)
         yql = f"select * from sources document_passage where {where}"
 
         logger.info("🔎 Passage search query built (query=%r, yql=%s)", query, yql)
@@ -435,7 +431,7 @@ class BM25TitleVespaDocumentSearchEngine(VespaDocumentSearchEngine):
         self,
         query: str,
         pagination: Pagination,
-        filters_json_string: str | None,  # noqa: ARG002
+        filters: Filter | None,  # noqa: ARG002
     ) -> dict[str, Any]:
         """
         Build request body for BM25 document title search.
@@ -477,7 +473,7 @@ class VespaLabelSearchEngine(VespaSearchEngine[Label]):
         self,
         query: str,
         pagination: Pagination,
-        filters_json_string: str | None,  # noqa: ARG002
+        filters: Filter | None,  # noqa: ARG002
     ) -> dict[str, Any]:
         """
         Build request body for concept/label search.

@@ -16,6 +16,7 @@ from relevance_tests import (
 )
 from relevance_tests.html_report import render_test_results_html
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
+from search.engines.dev_vespa import Filter
 from search.identifiers import Identifier
 from search.label import Label
 
@@ -243,7 +244,7 @@ class StubEngine(SearchEngine[Label]):
         query: str,  # noqa: ARG002
         pagination: Pagination,  # noqa: ARG002
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None = None,  # noqa: ARG002
+        filters: Filter | None = None,  # noqa: ARG002
     ) -> ListResponse[Label]:
         """Raise or return the next configured side effect."""
         self.calls += 1
