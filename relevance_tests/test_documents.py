@@ -483,10 +483,10 @@ def relevance_tests_documents():
     """Run relevance tests for documents"""
 
     engines = [
-        # BM25TitleVespaDocumentSearchEngine(),
         DevVespaDocumentSearchEngine(settings=settings, debug=True),
-        # Topic ranking off, to A/B the topic-filtered cases against text-only ranking.
-        DevVespaDocumentSearchEngine(settings=settings, debug=True, topic_weight=0.0),
+        # RESEARCH (stemming): exact-form boost
+        DevVespaDocumentSearchEngine(settings=settings, debug=True, exact_weight=1.0),
+        DevVespaDocumentSearchEngine(settings=settings, debug=True, exact_weight=3.0),
     ]
 
     run_relevance_tests_parallel(

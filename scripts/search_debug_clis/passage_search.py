@@ -11,6 +11,7 @@ from rich.text import Text
 from api.routers import settings
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
+from search.bolding import Bolding
 
 app = typer.Typer()
 console = Console()
@@ -23,9 +24,13 @@ def truncate(s: str, max_len: int | None) -> str:
     return s
 
 
-def highlight(s: str, words: list[str]) -> Text:
-    t = Text(s)
-    t.highlight_words(words, style="bold yellow", case_sensitive=False)
+def bolded(text: str, boldings: list[Bolding], max_len: int | None) -> Text:
+    """`text` with Vespa's bolded spans styled, exactly as the frontend highlights them."""
+    t = Text(text.replace("\n", " "))
+    for b in boldings:
+        t.stylize("bold yellow", b.start_index, b.end_index)
+    if max_len is not None and len(t) > max_len:
+        t.truncate(max_len, overflow="ellipsis")
     return t
 
 
@@ -121,6 +126,7 @@ def search(
         filters_json_string=_build_filters(document_id, filters, topic, topic_or),
         pagination=Pagination(page_token=page, page_size=page_size),
         order_by=[OrderBy(field=order, direction="desc" if order == "relevance" else "asc")],
+        bolding=True,
     )
     console.print(
         f"[bold magenta]{query!r}  {engine.parameters}  order={order}  "
@@ -167,8 +173,12 @@ def search(
                     max_len,
                 ),
             )
-        text_display = truncate(passage.text, max_len)
-        table.add_row("text", highlight(text_display, words))
+        table.add_row("text", bolded(passage.text, passage.boldings, max_len))
+        table.add_row(
+            "bolded",
+            ", ".join(sorted({b.labelled_text for b in passage.boldings}))
+            or "[red]nothing bolded[/red]",
+        )
         literal = [
             w for w in words if re.search(rf"\b{re.escape(w)}\b", passage.text, re.IGNORECASE)
         ]

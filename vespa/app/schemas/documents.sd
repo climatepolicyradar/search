@@ -542,6 +542,8 @@ schema documents {
     }
 
     document-summary debug-summary inherits search-with-passages {
+        summary title_not_stemmed {}
+        summary description_not_stemmed {}
         summary title_tokens {
             source: title
             tokens

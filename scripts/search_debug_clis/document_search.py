@@ -10,6 +10,7 @@ from rich.text import Text
 
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Settings
+from search.bolding import bolding_to_labels
 
 app = typer.Typer()
 console = Console()
@@ -31,7 +32,6 @@ def search(
     debug: bool = True,
     filters: str | None = None,
     labels: bool = False,
-    bolding: bool = False,
     topic: str | None = typer.Option(None, "--topic", help="e.g. Q1234 or concept::Q1234"),
     exact_weight: float | None = typer.Option(
         None,
@@ -49,7 +49,7 @@ def search(
     filters_json = json.dumps({"op": "and", "filters": conditions}) if conditions else None
 
     engine = DevVespaDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=bolding, exact_weight=exact_weight
+        settings=settings, debug=debug, bolding=True, exact_weight=exact_weight
     )
     results = engine.search(
         query=query,
@@ -61,12 +61,12 @@ def search(
         f"[bold magenta]{query!r}  {engine.parameters}  total={results.total_size}[/bold magenta]"
     )
 
-    words = query.split()
-
-    def highlight(s: str) -> Text:
-        """Return a Text object with query words highlighted."""
-        t = Text(s)
-        t.highlight_words(words, style="bold yellow", case_sensitive=False)
+    def bolded(s: str) -> Text:
+        """`s` with Vespa's <hi> spans styled, exactly as the frontend highlights them."""
+        parsed = bolding_to_labels(s)
+        t = Text(parsed.text)
+        for b in parsed.boldings:
+            t.stylize("bold yellow", b.start_index, b.end_index)
         return t
 
     for i, doc in enumerate(results.results):
@@ -84,15 +84,13 @@ def search(
         table.add_column(style="bold cyan", no_wrap=True)
         table.add_column()
         table.add_row("id", doc.id)
-        table.add_row("title", highlight(doc.title))
+        table.add_row("title", bolded(doc.title))
         if doc.description:
-            table.add_row("description", highlight(doc.description))
+            table.add_row("description", bolded(doc.description))
         if doc.attributes:
-            table.add_row(
-                "attributes", highlight(json.dumps(doc.attributes, default=str))
-            )
+            table.add_row("attributes", json.dumps(doc.attributes, default=str))
         if geographies:
-            table.add_row("geographies", highlight(", ".join(geographies)))
+            table.add_row("geographies", ", ".join(geographies))
         if relevance is not None:
             table.add_row("relevance", str(relevance))
 

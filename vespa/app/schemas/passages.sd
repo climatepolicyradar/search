@@ -163,16 +163,18 @@ schema passages {
 
     # RESEARCH (stemming): the passage text under alternative stemming.
     field content_kstem type string {
-        indexing: input content | index
+        indexing: input content | index | summary
         index: enable-bm25
+        bolding: on
         stemming: multiple
         linguistics {
             profile: passage_analysis_kstem
         }
     }
     field content_minimal type string {
-        indexing: input content | index
+        indexing: input content | index | summary
         index: enable-bm25
+        bolding: on
         stemming: multiple
         linguistics {
             profile: passage_analysis_minimal
@@ -338,6 +340,7 @@ schema passages {
     }
 
     document-summary debug-summary inherits search {
+        summary content_not_stemmed {}
         summary text_tokens {
             source: content
             tokens
@@ -346,6 +349,8 @@ schema passages {
             source: content_not_stemmed
             tokens
         }
+        summary content_kstem {}
+        summary content_minimal {}
         from-disk
     }
 }

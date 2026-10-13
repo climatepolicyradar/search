@@ -517,7 +517,9 @@ def relevance_tests_principal_documents():
 
     engines = [
         DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
-        BM25TitleVespaDocumentSearchEngine(),
+        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True, exact_weight=1.0),
+        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True, exact_weight=3.0),
+        # BM25TitleVespaDocumentSearchEngine(),  # legacy app, not on the dev instance
     ]
 
     # Principals aren't a primitive, but we use the primitive name to determine where

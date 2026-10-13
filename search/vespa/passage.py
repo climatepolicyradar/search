@@ -137,6 +137,9 @@ class VespaPassage(BaseModel):
     # Only in the `search-exact` summary; inbound-only, derived from `content`.
     content_not_stemmed: str | None = None
     # Raw debug-summary shape for `text_tokens`; use `.tokens` for the flattened form.
+    # RESEARCH (stemming): only in `debug-summary`; derived from `content`.
+    content_kstem: str | None = None
+    content_minimal: str | None = None
     text_tokens: Any = None
 
     @computed_field
