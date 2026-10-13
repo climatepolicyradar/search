@@ -7,7 +7,7 @@ from time import perf_counter
 from typing import Literal
 
 import requests
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from api.settings import settings
@@ -165,3 +165,27 @@ def read_health(response: Response) -> HealthResponse:
         status="healthy" if healthy else "unhealthy",
         probes=probes,
     )
+
+
+@router.get(
+    "/probes/{probe_id}",
+    response_model=ProbeResult,
+    summary="Health Check: One Probe",
+    responses={
+        HTTPStatus.NOT_FOUND: {"description": "No probe goes by that name."},
+        HTTPStatus.SERVICE_UNAVAILABLE: {"description": "The probe failed."},
+    },
+)
+def read_probe(probe_id: str, response: Response) -> ProbeResult:
+    """Run one probe used in our canaries in ./observability."""
+    probe = PROBES.get(probe_id)
+    if probe is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Unknown probe {probe_id!r}. Available: {', '.join(PROBES)}",
+        )
+    result = run_probe(probe_id, probe)
+    response.status_code = (
+        HTTPStatus.OK if result.healthy else HTTPStatus.SERVICE_UNAVAILABLE
+    )
+    return result

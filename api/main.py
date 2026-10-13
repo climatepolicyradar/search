@@ -162,10 +162,12 @@ async def log_request_lifecycle(request: Request, call_next):
         duration_ms=duration_ms,
     )
 
-    # The load balancer polls the health check every ~30s per task, and a failing
-    # probe already logs its own exception in `api.health.run_probe`, so a
-    # lifecycle line here only adds volume. Metrics are still recorded.
-    if route_path == HEALTH_ROUTE_PATH:
+    # The load balancer polls the health check every ~30s per task and the
+    # Grafana synthetic checks poll one route per probe every minute from each
+    # location, while a failing probe already logs its own exception in
+    # `api.health.run_probe` - so a lifecycle line anywhere under /health only
+    # adds volume. Metrics are still recorded.
+    if route_path.startswith(HEALTH_ROUTE_PATH):
         return response
 
     # An error response logged at INFO as "Success" is invisible to log grepping
