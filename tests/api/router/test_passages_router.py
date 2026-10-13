@@ -139,14 +139,14 @@ def _deflate(data: bytes, *, pad: bool = False) -> str:
 
 @pytest.mark.parametrize("pad", [False, True])
 def test_read_passages_with_deflated_filters(
-    passages_client: PassagesClient, 
+    passages_client: PassagesClient,
     pad: bool
 ) -> None:
     client, mock_engine = passages_client
 
     mock_engine.search.return_value = ListResponse(
-        results=[], 
-        total_size=0, 
+        results=[],
+        total_size=0,
         next_page_token=None
     )
 
@@ -174,14 +174,14 @@ def test_read_passages_with_deflated_filters(
     ],
 )
 def test_read_passages_with_bad_deflated_filters_returns_400(
-    passages_client: PassagesClient, 
+    passages_client: PassagesClient,
     filters: str
 ) -> None:
     client, mock_engine = passages_client
 
     response = client.get(
         params={"filters": filters, "encoding": "deflate"},
-        url="/search/passages", 
+        url="/search/passages",
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -196,12 +196,12 @@ def test_read_passages_default_order_by_is_idx_asc(
 
     mock_engine.search.return_value = ListResponse(
         next_page_token=None,
-        total_size=0, 
-        results=[], 
+        total_size=0,
+        results=[],
     )
 
     response = client.get(
-        url="/search/passages", 
+        url="/search/passages",
         params={"query": "toxic"}
     )
 

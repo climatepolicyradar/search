@@ -98,7 +98,7 @@ def test_normalise_filters_converts_published_date_iso_to_epoch() -> None:
           ]
         }
         """,
-        encoding=None,
+        None,
     )
     assert normalised == Filter(
         op="and",
@@ -136,7 +136,7 @@ def test_normalise_filters_rejects_invalid_published_date() -> None:
               ]
             }
             """,
-            encoding=None,
+            None,
         )
     assert exc_info.value.status_code == 400
     assert "ISO 8601" in str(exc_info.value.detail)

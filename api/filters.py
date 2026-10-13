@@ -137,7 +137,9 @@ def _inflate_filters(encoded: str) -> str:
     return text
 
 
-def _filters_dependency(desc: str) -> Callable[..., Filter | None]:
+def _filters_dependency(
+    desc: str,
+) -> Callable[[str | None, Encoding], Filter | None]:
     def _dep(
         filters: str | None = Query(None, description=desc),
         encoding: Encoding = Query(None, description=ENCODING_DESCRIPTION),
