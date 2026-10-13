@@ -576,10 +576,10 @@ def test_label_field_filter_type_not_contains_returns_matching_type_only(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[FieldFilter(field="type", op="not_contains", value="category")],
-        ).model_dump_json(),
+        ),
     ).results
 
     result_ids = {label.id for label in results}
@@ -614,10 +614,10 @@ def test_label_rewrite_rule_does_not_bypass_filters(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[FieldFilter(field="type", op="contains", value=inside_type)],
-        ).model_dump_json(),
+        ),
     ).results
 
     ids = {label.id for label in results}
@@ -657,7 +657,7 @@ def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa):
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(field="labels.type", op="contains", value="subconcept_of"),
@@ -667,7 +667,7 @@ def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa):
                     value="category::UN Submission",
                 ),
             ],
-        ).model_dump_json(),
+        ),
     ).results
 
     result_ids = {label.id for label in results}
@@ -700,7 +700,7 @@ def test_label_filter_same_element_excludes_split_relationships(vespa_app: Vespa
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-        filters_json_string=Filter(
+        filters=Filter(
             op="and",
             filters=[
                 FieldFilter(field="labels.type", op="contains", value="subconcept_of"),
@@ -710,7 +710,7 @@ def test_label_filter_same_element_excludes_split_relationships(vespa_app: Vespa
                     value="category::UN Submission",
                 ),
             ],
-        ).model_dump_json(),
+        ),
     ).results
 
     assert "category::Split" not in {label.id for label in results}

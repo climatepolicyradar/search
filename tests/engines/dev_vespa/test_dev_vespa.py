@@ -362,8 +362,8 @@ def test_passage_search_engine_reads_labels_from_top_level_passages_schema() -> 
     assert passage.labels[1].classifier_id == "classifier-2"
 
 
-def _topic_filter_json(*topics: str, op: str = "and") -> str:
-    """Filter JSON in the nested shape `_build_topic_filter` produces."""
+def _topic_filter(*topics: str, op: str = "and") -> Filter:
+    """A filter in the nested shape `_build_topic_filter` produces."""
     return Filter(
         op=op,  # pyright: ignore[reportArgumentType]
         filters=[
@@ -379,7 +379,7 @@ def _topic_filter_json(*topics: str, op: str = "and") -> str:
             )
             for topic in topics
         ],
-    ).model_dump_json()
+    )
 
 
 @pytest.mark.parametrize(
@@ -506,7 +506,7 @@ def test_document_search_engine_sends_filtered_topics_as_a_query_tensor() -> Non
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
-            filters_json_string=_topic_filter_json("Q567", "Q1651"),
+            filters=_topic_filter("Q567", "Q1651"),
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
@@ -559,7 +559,7 @@ def test_document_search_engine_forwards_topic_weight() -> None:
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
-            filters_json_string=_topic_filter_json("Q567"),
+            filters=_topic_filter("Q567"),
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
@@ -586,7 +586,7 @@ def test_document_search_engine_omits_topic_inputs_under_a_sort_override() -> No
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[OrderBy(field="title", direction="asc")],
-            filters_json_string=_topic_filter_json("Q567"),
+            filters=_topic_filter("Q567"),
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
@@ -663,7 +663,7 @@ def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor() -> None
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
-            filters_json_string=_topic_filter_json("Q567", "Q1651"),
+            filters=_topic_filter("Q567", "Q1651"),
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
@@ -694,7 +694,7 @@ def test_passage_search_engine_sends_topic_inputs_without_a_text_query() -> None
             query="",
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
-            filters_json_string=_topic_filter_json("Q567"),
+            filters=_topic_filter("Q567"),
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
@@ -717,7 +717,7 @@ def test_passage_search_engine_forwards_topic_weight() -> None:
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
-            filters_json_string=_topic_filter_json("Q567"),
+            filters=_topic_filter("Q567"),
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
@@ -744,7 +744,7 @@ def test_passage_search_engine_omits_topic_inputs_under_a_sort_override() -> Non
             query="some",
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[OrderBy(field="idx", direction="asc")],
-            filters_json_string=_topic_filter_json("Q567"),
+            filters=_topic_filter("Q567"),
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
@@ -1144,14 +1144,12 @@ def test_label_search_engine_omits_type_clause_without_label_type() -> None:
     assert "type contains" not in request_body["yql"]
 
 
-def test_label_search_engine_applies_filters_json_string_to_yql() -> None:
-    """`filters_json_string` is validated and folded into the YQL `where` clause."""
+def test_label_search_engine_applies_filters_to_yql() -> None:
+    """`filters` are folded into the YQL `where` clause."""
     engine = _label_engine()
-    filters_json = json.dumps(
-        {
-            "op": "and",
-            "filters": [{"field": "type", "op": "not_contains", "value": "keyword"}],
-        }
+    filters = Filter(
+        op="and",
+        filters=[FieldFilter(field="type", op="not_contains", value="keyword")],
     )
 
     with patch.object(
@@ -1161,7 +1159,7 @@ def test_label_search_engine_applies_filters_json_string_to_yql() -> None:
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
-            filters_json_string=filters_json,
+            filters=filters,
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]

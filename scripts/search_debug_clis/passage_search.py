@@ -9,7 +9,7 @@ from rich.text import Text
 
 from api.routers import settings
 from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import DevVespaPassageSearchEngine
+from search.engines.dev_vespa import DevVespaPassageSearchEngine, Filter
 
 app = typer.Typer()
 console = Console()
@@ -58,7 +58,7 @@ def _build_filters(
     filters: str | None,
     topics: list[str],
     topic_or: bool,
-) -> str | None:
+) -> Filter | None:
     """Combine the --document-id and --topic shorthand with any raw --filters JSON."""
     conditions: list[dict] = []
     if document_id:
@@ -71,7 +71,7 @@ def _build_filters(
         conditions.append(json.loads(filters))
     if not conditions:
         return None
-    return json.dumps({"op": "and", "filters": conditions})
+    return Filter.model_validate({"op": "and", "filters": conditions})
 
 
 @app.command()
@@ -102,7 +102,7 @@ def search(
     engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
     results = engine.search(
         query=query,
-        filters_json_string=_build_filters(document_id, filters, topic, topic_or),
+        filters=_build_filters(document_id, filters, topic, topic_or),
         pagination=Pagination(page_token=page, page_size=page_size),
         order_by=[OrderBy(field="relevance", direction="desc")],
     )

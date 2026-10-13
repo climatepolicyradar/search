@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from search.engines import ListResponse
+from search.engines.dev_vespa import FieldFilter, Filter
 from search.passage import Passage
 
 
@@ -38,7 +39,7 @@ def test_read_passages_with_query_only(passages_client) -> None:
     assert response.json()["results"][0]["text_block_id"] == "block-1"
     _, kwargs = mock_engine.search.call_args
     assert kwargs["query"] == "toxic"
-    assert kwargs["filters_json_string"] is None
+    assert kwargs["filters"] is None
 
 
 def test_read_passages_with_document_id_filter(passages_client) -> None:
@@ -58,9 +59,13 @@ def test_read_passages_with_document_id_filter(passages_client) -> None:
 
     assert response.status_code == HTTPStatus.OK
     _, kwargs = mock_engine.search.call_args
-    assert kwargs["filters_json_string"] is not None
-    assert "doc.1.2.3" in kwargs["filters_json_string"]
-    assert "doc.4.5.6" in kwargs["filters_json_string"]
+    assert kwargs["filters"] == Filter(
+        op="or",
+        filters=[
+            FieldFilter(field="document_id", op="contains", value="doc.1.2.3"),
+            FieldFilter(field="document_id", op="contains", value="doc.4.5.6"),
+        ],
+    )
 
 
 def test_read_passages_with_label_filter(passages_client) -> None:
@@ -79,7 +84,14 @@ def test_read_passages_with_label_filter(passages_client) -> None:
 
     assert response.status_code == HTTPStatus.OK
     _, kwargs = mock_engine.search.call_args
-    assert "concept::finance flow" in kwargs["filters_json_string"]
+    assert kwargs["filters"] == Filter(
+        op="and",
+        filters=[
+            FieldFilter(
+                field="labels.value.id", op="contains", value="concept::finance flow"
+            )
+        ],
+    )
 
 
 def test_read_passages_with_malformed_filters_returns_400(passages_client) -> None:
@@ -87,6 +99,16 @@ def test_read_passages_with_malformed_filters_returns_400(passages_client) -> No
     client, mock_engine = passages_client
 
     response = client.get("/search/passages", params={"filters": "not-json"})
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    mock_engine.search.assert_not_called()
+
+
+def test_read_passages_with_empty_filters_returns_400(passages_client) -> None:
+    """An empty ``filters`` value is malformed, not a request for no filters."""
+    client, mock_engine = passages_client
+
+    response = client.get("/search/passages", params={"filters": ""})
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     mock_engine.search.assert_not_called()

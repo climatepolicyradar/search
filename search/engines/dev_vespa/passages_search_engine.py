@@ -99,17 +99,15 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         query: str | None,
         pagination: Pagination,
         order_by: list[OrderBy],
-        filters_json_string: str | None = None,
+        filters: Filter | None = None,
         bolding: bool = False,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
         free_text, phrases = _parse_query(query) if query else ("", [])
 
         where = "true"
-        filters: Filter | None = None
 
-        if filters_json_string:
-            filters = Filter.model_validate_json(filters_json_string)
+        if filters is not None:
             where += _build_filter_query(
                 filters,
                 field_map=passages_filter_field_to_vespa_field_map,

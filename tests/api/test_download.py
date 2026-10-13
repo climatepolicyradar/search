@@ -16,6 +16,7 @@ from api.download import (
 )
 from search.data_in_models import Document, Label, LabelRelationship
 from search.engines import ListResponse, Pagination, VespaError
+from search.engines.dev_vespa import Filter
 
 
 def _label(type_: str, value_type: str, value: str) -> LabelRelationship:
@@ -189,7 +190,7 @@ def test_fetch_combines_multiple_pages_up_to_max_results(monkeypatch) -> None:
     engine = _make_engine([_docs("a", "b"), _docs("c")])
 
     results = fetch_documents_for_download(
-        engine, query="x", order_by=[], filters_json_string=None, max_results=3
+        engine, query="x", order_by=[], filters=None, max_results=3
     )
 
     assert [d.id for d in results] == ["a", "b", "c"]
@@ -206,7 +207,7 @@ def test_fetch_truncates_after_a_short_page() -> None:
     engine = _make_engine([_docs("a", "b"), _docs("c")])
 
     results = fetch_documents_for_download(
-        engine, query="x", order_by=[], filters_json_string=None, max_results=200
+        engine, query="x", order_by=[], filters=None, max_results=200
     )
 
     assert [d.id for d in results] == ["a", "b"]
@@ -224,7 +225,7 @@ def test_fetch_propagates_a_page_failure() -> None:
 
     with pytest.raises(VespaError):
         fetch_documents_for_download(
-            engine, query="x", order_by=[], filters_json_string=None, max_results=200
+            engine, query="x", order_by=[], filters=None, max_results=200
         )
 
 
@@ -239,11 +240,11 @@ def test_fetch_passes_query_filters_and_order_by_through(monkeypatch) -> None:
         engine,
         query="toxic waste",
         order_by=[],
-        filters_json_string='{"op": "and", "filters": []}',
+        filters=Filter(op="and", filters=[]),
         max_results=10,
     )
 
     _, kwargs = engine.search.call_args
     assert kwargs["query"] == "toxic waste"
-    assert kwargs["filters_json_string"] == '{"op": "and", "filters": []}'
+    assert kwargs["filters"] == Filter(op="and", filters=[])
     assert isinstance(kwargs["pagination"], Pagination)
