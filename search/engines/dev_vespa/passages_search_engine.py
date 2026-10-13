@@ -43,11 +43,14 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 
 
-# RESEARCH (stemming)
+# RESEARCH (stemming demo): each stemmer arm's field and rank profile.
+# `defaultIndex` must name the field, not a fieldset: through a fieldset, Vespa
+# stems the query with the default English (Porter) stemmer, so "informal" also
+# searched "inform" on the kstem/minimal fields.
 _STEM_VARIANTS: dict[str, tuple[str, str]] = {
-    "porter": ("default", "bm25_multiplicative"),
-    "kstem": ("kstem", "bm25_multiplicative_kstem"),
-    "minimal": ("minimal", "bm25_multiplicative_minimal"),
+    "porter": ("content", "bm25_multiplicative"),
+    "kstem": ("content_kstem", "bm25_multiplicative_kstem"),
+    "minimal": ("content_minimal", "bm25_multiplicative_minimal"),
 }
 
 
