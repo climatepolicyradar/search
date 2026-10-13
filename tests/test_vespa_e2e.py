@@ -1685,3 +1685,102 @@ def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
 
 # endregion Minimum Should Match (MSM)
 
+
+# region Query rewrites (EQUIV)
+#
+# `documents.sr` expands acronyms, and the `=` makes the acronym and its phrase
+# ONE query term. With `?` they were separate, so `tcfd` was seven terms and a
+# document saying only "TCFD" covered one of them. MSM then dropped it, and
+# fieldMatch completeness ranked it below documents spelling it out. FUS-421.
+
+
+def _feed_acronym_pair(app: Vespa) -> tuple[str, str]:
+    """A document using the acronym, and one spelling it out. Returns their ids."""
+    short = DocumentFactory.build(
+        title="TCFD implementation guidance", description="A guide", labels=[]
+    )
+    spelled_out = DocumentFactory.build(
+        title="Task Force on Climate-related Financial Disclosures report",
+        description="A report",
+        labels=[],
+    )
+    _feed_document(app, short)
+    _feed_document(app, spelled_out)
+    return short.id, spelled_out.id
+
+
+@pytest.mark.parametrize("msm", [0.0, 0.7])
+def test_an_acronym_search_finds_both_spellings(vespa_app: Vespa, msm: float):
+    """
+    Searching `tcfd` must return documents written either way, MSM or not.
+
+    Under `?` this failed above msm 0. The acronym document covered one of seven
+    terms and was dropped, leaving only documents that spell it out, which is
+    the opposite of what the rule is for.
+    """
+    short_id, spelled_out_id = _feed_acronym_pair(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=msm)
+    response = engine.search(
+        query="tcfd",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+    found = {d.id for d in response.results}
+
+    assert short_id in found, "the document using the acronym was dropped"
+    assert spelled_out_id in found, "the document spelling it out was dropped"
+
+
+def test_the_acronym_spelling_is_not_ranked_below_the_long_form(vespa_app: Vespa):
+    """
+    Someone typing `tcfd` should not be shown the long form first.
+
+    Query coverage feeds `title_score()`, so an inflated term count pushed
+    documents spelling the acronym out above documents using it.
+    """
+    short_id, _ = _feed_acronym_pair(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    response = engine.search(
+        query="tcfd",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+
+    assert response.results[0].id == short_id
+
+
+def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa):
+    """
+    `climate nz` must still find New Zealand documents, not just net zero ones.
+
+    The rewrite adds "net zero", so under `?` this was four terms. An NZ
+    document covered two and MSM dropped it, quietly turning a New Zealand
+    search into a net zero one.
+    """
+    kiwi = DocumentFactory.build(
+        title="NZ climate adaptation plan", description="A plan", labels=[]
+    )
+    # Mentions climate as well, so it genuinely covers both query terms. A
+    # document holding only the rewritten term is meant to be dropped at 0.7.
+    net_zero = DocumentFactory.build(
+        title="Climate pathway to net zero emissions", description="A plan", labels=[]
+    )
+    _feed_document(vespa_app, kiwi)
+    _feed_document(vespa_app, net_zero)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
+    response = engine.search(
+        query="climate nz",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+    found = {d.id for d in response.results}
+
+    assert kiwi.id in found, "a New Zealand document was dropped from a `climate nz` search"
+    assert net_zero.id in found
+
+
+# endregion Query rewrites (EQUIV)
+

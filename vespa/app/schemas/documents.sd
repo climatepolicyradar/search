@@ -426,7 +426,7 @@ schema documents {
         # textSimilarity for description rather than fieldMatch: the Vespa docs
         # flag fieldMatch as expensive for first-phase and we already run one.
         function coverage() {
-            expression: max(max(fieldMatch(title_geo).queryCompleteness, textSimilarity(description).queryCoverage), elementSimilarity(passages_text).maxCoverage)
+            expression: max(max(max(fieldMatch(title_geo).queryCompleteness, textSimilarity(description).queryCoverage), elementSimilarity(passages_text).maxCoverage), max(matches(case_number), matches(project_id)))
         }
 
         function title_score () {
@@ -483,7 +483,7 @@ schema documents {
         }
 
         function coverage() {
-            expression: max(max(fieldMatch(title_geo).queryCompleteness, textSimilarity(description).queryCoverage), elementSimilarity(passages_text).maxCoverage)
+            expression: max(max(max(fieldMatch(title_geo).queryCompleteness, textSimilarity(description).queryCoverage), elementSimilarity(passages_text).maxCoverage), max(matches(case_number), matches(project_id)))
         }
 
         first-phase {
