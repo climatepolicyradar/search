@@ -53,7 +53,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         if query:
             query = _strip_quotes(query)
 
-        where = " true "
+        where = ' status contains "active" '
 
         if filters is not None:
             where += _build_filter_query(

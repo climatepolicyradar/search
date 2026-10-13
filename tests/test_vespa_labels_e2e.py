@@ -33,6 +33,7 @@ from search.vespa.documents_feed_materializer import _source_document_to_vespa_u
 from search.vespa.labels_feed_materializer import (
     VespaLabel,
     VespaLabelLabelRelationship,
+    VespaLabelStatus,
     _vespa_label_to_vespa_update,
 )
 from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids, rule_cases
@@ -75,6 +76,7 @@ def _taxonomy_vespa_label(
     label_type: str,
     value: str,
     labels: list[VespaLabelLabelRelationship] | None = None,
+    status: VespaLabelStatus = "active",
 ) -> VespaLabel:
     """Build a ``VespaLabel`` for direct feed to the labels schema in e2e tests."""
     return VespaLabel(
@@ -87,7 +89,7 @@ def _taxonomy_vespa_label(
         negative_labels=[],
         labels=labels or [],
         label_source=_label_source_from_taxonomy(label_id, label_type, value),
-        status="active",
+        status=status,
     )
 
 
@@ -561,6 +563,59 @@ def test_label_search_returns_exact_match_first(vespa_app: Vespa):
 
     assert results, "Expected at least one result"
     assert results[0].value == "Law"
+
+
+def test_label_search_excludes_inactive_labels(vespa_app: Vespa):
+    _feed_label(
+        vespa_app,
+        _taxonomy_vespa_label("concept::Active Flood", "concept", "Flood"),
+    )
+    _feed_label(
+        vespa_app,
+        _taxonomy_vespa_label(
+            "concept::Inactive Flood", "concept", "Flood", status="inactive"
+        ),
+    )
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query="Flood",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+
+    result_ids = {label.id for label in results}
+    assert "concept::Active Flood" in result_ids
+    assert "concept::Inactive Flood" not in result_ids
+
+
+def test_label_search_excludes_inactive_labels_when_filtered(vespa_app: Vespa):
+    """The status clause must still apply once filters are appended to it."""
+    _feed_label(
+        vespa_app,
+        _taxonomy_vespa_label("concept::Active Drought", "concept", "Drought"),
+    )
+    _feed_label(
+        vespa_app,
+        _taxonomy_vespa_label(
+            "concept::Inactive Drought", "concept", "Drought", status="inactive"
+        ),
+    )
+
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    results = engine.search(
+        query=None,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        filters=Filter(
+            op="and",
+            filters=[FieldFilter(field="type", op="contains", value="concept")],
+        ),
+    ).results
+
+    result_ids = {label.id for label in results}
+    assert "concept::Active Drought" in result_ids
+    assert "concept::Inactive Drought" not in result_ids
 
 
 def test_label_field_filter_type_not_contains_returns_matching_type_only(
