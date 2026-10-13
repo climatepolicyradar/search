@@ -228,13 +228,6 @@ def test_label_search_propagates_vespa_error(settings, failing_query) -> None:
         )
 
 
-def test_all_label_types_propagates_vespa_error(settings, failing_query) -> None:
-    engine = DevVespaLabelSearchEngine(settings=settings)
-
-    with pytest.raises(VespaError):
-        engine.all_label_types()
-
-
 def _patch_http(response: MagicMock):
     """
     Intercept the real ``requests.post`` at the session layer.

@@ -320,7 +320,6 @@ def read_labels(
             order_by=order_by,
             label_type=type,
         )
-        engine.all_label_types()  # NOTE: Is this still being used?
     except Exception:
         logger.exception(
             "Error: label search request failed "
