@@ -2,6 +2,7 @@
 
 import base64
 import zlib
+from collections.abc import Generator
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
@@ -10,13 +11,15 @@ from fastapi.testclient import TestClient
 
 from api.filters import _NOT_DEFLATED
 from api.main import app
-from search.engines import ListResponse
+from search.engines import ListResponse, OrderBy
 from search.engines.dev_vespa import FieldFilter, Filter
 from search.passage import Passage
 
+type PassagesClient = tuple[TestClient, MagicMock]
+
 
 @pytest.fixture
-def passages_client():
+def passages_client() -> Generator[PassagesClient]:
     """Provide a test client with the passage engine mocked."""
     with patch("api.routers.DevVespaPassageSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
@@ -29,7 +32,7 @@ def _passage(text_block_id: str = "block-1") -> Passage:
     return Passage(text_block_id=text_block_id, document_id="doc-1")
 
 
-def test_read_passages_with_query_only(passages_client) -> None:
+def test_read_passages_with_query_only(passages_client: PassagesClient) -> None:
     """A plain query request returns results and passes no filters."""
     client, mock_engine = passages_client
     mock_engine.search.return_value = ListResponse(
@@ -45,7 +48,7 @@ def test_read_passages_with_query_only(passages_client) -> None:
     assert kwargs["filters"] is None
 
 
-def test_read_passages_with_document_id_filter(passages_client) -> None:
+def test_read_passages_with_document_id_filter(passages_client: PassagesClient) -> None:
     """A ``document_id`` filter is normalised and forwarded to the engine."""
     client, mock_engine = passages_client
     mock_engine.search.return_value = ListResponse(
@@ -71,7 +74,7 @@ def test_read_passages_with_document_id_filter(passages_client) -> None:
     )
 
 
-def test_read_passages_with_label_filter(passages_client) -> None:
+def test_read_passages_with_label_filter(passages_client: PassagesClient) -> None:
     """A ``labels.value.id`` filter is forwarded to the engine."""
     client, mock_engine = passages_client
     mock_engine.search.return_value = ListResponse(
@@ -97,7 +100,9 @@ def test_read_passages_with_label_filter(passages_client) -> None:
     )
 
 
-def test_read_passages_with_malformed_filters_returns_400(passages_client) -> None:
+def test_read_passages_with_malformed_filters_returns_400(
+    passages_client: PassagesClient,
+) -> None:
     """Malformed filter JSON is rejected with HTTP 400 before reaching the engine."""
     client, mock_engine = passages_client
 
@@ -107,7 +112,9 @@ def test_read_passages_with_malformed_filters_returns_400(passages_client) -> No
     mock_engine.search.assert_not_called()
 
 
-def test_read_passages_with_empty_filters_returns_400(passages_client) -> None:
+def test_read_passages_with_empty_filters_returns_400(
+    passages_client: PassagesClient,
+) -> None:
     """An empty ``filters`` value is malformed, not a request for no filters."""
     client, mock_engine = passages_client
 
@@ -131,15 +138,20 @@ def _deflate(data: bytes, *, pad: bool = False) -> str:
 
 
 @pytest.mark.parametrize("pad", [False, True])
-def test_read_passages_with_deflated_filters(passages_client, pad: bool) -> None:
-    """``encoding=deflate`` filters decode to the same tree as plain JSON."""
+def test_read_passages_with_deflated_filters(
+    passages_client: PassagesClient, 
+    pad: bool
+) -> None:
     client, mock_engine = passages_client
+
     mock_engine.search.return_value = ListResponse(
-        results=[], total_size=0, next_page_token=None
+        results=[], 
+        total_size=0, 
+        next_page_token=None
     )
 
     response = client.get(
-        "/search/passages",
+        url="/search/passages",
         params={
             "filters": _deflate(_DOCUMENT_ID_FILTER.model_dump_json().encode(), pad=pad),
             "encoding": "deflate",
@@ -162,13 +174,14 @@ def test_read_passages_with_deflated_filters(passages_client, pad: bool) -> None
     ],
 )
 def test_read_passages_with_bad_deflated_filters_returns_400(
-    passages_client, filters: str
+    passages_client: PassagesClient, 
+    filters: str
 ) -> None:
-    """Undecodable ``encoding=deflate`` filters are rejected before the engine."""
     client, mock_engine = passages_client
 
     response = client.get(
-        "/search/passages", params={"filters": filters, "encoding": "deflate"}
+        params={"filters": filters, "encoding": "deflate"},
+        url="/search/passages", 
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -176,24 +189,29 @@ def test_read_passages_with_bad_deflated_filters_returns_400(
     mock_engine.search.assert_not_called()
 
 
-def test_read_passages_default_order_by_is_idx_asc(passages_client) -> None:
-    """Omitting ``order_by`` defaults to ascending idx order."""
+def test_read_passages_default_order_by_is_idx_asc(
+    passages_client: PassagesClient,
+) -> None:
     client, mock_engine = passages_client
+
     mock_engine.search.return_value = ListResponse(
-        results=[], total_size=0, next_page_token=None
+        next_page_token=None,
+        total_size=0, 
+        results=[], 
     )
 
-    response = client.get("/search/passages", params={"query": "toxic"})
+    response = client.get(
+        url="/search/passages", 
+        params={"query": "toxic"}
+    )
 
     assert response.status_code == HTTPStatus.OK
     _, kwargs = mock_engine.search.call_args
-    order_by = kwargs["order_by"]
-    assert len(order_by) == 1
-    assert order_by[0].field == "idx"
-    assert order_by[0].direction == "asc"
+
+    assert kwargs["order_by"] == [OrderBy(field="idx", direction="asc")]
 
 
-def test_read_passages_order_by_relevance(passages_client) -> None:
+def test_read_passages_order_by_relevance(passages_client: PassagesClient) -> None:
     """``order_by=relevance desc`` is parsed and forwarded to the engine."""
     client, mock_engine = passages_client
     mock_engine.search.return_value = ListResponse(
@@ -206,11 +224,12 @@ def test_read_passages_order_by_relevance(passages_client) -> None:
 
     assert response.status_code == HTTPStatus.OK
     _, kwargs = mock_engine.search.call_args
-    assert kwargs["order_by"][0].field == "relevance"
+    assert kwargs["order_by"] == [OrderBy(field="relevance", direction="desc")]
 
 
-def test_read_passages_order_by_unsupported_field_returns_400(passages_client) -> None:
-    """An unsupported ``order_by`` field is rejected with HTTP 400."""
+def test_read_passages_order_by_unsupported_field_returns_400(
+    passages_client: PassagesClient,
+) -> None:
     client, mock_engine = passages_client
 
     response = client.get(
