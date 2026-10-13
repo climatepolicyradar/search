@@ -1,11 +1,14 @@
 """Tests for ``GET /search/passages``."""
 
+import base64
+import zlib
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from api.filters import _NOT_DEFLATED
 from api.main import app
 from search.engines import ListResponse
 from search.engines.dev_vespa import FieldFilter, Filter
@@ -111,6 +114,65 @@ def test_read_passages_with_empty_filters_returns_400(passages_client) -> None:
     response = client.get("/search/passages", params={"filters": ""})
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
+    mock_engine.search.assert_not_called()
+
+
+_DOCUMENT_ID_FILTER = Filter(
+    op="and",
+    filters=[FieldFilter(field="document_id", op="contains", value="doc.1.2.3")],
+)
+
+
+def _deflate(data: bytes, *, pad: bool = False) -> str:
+    """Encode as the browser's ``CompressionStream("deflate-raw")`` + base64url."""
+    compressor = zlib.compressobj(wbits=-15)
+    encoded = base64.urlsafe_b64encode(compressor.compress(data) + compressor.flush())
+    return (encoded if pad else encoded.rstrip(b"=")).decode()
+
+
+@pytest.mark.parametrize("pad", [False, True])
+def test_read_passages_with_deflated_filters(passages_client, pad: bool) -> None:
+    """``encoding=deflate`` filters decode to the same tree as plain JSON."""
+    client, mock_engine = passages_client
+    mock_engine.search.return_value = ListResponse(
+        results=[], total_size=0, next_page_token=None
+    )
+
+    response = client.get(
+        "/search/passages",
+        params={
+            "filters": _deflate(_DOCUMENT_ID_FILTER.model_dump_json().encode(), pad=pad),
+            "encoding": "deflate",
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    _, kwargs = mock_engine.search.call_args
+    assert kwargs["filters"] == _DOCUMENT_ID_FILTER
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        pytest.param(_DOCUMENT_ID_FILTER.model_dump_json(), id="plain-json"),
+        pytest.param("!!!", id="not-base64"),
+        pytest.param(_deflate(b'{"op": "and", "filters": []}')[:-4], id="truncated"),
+        pytest.param(_deflate(b"\xff\xfe"), id="not-utf8"),
+        pytest.param(_deflate(b" " * 2 * 1024 * 1024), id="too-big"),
+    ],
+)
+def test_read_passages_with_bad_deflated_filters_returns_400(
+    passages_client, filters: str
+) -> None:
+    """Undecodable ``encoding=deflate`` filters are rejected before the engine."""
+    client, mock_engine = passages_client
+
+    response = client.get(
+        "/search/passages", params={"filters": filters, "encoding": "deflate"}
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert response.json()["detail"] == _NOT_DEFLATED
     mock_engine.search.assert_not_called()
 
 

@@ -1,7 +1,9 @@
+import base64
 import json
+import zlib
 from collections.abc import Callable
 from datetime import datetime
-from typing import Annotated, get_args
+from typing import Annotated, Literal, assert_never, get_args
 
 from fastapi import Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -50,6 +52,16 @@ FILTERS_GRAMMAR_DESCRIPTION = (
     f'"key": <string>, "op": {_literal_options(AttributesCondition, "op")}, '
     '"value": <string|number|boolean>}. '
 )
+
+ENCODING_DESCRIPTION = (
+    "Encoding of `filters`. Omit to send raw JSON. "
+    "Use `deflate` when `filters` is raw-deflate compressed JSON, base64url "
+    'encoded (padding optional), as produced by `CompressionStream("deflate-raw")`.'
+)
+
+Encoding = Literal["deflate"] | None
+
+_NOT_DEFLATED = "filters are not complete deflate-encoded text, or inflate past 1 MiB"
 
 
 def _filters_description(
@@ -112,9 +124,33 @@ def _normalise_filters(filters_json_string: str) -> Filter:
     return filters
 
 
-def _filters_dependency(desc: str) -> Callable[[str | None], Filter | None]:
-    def _dep(filters: str | None = Query(None, description=desc)) -> Filter | None:
-        return _normalise_filters(filters) if filters is not None else None
+def _inflate_filters(encoded: str) -> str:
+    try:
+        inflater = zlib.decompressobj(wbits=-15)
+        padded = encoded + "=" * (-len(encoded) % 4)
+        compressed = base64.urlsafe_b64decode(padded)
+        text = inflater.decompress(compressed, 1024 * 1024).decode()
+    except (ValueError, zlib.error) as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, _NOT_DEFLATED) from exc
+    if not inflater.eof:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, _NOT_DEFLATED)
+    return text
+
+
+def _filters_dependency(desc: str) -> Callable[..., Filter | None]:
+    def _dep(
+        filters: str | None = Query(None, description=desc),
+        encoding: Encoding = Query(None, description=ENCODING_DESCRIPTION),
+    ) -> Filter | None:
+        match filters, encoding:
+            case None, _:
+                return None
+            case str(), "deflate":
+                return _normalise_filters(_inflate_filters(filters))
+            case str(), None:
+                return _normalise_filters(filters)
+            case _:
+                assert_never((filters, encoding))
 
     return _dep
 
