@@ -9,9 +9,9 @@ from rich.table import Table
 from rich.text import Text
 
 from api.routers import settings
+from search.bolding import Bolding
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
-from search.bolding import Bolding
 
 app = typer.Typer()
 console = Console()

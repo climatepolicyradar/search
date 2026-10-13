@@ -8,9 +8,9 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+from search.bolding import bolding_to_labels
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Settings
-from search.bolding import bolding_to_labels
 
 app = typer.Typer()
 console = Console()
