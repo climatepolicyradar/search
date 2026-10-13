@@ -70,15 +70,17 @@ class VespaFeederDeployment:
 
 _FEEDS: list[VespaFeederDeployment] = [
     # Labels
-    VespaFeederDeployment(flow=labels_feeder_flow, cron="0 5 * * *"),
+    VespaFeederDeployment(flow=labels_feeder_flow, cron="30 8 * * *"),
     # Documents
     VespaFeederDeployment(
         flow=documents_feeder_flow,
+        cron="30 8 * * *",
         job_variables={"cpu": 1024, "memory": 2048},
     ),
     # Passages
     VespaFeederDeployment(
         flow=passages_feeder_flow,
+        cron="30 8 * * *",
         # 8 x 10 x 47MB x 2 = 7.5GB worst case.
         job_variables={
             "cpu": 2048,

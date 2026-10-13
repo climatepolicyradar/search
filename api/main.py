@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from api.health import router as health_router
 from api.observability.src.api import (
     FastAPITelemetry,
     MetricsService,
@@ -20,6 +21,10 @@ from search.engines import VespaError
 from search.log import get_logger
 
 logger = get_logger(__name__)
+
+# Derived rather than written out, so moving either prefix cannot silently leave
+# the health check logging again.
+HEALTH_ROUTE_PATH = f"{router.prefix}{health_router.prefix}"
 
 
 @asynccontextmanager
@@ -156,6 +161,12 @@ async def log_request_lifecycle(request: Request, call_next):
         status_code=response.status_code,
         duration_ms=duration_ms,
     )
+
+    # The load balancer polls the health check every ~30s per task, and a failing
+    # probe already logs its own exception in `api.health.run_probe`, so a
+    # lifecycle line here only adds volume. Metrics are still recorded.
+    if route_path == HEALTH_ROUTE_PATH:
+        return response
 
     # An error response logged at INFO as "Success" is invisible to log grepping
     # and error alerting. A 4xx is us correctly refusing a bad request, so it is

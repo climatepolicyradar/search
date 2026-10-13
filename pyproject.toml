@@ -3,11 +3,11 @@ name = "search"
 version = "0.1.0"
 description = "Tests for measuring the relevance of our search results"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
   "boto3>=1.43.107",
   "duckdb>=1.5.6",
-  "fastapi[standard]>=0.141.1",
+  "fastapi[standard]>=0.142.2",
   "posthog>=7.62.0",
   # @related: PREFECT_VERSION
   # This should match the Dockerfiles using prefect as that's what we deploy to prefect
@@ -50,7 +50,7 @@ dev = [
   "pulumi>=3.267.0,<4.0.0",
   "pytest>=9.1.1",
   "hypothesis>=6.168.3",
-  "boto3-stubs[s3,ssm]>=1.43.102",
+  "boto3-stubs[s3,ssm]>=1.43.107",
   "pulumiverse-grafana>=2.41.0",
 ]
 

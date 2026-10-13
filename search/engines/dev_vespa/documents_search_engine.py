@@ -74,6 +74,28 @@ _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS = 2000
 
 _DEFAULT_DOCUMENT_RANK_PROFILE = "bm25-title-geo"
 
+# Every field on the `documents` document except `passages`, for `get`.
+# Including passages bloats the response and drains resources from the cluster.
+_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES = ",".join(
+    [
+        "version",
+        "id",
+        "title",
+        "description",
+        "labels",
+        "geographies",
+        "concepts",
+        "concept_counts",
+        "attributes_double",
+        "attributes_string",
+        "attributes_boolean",
+        "attributes_identifiers",
+        "document_source",
+        "attributes_published_date",
+        "principal_id",
+    ]
+)
+
 # Minimum Should Match: the fraction of the query's terms a document must cover
 # to be kept. Declared by `bm25-title-geo` and `unranked`, both defaulting to
 # 0.0, so sending it is a no-op until it is set.
@@ -391,6 +413,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         try:
             response = requests.get(
                 endpoint,
+                params={
+                    "fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"
+                },
                 timeout=API_TIMEOUT,
                 headers={"Authorization": f"Bearer {self.settings.vespa_read_token}"},
             )

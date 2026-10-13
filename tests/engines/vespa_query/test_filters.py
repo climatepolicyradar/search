@@ -247,7 +247,7 @@ def test_attributes_identifiers_eq_renders_string_contains() -> None:
     )
 
 
-def _labels_yql(filter_group: Filter) -> str:
+def _labels_yql(filter_group: Filter) -> str | None:
     """Build YQL the way the labels engine does (struct map, empty field map)."""
     return _build_filter_yql(
         filter_group,
@@ -338,6 +338,42 @@ def test_labels_struct_map_or_conditions_use_separate_same_elements() -> None:
         '(labels contains sameElement(id contains "a") '
         'or labels contains sameElement(id contains "b"))'
     )
+
+
+def test_empty_nested_group_contributes_no_operand() -> None:
+    """
+    A group with no filters drops out instead of leaving a dangling operand.
+
+    The UI sends one group per facet, so an untouched facet arrives as
+    ``{"op": "or", "filters": []}``. Joining its empty YQL with its siblings
+    used to produce ``( and ...)``, which Vespa rejects with a 400.
+    """
+    filter_group = Filter(
+        op="and",
+        filters=[
+            Filter(op="or", filters=[]),
+            Filter(
+                op="or",
+                filters=[
+                    FieldFilter(
+                        field="labels.value.id", op="contains", value="concept::Q1274"
+                    ),
+                ],
+            ),
+        ],
+    )
+    assert _labels_yql(filter_group) == (
+        'labels contains sameElement(id contains "concept::Q1274")'
+    )
+
+
+def test_filter_group_of_only_empty_groups_builds_no_yql() -> None:
+    """Every facet untouched means no WHERE clause to add at all."""
+    filter_group = Filter(
+        op="and",
+        filters=[Filter(op="or", filters=[]), Filter(op="and", filters=[])],
+    )
+    assert _labels_yql(filter_group) is None
 
 
 def test_labels_struct_map_not_contains_negates_same_element() -> None:

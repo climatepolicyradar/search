@@ -51,6 +51,8 @@ tags = {
 application_name = "search-api"
 dockerfile_path = REPO_ROOT_DIR / "api" / "Dockerfile"
 
+HEALTH_CHECK_PATH = "/search/health"
+
 is_review_stack = stack.startswith("pr-")
 
 if is_review_stack:
@@ -139,7 +141,7 @@ if is_review_stack:
                 ),
             ],
         ),
-        health_check_path="/",
+        health_check_path=HEALTH_CHECK_PATH,
         cpu="1024",
         memory="2048",
         scaling_targets=[
@@ -551,7 +553,7 @@ elif stack != "review":
                 ),
             ],
         ),
-        health_check_path="/",
+        health_check_path=HEALTH_CHECK_PATH,
         cpu="1024",
         memory="2048",
         scaling_targets=[
