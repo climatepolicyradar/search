@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import TypedDict
+from typing import Awaitable, TypedDict
 
 import httpx
 
@@ -29,6 +29,7 @@ class WikibaseConcept(TypedDict):
     negative_labels: list[str]
     subconcept_labels: list[str]
     label_relationships: list[WikibaseLabelRelationship]
+    has_preferred_classifier: bool
 
 
 def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
@@ -52,12 +53,21 @@ def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
         else None
     )
 
+    statements = [
+        statement
+        for claim in (entity.get("claims") or {}).values()
+        for statement in claim
+    ]
+
     negative_labels: list[str] = []
-    for claim in (entity.get("claims") or {}).values():
-        for statement in claim:
-            mainsnak = statement.get("mainsnak", {})
-            if mainsnak.get("property") == "P9" and mainsnak.get("snaktype") == "value":
-                negative_labels.append(mainsnak["datavalue"]["value"])
+    has_preferred_classifier: bool = False
+
+    for statement in statements:
+        match statement:
+            case {"mainsnak": {"property": "P9", "datavalue": {"value": label}}}:
+                negative_labels.append(label)
+            case {"mainsnak": {"property": "P20", "datavalue": _}, "rank": "preferred"}:
+                has_preferred_classifier = True
 
     return WikibaseConcept(
         wikibase_id=wikibase_id,
@@ -67,6 +77,7 @@ def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
         negative_labels=negative_labels,
         subconcept_labels=[],
         label_relationships=[],
+        has_preferred_classifier=has_preferred_classifier,
     )
 
 
@@ -361,7 +372,8 @@ async def fetch_concepts_at_timestamps(
                 continue
 
             # Fetch each concept's revision concurrently
-            tasks = []
+            tasks: list[Awaitable[WikibaseConcept | None]] = []
+
             for wid in batch_ids:
                 entity_info = entity_data.get("entities", {}).get(wid, {})
                 page_id = str(entity_info.get("pageid", ""))
