@@ -5,27 +5,27 @@ description = "Tests for measuring the relevance of our search results"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-  "boto3>=1.43.107",
+  "boto3>=1.43.111",
   "duckdb>=1.5.6",
   "fastapi[standard]>=0.142.2",
-  "posthog>=7.62.0",
+  "posthog>=7.67.0",
   # @related: PREFECT_VERSION
   # This should match the Dockerfiles using prefect as that's what we deploy to prefect
   # which can cause unexpected results.
-  "prefect[slack]==3.8.7",
-  "pydantic>=2.13.5",
+  "prefect[slack]==3.8.8",
+  "pydantic>=2.14.0",
   "pydantic-settings>=2.15.0",
   "python-dotenv>=1.2.4",
   "pyvespa>=1.2.8",
   "requests>=2.34.2",
   "rich>=15.0.0",
-  "typer>=0.27.2",
+  "typer>=0.27.3",
   "uvicorn>=0.54.0",
   "components>=1.0.5",
   "polyfactory>=3.3.0",
-  "opentelemetry-api>=1.45.0,<2.0.0",
+  "opentelemetry-api>=1.45.1,<2.0.0",
   "opentelemetry-distro>=0.59b0",
-  "opentelemetry-exporter-otlp>=1.38.0,<2.0.0",
+  "opentelemetry-exporter-otlp>=1.45.1,<2.0.0",
   "opentelemetry-instrumentation-fastapi>=0.62b1",
   "opentelemetry-instrumentation-logging>=0.59b0",
   "opentelemetry-instrumentation-sqlalchemy>=0.62b1",
@@ -43,15 +43,15 @@ dependencies = [
 [dependency-groups]
 research = ["snowflake-connector-python>=4.8.0", "openpyxl>=3.1.5"]
 dev = [
-  "pulumi-aws>=7.48.0,<8.0.0",
+  "pulumi-aws>=7.50.0,<8.0.0",
   "pulumi-docker>=5.2.0,<6.0.0",
   "pulumi-docker-build>=0.0.22,<1.0.0",
   "pulumi-pulumiservice>=1.4.0",
-  "pulumi>=3.267.0,<4.0.0",
+  "pulumi>=3.268.0,<4.0.0",
   "pytest>=9.1.1",
-  "hypothesis>=6.168.3",
+  "hypothesis>=6.168.5",
   "boto3-stubs[s3,ssm]>=1.43.107",
-  "pulumiverse-grafana>=2.41.0",
+  "pulumiverse-grafana>=2.42.0",
 ]
 
 [tool.uv.sources]
