@@ -13,6 +13,7 @@ from cpr_contracts import DocumentLabelRelationship, Label
 
 from search.data_in_models import Label as DataInLabel
 from search.vespa.labels_feed_materializer import (
+    VespaLabelStatus,
     _source_label_relationship_to_vespa_label,
     _vespa_label_to_vespa_update,
     _wikibase_concept_to_vespa_label,
@@ -72,7 +73,7 @@ def test_wikibase_concept_to_vespa_label_returns_vespa_label_shape() -> None:
 
 
 @pytest.mark.parametrize("has_preferred_classifier", [True, False])
-def test_wikibase_concept_to_vespa_label_active_follows_preferred_classifier(
+def test_wikibase_concept_to_vespa_label_status_follows_preferred_classifier(
     has_preferred_classifier: bool,
 ) -> None:
     concept: WikibaseConcept = {
@@ -86,11 +87,12 @@ def test_wikibase_concept_to_vespa_label_active_follows_preferred_classifier(
         "has_preferred_classifier": has_preferred_classifier,
     }
 
+    expected: VespaLabelStatus = "active" if has_preferred_classifier else "inactive"
     vespa_label = _wikibase_concept_to_vespa_label(concept)
     update = _vespa_label_to_vespa_update(vespa_label)
 
-    assert vespa_label["active"] is has_preferred_classifier
-    assert update["fields"]["active"] == {"assign": has_preferred_classifier}
+    assert vespa_label["status"] == expected
+    assert update["fields"]["status"] == {"assign": expected}
 
 
 def test_source_label_relationship_to_vespa_label_is_active() -> None:
@@ -101,7 +103,7 @@ def test_source_label_relationship_to_vespa_label_is_active() -> None:
     )
 
     vespa_label = _source_label_relationship_to_vespa_label(label_rel)
-    assert vespa_label["active"] is True
+    assert vespa_label["status"] == "active"
 
 
 def test_wikibase_concept_to_vespa_label_propagates_label_relationships() -> None:

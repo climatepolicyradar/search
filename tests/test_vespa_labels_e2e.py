@@ -87,7 +87,7 @@ def _taxonomy_vespa_label(
         negative_labels=[],
         labels=labels or [],
         label_source=_label_source_from_taxonomy(label_id, label_type, value),
-        active=True,
+        status="active",
     )
 
 

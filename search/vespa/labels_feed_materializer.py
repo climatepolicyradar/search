@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 import boto3
 import orjson
@@ -24,6 +24,8 @@ REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
 OUTPUT_CACHE_DIR = REPO_ROOT_DIR / ".data_cache" / "vespa"
 OUTPUT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+type VespaLabelStatus = Literal["active", "inactive"]
+
 
 class VespaLabelLabelRelationship(TypedDict):
     id: str
@@ -43,7 +45,7 @@ class VespaLabel(TypedDict):
     negative_labels: list[str]
     label_source: str
     labels: list[VespaLabelLabelRelationship]
-    active: bool
+    status: VespaLabelStatus
 
 
 class VespaLabelUpdate(TypedDict):
@@ -56,7 +58,7 @@ class VespaLabelUpdate(TypedDict):
     negative_labels: VespaAssign[list[str]]
     label_source: VespaAssign[str]
     labels: VespaAssign[list[VespaLabelLabelRelationship]]
-    active: VespaAssign[bool]
+    status: VespaAssign[VespaLabelStatus]
 
 
 def _label_relationship_to_vespa_label_relationship(
@@ -92,7 +94,7 @@ def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpd
             "negative_labels": {"assign": label["negative_labels"]},
             "label_source": {"assign": label["label_source"]},
             "labels": {"assign": label["labels"]},
-            "active": {"assign": label["active"]},
+            "status": {"assign": label["status"]},
         },
     }
 
@@ -119,7 +121,7 @@ def _source_label_relationship_to_vespa_label(
         "negative_labels": [],
         "label_source": value.model_dump_json(),
         "labels": [_label_relationship_to_vespa_label_relationship(label_relationship) for label_relationship in value.labels],
-        "active": True,
+        "status": "active"
     }
     return vespa_label
 
@@ -162,7 +164,7 @@ def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
         "description": concept["description"] or "",
         "negative_labels": concept["negative_labels"],
         "label_source": source_label.model_dump_json(),
-        "active": concept["has_preferred_classifier"],
+        "status": "active" if concept["has_preferred_classifier"] else "inactive",
         "labels": [
             _label_relationship_to_vespa_label_relationship(lr) for lr in label_rels
         ],
