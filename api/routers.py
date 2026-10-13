@@ -432,19 +432,3 @@ def read_passages(
         results=results.results,
         aggregations=None,
     )
-
-
-@router.get("/test_labels", response_model=SearchResponse[DataInLabel])
-def read_tmp_labels():
-    engine = DevVespaLabelSearchEngine(settings=settings)
-    results = engine.tmp_labels()
-    return SearchResponse[DataInLabel](
-        total_size=results.total_size,
-        page=0,
-        page_size=0,
-        total_pages=0,
-        next_page=None,
-        previous_page=None,
-        results=results.results,
-        aggregations=None,
-    )
