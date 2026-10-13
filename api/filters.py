@@ -126,9 +126,12 @@ def _normalise_filters(filters_json_string: str) -> Filter:
 
 def _inflate_filters(encoded: str) -> str:
     try:
+        # minus = raw, 15 = max stream size
         inflater = zlib.decompressobj(wbits=-15)
         padded = encoded + "=" * (-len(encoded) % 4)
         compressed = base64.urlsafe_b64decode(padded)
+
+        # max of 1MiB decompressed to stop giant payloads
         text = inflater.decompress(compressed, 1024 * 1024).decode()
     except (ValueError, zlib.error) as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _NOT_DEFLATED) from exc
