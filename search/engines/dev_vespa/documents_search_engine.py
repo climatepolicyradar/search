@@ -12,7 +12,7 @@ from pydantic import TypeAdapter
 from vespa.querybuilder import Grouping as G
 
 from search.bolding import merge_bolded, render_bolded
-from search.data_in_models import Document, DocumentRelationship
+from search.data_in_models import Document, DocumentRelationship, LabelRelationship
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
 from search.engines.dev_vespa.labels import (
     MISSING_PLACEHOLDER,
@@ -355,6 +355,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             document_relationships = TypeAdapter(
                 list[DocumentRelationship]
             ).validate_python(source.get("documents", []))
+            self._enrich_relationships_with_concepts(document_relationships)
 
             documents.append(
                 Document(
@@ -410,6 +411,21 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
     def get(self, document_id: str) -> Document | None:
         """Fetch a single document by id, parsed from its stored document_source."""
+        document = self._fetch_document(document_id)
+        if document is None:
+            return None
+        self._enrich_relationships_with_concepts(document.documents)
+        return document
+
+    def _fetch_document(self, document_id: str) -> Document | None:
+        """
+        Fetch a single document by id, parsed from its stored document_source.
+
+        Does not enrich `documents` relationships with concepts - unlike `get`,
+        this is also the primitive `_fetch_concept_labels` calls per related
+        document, and that must not recurse into each related document's own
+        relationships.
+        """
         endpoint = f"{self.settings.vespa_endpoint}/document/v1/documents/documents/docid/{document_id}"
         logger.info("Vespa request started [documents.get]")
         try:
@@ -443,6 +459,43 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         document = Document.model_validate(source)
         document.labels = get_labels_from_vespa_response(source, fields)
         return document
+
+    def _fetch_concept_labels(self, document_id: str) -> list[LabelRelationship]:
+        """
+        Fetch a document by id and return only its concept labels.
+
+        HACK: concepts are fed onto a Vespa document as a partial update outside
+        `document_source` (see `_fetch_document`), so a related document parsed
+        out of another document's `document_source` blob never carries
+        concepts - only whatever labels were baked in at index time. The only
+        way to get them is a full fetch per related document. Per-item
+        degradation: a related document that fails to fetch is logged and left
+        without concepts rather than failing the whole request.
+        """
+        try:
+            related = self._fetch_document(document_id)
+        except VespaError:
+            logger.warning(
+                "Could not fetch concepts for related document id=%r", document_id
+            )
+            return []
+        if related is None:
+            return []
+        return [label for label in related.labels if label.type == "concept"]
+
+    def _enrich_relationships_with_concepts(
+        self, relationships: list[DocumentRelationship]
+    ) -> None:
+        """Append each related document's concept labels onto it, fetched individually."""
+        if not relationships:
+            return
+        with ThreadPoolExecutor(max_workers=max(1, len(relationships))) as pool:
+            futures = {
+                pool.submit(self._fetch_concept_labels, rel.value.id): rel
+                for rel in relationships
+            }
+            for future in as_completed(futures):
+                futures[future].value.labels.extend(future.result())
 
     @staticmethod
     def parse_label_type_id_value(s: str) -> tuple[str, str, str]:

@@ -809,6 +809,147 @@ def test_document_get_renders_labels_and_concepts() -> None:
     assert concept_label.passages_id is None
 
 
+def test_document_get_fetches_concepts_for_related_documents() -> None:
+    """
+    `get` appends each related document's concepts, fetched individually.
+
+    HACK: concepts live outside `document_source` (see
+    `test_document_get_renders_labels_and_concepts`), so a related document
+    embedded in the owning document's `document_source` blob never carries
+    them - they have to be fetched per related document.
+    """
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    main_source = json.dumps(
+        {
+            "id": "doc-0",
+            "title": "Climate Policy",
+            "labels": [],
+            "documents": [
+                {
+                    "type": "member_of",
+                    "value": {
+                        "id": "doc-1",
+                        "title": "Related document",
+                        "labels": [],
+                    },
+                }
+            ],
+        }
+    )
+    related_source = json.dumps(
+        {"id": "doc-1", "title": "Related document", "labels": [], "documents": []}
+    )
+    responses = {
+        "doc-0": {"fields": {"document_source": main_source, "concepts": []}},
+        "doc-1": {
+            "fields": {
+                "document_source": related_source,
+                "concepts": [
+                    {
+                        "id": "concept::Q1343",
+                        "type": "concept",
+                        "value": "climate finance",
+                        "count": 7,
+                    }
+                ],
+            }
+        },
+    }
+
+    def fake_get(endpoint, **kwargs):
+        response = Mock(status_code=HTTPStatus.OK)
+        response.json.return_value = responses[endpoint.rsplit("/", 1)[-1]]
+        return response
+
+    with patch.object(documents_search_engine.requests, "get", side_effect=fake_get):
+        document = engine.get("doc-0")
+
+    assert document is not None
+    related = document.documents[0].value
+    assert related.id == "doc-1"
+    [concept_label] = related.labels
+    assert concept_label.type == "concept"
+    assert concept_label.value.id == "concept::Q1343"
+    assert concept_label.value.value == "climate finance"
+    assert concept_label.count == 7
+
+
+def test_document_get_degrades_per_related_document_on_concept_fetch_failure() -> None:
+    """
+    One related document's concept fetch failing does not fail the whole request.
+
+    Per docs/errors.md's per-item degradation carve-out: a transport failure
+    fetching one related document's concepts is logged and that one is left
+    without concepts, while the rest of the response - including other
+    related documents' concepts - is unaffected.
+    """
+    settings = Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    main_source = json.dumps(
+        {
+            "id": "doc-0",
+            "title": "Climate Policy",
+            "labels": [],
+            "documents": [
+                {
+                    "type": "member_of",
+                    "value": {"id": "doc-1", "title": "Healthy related", "labels": []},
+                },
+                {
+                    "type": "member_of",
+                    "value": {"id": "doc-2", "title": "Unreachable related", "labels": []},
+                },
+            ],
+        }
+    )
+    doc_1_source = json.dumps(
+        {"id": "doc-1", "title": "Healthy related", "labels": [], "documents": []}
+    )
+    responses = {
+        "doc-0": {"fields": {"document_source": main_source, "concepts": []}},
+        "doc-1": {
+            "fields": {
+                "document_source": doc_1_source,
+                "concepts": [
+                    {
+                        "id": "concept::Q1343",
+                        "type": "concept",
+                        "value": "climate finance",
+                        "count": 7,
+                    }
+                ],
+            }
+        },
+    }
+
+    def fake_get(endpoint, **kwargs):
+        document_id = endpoint.rsplit("/", 1)[-1]
+        if document_id == "doc-2":
+            raise ConnectionError("connection reset")
+        response = Mock(status_code=HTTPStatus.OK)
+        response.json.return_value = responses[document_id]
+        return response
+
+    with patch.object(documents_search_engine.requests, "get", side_effect=fake_get):
+        document = engine.get("doc-0")
+
+    assert document is not None
+    related_by_id = {rel.value.id: rel.value for rel in document.documents}
+    assert [label.value.id for label in related_by_id["doc-1"].labels] == [
+        "concept::Q1343"
+    ]
+    assert related_by_id["doc-2"].labels == []
+
+
 def test_passage_search_engine_quoted_query_builds_exact_phrase() -> None:
     """A fully-quoted passage query becomes an in-order phrase on the unstemmed field."""
     settings = Settings(
