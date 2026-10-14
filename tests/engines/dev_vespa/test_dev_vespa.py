@@ -1370,19 +1370,22 @@ def test_document_search_leaves_an_absent_description_empty() -> None:
 
 def test_document_search_absent_description_survives_exact_bolding() -> None:
     """
-    An absent description is still `None` when the exact summary bolds it.
+    A document with no description survives a quoted search.
 
-    A quoted query makes Vespa return `description_not_stemmed` alongside
-    `description`, and `_merge_exact_bolding` merges the two sets of `<hi>`
-    tags. Merging requires both copies to be the same underlying text, so
-    pairing an absent description with a bolded exact copy raises
-    `ValueError: Bolded copies of a field do not share the same text`.
+    Vespa wraps matched words in `<hi>` tags so the UI can embolden them. A
+    quoted query matches two copies of each field: `description`, stemmed,
+    bolds the free text; `description_not_stemmed` bolds the literal phrase.
+    `_merge_exact_bolding` combines the two.
 
-    The absence check therefore has to come before the merge, not after it.
-    On `main` this path already raised, because the old `MISSING_PLACEHOLDER`
-    default hit the same mismatch, so a quoted query over a description-less
-    document failed the whole request. This test pins the ordering that keeps
-    it fixed.
+    `merge_bolded` requires both copies to be the same text once the tags
+    are stripped, or the tag positions refer to different strings. With no
+    description there is no base text to line the phrase copy up against,
+    so it raises `ValueError: Bolded copies of a field do not share the same
+    text`. The absence has to be checked before the merge, not after.
+
+    On `main` the `MISSING_PLACEHOLDER` default mismatched the phrase copy
+    the same way, so the request failed rather than rendering "MISSING".
+    Only quoted queries reach this path.
     """
     engine = _document_engine(bolding=True)
 
@@ -1395,8 +1398,8 @@ def test_document_search_absent_description_survives_exact_bolding() -> None:
                         "document_source": (
                             '{"id": "doc-0", "labels": [], "documents": []}'
                         ),
-                        # no `description`, but the exact summary came back
-                        "description_not_stemmed": "<hi>needle</hi>",
+                        # no `description`, but the phrase copy came back
+                        "description_not_stemmed": "<hi>carbon tax</hi>",
                     },
                 }
             ]
@@ -1407,7 +1410,8 @@ def test_document_search_absent_description_survives_exact_bolding() -> None:
         documents_search_engine, "execute_vespa_query", return_value=fake_response
     ):
         result = engine.search(
-            query="needle",
+            # Quoted: only a query with phrases asks for `search-exact`.
+            query='"carbon tax"',
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
         )
