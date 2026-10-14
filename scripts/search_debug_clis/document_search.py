@@ -8,6 +8,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+from search.bolding import bolding_to_labels
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter, Settings
 
@@ -31,25 +32,46 @@ def search(
     debug: bool = True,
     filters: str | None = None,
     labels: bool = False,
-    bolding: bool = False,
+    topic: str | None = typer.Option(None, "--topic", help="e.g. Q1234 or concept::Q1234"),
+    exact_weight: float | None = typer.Option(
+        None,
+        "--exact-weight",
+        help="Exact-form boost weight. Omit for the engine default (1.0); 0 turns it off.",
+    ),
 ):
     """Search for documents."""
-    engine = DevVespaDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=bolding
+    conditions: list[dict] = []
+    if topic:
+        value = topic if topic.startswith("concept::") else f"concept::{topic}"
+        conditions.append({"field": "labels.value.id", "op": "contains", "value": value})
+    if filters:
+        conditions.append(json.loads(filters))
+    filter_model = (
+        Filter.model_validate({"op": "and", "filters": conditions}) if conditions else None
+    )
+    engine = (
+        DevVespaDocumentSearchEngine(settings=settings, debug=debug, bolding=True)
+        if exact_weight is None
+        else DevVespaDocumentSearchEngine(
+            settings=settings, debug=debug, bolding=True, exact_weight=exact_weight
+        )
     )
     results = engine.search(
         query=query,
-        filters=Filter.model_validate_json(filters) if filters else None,
+        filters=filter_model,
         pagination=Pagination(page_token=page_token, page_size=page_size),
         order_by=[OrderBy(field="relevance", direction="desc")],
     )
+    console.print(
+        f"[bold magenta]{query!r}  {engine.parameters}  total={results.total_size}[/bold magenta]"
+    )
 
-    words = query.split()
-
-    def highlight(s: str) -> Text:
-        """Return a Text object with query words highlighted."""
-        t = Text(s)
-        t.highlight_words(words, style="bold yellow", case_sensitive=False)
+    def bolded(s: str) -> Text:
+        """`s` with Vespa's <hi> spans styled, exactly as the frontend highlights them."""
+        parsed = bolding_to_labels(s)
+        t = Text(parsed.text)
+        for b in parsed.boldings:
+            t.stylize("bold yellow", b.start_index, b.end_index)
         return t
 
     for i, doc in enumerate(results.results):
@@ -67,15 +89,13 @@ def search(
         table.add_column(style="bold cyan", no_wrap=True)
         table.add_column()
         table.add_row("id", doc.id)
-        table.add_row("title", highlight(doc.title))
+        table.add_row("title", bolded(doc.title))
         if doc.description:
-            table.add_row("description", highlight(doc.description))
+            table.add_row("description", bolded(doc.description))
         if doc.attributes:
-            table.add_row(
-                "attributes", highlight(json.dumps(doc.attributes, default=str))
-            )
+            table.add_row("attributes", json.dumps(doc.attributes, default=str))
         if geographies:
-            table.add_row("geographies", highlight(", ".join(geographies)))
+            table.add_row("geographies", ", ".join(geographies))
         if relevance is not None:
             table.add_row("relevance", str(relevance))
 

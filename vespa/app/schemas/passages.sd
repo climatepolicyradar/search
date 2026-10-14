@@ -165,6 +165,10 @@ schema passages {
         fields: content
     }
 
+    fieldset exact {
+        fields: content_not_stemmed
+    }
+
     rank-profile nativerank {
         inputs{
             query(short_heading_weight) double: 0.15
@@ -211,10 +215,11 @@ schema passages {
     rank-profile bm25_multiplicative inherits nativerank {
         inputs {
             query(prox_weight) double: 2.0
+            query(exact_weight) double: 1.0
         }
 
         function text_score() {
-            expression: bm25(content) + bm25(content_not_stemmed)
+            expression: bm25(content) + query(exact_weight) * bm25(content_not_stemmed)
         }
         function proximity_boost() {
             expression: 1 + query(prox_weight) * nativeProximity(content)
@@ -231,7 +236,7 @@ schema passages {
             expression: (text_score() * proximity_boost + topic_score()) * (1 - short_headings_penalty) * (1 - table_of_contents_penalty) * (1 - reference_list_penalty) * (1 - page_header_or_footer_penalty) * (1 - demoted_section_penalty)
         }
 
-        summary-features: text_score() topic_score() proximity_boost bm25(content) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(is_page_header_or_footer) attribute(looks_like_demoted_section)
+        summary-features: text_score() topic_score() proximity_boost bm25(content) bm25(content_not_stemmed) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(is_page_header_or_footer) attribute(looks_like_demoted_section)
     }
 
     # `document-summary default` is deliberately left implicit.
@@ -278,6 +283,7 @@ schema passages {
     }
 
     document-summary debug-summary inherits search {
+        summary content_not_stemmed {}
         summary text_tokens {
             source: content
             tokens

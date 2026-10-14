@@ -602,14 +602,9 @@ def _flatten_tokens(token_field: Any) -> list[str]:
 
 
 def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
-    """
-    Title uses passage_analysis profile: stop words removed + snowball stemming.
-
-    "Running" should stem to "run", "waters" to "water",
-    and "is" should be removed as a stop word.
-    """
+    """Title uses passage_analysis profile: stop words removed + KStem stemming."""
     doc = DocumentFactory.build(
-        title="Running waters is beautiful",
+        title="Adapting informal settlements is beautiful",
         description="A short description",
         labels=[],
     )
@@ -617,7 +612,7 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
 
     engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
     results = engine.search(
-        query="running",
+        query="adapting",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
     ).results
@@ -626,8 +621,9 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     debug = engine.last_debug_info[0]
     values = _flatten_tokens(debug.get("title_tokens"))
 
-    assert "run" in values, f"Expected 'run' in title tokens, got: {values}"
-    assert "water" in values, f"Expected 'water' in title tokens, got: {values}"
+    assert "adapt" in values, f"Expected 'adapt' in title tokens, got: {values}"
+    assert "settlement" in values, f"Expected 'settlement' in title tokens, got: {values}"
+    assert "inform" not in values, f"KStem must not reduce 'informal', got: {values}"
     assert "is" not in values, f"Stop word 'is' should be removed, got: {values}"
 
 
