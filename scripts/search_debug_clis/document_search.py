@@ -48,9 +48,12 @@ def search(
         conditions.append(json.loads(filters))
     filters_json = json.dumps({"op": "and", "filters": conditions}) if conditions else None
 
-    engine_kwargs = {} if exact_weight is None else {"exact_weight": exact_weight}
-    engine = DevVespaDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=True, **engine_kwargs
+    engine = (
+        DevVespaDocumentSearchEngine(settings=settings, debug=debug, bolding=True)
+        if exact_weight is None
+        else DevVespaDocumentSearchEngine(
+            settings=settings, debug=debug, bolding=True, exact_weight=exact_weight
+        )
     )
     results = engine.search(
         query=query,

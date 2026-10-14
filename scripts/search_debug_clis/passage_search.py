@@ -113,9 +113,13 @@ def search(
     ),
 ):
     """Search for passages."""
-    # Only override the engine's default when a weight is given.
-    engine_kwargs = {} if exact_weight is None else {"exact_weight": exact_weight}
-    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug, **engine_kwargs)
+    engine = (
+        DevVespaPassageSearchEngine(settings=settings, debug=debug)
+        if exact_weight is None
+        else DevVespaPassageSearchEngine(
+            settings=settings, debug=debug, exact_weight=exact_weight
+        )
+    )
     results = engine.search(
         query=query,
         filters_json_string=_build_filters(document_id, filters, topic, topic_or),
