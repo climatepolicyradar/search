@@ -14,7 +14,7 @@ schema passages {
             index: enable-bm25
             stemming: multiple
             linguistics {
-                profile: passage_analysis
+                profile: passage_analysis_kstem
             }
             bolding: on
         }

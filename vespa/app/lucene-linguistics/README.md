@@ -26,6 +26,18 @@ profiles powered by Apache Lucene.
   or {defaultIndex: "labels_fieldset"}userInput(@query)
   ```
 
+- **Changing a profile's analyzers does not trigger reindexing.** Each field's
+  indexing script names its profile (`tokenize normalize profile:"…"`), but not
+  what the profile contains. Swapping a tokenizer, filter or stemmer inside a
+  profile deploys with no reindex, and existing documents keep their old tokens.
+  To roll out an analysis change, give the profile a new name (and update the
+  schema references and `_QUERY_LINGUISTICS_PROFILE`). The changed indexing
+  script is then an `indexing-change`, and with a valid validation override
+  Vespa Cloud schedules the reindex on deploy.
+- **An unknown `grammar.profile` doesn't error.** Vespa falls back to its
+  default English stemmer, so renaming a profile is safe even if the API deploys
+  before Vespa.
+
 ## Features
 
 ### Stemming modes

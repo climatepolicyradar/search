@@ -15,7 +15,7 @@
 # rank profiles. FUS-421.
 #
 # The quoted RHS is a phrase (tokens must be
-# adjacent) and is analysed at query time by `passage_analysis` (services.xml),
+# adjacent) and is analysed at query time by `passage_analysis_kstem` (services.xml),
 # which lowercases, strips punctuation, removes stopwords (en/stopwords.txt) and
 # stems, hence the RHS is written without stopwords ("...on...", "...and...").
 

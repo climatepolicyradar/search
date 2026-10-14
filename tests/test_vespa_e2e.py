@@ -602,7 +602,7 @@ def _flatten_tokens(token_field: Any) -> list[str]:
 
 
 def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
-    """Title uses passage_analysis profile: stop words removed + KStem stemming."""
+    """Title uses passage_analysis_kstem profile: stop words removed + KStem stemming."""
     doc = DocumentFactory.build(
         title="Adapting informal settlements is beautiful",
         description="A short description",
@@ -671,7 +671,7 @@ def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa):
 
     UNFCCC titles are full of these - "BTR1", "NDC1", "BUR2", "NC3" - and the
     standard tokenizer keeps them whole, so searching "BTR" used to match none of
-    them (FUS-326). title_index_analysis splits on the numeric boundary while
+    them (FUS-326). title_index_analysis_kstem splits on the numeric boundary while
     preserving the original, so both "BTR" and "BTR1" hit.
     """
     doc = DocumentFactory.build(
@@ -717,7 +717,7 @@ def test_linguistics_acronym_split_keeps_formula_queries_exact(vespa_app: Vespa)
     """
     Splitting "CO2" into `co` + `co2` must not make the two interchangeable.
 
-    title_index_analysis indexes the split part as well as the original, so a
+    title_index_analysis_kstem indexes the split part as well as the original, so a
     "CO2" title also carries `co`. That is one-way by design: the query side does
     not split, so searching "CO2" must still match only CO2 titles. Searching the
     bare "CO" matching CO2 titles is the accepted cost (see services.xml).

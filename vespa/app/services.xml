@@ -18,7 +18,7 @@
             <config name="com.yahoo.language.lucene.lucene-analysis">
                 <configDir>lucene-linguistics</configDir>
                 <analysis>
-                    <!-- title_index_analysis: passage_analysis plus acronym+ordinal
+                    <!-- title_index_analysis_kstem: passage_analysis_kstem plus acronym+ordinal
                          splitting.
 
                          WHY: UNFCCC titles are full of "<acronym><ordinal>" tokens -
@@ -42,11 +42,11 @@
                          `co`/`no` get a slightly higher document frequency, which
                          lowers their IDF and so reduces their influence.
 
-                         Deliberately NOT applied to passage_analysis: splitting
+                         Deliberately NOT applied to passage_analysis_kstem: splitting
                          numerics across long-form passage text would multiply that
                          side effect over every body paragraph and shift passage bm25
                          statistics. -->
-                    <item key="profile=title_index_analysis;language=en">
+                    <item key="profile=title_index_analysis_kstem;language=en">
                         <tokenizer>
                             <name>standard</name>
                         </tokenizer>
@@ -122,13 +122,13 @@
                             </item>
                         </tokenFilters>
                     </item>
-                    <!-- passage_analysis: stop words + stemming for long-form text.
+                    <!-- passage_analysis_kstem: stop words + stemming for long-form text.
                          charFilters map currency symbols to words so the
                              standard tokenizer preserves them, e.g. "$100" ->
                              "dollar100". Replacement values must not
                              contain whitespace - Vespa silently ignores a
                              charFilter whose replacement has a space. -->
-                    <item key="profile=passage_analysis;language=en">
+                    <item key="profile=passage_analysis_kstem;language=en">
                         <tokenizer>
                             <name>standard</name>
                         </tokenizer>
@@ -173,7 +173,7 @@
                         </tokenFilters>
                     </item>
                     <!-- exact_analysis: for quoted/exact-phrase matching. Same
-                         charFilters as passage_analysis (so "$100" -> dollar100 on
+                         charFilters as passage_analysis_kstem (so "$100" -> dollar100 on
                          both sides), lowercase only - NO stop-words, NO stemming. -->
                     <item key="profile=exact_analysis;language=en">
                         <tokenizer><name>standard</name></tokenizer>

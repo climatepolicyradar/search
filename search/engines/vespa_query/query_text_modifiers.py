@@ -17,7 +17,7 @@ def _normalize_currency_symbols(query: str) -> str:
     Map currency symbols to words so queries match the indexed (charFiltered) form.
 
     This is needed as Vespa's query parser strips punctuation (incl. currency symbols)
-    *before* linguistics runs, so the `passage_analysis` charFilter in
+    *before* linguistics runs, so the `passage_analysis_kstem` charFilter in
     vespa/app/services.xml - which maps these symbols to words at index time
     (e.g. "$100" -> "dollar100") - never sees them on the query side. We apply the
     same mapping to the query string here so query terms match the indexed form.

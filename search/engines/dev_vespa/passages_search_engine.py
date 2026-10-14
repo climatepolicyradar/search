@@ -46,7 +46,7 @@ _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 # `content`'s profile, named on the query. Vespa only applies a field's
 # profile to query terms when the query names the field; through a fieldset it stems
 # with its fallback English stemmer instead.
-_QUERY_LINGUISTICS_PROFILE = "passage_analysis"
+_QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # How much an exact match on the unstemmed query is weighted/boosted - see `_free_text_yql`.
 _DEFAULT_EXACT_WEIGHT = 1.0
 
