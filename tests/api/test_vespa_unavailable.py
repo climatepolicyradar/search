@@ -14,15 +14,8 @@ from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
-from api.main import app
 from search.engines import ListResponse, VespaError
-
-
-@pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
 
 
 @pytest.fixture

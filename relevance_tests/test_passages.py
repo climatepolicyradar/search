@@ -1,3 +1,4 @@
+import requests
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -820,19 +821,23 @@ test_cases = [
 def relevance_tests_passages():
     """Run relevance tests for passages"""
 
-    engines = [
-        DevVespaPassageSearchEngine(
-            settings=settings, debug=True, ranking_profile="bm25_multiplicative"
-        ),
-        ExactVespaPassageSearchEngine(),
-    ]
+    with requests.Session() as http:
+        engines = [
+            DevVespaPassageSearchEngine(
+                settings=settings,
+                session=http,
+                debug=True,
+                ranking_profile="bm25_multiplicative",
+            ),
+            ExactVespaPassageSearchEngine(),
+        ]
 
-    run_relevance_tests_parallel(
-        engines=engines,
-        test_cases=test_cases,
-        primitive_type=Passage,
-        output_subdir="passages",
-    )
+        run_relevance_tests_parallel(
+            engines=engines,
+            test_cases=test_cases,
+            primitive_type=Passage,
+            output_subdir="passages",
+        )
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from api.settings import settings
+from api.state import HttpSessionDep
 from search.engines import OrderBy, Pagination, VespaError
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
@@ -38,9 +39,9 @@ class HealthResponse(BaseModel):
     probes: list[ProbeResult]
 
 
-def probe_vespa() -> None:
+def probe_vespa(http: requests.Session) -> None:
     """Vespa's own health endpoint - the discriminator between us and them."""
-    response = requests.get(
+    response = http.get(
         f"{settings.vespa_endpoint}/state/v1/health",
         timeout=API_TIMEOUT,
         headers={"Authorization": f"Bearer {settings.vespa_read_token}"},
@@ -58,22 +59,22 @@ def probe_vespa() -> None:
         )
 
 
-def probe_documents_search() -> None:
-    DevVespaDocumentSearchEngine(settings=settings).search(
+def probe_documents_search(http: requests.Session) -> None:
+    DevVespaDocumentSearchEngine(settings=settings, session=http).search(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
     )
 
 
-def probe_documents_get() -> None:
+def probe_documents_get(http: requests.Session) -> None:
     """
     Fetch a document by id, via the top hit rather than a pinned id.
 
     The id comes from a search so the probe cannot go red because one hard-coded
     document was unpublished - that is a corpus change, not a service failure.
     """
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=http)
     results = engine.search(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
@@ -93,16 +94,16 @@ def probe_documents_get() -> None:
         )
 
 
-def probe_labels_search() -> None:
-    DevVespaLabelSearchEngine(settings=settings).search(
+def probe_labels_search(http: requests.Session) -> None:
+    DevVespaLabelSearchEngine(settings=settings, session=http).search(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
     )
 
 
-def probe_passages_search() -> None:
-    DevVespaPassageSearchEngine(settings=settings).search(
+def probe_passages_search(http: requests.Session) -> None:
+    DevVespaPassageSearchEngine(settings=settings, session=http).search(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
@@ -111,7 +112,7 @@ def probe_passages_search() -> None:
 
 # A probe raises on failure and returns on success. Anything that is not a 2xx
 # from Vespa already raises `VespaError` on the way up.
-Probe = Callable[[], None]
+Probe = Callable[[requests.Session], None]
 
 PROBES: dict[str, Probe] = {
     "vespa": probe_vespa,
@@ -124,14 +125,14 @@ PROBES: dict[str, Probe] = {
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-def run_probe(name: str, probe: Probe) -> ProbeResult:
+def run_probe(name: str, probe: Probe, http: requests.Session) -> ProbeResult:
     """Run one probe and turn its outcome into a result row."""
     started = perf_counter()
     healthy = True
     # As a failure here is data over an actual fault, it is OK to swallow the exception:
     # one dead probe must not hide the other four. Why it failed is in the log.
     try:
-        probe()
+        probe(http)
     except Exception:
         logger.exception(f"Error: health probe failed (probe={name})")
         healthy = False
@@ -150,11 +151,12 @@ def run_probe(name: str, probe: Probe) -> ProbeResult:
         HTTPStatus.SERVICE_UNAVAILABLE: {"description": "At least one probe failed."}
     },
 )
-def read_health(response: Response) -> HealthResponse:
+def read_health(response: Response, http: HttpSessionDep) -> HealthResponse:
     """Run every probe concurrently and report each one."""
     with ThreadPoolExecutor(max_workers=len(PROBES)) as pool:
         futures = {
-            name: pool.submit(run_probe, name, probe) for name, probe in PROBES.items()
+            name: pool.submit(run_probe, name, probe, http)
+            for name, probe in PROBES.items()
         }
     # `run_probe` never raises, so every future has a result.
     probes = [futures[name].result() for name in PROBES]
@@ -176,7 +178,11 @@ def read_health(response: Response) -> HealthResponse:
         HTTPStatus.SERVICE_UNAVAILABLE: {"description": "The probe failed."},
     },
 )
-def read_probe(probe_id: str, response: Response) -> ProbeResult:
+def read_probe(
+    probe_id: str,
+    response: Response,
+    http: HttpSessionDep,
+) -> ProbeResult:
     """Run one probe used in our canaries in ./observability."""
     probe = PROBES.get(probe_id)
     if probe is None:
@@ -184,7 +190,7 @@ def read_probe(probe_id: str, response: Response) -> ProbeResult:
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Unknown probe {probe_id!r}. Available: {', '.join(PROBES)}",
         )
-    result = run_probe(probe_id, probe)
+    result = run_probe(probe_id, probe, http)
     response.status_code = (
         HTTPStatus.OK if result.healthy else HTTPStatus.SERVICE_UNAVAILABLE
     )

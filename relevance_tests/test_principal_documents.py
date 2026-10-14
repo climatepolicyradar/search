@@ -1,5 +1,6 @@
 import re
 
+import requests
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -515,24 +516,29 @@ test_cases = [
 def relevance_tests_principal_documents():
     """Run relevance tests for documents"""
 
-    engines = [
-        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
-        BM25TitleVespaDocumentSearchEngine(),
-    ]
+    with requests.Session() as http:
+        engines = [
+            DevVespaPrincipalDocumentSearchEngine(
+                settings=settings,
+                session=http,
+                debug=True,
+            ),
+            BM25TitleVespaDocumentSearchEngine(),
+        ]
 
-    # Principals aren't a primitive, but we use the primitive name to determine where
-    # to store the results of the relevance tests. This is a hacky way to achieve this
-    # without having to maintain a new `Principal` type which might cause confusion
-    # if used elsewhere.
-    Principal = Document
-    Principal.__name__ = "Principal"
+        # Principals aren't a primitive, but we use the primitive name to determine where
+        # to store the results of the relevance tests. This is a hacky way to achieve this
+        # without having to maintain a new `Principal` type which might cause confusion
+        # if used elsewhere.
+        Principal = Document
+        Principal.__name__ = "Principal"
 
-    run_relevance_tests_parallel(
-        engines=engines,
-        test_cases=test_cases,
-        primitive_type=Principal,
-        output_subdir="principal_documents",
-    )
+        run_relevance_tests_parallel(
+            engines=engines,
+            test_cases=test_cases,
+            primitive_type=Principal,
+            output_subdir="principal_documents",
+        )
 
 
 if __name__ == "__main__":

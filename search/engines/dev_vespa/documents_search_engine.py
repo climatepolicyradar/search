@@ -152,6 +152,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     def __init__(
         self,
         settings: Settings,
+        session: requests.Session,
         debug: bool = False,
         bolding: bool = False,
         ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
@@ -163,6 +164,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         """
         Initialise the search engine.
 
+        :param session: HTTP session every Vespa request is sent on.
         :param debug: When ``True``, request the ``debug-summary`` document
             summary from Vespa and store per-hit token information in
             :attr:`last_debug_info`.
@@ -199,6 +201,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.bolding = bolding
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
+        self.session = session
         self.msm = msm
         self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
@@ -329,6 +332,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["presentation.bolding"] = "false"
 
         response = execute_vespa_query(
+            session=self.session,
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -409,7 +413,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         endpoint = f"{self.settings.vespa_endpoint}/document/v1/documents/documents/docid/{document_id}"
         logger.info("Vespa request started [documents.get]")
         try:
-            response = requests.get(
+            response = self.session.get(
                 endpoint,
                 params={
                     "fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"
@@ -518,6 +522,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
         response = execute_vespa_query(
+            session=self.session,
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -598,6 +603,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
         response = execute_vespa_query(
+            session=self.session,
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,

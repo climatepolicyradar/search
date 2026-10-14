@@ -1,5 +1,6 @@
 import json
 
+import requests
 import typer
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -24,7 +25,11 @@ def search(
     label_type: str | None = None,
 ):
     """Search for labels."""
-    engine = DevVespaLabelSearchEngine(settings=settings, debug=debug)
+    engine = DevVespaLabelSearchEngine(
+        settings=settings,
+        session=requests.Session(),
+        debug=debug,
+    )
     results = engine.search(
         query=query,
         pagination=Pagination(page_token=page, page_size=page_size),

@@ -1,5 +1,6 @@
 import json
 
+import requests
 import typer
 from pydantic_settings import SettingsConfigDict
 from rich.console import Console, Group
@@ -33,7 +34,10 @@ def search(
 ):
     """Search for principal documents."""
     engine = DevVespaPrincipalDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=bolding
+        settings=settings,
+        session=requests.Session(),
+        debug=debug,
+        bolding=bolding,
     )
     results = engine.search(
         query=query,

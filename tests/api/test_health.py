@@ -1,7 +1,8 @@
 from http import HTTPStatus
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
+import requests
 from fastapi import HTTPException, Response
 
 from api import health
@@ -15,7 +16,7 @@ def build_probes(outcomes: dict) -> dict:
     """One probe per entry, raising where asked."""
 
     def build(failure):
-        def probe() -> None:
+        def probe(http: requests.Session) -> None:
             if failure is not None:
                 raise failure
 
@@ -33,7 +34,7 @@ def run_health(outcomes: dict) -> tuple:
         patch.dict(health.PROBES, build_probes(outcomes), clear=True),
     ):
         response = Response()
-        return health.read_health(response), response
+        return health.read_health(response, Mock(spec=requests.Session)), response
 
 
 def run_one_probe(name: str, outcomes: dict) -> tuple:
@@ -43,7 +44,10 @@ def run_one_probe(name: str, outcomes: dict) -> tuple:
         patch.dict(health.PROBES, build_probes(outcomes), clear=True),
     ):
         response = Response()
-        return health.read_probe(name, response), response
+        return (
+            health.read_probe(name, response, Mock(spec=requests.Session)),
+            response,
+        )
 
 
 @pytest.mark.parametrize(

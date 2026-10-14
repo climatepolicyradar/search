@@ -1,3 +1,4 @@
+import requests
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -482,19 +483,25 @@ test_cases = [
 def relevance_tests_documents():
     """Run relevance tests for documents"""
 
-    engines = [
-        # BM25TitleVespaDocumentSearchEngine(),
-        DevVespaDocumentSearchEngine(settings=settings, debug=True),
-        # Topic ranking off, to A/B the topic-filtered cases against text-only ranking.
-        DevVespaDocumentSearchEngine(settings=settings, debug=True, topic_weight=0.0),
-    ]
+    with requests.Session() as http:
+        engines = [
+            # BM25TitleVespaDocumentSearchEngine(),
+            DevVespaDocumentSearchEngine(settings=settings, session=http, debug=True),
+            # Topic ranking off, to A/B the topic-filtered cases against text-only ranking.
+            DevVespaDocumentSearchEngine(
+                settings=settings,
+                session=http,
+                debug=True,
+                topic_weight=0.0,
+            ),
+        ]
 
-    run_relevance_tests_parallel(
-        engines=engines,
-        test_cases=test_cases,
-        primitive_type=Document,
-        output_subdir="documents",
-    )
+        run_relevance_tests_parallel(
+            engines=engines,
+            test_cases=test_cases,
+            primitive_type=Document,
+            output_subdir="documents",
+        )
 
 
 if __name__ == "__main__":

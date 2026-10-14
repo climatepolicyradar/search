@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import requests
+
 from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
@@ -36,10 +38,16 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
 
     model_class = DataInLabel
 
-    def __init__(self, settings: Settings, debug: bool = False) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        session: requests.Session,
+        debug: bool = False,
+    ) -> None:
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
+        self.session = session
 
     def search(
         self,
@@ -88,6 +96,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         }
 
         response = execute_vespa_query(
+            session=self.session,
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,

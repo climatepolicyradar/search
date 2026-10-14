@@ -1,3 +1,4 @@
+import requests
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -325,17 +326,18 @@ test_cases = [
 def relevance_tests_labels():
     """Run relevance tests for labels"""
 
-    engines = [
-        DevVespaLabelSearchEngine(settings=settings, debug=True),
-        # VespaLabelSearchEngine(),
-    ]
+    with requests.Session() as http:
+        engines = [
+            DevVespaLabelSearchEngine(settings=settings, session=http, debug=True),
+            # VespaLabelSearchEngine(),
+        ]
 
-    run_relevance_tests_parallel(
-        engines=engines,
-        test_cases=test_cases,
-        primitive_type=Label,
-        output_subdir="labels",
-    )
+        run_relevance_tests_parallel(
+            engines=engines,
+            test_cases=test_cases,
+            primitive_type=Label,
+            output_subdir="labels",
+        )
 
 
 if __name__ == "__main__":

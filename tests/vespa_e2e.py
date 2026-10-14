@@ -102,8 +102,11 @@ def clean_docs(vespa_app: Vespa):
 
 
 
-def get_search_ids(filter_: Filter) -> set[str]:
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+def get_search_ids(http: req.Session, filter_: Filter) -> set[str]:
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+    )
     docs = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),

@@ -1,9 +1,13 @@
 """Pytest configuration and shared fixtures."""
 
 import os
+from collections.abc import Generator
+from unittest.mock import Mock
 
 import boto3
 import pytest
+import requests
+from fastapi.testclient import TestClient
 from hypothesis import find
 from hypothesis import strategies as st
 from moto import mock_aws
@@ -17,6 +21,22 @@ from tests.common_strategies import (
     label_strategy,
     passage_strategy,
 )
+
+
+@pytest.fixture
+def http() -> Generator[requests.Session, None, None]:
+    with requests.Session() as session:
+        yield session
+
+
+@pytest.fixture
+def client() -> Generator[TestClient, None, None]:
+    from api.main import app
+    from api.state import http_session
+
+    app.dependency_overrides[http_session] = lambda: Mock(spec=requests.Session)
+    yield TestClient(app=app, base_url="http://localhost")
+    app.dependency_overrides.pop(http_session)
 
 
 @pytest.fixture(scope="function")

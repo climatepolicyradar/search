@@ -12,13 +12,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
 from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse
 
 
 @pytest.fixture
-def labels_client():
+def labels_client(client: TestClient):
     """
     Provide a test client with Vespa label search mocked.
 
@@ -38,7 +37,7 @@ def labels_client():
             total_size=1,
             next_page_token=None,
         )
-        yield TestClient(app)
+        yield client
 
 
 def test_labels_endpoint_serialises_data_in_label_results(

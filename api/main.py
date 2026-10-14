@@ -1,12 +1,15 @@
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 from pathlib import Path
 from time import perf_counter
 
+import requests
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from requests.adapters import HTTPAdapter
 
 from api.health import router as health_router
 from api.observability.src.api import (
@@ -17,6 +20,7 @@ from api.observability.src.api import (
 )
 from api.routers import router
 from api.search_metrics import SearchMetrics
+from api.state import AppState
 from search.engines import VespaError
 from search.log import get_logger
 
@@ -27,11 +31,21 @@ logger = get_logger(__name__)
 HEALTH_ROUTE_PATH = f"{router.prefix}{health_router.prefix}"
 
 
+# Per upstream host. requests' default of 10 is below the number of concurrent
+# Vespa calls one process makes (FastAPI's threadpool times each route's fan-out),
+# and connections over the limit are opened anyway, then thrown away.
+HTTP_POOL_MAXSIZE = 64
+
+
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(_app: FastAPI) -> AsyncIterator[dict[str, AppState]]:
     """Lifespan context manager for startup and shutdown events."""
-    yield
-    # Shutdown: Cleanup (if needed)
+    with requests.Session() as http:
+        adapter = HTTPAdapter(pool_maxsize=HTTP_POOL_MAXSIZE)
+        http.mount("https://", adapter)
+        http.mount("http://", adapter)
+        yield {"app_state": AppState(http=http)}
+        # Shutdown: Cleanup (if needed)
 
 
 # Configure Open Telemetry.

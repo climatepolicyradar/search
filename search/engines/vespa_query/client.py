@@ -74,15 +74,18 @@ class VespaError(Exception):
 
 def execute_vespa_query(
     *,
+    session: requests.Session,
     endpoint: str,
     token: str,
     request_body: dict[str, Any],
     request_context: str,
-    post_fn=requests.post,
 ) -> dict[str, Any]:
     """
     Execute a Vespa query and emit contextual logs.
 
+    :param session: HTTP session to send the request on, so connections are
+        pooled across requests.
+    :type session: requests.Session
     :param endpoint: Fully-qualified Vespa query endpoint URL.
     :type endpoint: str
     :param token: Bearer token used for read access.
@@ -91,8 +94,6 @@ def execute_vespa_query(
     :type request_body: dict[str, Any]
     :param request_context: Context label for logs.
     :type request_context: str
-    :param post_fn: HTTP post callable for dependency injection in tests.
-    :type post_fn: typing.Callable[..., requests.Response]
     :return: Decoded JSON response.
     :rtype: dict[str, Any]
     :raises VespaError: if the request never reached Vespa, Vespa returned a
@@ -115,7 +116,7 @@ def execute_vespa_query(
 
     started = time.perf_counter()
     try:
-        response = post_fn(
+        response = session.post(
             endpoint,
             json=request_body,
             timeout=API_TIMEOUT,

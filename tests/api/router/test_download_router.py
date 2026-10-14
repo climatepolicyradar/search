@@ -6,17 +6,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
 from search.data_in_models import Document
 from search.engines import ListResponse, VespaError
 
 
 @pytest.fixture
-def document_client():
+def document_client(client: TestClient):
     with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
         mock_engine_cls.return_value = mock_engine
-        yield TestClient(app), mock_engine
+        yield client, mock_engine
 
 
 def test_download_returns_csv_with_content_disposition(document_client) -> None:

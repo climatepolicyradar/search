@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import requests
+
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
@@ -75,6 +77,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     def __init__(
         self,
         settings: Settings,
+        session: requests.Session,
         debug: bool = False,
         ranking_profile: str = _DEFAULT_PASSAGE_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
@@ -83,6 +86,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
+        self.session = session
         self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
 
@@ -159,6 +163,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             request_body["presentation.bolding"] = "false"
 
         response = execute_vespa_query(
+            session=self.session,
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,

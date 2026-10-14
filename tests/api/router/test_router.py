@@ -6,18 +6,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import API_TITLE, API_VERSION, app
+from api.main import API_TITLE, API_VERSION
 from search.data_in_models import Document
 from search.engines import ListResponse, VespaError
 
 
 @pytest.fixture
-def document_client():
+def document_client(client: TestClient):
     """Provide a test client with the document engine mocked."""
     with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
         mock_engine_cls.return_value = mock_engine
-        yield TestClient(app), mock_engine
+        yield client, mock_engine
 
 
 def test_get_document_returns_200_when_found(document_client) -> None:
@@ -102,8 +102,7 @@ def test_an_unknown_field_is_rejected(document_client) -> None:
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_get_labels_taxonomy_returns_non_empty_list() -> None:
-    client = TestClient(app)
+def test_get_labels_taxonomy_returns_non_empty_list(client: TestClient) -> None:
 
     response = client.get("/search/labels-taxonomy")
 
@@ -113,7 +112,7 @@ def test_get_labels_taxonomy_returns_non_empty_list() -> None:
     assert len(body["results"]) > 0
 
 
-def test_get_labels_taxonomy_exposes_every_category() -> None:
+def test_get_labels_taxonomy_exposes_every_category(client: TestClient) -> None:
     """
     The categories are the roots of the frontend filter tree, pinned exhaustively.
 
@@ -125,7 +124,6 @@ def test_get_labels_taxonomy_exposes_every_category() -> None:
     Every category is a root -- it has no `subconcept_of` parent -- which is
     what makes it a category rather than a label nested under one.
     """
-    client = TestClient(app)
 
     response = client.get("/search/labels-taxonomy")
 
@@ -150,7 +148,7 @@ def test_get_labels_taxonomy_exposes_every_category() -> None:
         )
 
 
-def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
+def test_get_labels_taxonomy_nests_the_global_stocktake_branch(client: TestClient) -> None:
     """
     GST1 and Party must nest under Global Stocktake.
 
@@ -168,7 +166,6 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     this exception will no longer be true and we accept that BTR will show under
     Global Stocktake and not return results until we ingest GST2 docs.
     """
-    client = TestClient(app)
 
     response = client.get("/search/labels-taxonomy")
 
@@ -209,9 +206,8 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     assert btr_parent_ids == {"un_convention::UNFCCC"}
 
 
-def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
+def test_root_advertises_the_docs_as_schema_org_json_ld(client: TestClient) -> None:
     """The root response is how an agent with no prior knowledge finds the docs."""
-    client = TestClient(app)
 
     body = client.get("/").json()
 
@@ -222,14 +218,13 @@ def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
     assert documentation["OpenAPI schema"].endswith("/search/openapi.json")
 
 
-def test_root_keeps_the_keys_the_health_check_reads() -> None:
+def test_root_keeps_the_keys_the_health_check_reads(client: TestClient) -> None:
     """
     `/` doubles as the App Runner health check, so `name` and `version` stay.
 
     Adding JSON-LD around them is additive; dropping them would fail the
     deployment somewhere no test in this file would notice.
     """
-    client = TestClient(app)
 
     body = client.get("/").json()
 
@@ -237,8 +232,7 @@ def test_root_keeps_the_keys_the_health_check_reads() -> None:
     assert body["version"] == API_VERSION
 
 
-def test_get_llms_txt_serves_the_spec_as_plain_text() -> None:
-    client = TestClient(app)
+def test_get_llms_txt_serves_the_spec_as_plain_text(client: TestClient) -> None:
 
     response = client.get("/search/llms.txt")
 

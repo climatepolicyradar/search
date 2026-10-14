@@ -3,6 +3,7 @@ from http import HTTPStatus
 from unittest.mock import Mock, patch
 
 import pytest
+import requests
 from pydantic import AnyHttpUrl
 
 from search.engines import OrderBy, Pagination
@@ -68,7 +69,11 @@ def _document_engine(**kwargs) -> DevVespaDocumentSearchEngine:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    return DevVespaDocumentSearchEngine(settings=settings, **kwargs)
+    return DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        **kwargs,
+    )
 
 
 @pytest.mark.parametrize(
@@ -145,7 +150,10 @@ def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> N
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     fake_response = {
         "root": {
@@ -187,7 +195,10 @@ def test_passage_search_engine_applies_order_by_to_request_body() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     fake_response = {"root": {"children": []}}
 
@@ -217,7 +228,11 @@ def test_passage_search_engine_order_by_wins_over_debug_mode_ranking_profile() -
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings, debug=True)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        debug=True,
+    )
 
     fake_response = {"root": {"children": []}}
 
@@ -243,7 +258,10 @@ def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     fake_response = {
         "root": {
@@ -298,7 +316,10 @@ def test_passage_search_engine_reads_labels_from_top_level_passages_schema() -> 
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     fake_response = {
         "root": {
@@ -495,7 +516,10 @@ def test_document_search_engine_sends_filtered_topics_as_a_query_tensor() -> Non
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         documents_search_engine,
@@ -524,7 +548,10 @@ def test_document_search_engine_omits_topic_inputs_without_topics_filter() -> No
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         documents_search_engine,
@@ -548,7 +575,11 @@ def test_document_search_engine_forwards_topic_weight() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, topic_weight=0.0)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        topic_weight=0.0,
+    )
 
     with patch.object(
         documents_search_engine,
@@ -575,7 +606,10 @@ def test_document_search_engine_omits_topic_inputs_under_a_sort_override() -> No
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         documents_search_engine,
@@ -606,7 +640,10 @@ def test_passage_search_engine_sends_ranking_profile_without_debug() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -633,7 +670,11 @@ def test_passage_search_engine_requests_the_search_summary_unless_debugging(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        debug=debug,
+    )
 
     with patch.object(
         passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -654,7 +695,10 @@ def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor() -> None
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -685,7 +729,10 @@ def test_passage_search_engine_sends_topic_inputs_without_a_text_query() -> None
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -708,7 +755,11 @@ def test_passage_search_engine_forwards_topic_weight() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings, topic_weight=0.0)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        topic_weight=0.0,
+    )
 
     with patch.object(
         passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -735,7 +786,10 @@ def test_passage_search_engine_omits_topic_inputs_under_a_sort_override() -> Non
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -759,7 +813,11 @@ def test_document_get_renders_labels_and_concepts() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    session = Mock(spec=requests.Session)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=session,
+    )
 
     document_source = json.dumps(
         {
@@ -795,8 +853,9 @@ def test_document_get_renders_labels_and_concepts() -> None:
         }
     }
 
-    with patch.object(documents_search_engine.requests, "get", return_value=response):
-        document = engine.get("doc-0")
+    session.get.return_value = response
+
+    document = engine.get("doc-0")
 
     assert document is not None
     source_label, concept_label = document.labels
@@ -815,7 +874,10 @@ def test_passage_search_engine_quoted_query_builds_exact_phrase() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -841,7 +903,10 @@ def test_passage_search_engine_mixes_free_term_and_phrase() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         passages_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -865,7 +930,10 @@ def test_document_search_engine_quoted_query_builds_exact_phrase() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     with patch.object(
         documents_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
@@ -914,7 +982,10 @@ def test_document_search_engine_sends_default_target_hits() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
 
     yql = _document_search_yql(engine)
 
@@ -929,7 +1000,11 @@ def test_document_search_engine_forwards_target_hits() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, total_target_hits=200)
+    engine = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        total_target_hits=200,
+    )
 
     yql = _document_search_yql(engine)
 
@@ -1052,7 +1127,11 @@ def _label_engine(**kwargs) -> DevVespaLabelSearchEngine:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    return DevVespaLabelSearchEngine(settings=settings, **kwargs)
+    return DevVespaLabelSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        **kwargs,
+    )
 
 
 @pytest.mark.parametrize(

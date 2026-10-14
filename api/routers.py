@@ -13,6 +13,7 @@ from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.settings import settings
+from api.state import HttpSessionDep
 from api.utils import (
     documents_order_by,
     order_by,
@@ -80,6 +81,7 @@ def read_llms_txt() -> str:
     responses=SEARCH_RESPONSES,
 )
 def download_documents(
+    http: HttpSessionDep,
     filters: DocumentsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
     order_by: list[OrderBy] = Depends(documents_order_by),
@@ -107,7 +109,7 @@ def download_documents(
         filters is not None,
     )
 
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=http)
     try:
         documents = fetch_documents_for_download(
             engine,
@@ -142,8 +144,8 @@ def download_documents(
     response_model=ItemResponse[Document],
     responses=ITEM_RESPONSES,
 )
-def read_document(document_id: str):
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+def read_document(document_id: str, http: HttpSessionDep):
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=http)
     # `VespaError` deliberately propagates: `api.main.handle_vespa_error` turns
     # backend failure into a 503 for every route.
     result = engine.get(document_id)
@@ -160,6 +162,7 @@ def read_document(document_id: str):
     responses=SEARCH_RESPONSES,
 )
 def read_documents(
+    http: HttpSessionDep,
     filters: DocumentsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
     # @see: https://google.aip.dev/157#read-masks-as-a-request-field
@@ -197,7 +200,11 @@ def read_documents(
     requested_fields = set(fields or [])
 
     engine = DevVespaDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=bolding, msm=msm
+        settings=settings,
+        session=http,
+        debug=debug,
+        bolding=bolding,
+        msm=msm,
     )
     aggregation_engines = {
         "aggregations.labels": engine.aggregations,
@@ -294,6 +301,7 @@ def read_documents(
     responses=SEARCH_RESPONSES,
 )
 def read_labels(
+    http: HttpSessionDep,
     filters: LabelsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
@@ -311,7 +319,7 @@ def read_labels(
         filters is not None,
     )
 
-    engine = DevVespaLabelSearchEngine(settings=settings)
+    engine = DevVespaLabelSearchEngine(settings=settings, session=http)
     try:
         results = engine.search(
             query=query,
@@ -379,6 +387,7 @@ def read_labels_taxonomy():
     responses=SEARCH_RESPONSES,
 )
 def read_passages(
+    http: HttpSessionDep,
     filters: PassagesFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
     pagination: Pagination = Depends(pagination),
@@ -395,7 +404,7 @@ def read_passages(
         filters is not None,
     )
 
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(settings=settings, session=http)
     try:
         results = engine.search(
             query=query,

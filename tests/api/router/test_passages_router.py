@@ -10,7 +10,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.filters import _NOT_DEFLATED
-from api.main import app
 from search.engines import ListResponse, OrderBy
 from search.engines.dev_vespa import FieldFilter, Filter
 from search.passage import Passage
@@ -19,13 +18,13 @@ type PassagesClient = tuple[TestClient, MagicMock]
 
 
 @pytest.fixture
-def passages_client() -> Generator[PassagesClient]:
+def passages_client(client: TestClient) -> Generator[PassagesClient]:
     """Provide a test client with the passage engine mocked."""
     with patch("api.routers.DevVespaPassageSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
         mock_engine.last_debug_info = None
         mock_engine_cls.return_value = mock_engine
-        yield TestClient(app), mock_engine
+        yield client, mock_engine
 
 
 def _passage(text_block_id: str = "block-1") -> Passage:

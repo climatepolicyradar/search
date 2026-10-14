@@ -1,5 +1,6 @@
 import json
 
+import requests
 import typer
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -99,7 +100,11 @@ def search(
     ),
 ):
     """Search for passages."""
-    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
+    engine = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=requests.Session(),
+        debug=debug,
+    )
     results = engine.search(
         query=query,
         filters=_build_filters(document_id, filters, topic, topic_or),

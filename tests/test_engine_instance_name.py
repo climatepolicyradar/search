@@ -1,8 +1,9 @@
 """Tests that the Vespa instance name is surfaced in the engine id and W&B config."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
 import pytest
+import requests
 
 from search import weights_and_biases
 from search.engines.dev_vespa import (
@@ -22,7 +23,8 @@ def _dev_engine(instance_name):
             vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
             vespa_read_token="token",  # nosec B106
             vespa_dev_instance_name=instance_name,
-        )
+        ),
+        session=Mock(spec=requests.Session),
     )
 
 
@@ -56,8 +58,15 @@ def test_engine_id_factors_in_parameters():
         vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
         vespa_read_token="token",  # nosec B106
     )
-    default = DevVespaPassageSearchEngine(settings=settings)
-    bm25 = DevVespaPassageSearchEngine(settings=settings, ranking_profile="bm25")
+    default = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
+    bm25 = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        ranking_profile="bm25",
+    )
 
     assert default.name == bm25.name == "DevVespaPassageSearchEngine"
     assert bm25.parameters == {"ranking_profile": "bm25", "topic_weight": 1.0}
@@ -70,8 +79,15 @@ def test_passage_engine_id_factors_in_topic_weight():
         vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
         vespa_read_token="token",  # nosec B106
     )
-    on = DevVespaPassageSearchEngine(settings=settings)
-    off = DevVespaPassageSearchEngine(settings=settings, topic_weight=0.0)
+    on = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
+    off = DevVespaPassageSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        topic_weight=0.0,
+    )
 
     assert on.name == off.name == "DevVespaPassageSearchEngine"
     assert on.id != off.id
@@ -83,8 +99,15 @@ def test_document_engine_id_factors_in_topic_weight():
         vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
         vespa_read_token="token",  # nosec B106
     )
-    on = DevVespaDocumentSearchEngine(settings=settings)
-    off = DevVespaDocumentSearchEngine(settings=settings, topic_weight=0.0)
+    on = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+    )
+    off = DevVespaDocumentSearchEngine(
+        settings=settings,
+        session=Mock(spec=requests.Session),
+        topic_weight=0.0,
+    )
 
     assert on.name == off.name == "DevVespaDocumentSearchEngine"
     assert on.id != off.id
@@ -141,6 +164,7 @@ def test_log_test_results_logs_engine_parameters_in_wandb_config(
             vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
             vespa_read_token="token",  # nosec B106
         ),
+        session=Mock(spec=requests.Session),
         topic_weight=0.0,
     )
     weights_and_biases.WandbSession().log_test_results(
@@ -170,7 +194,8 @@ def test_engines_without_parameters_are_unchanged(monkeypatch, simple_test_resul
         settings=Settings(
             vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
             vespa_read_token="token",  # nosec B106
-        )
+        ),
+        session=Mock(spec=requests.Session),
     )
     assert engine.parameters == {}
     assert engine.id == generate_id(str(engine))

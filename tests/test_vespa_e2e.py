@@ -171,8 +171,8 @@ def _feed_document_with_id(app: Vespa, document: Document) -> None:
     r.raise_for_status()
 
 
-def _ids(filter_: Filter, query: str | None = None) -> set[str]:
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+def _ids(http: req.Session, filter_: Filter, query: str | None = None) -> set[str]:
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     docs = engine.search(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
@@ -193,7 +193,10 @@ def _principal_label() -> DocumentLabelRelationship:
 
 
 # region Attributes
-def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa):
+def test_attribute_published_date_gte_filters_from_datetime(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     document_before_range = DocumentFactory.build(
         attributes={"published_date": "2019-12-31T23:59:59Z"},
         labels=[],
@@ -216,12 +219,15 @@ def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa):
             )
         ],
     )
-    ids = _ids(f)
+    ids = _ids(http, f)
     assert document_before_range.id not in ids
     assert document_in_range.id in ids
 
 
-def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa):
+def test_attribute_published_date_range_filters_inclusive(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     document_before_range = DocumentFactory.build(
         attributes={"published_date": "2017-06-01T00:00:00Z"},
         labels=[],
@@ -255,7 +261,7 @@ def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa):
             ),
         ],
     )
-    ids = _ids(f)
+    ids = _ids(http, f)
     assert document_before_range.id not in ids
     assert document_in_range.id in ids
     assert document_after_range.id not in ids
@@ -299,7 +305,10 @@ def _feed_published_date_boundary_docs(vespa_app: Vespa) -> dict[str, Document]:
     ],
 )
 def test_attribute_published_date_year_operator_boundaries(
-    vespa_app: Vespa, op: str, expected_keys: set[str]
+    vespa_app: Vespa,
+    op: str,
+    expected_keys: set[str],
+    http: req.Session,
 ):
     docs = _feed_published_date_boundary_docs(vespa_app)
     op_values = {
@@ -319,13 +328,14 @@ def test_attribute_published_date_year_operator_boundaries(
             )
         ],
     )
-    ids = _ids(f)
+    ids = _ids(http, f)
     expected_ids = {docs[key].id for key in expected_keys}
     assert ids == expected_ids
 
 
 def test_attribute_published_date_eq_datetime_matches_exact_timestamp(
     vespa_app: Vespa,
+    http: req.Session,
 ):
     docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
@@ -339,11 +349,14 @@ def test_attribute_published_date_eq_datetime_matches_exact_timestamp(
             )
         ],
     )
-    ids = _ids(f)
+    ids = _ids(http, f)
     assert ids == {docs["year_end"].id}
 
 
-def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vespa):
+def test_attribute_published_date_eq_iso_matches_exact_timestamp(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
         op="and",
@@ -356,11 +369,14 @@ def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vesp
             )
         ],
     )
-    ids = _ids(f)
+    ids = _ids(http, f)
     assert ids == {docs["year_start"].id}
 
 
-def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Vespa):
+def test_attribute_published_date_not_eq_excludes_exact_timestamp(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
         op="and",
@@ -373,7 +389,7 @@ def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Ves
             )
         ],
     )
-    ids = _ids(f)
+    ids = _ids(http, f)
     assert docs["year_start"].id not in ids
     assert docs["before_year"].id in ids
     assert docs["year_end"].id in ids
@@ -414,6 +430,7 @@ def test_field_filter_attribute(
     op: Literal["contains", "not_contains"],
     match_in: bool,
     non_match_in: bool,
+    http: req.Session,
 ):
     doc_matching = DocumentFactory.build(attributes=matching_attrs, labels=[])
     doc_non_matching = DocumentFactory.build(attributes=non_matching_attrs, labels=[])
@@ -424,12 +441,12 @@ def test_field_filter_attribute(
         op="and",
         filters=[FieldFilter(field=filter_field, op=op, value=filter_value)],
     )
-    ids = _ids(f)
+    ids = _ids(http, f)
     assert (doc_matching.id in ids) == match_in
     assert (doc_non_matching.id in ids) == non_match_in
 
 
-def test_field_filter_id_selects_exact_documents(vespa_app: Vespa):
+def test_field_filter_id_selects_exact_documents(vespa_app: Vespa, http: req.Session):
     """An OR of `id` conditions fetches a known set of documents in one query."""
     expected_ids = [
         "UNFCCC.non-party.283.0",
@@ -459,7 +476,7 @@ def test_field_filter_id_selects_exact_documents(vespa_app: Vespa):
             )
         ],
     )
-    assert _ids(f) == set(expected_ids)
+    assert _ids(http, f) == set(expected_ids)
 
 
 def _first_production_text(rhs: str) -> str:
@@ -511,7 +528,11 @@ def _document_rewrite_rule_cases() -> list[tuple[str, str, str]]:
     ("case_id", "query", "rewrite_text"), _document_rewrite_rule_cases()
 )
 def test_document_rewrite_rule_does_not_bypass_filters(
-    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+    vespa_app: Vespa,
+    case_id: str,
+    query: str,
+    rewrite_text: str,
+    http: req.Session,
 ):
     """A rewrite rule's production must never let a filtered document search return a document outside the filter."""
 
@@ -534,7 +555,7 @@ def test_document_rewrite_rule_does_not_bypass_filters(
         op="and",
         filters=[FieldFilter(field="id", op="contains", value=doc_inside_id)],
     )
-    ids = _ids(f, query=query)
+    ids = _ids(http, f, query=query)
 
     assert ids == set(), (
         f"query {query!r} with an id filter returned a document outside the "
@@ -544,6 +565,7 @@ def test_document_rewrite_rule_does_not_bypass_filters(
 
 def test_principal_search_rewrite_rule_does_not_bypass_status_filter(
     vespa_app: Vespa,
+    http: req.Session,
 ):
     """A rewrite rule must never let principal search return a non-principal document."""
 
@@ -560,7 +582,10 @@ def test_principal_search_rewrite_rule_does_not_bypass_status_filter(
     _feed_document_with_id(vespa_app, doc_principal)
     _feed_document_with_id(vespa_app, doc_non_principal)
 
-    engine = DevVespaPrincipalDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaPrincipalDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+    )
     results = engine.search(
         query="law",
         pagination=Pagination(page_token=1, page_size=10),
@@ -601,7 +626,7 @@ def _flatten_tokens(token_field: Any) -> list[str]:
     return flat
 
 
-def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
+def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa, http: req.Session):
     """
     Title uses passage_analysis profile: stop words removed + snowball stemming.
 
@@ -615,7 +640,11 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        debug=True,
+    )
     results = engine.search(
         query="running",
         pagination=Pagination(page_token=1, page_size=10),
@@ -631,7 +660,7 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     assert "is" not in values, f"Stop word 'is' should be removed, got: {values}"
 
 
-def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
+def test_linguistics_title_synonym_expansion(vespa_app: Vespa, http: req.Session):
     """
     Test title acronym query rewrites from semantic rules (documents.sr).
 
@@ -652,7 +681,11 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     _feed_document(vespa_app, doc_with_full_forms)
     _feed_document(vespa_app, doc_without_match)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        debug=True,
+    )
     results = engine.search(
         query="fca rules tcfd",
         pagination=Pagination(page_token=1, page_size=50),
@@ -669,7 +702,7 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     )
 
 
-def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa):
+def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa, http: req.Session):
     """
     "<acronym><ordinal>" title tokens are also indexed as the bare acronym.
 
@@ -691,7 +724,11 @@ def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa):
     _feed_document(vespa_app, doc)
     _feed_document(vespa_app, unrelated)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        debug=True,
+    )
 
     def search_ids(query: str) -> set[str]:
         return {
@@ -717,7 +754,10 @@ def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa):
     assert "1" not in values, f"Ordinal '1' should not be indexed alone, got: {values}"
 
 
-def test_linguistics_acronym_split_keeps_formula_queries_exact(vespa_app: Vespa):
+def test_linguistics_acronym_split_keeps_formula_queries_exact(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     Splitting "CO2" into `co` + `co2` must not make the two interchangeable.
 
@@ -735,7 +775,7 @@ def test_linguistics_acronym_split_keeps_formula_queries_exact(vespa_app: Vespa)
     _feed_document(vespa_app, co2_doc)
     _feed_document(vespa_app, co_doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
 
     def search_ids(query: str) -> set[str]:
         return {
@@ -761,7 +801,7 @@ def test_linguistics_acronym_split_keeps_formula_queries_exact(vespa_app: Vespa)
 
 
 # region Document sorting (API JSON paths via Vespa ranking.sorting)
-def test_document_sort_title_sort_asc(vespa_app: Vespa):
+def test_document_sort_title_sort_asc(vespa_app: Vespa, http: req.Session):
     doc_z = DocumentFactory.build(title="Zebra memo", labels=[])
     doc_a = DocumentFactory.build(title="Apple brief", labels=[])
     doc_m = DocumentFactory.build(title="Magpie brief", labels=[])
@@ -777,7 +817,7 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
     _feed_document(vespa_app, doc_f)
     _feed_document_without_title(vespa_app, doc_missing)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
@@ -793,7 +833,7 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
     assert results[-1].id == "e2e-title-missing-asc"
 
 
-def test_document_sort_title_sort_desc(vespa_app: Vespa):
+def test_document_sort_title_sort_desc(vespa_app: Vespa, http: req.Session):
     doc_z = DocumentFactory.build(title="Zebra memo", labels=[])
     doc_a = DocumentFactory.build(title="Apple brief", labels=[])
     doc_m = DocumentFactory.build(title="Magpie brief", labels=[])
@@ -809,7 +849,7 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
     _feed_document(vespa_app, doc_f)
     _feed_document_without_title(vespa_app, doc_missing)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
@@ -825,7 +865,7 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
     assert results[-1].id == "e2e-title-missing-desc"
 
 
-def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
+def test_document_sort_published_timestamp_desc(vespa_app: Vespa, http: req.Session):
     doc_old = DocumentFactory.build(
         title="Old",
         labels=[],
@@ -857,7 +897,7 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
     _feed_document(vespa_app, doc_newest)
     _feed_document(vespa_app, doc_undated)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
@@ -873,7 +913,7 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
     ]
 
 
-def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
+def test_document_sort_published_timestamp_asc(vespa_app: Vespa, http: req.Session):
     doc_old = DocumentFactory.build(
         title="Old",
         labels=[],
@@ -905,7 +945,7 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
     _feed_document(vespa_app, doc_newest)
     _feed_document(vespa_app, doc_undated)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
@@ -921,7 +961,10 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
     ]
 
 
-def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
+def test_document_sort_title_asc_and_desc_first_hit_differ(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     First A-Z title and first Z-A title should not always be the same first row.
 
@@ -973,7 +1016,7 @@ def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
     for doc in (doc_m, doc_z, doc_a, doc_y, doc_b):
         _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     asc = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
@@ -993,6 +1036,7 @@ def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
 
 def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
     vespa_app: Vespa,
+    http: req.Session,
 ):
     """
     Newest-by-date and first A-Z title should not always be the same first row.
@@ -1050,7 +1094,7 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
     for doc in (doc_newer_z, doc_ancient, doc_older_a, doc_newest_banana, doc_mid):
         _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     by_date = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
@@ -1107,9 +1151,11 @@ def _feed_concept_counts(
     r.raise_for_status()
 
 
-def _topic_ranked_titles(topic_weight: float) -> list[str]:
+def _topic_ranked_titles(http: req.Session, topic_weight: float) -> list[str]:
     engine = DevVespaDocumentSearchEngine(
-        settings=_TEST_SETTINGS, topic_weight=topic_weight
+        settings=_TEST_SETTINGS,
+        session=http,
+        topic_weight=topic_weight,
     )
     results = engine.search(
         query="climate finance",
@@ -1120,7 +1166,10 @@ def _topic_ranked_titles(topic_weight: float) -> list[str]:
     return [d.title for d in results]
 
 
-def test_topic_filter_reorders_documents_by_mention_count(vespa_app: Vespa):
+def test_topic_filter_reorders_documents_by_mention_count(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     A filtered-for topic promotes the document that discusses it most.
 
@@ -1140,13 +1189,16 @@ def test_topic_filter_reorders_documents_by_mention_count(vespa_app: Vespa):
     _feed_concept_counts(vespa_app, doc_light, {_TOPIC_ID: 1})
     _feed_concept_counts(vespa_app, doc_heavy, {_TOPIC_ID: 200})
 
-    assert _topic_ranked_titles(topic_weight=1.0) == [
+    assert _topic_ranked_titles(http, topic_weight=1.0) == [
         "Heavy mention",
         "Climate finance passing mention",
     ]
 
 
-def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
+def test_topic_weight_zero_leaves_text_ranking_untouched(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """``topic_weight=0.0`` switches topic ranking off, restoring text-only order."""
     doc_light = DocumentFactory.build(
         title="Climate finance passing mention",
@@ -1161,7 +1213,7 @@ def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
     _feed_concept_counts(vespa_app, doc_light, {_TOPIC_ID: 1})
     _feed_concept_counts(vespa_app, doc_heavy, {_TOPIC_ID: 200})
 
-    assert _topic_ranked_titles(topic_weight=0.0) == [
+    assert _topic_ranked_titles(http, topic_weight=0.0) == [
         "Climate finance passing mention",
         "Heavy mention",
     ]
@@ -1171,18 +1223,18 @@ def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
 
 
 # region single Document retrieval
-def test_get_returns_document_by_id(vespa_app: Vespa):
+def test_get_returns_document_by_id(vespa_app: Vespa, http: req.Session):
     doc = DocumentFactory.build(title="Climate Policy", labels=[])
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     result = engine.get(doc.id)
 
     assert result is not None
     assert result.id == doc.id
 
 
-def test_get_renders_concepts_as_labels(vespa_app: Vespa):
+def test_get_renders_concepts_as_labels(vespa_app: Vespa, http: req.Session):
     """
     ``get`` renders a document like a search hit, concepts included.
 
@@ -1193,7 +1245,7 @@ def test_get_renders_concepts_as_labels(vespa_app: Vespa):
     _feed_document(vespa_app, doc)
     _feed_concept_counts(vespa_app, doc, {_TOPIC_ID: 7})
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     result = engine.get(doc.id)
 
     assert result is not None
@@ -1203,23 +1255,26 @@ def test_get_renders_concepts_as_labels(vespa_app: Vespa):
     ]
 
 
-def test_get_returns_none_for_missing_id():
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+def test_get_returns_none_for_missing_id(http: req.Session):
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     result = engine.get("does-not-exist")
     assert result is None
 
 
-def test_get_raises_vespa_error_when_unreachable():
+def test_get_raises_vespa_error_when_unreachable(http: req.Session):
     bad_settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:19999"),
         vespa_read_token="",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=bad_settings)
+    engine = DevVespaDocumentSearchEngine(settings=bad_settings, session=http)
     with pytest.raises(VespaError):
         engine.get("any-id")
 
 
-def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_app: Vespa):
+def test_quoted_document_search_matches_phrase_in_title_and_description(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """A fully-quoted document query phrase-matches title and description; order matters."""
     doc_title = DocumentFactory.build(
         id="doc-just-title",
@@ -1242,7 +1297,7 @@ def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_ap
     for d in (doc_title, doc_desc, doc_reordered):
         _feed_document(vespa_app, d)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     ids = {
         d.id
         for d in engine.search(
@@ -1257,7 +1312,10 @@ def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_ap
     assert "doc-reordered" not in ids, f"out-of-order phrase must not match, got: {ids}"
 
 
-def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):
+def test_quoted_document_search_preserves_currency_symbols(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """`"$100"` matches a $100 title but not $1000 (exact_analysis currency charFilters)."""
     doc_100 = DocumentFactory.build(
         id="doc-100", title="Grant of $100 approved", description="d", labels=[]
@@ -1268,7 +1326,7 @@ def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):
     _feed_document(vespa_app, doc_100)
     _feed_document(vespa_app, doc_1000)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     ids = {
         d.id
         for d in engine.search(
@@ -1282,7 +1340,10 @@ def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):
     assert "doc-1000" not in ids, f"quoted $100 must not match $1000, got: {ids}"
 
 
-def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa):
+def test_unquoted_document_search_is_unaffected_by_exact_field(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """An unquoted query still stems and goes through userQuery()."""
     doc = DocumentFactory.build(
         id="doc-plain",
@@ -1292,7 +1353,7 @@ def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa)
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     ids = {
         d.id
         for d in engine.search(
@@ -1307,7 +1368,7 @@ def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa)
 
 
 
-def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
+def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa, http: req.Session):
     """Partial quoted spans can be combined with unquoted ones"""
     docs = [
         DocumentFactory.build(
@@ -1338,7 +1399,7 @@ def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
     for d in docs:
         _feed_document(vespa_app, d)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     ids = {
         d.id
         for d in engine.search(
@@ -1354,7 +1415,10 @@ def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
     assert "doc-mix-inflected" not in ids, f"quoted part must stay literal, got: {ids}"
 
 
-def test_quoted_document_search_bolds_phrase_in_title_and_description(vespa_app: Vespa):
+def test_quoted_document_search_bolds_phrase_in_title_and_description(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     A quoted phrase is bolded in title and description, alongside the free text.
 
@@ -1370,7 +1434,11 @@ def test_quoted_document_search_bolds_phrase_in_title_and_description(vespa_app:
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        bolding=True,
+    )
     results = engine.search(
         query='"just transition"',
         pagination=Pagination(page_token=1, page_size=10),
@@ -1449,7 +1517,11 @@ def _feed_document_with_passages(app: Vespa) -> Document:
 
 
 @pytest.mark.parametrize("bolding", [False, True])
-def test_search_hits_carry_no_passages(vespa_app: Vespa, bolding: bool):
+def test_search_hits_carry_no_passages(
+    vespa_app: Vespa,
+    bolding: bool,
+    http: req.Session,
+):
     """
     Document hits never carry passages, with or without bolding.
 
@@ -1459,7 +1531,11 @@ def test_search_hits_carry_no_passages(vespa_app: Vespa, bolding: bool):
     """
     _feed_document_with_passages(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=bolding)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        bolding=bolding,
+    )
     result = engine.search(
         query="flood", pagination=Pagination(page_token=1, page_size=10), order_by=[]
     )
@@ -1555,8 +1631,12 @@ def _msm_corpus(app: Vespa) -> dict[str, str]:
     }
 
 
-def _msm_search(msm: float):
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=msm)
+def _msm_search(http: req.Session, msm: float):
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        msm=msm,
+    )
     return engine.search(
         query="parametric insurance",
         pagination=Pagination(page_token=1, page_size=50),
@@ -1564,20 +1644,23 @@ def _msm_search(msm: float):
     )
 
 
-def _msm_hit_ids(msm: float) -> set[str]:
-    return {d.id for d in _msm_search(msm).results}
+def _msm_hit_ids(http: req.Session, msm: float) -> set[str]:
+    return {d.id for d in _msm_search(http, msm).results}
 
 
-def test_msm_off_returns_every_partial_match(vespa_app: Vespa):
+def test_msm_off_returns_every_partial_match(vespa_app: Vespa, http: req.Session):
     """`msm=0` is today's behaviour: one term out of two is enough."""
     ids = _msm_corpus(vespa_app)
 
-    hits = _msm_hit_ids(0.0)
+    hits = _msm_hit_ids(http, 0.0)
 
     assert set(ids.values()) <= hits
 
 
-def test_msm_drops_documents_whose_terms_never_co_occur(vespa_app: Vespa):
+def test_msm_drops_documents_whose_terms_never_co_occur(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     The point of the feature.
 
@@ -1587,7 +1670,7 @@ def test_msm_drops_documents_whose_terms_never_co_occur(vespa_app: Vespa):
     """
     ids = _msm_corpus(vespa_app)
 
-    hits = _msm_hit_ids(0.6)
+    hits = _msm_hit_ids(http, 0.6)
 
     assert ids["title"] in hits, "both terms in the title must survive"
     assert ids["passage"] in hits, "both terms in one passage must survive"
@@ -1596,7 +1679,7 @@ def test_msm_drops_documents_whose_terms_never_co_occur(vespa_app: Vespa):
     )
 
 
-def test_msm_reduces_the_reported_total(vespa_app: Vespa):
+def test_msm_reduces_the_reported_total(vespa_app: Vespa, http: req.Session):
     """
     Dropped documents must leave `total_size`, not just the current page.
 
@@ -1605,8 +1688,8 @@ def test_msm_reduces_the_reported_total(vespa_app: Vespa):
     """
     _msm_corpus(vespa_app)
 
-    total_off = _msm_search(0.0).total_size
-    total_on = _msm_search(0.6).total_size
+    total_off = _msm_search(http, 0.0).total_size
+    total_on = _msm_search(http, 0.6).total_size
 
     assert total_off is not None and total_on is not None
     assert total_on < total_off, (
@@ -1614,18 +1697,18 @@ def test_msm_reduces_the_reported_total(vespa_app: Vespa):
     )
 
 
-def test_msm_full_requires_every_term(vespa_app: Vespa):
+def test_msm_full_requires_every_term(vespa_app: Vespa, http: req.Session):
     """`msm=1.0` keeps only documents covering the whole query in one place."""
     ids = _msm_corpus(vespa_app)
 
-    hits = _msm_hit_ids(1.0)
+    hits = _msm_hit_ids(http, 1.0)
 
     assert ids["title"] in hits
     assert ids["passage"] in hits
     assert ids["split"] not in hits
 
 
-def test_msm_counts_the_description(vespa_app: Vespa):
+def test_msm_counts_the_description(vespa_app: Vespa, http: req.Session):
     """
     A document matching only in its description must survive.
 
@@ -1635,14 +1718,14 @@ def test_msm_counts_the_description(vespa_app: Vespa):
     """
     ids = _msm_corpus(vespa_app)
 
-    hits = _msm_hit_ids(1.0)
+    hits = _msm_hit_ids(http, 1.0)
 
     assert ids["description"] in hits, (
         "a document whose description contains the whole query must survive msm=1.0"
     )
 
 
-def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa):
+def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa, http: req.Session):
     """
     With no query text there is nothing for MSM to be a fraction of.
 
@@ -1652,7 +1735,11 @@ def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa):
     """
     ids = _msm_corpus(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=1.0)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        msm=1.0,
+    )
     response = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=50),
@@ -1662,7 +1749,7 @@ def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa):
     assert {d.id for d in response.results} >= set(ids.values())
 
 
-def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
+def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa, http: req.Session):
     """
     A date sort switches to `unranked`, which would otherwise skip the guard.
 
@@ -1670,7 +1757,11 @@ def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
     """
     ids = _msm_corpus(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.6)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        msm=0.6,
+    )
     response = engine.search(
         query="parametric insurance",
         pagination=Pagination(page_token=1, page_size=50),
@@ -1710,7 +1801,11 @@ def _feed_acronym_pair(app: Vespa) -> tuple[str, str]:
 
 
 @pytest.mark.parametrize("msm", [0.0, 0.7])
-def test_an_acronym_search_finds_both_spellings(vespa_app: Vespa, msm: float):
+def test_an_acronym_search_finds_both_spellings(
+    vespa_app: Vespa,
+    msm: float,
+    http: req.Session,
+):
     """
     Searching `tcfd` must return documents written either way, MSM or not.
 
@@ -1720,7 +1815,11 @@ def test_an_acronym_search_finds_both_spellings(vespa_app: Vespa, msm: float):
     """
     short_id, spelled_out_id = _feed_acronym_pair(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=msm)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        msm=msm,
+    )
     response = engine.search(
         query="tcfd",
         pagination=Pagination(page_token=1, page_size=10),
@@ -1732,7 +1831,10 @@ def test_an_acronym_search_finds_both_spellings(vespa_app: Vespa, msm: float):
     assert spelled_out_id in found, "the document spelling it out was dropped"
 
 
-def test_the_acronym_spelling_is_not_ranked_below_the_long_form(vespa_app: Vespa):
+def test_the_acronym_spelling_is_not_ranked_below_the_long_form(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     Someone typing `tcfd` should not be shown the long form first.
 
@@ -1741,7 +1843,7 @@ def test_the_acronym_spelling_is_not_ranked_below_the_long_form(vespa_app: Vespa
     """
     short_id, _ = _feed_acronym_pair(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, session=http)
     response = engine.search(
         query="tcfd",
         pagination=Pagination(page_token=1, page_size=10),
@@ -1751,7 +1853,7 @@ def test_the_acronym_spelling_is_not_ranked_below_the_long_form(vespa_app: Vespa
     assert response.results[0].id == short_id
 
 
-def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa):
+def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa, http: req.Session):
     """
     `climate nz` must still find New Zealand documents, not just net zero ones.
 
@@ -1770,7 +1872,11 @@ def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa):
     _feed_document(vespa_app, kiwi)
     _feed_document(vespa_app, net_zero)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        session=http,
+        msm=0.7,
+    )
     response = engine.search(
         query="climate nz",
         pagination=Pagination(page_token=1, page_size=10),

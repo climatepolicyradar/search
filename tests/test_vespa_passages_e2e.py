@@ -271,7 +271,7 @@ def test_passage_imported_principal_id_resolves_to_parent(vespa_app: Vespa):
     )
 
 
-def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
+def test_passage_search_preserves_currency_symbols(vespa_app: Vespa, http: req.Session):
     """Searching a currency amount matches that amount but not a different one."""
     principal = DocumentFactory.build(id="principal-cur", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
@@ -286,7 +286,7 @@ def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
         document_id="principal-cur",
     )
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query="$100",
         pagination=Pagination(page_token=1, page_size=10),
@@ -301,7 +301,10 @@ def test_passage_search_preserves_currency_symbols(vespa_app: Vespa):
     assert "$100" in matched.text
 
 
-def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
+def test_passage_bolding_wraps_matched_terms_only_when_asked(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     `bolding=True` reports matched query terms as `boldings`; the default does not.
 
@@ -320,7 +323,7 @@ def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
         document_id="principal-bold",
     )
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     pagination = Pagination(page_token=1, page_size=10)
 
     bolded = engine.search(
@@ -338,7 +341,7 @@ def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
     assert plain.results[0].boldings == []
 
 
-def test_passage_bolding_covers_quoted_phrases(vespa_app: Vespa):
+def test_passage_bolding_covers_quoted_phrases(vespa_app: Vespa, http: req.Session):
     """
     A quoted phrase is bolded, alone or alongside free text.
 
@@ -359,7 +362,7 @@ def test_passage_bolding_covers_quoted_phrases(vespa_app: Vespa):
         document_id="principal-qbold",
     )
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     pagination = Pagination(page_token=1, page_size=10)
 
     for query, block_id, expected in [
@@ -466,7 +469,10 @@ def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa)
     }
 
 
-def test_passage_document_id_filter_is_exact_and_covers_the_corpus(vespa_app: Vespa):
+def test_passage_document_id_filter_is_exact_and_covers_the_corpus(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     `document_id` filters return exactly the passages of those documents, with full coverage.
 
@@ -486,7 +492,7 @@ def test_passage_document_id_filter_is_exact_and_covers_the_corpus(vespa_app: Ve
             document_id=doc_id,
         )
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     filters = Filter(
         op="and",
         filters=[
@@ -556,7 +562,11 @@ def _rewrite_rule_cases() -> list[tuple[str, str, str]]:
 
 @pytest.mark.parametrize(("case_id", "query", "rewrite_text"), _rewrite_rule_cases())
 def test_rewrite_rule_does_not_bypass_filters(
-    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+    vespa_app: Vespa,
+    case_id: str,
+    query: str,
+    rewrite_text: str,
+    http: req.Session,
 ):
     """A rewrite rule's production must never let a filtered search return a passage outside the filter."""
     principal = DocumentFactory.build(
@@ -580,7 +590,7 @@ def test_rewrite_rule_does_not_bypass_filters(
         document_id=f"principal-{case_id}",
     )
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     filters = Filter(
         op="and",
         filters=[
@@ -642,7 +652,12 @@ def test_rewrite_rule_does_not_bypass_filters(
     ],
 )
 def test_passage_search_applies_rulebase_rewrites(
-    vespa_app: Vespa, case_id: str, query: str, text: str, should_match: bool
+    vespa_app: Vespa,
+    case_id: str,
+    query: str,
+    text: str,
+    should_match: bool,
+    http: req.Session,
 ):
     """Searching for a term with rewrites defined in passages.sr rules matches the expanded phrase(s), not just the literal query - and does not match text where the expanded phrase's words are out of order."""
     principal = DocumentFactory.build(
@@ -655,7 +670,7 @@ def test_passage_search_applies_rulebase_rewrites(
         document_id=f"principal-{case_id}",
     )
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
@@ -673,7 +688,10 @@ def test_passage_search_applies_rulebase_rewrites(
         )
 
 
-def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
+def test_passage_labels_are_returned_and_filterable(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     A passage's `labels` field round-trips and is filterable.
 
@@ -704,7 +722,7 @@ def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
         vespa_app, "tb-drought", document_id="doc-labels", labels=[]
     )
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
@@ -800,6 +818,7 @@ def _topic_filter(concept_ids: list[str]) -> Filter:
 
 
 def _topic_search(
+    http: req.Session,
     query: str | None,
     concept_ids: list[str],
     topic_weight: float,
@@ -807,7 +826,10 @@ def _topic_search(
 ) -> tuple[list[Passage], list[dict[str, Any]]]:
     """Run a search filtered on `concept_ids`, returning results and debug info."""
     engine = DevVespaPassageSearchEngine(
-        settings=_TEST_SETTINGS, topic_weight=topic_weight, debug=debug
+        settings=_TEST_SETTINGS,
+        session=http,
+        topic_weight=topic_weight,
+        debug=debug,
     )
     results = engine.search(
         query=query,
@@ -819,13 +841,19 @@ def _topic_search(
 
 
 def _topic_ranked_ids(
-    query: str | None, concept_ids: list[str], topic_weight: float
+    http: req.Session,
+    query: str | None,
+    concept_ids: list[str],
+    topic_weight: float,
 ) -> list[str]:
-    results, _ = _topic_search(query, concept_ids, topic_weight)
+    results, _ = _topic_search(http, query, concept_ids, topic_weight)
     return [p.text_block_id for p in results]
 
 
-def test_topic_score_counts_the_filtered_topics_a_passage_carries(vespa_app: Vespa):
+def test_topic_score_counts_the_filtered_topics_a_passage_carries(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     `topic_score()` is presence-per-topic, weighted - not a mention count.
 
@@ -835,6 +863,7 @@ def test_topic_score_counts_the_filtered_topics_a_passage_carries(vespa_app: Ves
     _feed_topic_ranking_passages(vespa_app)
 
     results, debug_info = _topic_search(
+        http,
         "climate finance",
         concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
         topic_weight=1.0,
@@ -848,11 +877,15 @@ def test_topic_score_counts_the_filtered_topics_a_passage_carries(vespa_app: Ves
     assert scores == {"tb-topic-winner": 2.0, "tb-text-winner": 1.0}
 
 
-def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
+def test_topic_weight_zero_leaves_text_ranking_untouched(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """`topic_weight=0.0` switches topic ranking off, restoring text-only order."""
     _feed_topic_ranking_passages(vespa_app)
 
     assert _topic_ranked_ids(
+        http,
         "climate finance",
         concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
         topic_weight=0.0,
@@ -861,7 +894,9 @@ def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
 
 @pytest.mark.parametrize("query_text", ["climate finance", None])
 def test_topic_ranking_puts_the_passage_carrying_both_topics_first(
-    vespa_app: Vespa, query_text: str | None
+    vespa_app: Vespa,
+    query_text: str | None,
+    http: req.Session,
 ):
     """
     A passage carrying both filtered-for topics leads, with or without query text.
@@ -879,13 +914,17 @@ def test_topic_ranking_puts_the_passage_carrying_both_topics_first(
     _feed_topic_ranking_passages(vespa_app)
 
     assert _topic_ranked_ids(
+        http,
         query=query_text,
         concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
         topic_weight=5.0,
     ) == ["tb-topic-winner", "tb-text-winner"]
 
 
-def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(vespa_app: Vespa):
+def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """A table of contents carrying the filtered topic ranks below equivalent prose."""
     document = DocumentFactory.build(id="doc-junk", labels=[_principal_label()])
     _feed_document(vespa_app, document)
@@ -908,11 +947,17 @@ def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(vespa_app: V
     )
 
     assert _topic_ranked_ids(
-        query=None, concept_ids=[_CLIMATE_FINANCE], topic_weight=1.0
+        http,
+        query=None,
+        concept_ids=[_CLIMATE_FINANCE],
+        topic_weight=1.0,
     ) == ["tb-prose", "tb-toc"]
 
 
-def test_junk_penalties_suppress_a_page_header_or_footer(vespa_app: Vespa):
+def test_junk_penalties_suppress_a_page_header_or_footer(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """A page header/footer carrying the filtered topic ranks below equivalent prose."""
     document = DocumentFactory.build(id="doc-junk-2", labels=[_principal_label()])
     _feed_document(vespa_app, document)
@@ -935,11 +980,17 @@ def test_junk_penalties_suppress_a_page_header_or_footer(vespa_app: Vespa):
     )
 
     assert _topic_ranked_ids(
-        query=None, concept_ids=[_CLIMATE_FINANCE], topic_weight=1.0
+        http,
+        query=None,
+        concept_ids=[_CLIMATE_FINANCE],
+        topic_weight=1.0,
     ) == ["tb-prose-2", "tb-header"]
 
 
-def test_quoted_passage_search_is_literal_phrase_match(vespa_app: Vespa):
+def test_quoted_passage_search_is_literal_phrase_match(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """A double-quoted query matches only the literal phrase."""
     principal = DocumentFactory.build(id="principal-exact", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
@@ -953,7 +1004,7 @@ def test_quoted_passage_search_is_literal_phrase_match(vespa_app: Vespa):
     for block_id, text in passages.items():
         _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-exact")
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query='"national strategy for climate change 2050"',
         pagination=Pagination(page_token=1, page_size=10),
@@ -967,7 +1018,10 @@ def test_quoted_passage_search_is_literal_phrase_match(vespa_app: Vespa):
     )
 
 
-def test_quoted_passage_search_preserves_currency_symbols(vespa_app: Vespa):
+def test_quoted_passage_search_preserves_currency_symbols(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """
     A quoted currency amount matches that amount and not a longer one.
 
@@ -993,7 +1047,7 @@ def test_quoted_passage_search_preserves_currency_symbols(vespa_app: Vespa):
     for block_id, text in passages.items():
         _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-qcur")
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     for query in ('"$100"', '"grant of $100"'):
         results = engine.search(
             query=query,
@@ -1006,7 +1060,7 @@ def test_quoted_passage_search_preserves_currency_symbols(vespa_app: Vespa):
         )
 
 
-def test_quoted_passage_search_punctuation_limits(vespa_app: Vespa):
+def test_quoted_passage_search_punctuation_limits(vespa_app: Vespa, http: req.Session):
     """
     Quoting cannot distinguish punctuation the tokenizer discards.
 
@@ -1029,7 +1083,7 @@ def test_quoted_passage_search_punctuation_limits(vespa_app: Vespa):
     for block_id, text in passages.items():
         _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-punct")
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
 
     def search(query: str) -> list[str]:
         results = engine.search(
@@ -1048,7 +1102,10 @@ def test_quoted_passage_search_punctuation_limits(vespa_app: Vespa):
     assert search('"fell 40%"') == ["tb-pct", "tb-pct-words"]
 
 
-def test_quoted_passage_search_requires_adjacency_and_order(vespa_app: Vespa):
+def test_quoted_passage_search_requires_adjacency_and_order(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """A quoted query is a phrase, not a bag of words: order and adjacency matter."""
     principal = DocumentFactory.build(id="principal-order", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
@@ -1060,7 +1117,7 @@ def test_quoted_passage_search_requires_adjacency_and_order(vespa_app: Vespa):
     for block_id, text in passages.items():
         _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-order")
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query='"just transition"',
         pagination=Pagination(page_token=1, page_size=10),
@@ -1073,7 +1130,7 @@ def test_quoted_passage_search_requires_adjacency_and_order(vespa_app: Vespa):
     )
 
 
-def test_mixed_quoted_and_unquoted_passage_search(vespa_app: Vespa):
+def test_mixed_quoted_and_unquoted_passage_search(vespa_app: Vespa, http: req.Session):
     """Partial quoted spans can be combined with unquoted ones."""
     principal = DocumentFactory.build(id="principal-mixed", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
@@ -1089,7 +1146,7 @@ def test_mixed_quoted_and_unquoted_passage_search(vespa_app: Vespa):
     for block_id, text in passages.items():
         _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-mixed")
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query='peatlands "blue carbon"',
         pagination=Pagination(page_token=1, page_size=10),
@@ -1102,7 +1159,10 @@ def test_mixed_quoted_and_unquoted_passage_search(vespa_app: Vespa):
     )
 
 
-def test_unquoted_passage_search_is_unaffected_by_exact_field(vespa_app: Vespa):
+def test_unquoted_passage_search_is_unaffected_by_exact_field(
+    vespa_app: Vespa,
+    http: req.Session,
+):
     """An unquoted query still goes through userQuery() against `content`."""
     principal = DocumentFactory.build(id="principal-plain", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
@@ -1112,7 +1172,7 @@ def test_unquoted_passage_search_is_unaffected_by_exact_field(vespa_app: Vespa):
         document_id="principal-plain",
     )
 
-    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    engine = DevVespaPassageSearchEngine(settings=_TEST_SETTINGS, session=http)
     results = engine.search(
         query="national strategies",
         pagination=Pagination(page_token=1, page_size=10),

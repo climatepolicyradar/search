@@ -51,13 +51,15 @@ def _response(
     return response
 
 
-def _execute(post_fn) -> dict:
+def _execute(post: MagicMock) -> dict:
+    session = MagicMock(spec=requests.Session)
+    session.post = post
     return dev_vespa.execute_vespa_query(
+        session=session,
         endpoint="http://localhost:8080/search",
         token="test-read-token",  # nosec B106
         request_body={"yql": "select * from sources documents where true"},
         request_context="test.context",
-        post_fn=post_fn,
     )
 
 
@@ -84,10 +86,10 @@ def test_execute_raises_on_a_timeout() -> None:
 @pytest.mark.parametrize("status_code", [400, 401, 429, 500, 502, 504])
 def test_execute_raises_on_a_non_success_status_code(status_code: int) -> None:
     """Any 4xx/5xx from Vespa is raised, with the status in the message."""
-    post_fn = MagicMock(return_value=_response(status_code, text="upstream detail"))
+    post = MagicMock(return_value=_response(status_code, text="upstream detail"))
 
     with pytest.raises(VespaError) as exc_info:
-        _execute(post_fn)
+        _execute(post)
 
     message = str(exc_info.value)
     assert str(status_code) in message
@@ -99,10 +101,10 @@ def test_execute_raises_on_a_non_success_status_code(status_code: int) -> None:
 
 def test_execute_truncates_the_error_body_it_reports() -> None:
     """A large Vespa error body is previewed, not echoed in full."""
-    post_fn = MagicMock(return_value=_response(500, text="z" * 5000))
+    post = MagicMock(return_value=_response(500, text="z" * 5000))
 
     with pytest.raises(VespaError) as exc_info:
-        _execute(post_fn)
+        _execute(post)
 
     assert (
         str(exc_info.value).count("z") == dev_vespa.HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS
@@ -119,12 +121,12 @@ def test_execute_raises_when_the_body_is_not_json(status_code: int) -> None:
     not serve with a success code. The status is kept in the message, where it
     is diagnostic rather than load-bearing.
     """
-    post_fn = MagicMock(
+    post = MagicMock(
         return_value=_response(status_code, json_error=ValueError("not json")),
     )
 
     with pytest.raises(VespaError) as exc_info:
-        _execute(post_fn)
+        _execute(post)
 
     assert "invalid JSON" in str(exc_info.value)
     assert str(status_code) in str(exc_info.value)
@@ -133,9 +135,9 @@ def test_execute_raises_when_the_body_is_not_json(status_code: int) -> None:
 
 def test_execute_returns_the_decoded_body_on_success() -> None:
     body = {"root": {"children": [], "fields": {"totalCount": 0}}}
-    post_fn = MagicMock(return_value=_response(200, json_value=body))
+    post = MagicMock(return_value=_response(200, json_value=body))
 
-    assert _execute(post_fn) == body
+    assert _execute(post) == body
 
 
 # endregion execute_vespa_query failure modes
@@ -172,7 +174,7 @@ def failing_query():
 
 
 def test_document_search_propagates_vespa_error(settings, failing_query) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=requests.Session())
 
     with pytest.raises(VespaError):
         engine.search(
@@ -183,7 +185,7 @@ def test_document_search_propagates_vespa_error(settings, failing_query) -> None
 
 
 def test_document_aggregations_propagates_vespa_error(settings, failing_query) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=requests.Session())
 
     with pytest.raises(VespaError):
         engine.aggregations(query="needle")
@@ -193,21 +195,21 @@ def test_labels_value_type_facets_propagates_vespa_error(
     settings, failing_query
 ) -> None:
     """Facet queries fan out across threads; the failure must still surface."""
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=requests.Session())
 
     with pytest.raises(VespaError):
         engine.labels_value_type_facets(query="needle")
 
 
 def test_labels_type_facets_propagates_vespa_error(settings, failing_query) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=requests.Session())
 
     with pytest.raises(VespaError):
         engine.labels_type_facets(query="needle")
 
 
 def test_passage_search_propagates_vespa_error(settings, failing_query) -> None:
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(settings=settings, session=requests.Session())
 
     with pytest.raises(VespaError):
         engine.search(
@@ -218,7 +220,7 @@ def test_passage_search_propagates_vespa_error(settings, failing_query) -> None:
 
 
 def test_label_search_propagates_vespa_error(settings, failing_query) -> None:
-    engine = DevVespaLabelSearchEngine(settings=settings)
+    engine = DevVespaLabelSearchEngine(settings=settings, session=requests.Session())
 
     with pytest.raises(VespaError):
         engine.search(
@@ -230,18 +232,17 @@ def test_label_search_propagates_vespa_error(settings, failing_query) -> None:
 
 def _patch_http(response: MagicMock):
     """
-    Intercept the real ``requests.post`` at the session layer.
+    Intercept a real ``requests.Session`` at its lowest public layer.
 
-    ``execute_vespa_query``'s ``post_fn`` default is bound to ``requests.post``
-    at import time, so replacing the module attribute has no effect. Patching
-    ``Session.request`` leaves the real ``requests.post`` in the path.
+    Patching ``Session.request`` leaves the real ``Session.post`` in the path, so
+    the engine's own session is exercised up to the wire.
     """
     return patch.object(requests.sessions.Session, "request", return_value=response)
 
 
 def test_document_search_surfaces_an_http_failure_end_to_end(settings) -> None:
     """The whole path, from a 503 off the wire to the engine's caller."""
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=requests.Session())
 
     with _patch_http(_response(503, text="service unavailable")):
         with pytest.raises(VespaError):
@@ -254,7 +255,7 @@ def test_document_search_surfaces_an_http_failure_end_to_end(settings) -> None:
 
 def test_document_search_still_returns_an_empty_list_for_no_matches(settings) -> None:
     """The counterpart: a genuinely empty result set is not an error."""
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, session=requests.Session())
     body = {"root": {"children": [], "fields": {"totalCount": 0}}}
 
     with _patch_http(_response(200, json_value=body)):
@@ -285,10 +286,10 @@ def test_a_degraded_response_is_warned_about(caplog) -> None:
             "children": [],
         }
     }
-    post_fn = MagicMock(return_value=_response(200, json_value=body))
+    post = MagicMock(return_value=_response(200, json_value=body))
 
     with caplog.at_level(logging.WARNING):
-        assert _execute(post_fn) == body
+        assert _execute(post) == body
 
     assert "degraded" in caplog.text
     assert "test.context" in caplog.text
@@ -306,10 +307,10 @@ def test_a_full_coverage_response_is_not_warned_about(caplog) -> None:
             "children": [],
         }
     }
-    post_fn = MagicMock(return_value=_response(200, json_value=body))
+    post = MagicMock(return_value=_response(200, json_value=body))
 
     with caplog.at_level(logging.WARNING):
-        _execute(post_fn)
+        _execute(post)
 
     assert "degraded" not in caplog.text
 
@@ -326,11 +327,11 @@ def test_every_request_asks_vespa_for_timing() -> None:
     Without it a slow query cannot be attributed: FUS-479 read as a 83ms search
     when 4.5s of the budget was going on summary fetch.
     """
-    post_fn = MagicMock(return_value=_response(200, json_value={}))
+    post = MagicMock(return_value=_response(200, json_value={}))
 
-    _execute(post_fn)
+    _execute(post)
 
-    assert post_fn.call_args.kwargs["json"]["presentation.timing"] is True
+    assert post.call_args.kwargs["json"]["presentation.timing"] is True
 
 
 def test_a_completed_request_logs_where_the_time_went(caplog) -> None:
