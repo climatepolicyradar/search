@@ -30,21 +30,6 @@ class VespaPageBoxes(BaseModel):
     bounding_boxes: list[VespaBoundingBox] = Field(default_factory=list)
 
 
-class VespaConcept(BaseModel):
-    """
-    Superseded by `VespaLabel`/`labels`.
-
-    The `passages.sd` schema no longer has a `concepts` field. Kept only so
-    `passages_feed_materializer.py`'s legacy (already schema-incompatible) path
-    stays importable.
-    """
-
-    id: str = ""
-    type: str = ""
-    value: str = ""
-    count: int = 0
-
-
 class VespaLabel(BaseModel):
     # These are the core Label fields i.e. the node.
     id: str = ""
