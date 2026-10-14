@@ -1183,16 +1183,19 @@ def test_label_search_engine_strips_quotes_from_query() -> None:
     assert request_body["query"] == "Romania"
 
 
-def test_label_search_engine_parses_valid_label_source() -> None:
-    """A hit with a valid `label_source` JSON payload becomes a result label."""
+def test_label_search_engine_parses_valid_flat_fields() -> None:
+    """A hit with valid `id`/`type`/`value` fields becomes a result label."""
     engine = _label_engine()
-    label_json = json.dumps(
-        {"id": "geography::Romania", "type": "geography", "value": "Romania"}
-    )
     fake_response = {
         "root": {
             "children": [
-                {"fields": {"label_source": label_json}},
+                {
+                    "fields": {
+                        "id": "geography::Romania",
+                        "type": "geography",
+                        "value": "Romania",
+                    }
+                },
             ]
         }
     }
@@ -1206,15 +1209,56 @@ def test_label_search_engine_parses_valid_label_source() -> None:
 
     assert len(result.results) == 1
     assert result.results[0].id == "geography::Romania"
+    assert result.results[0].labels == []
 
 
-def test_label_search_engine_skips_hits_with_malformed_label_source() -> None:
-    """A hit whose `label_source` fails to parse is dropped, not raised."""
+def test_label_search_engine_parses_label_relationships() -> None:
+    """The `labels` struct array becomes nested `LabelRelationship` entries."""
     engine = _label_engine()
     fake_response = {
         "root": {
             "children": [
-                {"fields": {"label_source": "not valid json"}},
+                {
+                    "fields": {
+                        "id": "country::Canada",
+                        "type": "country",
+                        "value": "Canada",
+                        "labels": [
+                            {
+                                "id": "region::North America",
+                                "type": "region",
+                                "value": "North America",
+                                "timestamp": 1700000000,
+                                "relationship": "subconcept_of",
+                            }
+                        ],
+                    }
+                },
+            ]
+        }
+    }
+
+    with patch.object(labels_search_engine, "execute_vespa_query", return_value=fake_response):
+        result = engine.search(
+            query=None,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert len(result.results) == 1
+    [relationship] = result.results[0].labels
+    assert relationship.type == "subconcept_of"
+    assert relationship.value.id == "region::North America"
+    assert relationship.timestamp is not None
+
+
+def test_label_search_engine_skips_hits_with_missing_fields() -> None:
+    """A hit missing a required flat field is dropped, not raised."""
+    engine = _label_engine()
+    fake_response = {
+        "root": {
+            "children": [
+                {"fields": {"id": "geography::Romania", "type": "geography"}},
             ]
         }
     }
@@ -1229,8 +1273,8 @@ def test_label_search_engine_skips_hits_with_malformed_label_source() -> None:
     assert result.results == []
 
 
-def test_label_search_engine_skips_hits_with_empty_label_source() -> None:
-    """A hit with no `label_source` field is dropped, not raised."""
+def test_label_search_engine_skips_hits_with_empty_fields() -> None:
+    """A hit with no fields at all is dropped, not raised."""
     engine = _label_engine()
     fake_response = {
         "root": {
@@ -1253,16 +1297,14 @@ def test_label_search_engine_skips_hits_with_empty_label_source() -> None:
 def test_label_search_engine_populates_debug_info_when_debugging() -> None:
     """`debug=True` records per-hit relevance/summary info on `last_debug_info`."""
     engine = _label_engine(debug=True)
-    label_json = json.dumps(
-        {"id": "geography::Romania", "type": "geography", "value": "Romania"}
-    )
     fake_response = {
         "root": {
             "children": [
                 {
                     "relevance": 0.5,
                     "fields": {
-                        "label_source": label_json,
+                        "id": "geography::Romania",
+                        "type": "geography",
                         "value": "Romania",
                     },
                 },
@@ -1285,13 +1327,16 @@ def test_label_search_engine_populates_debug_info_when_debugging() -> None:
 def test_label_search_engine_omits_debug_info_by_default() -> None:
     """Without `debug=True`, no per-hit debug info is collected."""
     engine = _label_engine()
-    label_json = json.dumps(
-        {"id": "geography::Romania", "type": "geography", "value": "Romania"}
-    )
     fake_response = {
         "root": {
             "children": [
-                {"fields": {"label_source": label_json}},
+                {
+                    "fields": {
+                        "id": "geography::Romania",
+                        "type": "geography",
+                        "value": "Romania",
+                    }
+                },
             ]
         }
     }
