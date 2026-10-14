@@ -1368,6 +1368,7 @@ def test_passage_exact_boost_can_be_switched_off() -> None:
     )
     assert "rank(" not in body["yql"]
     assert "input.query(exact_weight)" not in body
+    assert ' and ({grammar.profile: "passage_analysis"}userInput(@query))' in body["yql"]
 
 
 def test_passage_exact_weight_is_not_sent_under_a_sort_override() -> None:

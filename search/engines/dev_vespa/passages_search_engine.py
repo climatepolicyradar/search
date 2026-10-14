@@ -124,7 +124,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         in `rank()`: the second operand matches the unstemmed `exact` fieldset for
         scoring only, so which passages match is unchanged.
         """
-        match = f'{{grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query)'
+        match = f'({{grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query))'
         if self.exact_weight is None:
             return f" and {match}"
         return (

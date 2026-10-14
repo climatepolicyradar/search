@@ -106,16 +106,16 @@ def search(
     exact_weight: float | None = typer.Option(
         None,
         "--exact-weight",
-        help="Option B: also score unquoted terms against the unstemmed field, scaled by this.",
+        help="Exact-form boost weight. Omit for the engine default (1.0); 0 turns it off.",
     ),
     order: str = typer.Option(
         "relevance", "--order", help="relevance | idx (idx = the API's in-document default)."
     ),
 ):
     """Search for passages."""
-    engine = DevVespaPassageSearchEngine(
-        settings=settings, debug=debug, exact_weight=exact_weight
-    )
+    # Only override the engine's default when a weight is given.
+    engine_kwargs = {} if exact_weight is None else {"exact_weight": exact_weight}
+    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug, **engine_kwargs)
     results = engine.search(
         query=query,
         filters_json_string=_build_filters(document_id, filters, topic, topic_or),

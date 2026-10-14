@@ -36,7 +36,7 @@ def search(
     exact_weight: float | None = typer.Option(
         None,
         "--exact-weight",
-        help="Option B: also score unquoted terms against the unstemmed fields, scaled by this.",
+        help="Exact-form boost weight. Omit for the engine default (1.0); 0 turns it off.",
     ),
 ):
     """Search for documents."""
@@ -48,8 +48,9 @@ def search(
         conditions.append(json.loads(filters))
     filters_json = json.dumps({"op": "and", "filters": conditions}) if conditions else None
 
+    engine_kwargs = {} if exact_weight is None else {"exact_weight": exact_weight}
     engine = DevVespaDocumentSearchEngine(
-        settings=settings, debug=debug, bolding=True, exact_weight=exact_weight
+        settings=settings, debug=debug, bolding=True, **engine_kwargs
     )
     results = engine.search(
         query=query,
