@@ -30,7 +30,7 @@ def labels_feeder_flow(
     # @see: https://app.notion.com/p/climatepolicyradar/RFC-Label-relationships-Tech-Debt-Mandate-3c79109609a48031bb45c50e01b9735c?source=copy_link
     vespa_feeder(
         s3_bucket="cpr-cache",
-        s3_key="search/vespa/labels_feed_materializer.jsonl",
+        s3_prefix="search/vespa/labels_feed_materializer.jsonl",
         batch_size=batch_size,
         sample_rate=sample_rate,
     )

@@ -71,7 +71,9 @@ _DENSITY_MIN_WORDS = 60
 _FOOTNOTE_MARKER = re.compile(r"^\(?\[?\d{1,4}\]?\)?[.)]?\s+")
 # A full URL or DOI token, not just the keyword `_SOURCE_LOCATOR` triggers on - used to measure
 # how much text is left once a short passage's own locator is stripped out of it.
-_FULL_LOCATOR_TOKEN = re.compile(r"(?:https?|ftp)://\S+|www\.\S+|doi:\s*\S+", re.IGNORECASE)
+_FULL_LOCATOR_TOKEN = re.compile(
+    r"(?:https?|ftp)://\S+|www\.\S+|doi:\s*\S+", re.IGNORECASE
+)
 # Below this many leftover words, a short passage carrying a source locator is essentially JUST
 # the locator (a bare 'Available at: <url>' footnote) - sufficient on its own, since these carry
 # no author-initial or citation-year at all and could never otherwise reach two signals.
@@ -134,7 +136,9 @@ def looks_like_reference_list(text: str, content_type: str = "") -> bool:
         return len(pattern.findall(text)) / len(words) * 100
 
     if len(words) >= _DENSITY_MIN_WORDS:
-        reads_as_prose = per_100_words(_FUNCTION_WORD) > _PROSE_FUNCTION_WORDS_PER_100_WORDS
+        reads_as_prose = (
+            per_100_words(_FUNCTION_WORD) > _PROSE_FUNCTION_WORDS_PER_100_WORDS
+        )
         is_contact_block = per_100_words(_CONTACT_DETAIL) >= _CONTACTS_PER_100_WORDS
         if reads_as_prose or is_contact_block:
             return False
@@ -404,8 +408,8 @@ def looks_like_table_of_contents(text: str, page_numbers: list[int]) -> bool:
 def looks_like_short_heading(text: str, content_type: str = "") -> bool:
     """
     True if the passage is a short ALLCAPS figure title or section heading.
-    
-    Fewer than 12 words and either at least 90% of the cased characters are upper case or 
+
+    Fewer than 12 words and either at least 90% of the cased characters are upper case or
     type is `sectionHeading`.
     """
     words = re.findall(r"[A-Za-z][A-Za-z'-]*", text)
@@ -413,8 +417,8 @@ def looks_like_short_heading(text: str, content_type: str = "") -> bool:
         return False
 
     if content_type == "sectionHeading":
-                return True
-    
+        return True
+
     letters = [char for char in text if char.isalpha()]
     return sum(char.isupper() for char in letters) / len(letters) >= 0.9
 
@@ -428,7 +432,7 @@ def is_page_header_or_footer(content_type: str = "") -> bool:
 
 
 # `references` is deliberately plural-only: `\breference\b` fires on 'Terms of
-# Reference', 'Reference Scenario' and 'reference year', which are core NDC vocabulary. 
+# Reference', 'Reference Scenario' and 'reference year', which are core NDC vocabulary.
 _DEMOTED_SECTION_WORD = re.compile(
     r"\b(?:references|reference list|bibliograph(?:y|ies|ic|ical)"
     r"|authors?|biograph(?:y|ies|ical))\b",
@@ -456,24 +460,22 @@ def looks_like_demoted_section(
 ) -> bool:
     """
     True if the passage sits in a references, bibliography or author-biography section.
-    
+
     Reads as: the section heading, title, or page heading names one of those sections, is not a caption or
     source note, and is short enough to be a heading rather than a sentence once
     leading section numbering is discounted.
-    
+
     Complements `looks_like_reference_list`, which reads the passage's own text and
-    so misses prose that sits in a bibliography e.g. under '10.8 BIBLIOGRAPHIC 
-    REFERENCES', "Understanding the health status of ecosystems is crucial for 
+    so misses prose that sits in a bibliography e.g. under '10.8 BIBLIOGRAPHIC
+    REFERENCES', "Understanding the health status of ecosystems is crucial for
     high-level decision-making..." fires no citation signal at all.
-    
-    A passage of type sectionHeading, title, or pageHeader is judged on its own text, because `heading_id` on 
-    such a passage points at its heading, never at itself e.g. the passage 'References' 
+
+    A passage of type sectionHeading, title, or pageHeader is judged on its own text, because `heading_id` on
+    such a passage points at its heading, never at itself e.g. the passage 'References'
     has heading_text 'Annex VI: Common reporting tables'.
     """
     heading = (
-        text
-        if content_type in _SELF_HEADING_TYPES
-        else (heading_text or "")
+        text if content_type in _SELF_HEADING_TYPES else (heading_text or "")
     ).strip()
     if not heading or _CAPTION_OR_SENTENCE.search(heading):
         return False
