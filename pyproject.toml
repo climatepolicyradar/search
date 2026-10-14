@@ -7,7 +7,7 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
   "boto3>=1.43.111",
   "duckdb>=1.5.6",
-  "fastapi[standard]>=0.142.2",
+  "fastapi[standard]>=0.143.0",
   "posthog>=7.67.0",
   # @related: PREFECT_VERSION
   # This should match the Dockerfiles using prefect as that's what we deploy to prefect
@@ -50,7 +50,7 @@ dev = [
   "pulumi>=3.268.0,<4.0.0",
   "pytest>=9.1.1",
   "hypothesis>=6.168.5",
-  "boto3-stubs[s3,ssm]>=1.43.107",
+  "boto3-stubs[s3,ssm]>=1.43.111",
   "pulumiverse-grafana>=2.42.0",
 ]
 

@@ -1327,6 +1327,7 @@ def test_label_search_engine_reads_total_size_from_response() -> None:
     assert result.total_size == 42
 
 
+
 _KSTEM_SETTINGS = Settings(
     vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
     vespa_read_token="test-read-token",  # nosec B106
@@ -1400,3 +1401,95 @@ def test_document_exact_boost_is_on_by_default() -> None:
     assert '({defaultIndex: "exact", grammar: "any"}userInput(@query)))' in body["yql"]
     assert body["input.query(exact_weight)"] == 1.0
     assert engine.parameters["exact_weight"] == 1.0
+
+
+
+def test_document_search_leaves_an_absent_description_empty() -> None:
+    """
+    A document with no description comes back as `None`, not `"MISSING"`.
+
+    `MISSING_PLACEHOLDER` is a debugging aid for values that should always
+    exist. `description` is genuinely optional (`str | None` on BaseDocument),
+    so an absent one must stay empty and let the card render nothing, rather
+    than printing the placeholder to users (FUS-649).
+    """
+    engine = _document_engine(bolding=True)
+
+    fake_response = {
+        "root": {
+            "children": [
+                {
+                    "id": "id:documents:documents::doc-0",
+                    "fields": {
+                        "document_source": (
+                            '{"id": "doc-0", "labels": [], "documents": []}'
+                        ),
+                        "title": "Third National Communication",
+                        # no `description` key at all
+                    },
+                }
+            ]
+        }
+    }
+
+    with patch.object(
+        documents_search_engine, "execute_vespa_query", return_value=fake_response
+    ):
+        result = engine.search(
+            query="communication",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert result.results[0].description is None
+
+
+def test_document_search_absent_description_survives_exact_bolding() -> None:
+    """
+    A document with no description survives a quoted search.
+
+    Vespa wraps matched words in `<hi>` tags so the UI can embolden them. A
+    quoted query matches two copies of each field: `description`, stemmed,
+    bolds the free text; `description_not_stemmed` bolds the literal phrase.
+    `_merge_exact_bolding` combines the two.
+
+    `merge_bolded` requires both copies to be the same text once the tags
+    are stripped, or the tag positions refer to different strings. With no
+    description there is no base text to line the phrase copy up against,
+    so it raises `ValueError: Bolded copies of a field do not share the same
+    text`. The absence has to be checked before the merge, not after.
+
+    On `main` the `MISSING_PLACEHOLDER` default mismatched the phrase copy
+    the same way, so the request failed rather than rendering "MISSING".
+    Only quoted queries reach this path.
+    """
+    engine = _document_engine(bolding=True)
+
+    fake_response = {
+        "root": {
+            "children": [
+                {
+                    "id": "id:documents:documents::doc-0",
+                    "fields": {
+                        "document_source": (
+                            '{"id": "doc-0", "labels": [], "documents": []}'
+                        ),
+                        # no `description`, but the phrase copy came back
+                        "description_not_stemmed": "<hi>carbon tax</hi>",
+                    },
+                }
+            ]
+        }
+    }
+
+    with patch.object(
+        documents_search_engine, "execute_vespa_query", return_value=fake_response
+    ):
+        result = engine.search(
+            # Quoted: only a query with phrases asks for `search-exact`.
+            query='"carbon tax"',
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert result.results[0].description is None
