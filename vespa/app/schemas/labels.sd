@@ -1,4 +1,4 @@
-schema labels {
+    schema labels {
     document labels {
         field id type string {
             indexing: attribute | summary
@@ -145,7 +145,6 @@ schema labels {
         summary subconcept_labels {}
         summary description {}
         summary negative_labels {}
-        summary label_source {}
         summary labels {}
     }
 }
