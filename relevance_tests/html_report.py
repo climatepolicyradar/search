@@ -74,6 +74,8 @@ _TEMPLATE = """<!DOCTYPE html>
   .footnote { color: var(--muted); font-size: 0.8rem; margin-top: 0.6rem; }
   .note { background: #fff8e1; border-left: 3px solid #d97706; padding: 0.5rem 0.8rem;
           margin: 0.5rem 0; font-size: 0.85rem; color: #7c4a00; }
+  .detail { border-left: 3px solid var(--muted); padding: 0.5rem 0.8rem;
+            margin: 0.5rem 0; font-size: 0.85rem; }
   .results-heading { font-size: 0.8rem; font-weight: 600; color: var(--muted);
                      text-transform: uppercase; letter-spacing: 0.06em;
                      margin: 1rem 0 0.25rem 0; padding-bottom: 0.25rem;
@@ -147,6 +149,9 @@ _TEMPLATE = """<!DOCTYPE html>
           <div class="diagnosis">{{ t.diagnosis }}</div>
         {% endif %}
 
+        {% if t.detail %}
+          <div class="detail">{{ t.detail }}</div>
+        {% endif %}
         {% if t.note %}
           <div class="note">{{ t.note }}</div>
         {% endif %}
@@ -327,7 +332,9 @@ def _render_test_entry(test_result) -> dict:
         debug_info = None
 
     comparison_results = test_result.comparison_search_results
-    comparison_terms = getattr(tc, "search_terms_to_compare", "")
+    comparison_terms = getattr(tc, "search_terms_to_compare", None) or getattr(
+        tc, "broader_search_terms", ""
+    )
     return {
         "test_name": tc.name,
         "search_terms": tc.search_terms,
@@ -336,6 +343,7 @@ def _render_test_entry(test_result) -> dict:
         "error": test_result.error,
         "diagnosis": diagnosis,
         "note": note,
+        "detail": test_result.detail,
         "results_heading": (
             f"Search results — '{tc.search_terms}'"
             if comparison_results is not None
