@@ -161,40 +161,12 @@ schema passages {
         }
     }
 
-    # RESEARCH (stemming): the passage text under alternative stemming.
-    field content_kstem type string {
-        indexing: input content | index | summary
-        index: enable-bm25
-        bolding: on
-        stemming: multiple
-        linguistics {
-            profile: passage_analysis_kstem
-        }
-    }
-    field content_minimal type string {
-        indexing: input content | index | summary
-        index: enable-bm25
-        bolding: on
-        stemming: multiple
-        linguistics {
-            profile: passage_analysis_minimal
-        }
-    }
-
     fieldset default {
         fields: content
     }
 
     fieldset exact {
         fields: content_not_stemmed
-    }
-
-    fieldset kstem {
-        fields: content_kstem
-    }
-
-    fieldset minimal {
-        fields: content_minimal
     }
 
     rank-profile nativerank {
@@ -269,33 +241,6 @@ schema passages {
         summary-features: text_score() topic_score() proximity_boost bm25(content) bm25(content_not_stemmed) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(is_page_header_or_footer) attribute(looks_like_demoted_section)
     }
 
-    # RESEARCH (stemming)
-    rank-profile bm25_multiplicative_kstem inherits bm25_multiplicative {
-        function text_score() {
-            expression: bm25(content_kstem) + query(exact_weight) * bm25(content_not_stemmed)
-        }
-        function proximity_boost() {
-            expression: 1 + query(prox_weight) * nativeProximity(content_kstem)
-        }
-        rank-properties {
-            bm25(content_kstem).b: 0.4
-        }
-        summary-features: text_score() topic_score() proximity_boost bm25(content_kstem) bm25(content_not_stemmed) nativeProximity(content_kstem)
-    }
-
-    rank-profile bm25_multiplicative_minimal inherits bm25_multiplicative {
-        function text_score() {
-            expression: bm25(content_minimal) + query(exact_weight) * bm25(content_not_stemmed)
-        }
-        function proximity_boost() {
-            expression: 1 + query(prox_weight) * nativeProximity(content_minimal)
-        }
-        rank-properties {
-            bm25(content_minimal).b: 0.4
-        }
-        summary-features: text_score() topic_score() proximity_boost bm25(content_minimal) bm25(content_not_stemmed) nativeProximity(content_minimal)
-    }
-
     # `document-summary default` is deliberately left implicit.
     # Vespa owns that class: it holds every field declared `summary`,
     # so it is quite expensive.
@@ -349,8 +294,6 @@ schema passages {
             source: content_not_stemmed
             tokens
         }
-        summary content_kstem {}
-        summary content_minimal {}
         from-disk
     }
 }

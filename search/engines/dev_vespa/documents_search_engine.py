@@ -100,7 +100,11 @@ _DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES = ",".join(
 # to be kept. Declared by `bm25-title-geo` and `unranked`, both defaulting to
 # 0.0, so sending it is a no-op until it is set.
 _DEFAULT_MSM = 0.0
-
+# The default fieldset's search-side profile, named on the query - see
+# passages_search_engine._QUERY_LINGUISTICS_PROFILE.
+_QUERY_LINGUISTICS_PROFILE = "passage_analysis"
+# How much a literal match on the unstemmed copies adds - see `_userQuery`.
+_DEFAULT_EXACT_WEIGHT = 1.0
 
 def _document_phrase_yql(count: int) -> str:
     """One phrase clause per quoted phrase, each matching title OR description OR passages."""
@@ -159,7 +163,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         passages_breadth_weight: float | None = _DEFAULT_PASSAGES_BREADTH_WEIGHT,
         total_target_hits: int = _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
         msm: float = _DEFAULT_MSM,
-        exact_weight: float | None = None,
+        exact_weight: float | None = _DEFAULT_EXACT_WEIGHT,
     ) -> None:
         """
         Initialise the search engine.
@@ -191,10 +195,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             somewhere in this 200-page PDF".
             Only ``bm25-title-geo`` and ``unranked`` declare it; other profiles
             ignore it.
-        :param exact_weight: When set, unquoted text is also matched against the
-            unstemmed `exact` fieldset, for ranking only, scaled by this. ``None``
-            leaves the query unchanged.
-        :raises ValueError: if ``msm`` is outside 0.0 - 1.0.
+        :param exact_weight: How much a literal (unstemmed) match of an unquoted
+            term adds, via `exact_phrase_score()`. ``None`` leaves the unstemmed
+            copies out of unquoted queries.
+        :raises ValueError: if ``msm`` is outside 0.0 - 1.0 or ``exact_weight`` is negative.
         """
         if not 0.0 <= msm <= 1.0:
             raise ValueError(f"msm must be between 0.0 and 1.0, got {msm!r}")
@@ -234,17 +238,14 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     @property
     def parameters(self) -> dict[str, Any]:
         """Tuning parameters, surfaced in the search engine's ID and W&B logging."""
-        parameters: dict[str, Any] = {
+        return {
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
             "passages_breadth_weight": self.passages_breadth_weight,
             "total_target_hits": self.total_target_hits,
             "msm": self.msm,
+            "exact_weight": self.exact_weight,
         }
-        # Only when set, so the default engine's id (derived from these) is unchanged.
-        if self.exact_weight is not None:
-            parameters["exact_weight"] = self.exact_weight
-        return parameters
 
     @property
     def _userQuery(self) -> str:
@@ -252,14 +253,15 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         The text-matching half of the YQL, carrying the weakAnd retrieval depth.
 
         `userInput(@query)` rather than `userQuery()` because `totalTargetHits`
-        only binds to the former. Both build a weakAnd over the `default` fieldset
-        and are otherwise equivalent here.
-
-        With `exact_weight`, it is wrapped in `rank()` so the unstemmed `exact`
-        fieldset scores literal matches without changing which documents match.
+        only binds to the former. `grammar.profile` stems the query with the
+        default fieldset's own analysis profile, which a fieldset query otherwise would
+        not. With `exact_weight`, the match is wrapped in `rank()` so the unstemmed
+        `exact` fieldset scores literal matches without changing which documents
+        match..
         """
         match = (
-            f"(({{totalTargetHits:{self.total_target_hits}}}userInput(@query)) "
+                       f"(({{totalTargetHits:{self.total_target_hits}, "
+            f'grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query)) '
             # As geographies and title_synonyms use different Lucene analyzers
             # to the default fieldset, they're referenced explicitly in the query
             # so they can be searched.

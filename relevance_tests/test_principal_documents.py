@@ -7,6 +7,7 @@ from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.data_in_models import Document
 from search.engines.dev_vespa import DevVespaPrincipalDocumentSearchEngine
+from search.engines.vespa import BM25TitleVespaDocumentSearchEngine
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
@@ -516,9 +517,7 @@ def relevance_tests_principal_documents():
 
     engines = [
         DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
-        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True, exact_weight=1.0),
-        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True, exact_weight=3.0),
-        # BM25TitleVespaDocumentSearchEngine(),  # legacy app, not on the dev instance
+        BM25TitleVespaDocumentSearchEngine(),
     ]
 
     # Principals aren't a primitive, but we use the primitive name to determine where

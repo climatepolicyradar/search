@@ -4,6 +4,9 @@ from api.routers import settings
 from prefect import flow
 from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
+from search.engines.vespa import (
+    ExactVespaPassageSearchEngine,
+)
 from search.passage import (
     Passage,
     looks_like_questionnaire,
@@ -821,14 +824,7 @@ def relevance_tests_passages():
         DevVespaPassageSearchEngine(
             settings=settings, debug=True, ranking_profile="bm25_multiplicative"
         ),
-        # RESEARCH (stemming): exact-form boost - compare against the engine above
-        DevVespaPassageSearchEngine(settings=settings, debug=True, exact_weight=1.0),
-        DevVespaPassageSearchEngine(settings=settings, debug=True, exact_weight=3.0),
-        # RESEARCH (stemming): stemmers - compare kstem/minimal against "porter"
-        DevVespaPassageSearchEngine(settings=settings, debug=True, stem_variant="porter"),
-        DevVespaPassageSearchEngine(settings=settings, debug=True, stem_variant="kstem"),
-        DevVespaPassageSearchEngine(settings=settings, debug=True, stem_variant="minimal"),
-        # ExactVespaPassageSearchEngine(),
+        ExactVespaPassageSearchEngine(),
     ]
 
     run_relevance_tests_parallel(

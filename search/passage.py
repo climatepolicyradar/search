@@ -88,18 +88,10 @@ class Passage(BaseModel):
             phrases, and its spans are merged in.
         """
         data = vespa_passage.model_dump()
-        # Every bolded copy of the text that came back: `content` bolds the free
-        # text, `content_not_stemmed` the quoted phrases, and the research stemmer
-        # fields whatever a stem-variant query matched on them.
-        copies = [
-            data[field]
-            for field in ("content_not_stemmed", "content_kstem", "content_minimal")
-            if data[field] is not None
-        ]
         if not bolding:
             bolded = BoldedText(text=data["content"], boldings=[])
-        elif copies:
-            bolded = merge_bolded(data["content"], *copies)
+        elif data["content_not_stemmed"] is not None:
+            bolded = merge_bolded(data["content"], data["content_not_stemmed"])
         else:
             bolded = bolding_to_labels(data["content"])
         return cls(

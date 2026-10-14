@@ -43,15 +43,12 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 
 
-# RESEARCH (stemming demo): each stemmer arm's field and rank profile.
-# `defaultIndex` must name the field, not a fieldset: through a fieldset, Vespa
-# stems the query with the default English (Porter) stemmer, so "informal" also
-# searched "inform" on the kstem/minimal fields.
-_STEM_VARIANTS: dict[str, tuple[str, str]] = {
-    "porter": ("content", "bm25_multiplicative"),
-    "kstem": ("content_kstem", "bm25_multiplicative_kstem"),
-    "minimal": ("content_minimal", "bm25_multiplicative_minimal"),
-}
+# `content`'s search-side profile, named on the query. Vespa only applies a field's
+# profile to query terms when the query names the field; through a fieldset it stems
+# with its fallback English stemmer instead, so "informal" would also search "inform".
+_QUERY_LINGUISTICS_PROFILE = "passage_analysis"
+# How much a literal match on the unstemmed copy adds - see `_free_text_yql`.
+_DEFAULT_EXACT_WEIGHT = 1.0
 
 
 def _passage_phrase_yql(count: int) -> str:
@@ -89,54 +86,45 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         debug: bool = False,
         ranking_profile: str = _DEFAULT_PASSAGE_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
-        exact_weight: float | None = None,
-        stem_variant: str | None = None,
+        exact_weight: float | None = _DEFAULT_EXACT_WEIGHT,
     ) -> None:
-        """Initialise the search engine."""
-        if stem_variant is not None and stem_variant not in _STEM_VARIANTS:
-            raise ValueError(
-                f"stem_variant must be one of {sorted(_STEM_VARIANTS)}, got {stem_variant!r}"
-            )
+        """
+        Initialise the search engine.
+
+        :param exact_weight: How much a literal (unstemmed) match of an unquoted
+            term adds to its stemmed score, so "informal" outranks a passage that
+            only shares its stem ("information"). ``None`` leaves the unstemmed
+            copy out of unquoted queries.
+        :raises ValueError: if ``exact_weight`` is negative.
+        """
         if exact_weight is not None and exact_weight < 0:
             raise ValueError(f"exact_weight must be >= 0, got {exact_weight!r}")
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
-        self.ranking_profile = (
-            _STEM_VARIANTS[stem_variant][1] if stem_variant else ranking_profile
-        )
+        self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
         self.exact_weight = exact_weight
-        self.stem_variant = stem_variant
 
     @property
     def parameters(self) -> dict[str, Any]:
         """Tuning parameters, surfaced in relevance-test logging."""
-        parameters: dict[str, Any] = {
+        return {
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
+            "exact_weight": self.exact_weight,
         }
-        # Only when set, so the default engine's id (derived from these) is unchanged.
-        if self.exact_weight is not None:
-            parameters["exact_weight"] = self.exact_weight
-        if self.stem_variant is not None:
-            parameters["stem_variant"] = self.stem_variant
-        return parameters
 
     def _free_text_yql(self) -> str:
         """
         The free-text half of the YQL.
 
-        For stemming research: with `exact_weight` it is wrapped in `rank()` and
-        the query is matched against the unstemmed `exact` fieldset for scoring only, so
-        a literal e.g. "informal" outscores a passage that only shares its stem
-        e.g. "information". Which passages match is unchanged.
+        `grammar.profile` stems the query with `content`'s own analyzer, which a
+        fieldset query otherwise would not. With `exact_weight`, the match is wrapped
+        in `rank()`: the second operand matches the unstemmed `exact` fieldset for
+        scoring only, so which passages match is unchanged.
         """
-        if self.stem_variant is None:
-            match = "userQuery()"
-        else:
-            fieldset = _STEM_VARIANTS[self.stem_variant][0]
-            match = f'({{defaultIndex: "{fieldset}"}}userInput(@query))'
+        match = f'{{grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query)'
         if self.exact_weight is None:
             return f" and {match}"
         return (
@@ -197,8 +185,6 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
 
         if free_text and self.exact_weight is not None and not sort_overrides:
             request_body["input.query(exact_weight)"] = self.exact_weight
-        if self.stem_variant is not None:
-            request_body["rules.off"] = True
 
         if free_text:
             request_body["query"] = _normalize_currency_symbols(free_text)

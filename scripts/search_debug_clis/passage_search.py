@@ -108,18 +108,13 @@ def search(
         "--exact-weight",
         help="Option B: also score unquoted terms against the unstemmed field, scaled by this.",
     ),
-    stem_variant: str | None = typer.Option(
-        None,
-        "--stem-variant",
-        help="Option C: porter | kstem | minimal (semantic rules are off for all three).",
-    ),
     order: str = typer.Option(
         "relevance", "--order", help="relevance | idx (idx = the API's in-document default)."
     ),
 ):
     """Search for passages."""
     engine = DevVespaPassageSearchEngine(
-        settings=settings, debug=debug, exact_weight=exact_weight, stem_variant=stem_variant
+        settings=settings, debug=debug, exact_weight=exact_weight
     )
     results = engine.search(
         query=query,
