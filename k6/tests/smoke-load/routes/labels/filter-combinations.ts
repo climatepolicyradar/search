@@ -57,9 +57,6 @@ const isLoadProfile = (__ENV.PROFILE || "load") === "load";
 // holding its own copy in memory.
 // https://grafana.com/docs/k6/latest/javascript-api/k6-data/sharedarray/
 //
-// `type` (a bare top-level field on the Vespa `labels` schema, grouped by
-// engine.all_label_types() and filtered via a plain `field: "type"` condition.
-//
 // `page_token`/`page_size` are folded in here rather than living in their
 // own pagination-combinations.ts (this route used to have one): pagination
 // isn't part of any real navigator-frontend usage of this route (it always

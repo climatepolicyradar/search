@@ -26,7 +26,7 @@ class StubLabelSearchEngine(SearchEngine[Label]):
         query: str,  # noqa: ARG002
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None,  # noqa: ARG002
+        filters: Filter | None,  # noqa: ARG002
     ) -> ListResponse[Label]:
         """Return the stubbed results, truncated to the requested page size."""
         results = self.results[: pagination.page_size]
@@ -82,11 +82,11 @@ def test_topics_or_matches_any_topic() -> None:
         document_id="CPR.document.i00004961.n0000",
     )
 
-    filters_json_string = test_case.filters_json_string()
+    filters = test_case.filters()
 
-    assert filters_json_string is not None
+    assert filters is not None
     assert _build_filter_yql(
-        Filter.model_validate_json(filters_json_string),
+        filters,
         passages_filter_field_to_vespa_field_map,
         passages_filter_struct_field_to_vespa_field_map,
     ) == (
@@ -98,12 +98,12 @@ def test_topics_or_matches_any_topic() -> None:
 
 def test_already_prefixed_topics_are_left_alone() -> None:
     """A topic given as ``concept::Q567`` isn't prefixed twice."""
-    filters_json_string = _test_case(topics=["concept::Q567"]).filters_json_string()
+    filters = _test_case(topics=["concept::Q567"]).filters()
 
-    assert filters_json_string is not None
+    assert filters is not None
     assert (
         _build_filter_yql(
-            Filter.model_validate_json(filters_json_string),
+            filters,
             passages_filter_field_to_vespa_field_map,
             passages_filter_struct_field_to_vespa_field_map,
         )
@@ -112,8 +112,8 @@ def test_already_prefixed_topics_are_left_alone() -> None:
 
 
 def test_no_topics_leaves_filters_unset() -> None:
-    """A test case without topics or other filters sends no filter JSON."""
-    assert _test_case().filters_json_string() is None
+    """A test case without topics or other filters sends no filter."""
+    assert _test_case().filters() is None
 
 
 def test_relative_order_rejects_identical_result_ids():
@@ -141,7 +141,7 @@ class StubComparisonSearchEngine(SearchEngine[Label]):
         query: str,
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None,  # noqa: ARG002
+        filters: Filter | None,  # noqa: ARG002
     ) -> ListResponse[Label]:
         """Return the labels stubbed for this query."""
         results = [

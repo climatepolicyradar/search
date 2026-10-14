@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from search.data_in_models import Label as DataInLabel
-from search.data_in_models import LabelRelationship
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
@@ -47,17 +46,16 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         query: str | None,
         pagination: Pagination,
         order_by: list[OrderBy],  # noqa: ARG002
-        filters_json_string: str | None = None,  # noqa: ARG002
+        filters: Filter | None = None,
         label_type: str | None = None,
     ) -> ListResponse[DataInLabel]:
         """Fetch a list of relevant label search results."""
         if query:
             query = _strip_quotes(query)
 
-        where = " true "
+        where = ' status contains "active" '
 
-        if filters_json_string:
-            filters = Filter.model_validate_json(filters_json_string)
+        if filters is not None:
             where += _build_filter_query(
                 filters,
                 field_map=labels_filter_field_to_vespa_field_map,
@@ -140,183 +138,6 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         self.last_debug_info = debug_info
         total_size = _get_total_count(response)
         return ListResponse(results=labels, total_size=total_size, next_page_token=None)
-
-    def all_label_types(self) -> list[str]:
-        """Fetch all distinct label types from the labels source."""
-        yql = (
-            "select * from sources labels where true "
-            "| all(group(type) order(-count()) each(output(count())))"
-        )
-
-        request_body = {
-            "yql": yql,
-            "hits": 0,
-            "timeout": "5s",
-        }
-        response = execute_vespa_query(
-            endpoint=f"{self.settings.vespa_endpoint}/search",
-            token=self.settings.vespa_read_token,
-            request_body=request_body,
-            request_context="labels.all_label_types",
-        )
-        types: list[str] = []
-
-        root = response.get("root", {})
-        children = root.get("children", [{}])[0].get("children", [])
-        group_list = next(
-            (
-                item.get("children", [])
-                for item in children
-                if item.get("label") == "type"
-            ),
-            [],
-        )
-
-        for group in group_list:
-            types.append(group.get("value", ""))
-
-        return types
-
-    def tmp_labels(self) -> ListResponse[DataInLabel]:
-        """Labels for UI testing"""
-        return ListResponse(
-            results=[
-                DataInLabel(
-                    id="region::South Asia",
-                    type="region",
-                    value="South Asia",
-                    labels=[],
-                ),
-                DataInLabel(
-                    id="country::India",
-                    type="country",
-                    value="India",
-                    labels=[
-                        LabelRelationship(
-                            type="subconcept_of",
-                            value=DataInLabel(
-                                id="region::South Asia",
-                                type="region",
-                                value="South Asia",
-                            ),
-                        ),
-                    ],
-                ),
-                DataInLabel(
-                    id="subdivision::Kerela",
-                    type="subdivision",
-                    value="Kerela",
-                    labels=[
-                        LabelRelationship(
-                            type="subconcept_of",
-                            value=DataInLabel(
-                                id="country::India",
-                                type="country",
-                                value="India",
-                            ),
-                        ),
-                    ],
-                ),
-                DataInLabel(
-                    id="subdivision::Punjab",
-                    type="subdivision",
-                    value="Punjab",
-                    labels=[
-                        LabelRelationship(
-                            type="subconcept_of",
-                            value=DataInLabel(
-                                id="country::India",
-                                type="country",
-                                value="India",
-                            ),
-                        ),
-                    ],
-                ),
-                DataInLabel(
-                    id="region::North America",
-                    type="region",
-                    value="North America",
-                    labels=[],
-                ),
-                DataInLabel(
-                    id="country::USA",
-                    type="country",
-                    value="USA",
-                    labels=[
-                        LabelRelationship(
-                            type="subconcept_of",
-                            value=DataInLabel(
-                                id="region::North America",
-                                type="region",
-                                value="North America",
-                            ),
-                        ),
-                    ],
-                ),
-                DataInLabel(
-                    id="country::Canada",
-                    type="country",
-                    value="Canada",
-                    labels=[
-                        LabelRelationship(
-                            type="subconcept_of",
-                            value=DataInLabel(
-                                id="region::North America",
-                                type="region",
-                                value="North America",
-                            ),
-                        ),
-                    ],
-                ),
-                DataInLabel(
-                    id="subdivision::Texas",
-                    type="subdivision",
-                    value="Texas",
-                    labels=[
-                        LabelRelationship(
-                            type="subconcept_of",
-                            value=DataInLabel(
-                                id="country::USA",
-                                type="country",
-                                value="USA",
-                            ),
-                        ),
-                    ],
-                ),
-                DataInLabel(
-                    id="subdivision::California",
-                    type="subdivision",
-                    value="California",
-                    labels=[
-                        LabelRelationship(
-                            type="subconcept_of",
-                            value=DataInLabel(
-                                id="country::USA",
-                                type="country",
-                                value="USA",
-                            ),
-                        ),
-                    ],
-                ),
-                DataInLabel(
-                    id="subdivision::British Columbia",
-                    type="subdivision",
-                    value="British Columbia",
-                    labels=[
-                        LabelRelationship(
-                            type="subconcept_of",
-                            value=DataInLabel(
-                                id="country::Canada",
-                                type="country",
-                                value="Canada",
-                            ),
-                        ),
-                    ],
-                ),
-            ],
-            total_size=0,
-            next_page_token=None,
-        )
 
     def count(self, query: str) -> int:
         """Return hit count for DevVespaLabelSearchEngine."""

@@ -8,16 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from api.download import DEFAULT_MAX_RESULTS, fetch_documents_for_download, generate_csv
+from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.settings import settings
 from api.utils import (
-    DOCUMENTS_FILTERS_DESCRIPTION,
-    LABELS_FILTERS_DESCRIPTION,
-    PASSAGES_FILTERS_DESCRIPTION,
     documents_order_by,
-    normalise_filters,
     order_by,
     pagination,
     passages_order_by,
@@ -83,10 +80,8 @@ def read_llms_txt() -> str:
     responses=SEARCH_RESPONSES,
 )
 def download_documents(
+    filters: DocumentsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
-    filters_json_string: str | None = Query(
-        None, alias="filters", description=DOCUMENTS_FILTERS_DESCRIPTION
-    ),
     order_by: list[OrderBy] = Depends(documents_order_by),
     max_results: int = Query(
         DEFAULT_MAX_RESULTS,
@@ -109,17 +104,16 @@ def download_documents(
         "(query=%r, max_results=%s, filters_present=%s)",
         query,
         max_results,
-        bool(filters_json_string),
+        filters is not None,
     )
 
-    normalised_filters = normalise_filters(filters_json_string)
     engine = DevVespaDocumentSearchEngine(settings=settings)
     try:
         documents = fetch_documents_for_download(
             engine,
             query=query,
             order_by=order_by,
-            filters_json_string=normalised_filters,
+            filters=filters,
             max_results=max_results,
         )
     except Exception:
@@ -166,10 +160,8 @@ def read_document(document_id: str):
     responses=SEARCH_RESPONSES,
 )
 def read_documents(
+    filters: DocumentsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
-    filters_json_string: str | None = Query(
-        None, alias="filters", description=DOCUMENTS_FILTERS_DESCRIPTION
-    ),
     # @see: https://google.aip.dev/157#read-masks-as-a-request-field
     fields: list[Fields] | None = Query(None),
     pagination: Pagination = Depends(pagination),
@@ -198,11 +190,10 @@ def read_documents(
         pagination.page_size,
         debug,
         bolding,
-        bool(filters_json_string),
+        filters is not None,
         msm,
     )
 
-    normalised_filters = normalise_filters(filters_json_string)
     requested_fields = set(fields or [])
 
     engine = DevVespaDocumentSearchEngine(
@@ -231,13 +222,13 @@ def read_documents(
                 query=query,
                 pagination=pagination,
                 order_by=order_by,
-                filters_json_string=normalised_filters,
+                filters=filters,
             )
             f_aggregations = {
                 field: pool.submit(
                     aggregation_engines[field],
                     query=query,
-                    filters_json_string=normalised_filters,
+                    filters=filters,
                 )
                 for field in requested_aggregation_fields
             }
@@ -245,7 +236,7 @@ def read_documents(
                 field: pool.submit(
                     facet_engines[field],
                     query=query,
-                    filters_json_string=normalised_filters,
+                    filters=filters,
                 )
                 for field in requested_facet_fields
             }
@@ -303,10 +294,8 @@ def read_documents(
     responses=SEARCH_RESPONSES,
 )
 def read_labels(
+    filters: LabelsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
-    filters_json_string: str | None = Query(
-        None, alias="filters", description=LABELS_FILTERS_DESCRIPTION
-    ),
     type: str | None = None,
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(order_by),
@@ -319,21 +308,18 @@ def read_labels(
         type,
         pagination.page_token,
         pagination.page_size,
-        bool(filters_json_string),
+        filters is not None,
     )
-
-    normalised_filters = normalise_filters(filters_json_string)
 
     engine = DevVespaLabelSearchEngine(settings=settings)
     try:
         results = engine.search(
             query=query,
-            filters_json_string=normalised_filters,
+            filters=filters,
             pagination=pagination,
             order_by=order_by,
             label_type=type,
         )
-        engine.all_label_types()  # NOTE: Is this still being used?
     except Exception:
         logger.exception(
             "Error: label search request failed "
@@ -393,10 +379,8 @@ def read_labels_taxonomy():
     responses=SEARCH_RESPONSES,
 )
 def read_passages(
+    filters: PassagesFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
-    filters_json_string: str | None = Query(
-        None, alias="filters", description=PASSAGES_FILTERS_DESCRIPTION
-    ),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(passages_order_by),
     bolding: bool = False,
@@ -408,10 +392,8 @@ def read_passages(
         pagination.page_token,
         pagination.page_size,
         bolding,
-        bool(filters_json_string),
+        filters is not None,
     )
-
-    normalised_filters = normalise_filters(filters_json_string)
 
     engine = DevVespaPassageSearchEngine(settings=settings)
     try:
@@ -419,7 +401,7 @@ def read_passages(
             query=query,
             pagination=pagination,
             order_by=order_by,
-            filters_json_string=normalised_filters,
+            filters=filters,
             bolding=bolding,
         )
     except Exception:
@@ -441,22 +423,6 @@ def read_passages(
     )
 
     return SearchResponse[Passage](
-        total_size=results.total_size,
-        page=0,
-        page_size=0,
-        total_pages=0,
-        next_page=None,
-        previous_page=None,
-        results=results.results,
-        aggregations=None,
-    )
-
-
-@router.get("/test_labels", response_model=SearchResponse[DataInLabel])
-def read_tmp_labels():
-    engine = DevVespaLabelSearchEngine(settings=settings)
-    results = engine.tmp_labels()
-    return SearchResponse[DataInLabel](
         total_size=results.total_size,
         page=0,
         page_size=0,

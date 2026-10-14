@@ -94,8 +94,8 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
             return value
         return value.strip().lower().replace("-", "_").replace(" ", "_")
 
-    def filters_json_string(self) -> str | None:
-        """Vespa filter JSON for this test case's corpus/document/principal/topics, or None."""
+    def filters(self) -> Filter | None:
+        """Vespa filter for this test case's corpus/document/principal/topics, or None."""
         conditions: list[Condition | Filter] = []
         if topic_filter := _build_topic_filter(self.topics or [], self.topics_or):
             conditions.append(topic_filter)
@@ -113,7 +113,7 @@ class TestCase(BaseModel, ABC, Generic[TModel]):
             )
         if not conditions:
             return None
-        return Filter(op="and", filters=conditions).model_dump_json()
+        return Filter(op="and", filters=conditions)
 
     @property
     def name(self) -> str:
@@ -164,7 +164,7 @@ class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=self.filters_json_string(),
+            filters=self.filters(),
         )
         result_ids = [result.id for result in search_results.results]
 
@@ -317,7 +317,7 @@ class RecallTestCase(TestCase[TModel], Generic[TModel]):
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=max(10, self.k)),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=self.filters_json_string(),
+            filters=self.filters(),
         )
         # page_size has a floor of 10, so the response can be longer than k. Truncate
         # to k before checking, otherwise a k below 10 is silently treated as 10.
@@ -417,7 +417,7 @@ class RelativeOrderTestCase(TestCase[TModel], Generic[TModel]):
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=max(10, self.k)),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=self.filters_json_string(),
+            filters=self.filters(),
         )
         results = search_results.results[: self.k]
         result_ids = [result.id for result in results]
@@ -511,7 +511,7 @@ class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=self.k),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=self.filters_json_string(),
+            filters=self.filters(),
         )
         results = search_results.results[: self.k]
         passing_results = [
@@ -610,18 +610,18 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
     def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
         """Run the test case against the given engine."""
 
-        filters_json_string = self.filters_json_string()
+        filters = self.filters()
         search_results_1 = engine.search(
             query=self.search_terms,
             pagination=Pagination(page_token=1, page_size=self.k),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=filters_json_string,
+            filters=filters,
         )
         search_results_2 = engine.search(
             query=self.search_terms_to_compare,
             pagination=Pagination(page_token=1, page_size=self.k),
             order_by=[OrderBy(field="relevance", direction="desc")],
-            filters_json_string=filters_json_string,
+            filters=filters,
         )
 
         results_1_limited = search_results_1.results[: self.k]

@@ -283,15 +283,13 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         query: str | None,
         pagination: Pagination,
         order_by: list[OrderBy],
-        filters_json_string: str | None = None,
+        filters: Filter | None = None,
     ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
 
         where = "true "
-        filters: Filter | None = None
 
-        if filters_json_string:
-            filters = Filter.model_validate_json(filters_json_string)
+        if filters is not None:
             where += _build_filter_query(
                 filters,
                 field_map=documents_filter_field_to_vespa_field_map,
@@ -483,7 +481,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     def aggregations(
         self,
         query: str | None,
-        filters_json_string: str | None = None,
+        filters: Filter | None = None,
     ) -> list[CountAggregation[Label]]:
         """Return aggregations (label/concept groups with counts) filtered by the search query."""
         # Build the top-level where clause from the search query and any filters,
@@ -495,8 +493,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             where += self._userQuery
         where += _document_phrase_yql(len(phrases))
 
-        if filters_json_string:
-            filters = Filter.model_validate_json(filters_json_string)
+        if filters is not None:
             where += _build_filter_query(
                 filters,
                 field_map=documents_filter_field_to_vespa_field_map,
@@ -658,7 +655,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     def labels_value_type_facets(
         self,
         query: str | None,
-        filters_json_string: str | None = None,
+        filters: Filter | None = None,
     ) -> dict[str, list[CountAggregation[Label]]]:
         """
         Compute disjunctive facet counts partitioned by `label.type`. AKA faceted search.
@@ -671,12 +668,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         Example:
         - (category::1 OR category::2) OR (geography::USA OR geography::GBR)
         """
-        filters = (
-            Filter.model_validate_json(filters_json_string)
-            if filters_json_string
-            else None
-        )
-
         facet_label_types = _get_label_types_from_filters(filters)
         facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
         for label_type in facet_label_types:
@@ -721,15 +712,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     def labels_type_facets(
         self,
         query: str | None,
-        filters_json_string: str | None = None,
+        filters: Filter | None = None,
     ) -> dict[str, list[CountAggregation[Label]]]:
         """Compute disjunctive facet counts partitioned by `label.relationship`."""
-        filters = (
-            Filter.model_validate_json(filters_json_string)
-            if filters_json_string
-            else None
-        )
-
         facet_label_types = _get_label_types_from_filters(filters)
         facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
         for label_type in facet_label_types:
@@ -786,7 +771,7 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
         query: str | None,
         pagination: Pagination,
         order_by: list[OrderBy],
-        filters_json_string: str | None = None,
+        filters: Filter | None = None,
     ) -> ListResponse[Document]:
         """Search principal documents"""
 
@@ -801,12 +786,9 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
             ],
         )
 
-        if filters_json_string is not None:
-            caller_filter = Filter.model_validate_json(filters_json_string)
-            merged_filter = Filter(op="and", filters=[principal_filter, caller_filter])
+        if filters is not None:
+            merged_filter = Filter(op="and", filters=[principal_filter, filters])
         else:
             merged_filter = principal_filter
 
-        return super().search(
-            query, pagination, order_by, merged_filter.model_dump_json()
-        )
+        return super().search(query, pagination, order_by, merged_filter)

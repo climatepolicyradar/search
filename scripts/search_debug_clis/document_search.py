@@ -10,7 +10,7 @@ from rich.text import Text
 
 from search.bolding import bolding_to_labels
 from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Settings
+from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter, Settings
 
 app = typer.Typer()
 console = Console()
@@ -46,8 +46,9 @@ def search(
         conditions.append({"field": "labels.value.id", "op": "contains", "value": value})
     if filters:
         conditions.append(json.loads(filters))
-    filters_json = json.dumps({"op": "and", "filters": conditions}) if conditions else None
-
+    filter_model = (
+        Filter.model_validate({"op": "and", "filters": conditions}) if conditions else None
+    )
     engine = (
         DevVespaDocumentSearchEngine(settings=settings, debug=debug, bolding=True)
         if exact_weight is None
@@ -57,7 +58,7 @@ def search(
     )
     results = engine.search(
         query=query,
-        filters_json_string=filters_json,
+        filters=filter_model,
         pagination=Pagination(page_token=page_token, page_size=page_size),
         order_by=[OrderBy(field="relevance", direction="desc")],
     )

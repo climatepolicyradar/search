@@ -504,7 +504,7 @@ def test_passage_document_id_filter_is_exact_and_covers_the_corpus(vespa_app: Ve
         query="mangrove",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
-        filters_json_string=filters.model_dump_json(),
+        filters=filters,
     )
 
     assert sorted(p.document_id for p in response.results) == ["doc-fs-a", "doc-fs-c"]
@@ -594,7 +594,7 @@ def test_rewrite_rule_does_not_bypass_filters(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
-        filters_json_string=filters.model_dump_json(),
+        filters=filters,
     )
 
     assert response.results == [], (
@@ -709,11 +709,15 @@ def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
-        filters_json_string=(
-            '{"op": "and", "filters": ['
-            '{"field": "labels.value.id", "op": "contains", '
-            '"value": "concept::finance flow"}'
-            "]}"
+        filters=Filter(
+            op="and",
+            filters=[
+                FieldFilter(
+                    field="labels.value.id",
+                    op="contains",
+                    value="concept::finance flow",
+                )
+            ],
         ),
     )
     ids = [p.text_block_id for p in results.results]
@@ -784,13 +788,15 @@ def _feed_topic_ranking_passages(vespa_app: Vespa) -> None:
     )
 
 
-def _topic_filter_json(concept_ids: list[str]) -> str:
+def _topic_filter(concept_ids: list[str]) -> Filter:
     """An OR over the given concept ids, as `topics_or=True` produces."""
-    conditions = ",".join(
-        f'{{"field": "labels.value.id", "op": "contains", "value": "{concept_id}"}}'
-        for concept_id in concept_ids
+    return Filter(
+        op="or",
+        filters=[
+            FieldFilter(field="labels.value.id", op="contains", value=concept_id)
+            for concept_id in concept_ids
+        ],
     )
-    return f'{{"op": "or", "filters": [{conditions}]}}'
 
 
 def _topic_search(
@@ -807,7 +813,7 @@ def _topic_search(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
-        filters_json_string=_topic_filter_json(concept_ids),
+        filters=_topic_filter(concept_ids),
     )
     return results.results, engine.last_debug_info
 
