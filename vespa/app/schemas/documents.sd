@@ -11,8 +11,8 @@ schema documents {
             stemming: multiple
             linguistics {
                 profile {
-                    index: title_index_analysis
-                    search: passage_analysis
+                    index: title_index_analysis_kstem
+                    search: passage_analysis_kstem
                 }
             }
             bolding: on
@@ -21,7 +21,7 @@ schema documents {
             indexing: index | summary
             stemming: multiple
             linguistics {
-                profile: passage_analysis
+                profile: passage_analysis_kstem
             }
             bolding: on
         }
@@ -193,8 +193,8 @@ schema documents {
         stemming: multiple
         linguistics {
             profile {
-                index: title_index_analysis
-                search: passage_analysis
+                index: title_index_analysis_kstem
+                search: passage_analysis_kstem
             }
         }
     }
@@ -255,7 +255,7 @@ schema documents {
         indexing: input passages | for_each { get_field text } | index | summary
         stemming: multiple
         linguistics {
-            profile: passage_analysis
+            profile: passage_analysis_kstem
         }
         bolding: on
         summary: matched-elements-only

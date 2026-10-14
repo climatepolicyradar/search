@@ -25,9 +25,9 @@
                             </item>
                         </tokenFilters>
                     </item>
-                    <!-- title_index_analysis: passage_analysis plus acronym+ordinal
+                    <!-- title_index_analysis_kstem: passage_analysis_kstem plus acronym+ordinal
                          splitting, index side only. See vespa/app/services.xml. -->
-                    <item key="profile=title_index_analysis;language=en">
+                    <item key="profile=title_index_analysis_kstem;language=en">
                         <tokenizer>
                             <name>standard</name>
                         </tokenizer>
@@ -88,7 +88,7 @@
                             </item>
                         </tokenFilters>
                     </item>
-                    <item key="profile=passage_analysis;language=en">
+                    <item key="profile=passage_analysis_kstem;language=en">
                         <tokenizer>
                             <name>standard</name>
                         </tokenizer>
@@ -138,7 +138,7 @@
                         </tokenFilters>
                     </item>
                     <!-- exact_analysis: for quoted/exact-phrase matching. Same
-                         charFilters as passage_analysis (so "$100" -> dollar100 on
+                         charFilters as passage_analysis_kstem (so "$100" -> dollar100 on
                          both sides), lowercase only - NO stop-words, NO stemming. -->
                     <item key="profile=exact_analysis;language=en">
                         <tokenizer><name>standard</name></tokenizer>

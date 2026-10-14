@@ -945,7 +945,7 @@ def test_quoted_passage_search_is_literal_phrase_match(vespa_app: Vespa):
     _feed_document(vespa_app, principal)
     passages = {
         "tb-exact": "The National Strategy for Climate Change 2050 sets the target.",
-        # Differs only by a stop word that passage_analysis removes.
+        # Differs only by a stop word that passage_analysis_kstem removes.
         "tb-stopword": "The National Strategy on Climate Change 2050 sets the target.",
         # Differs only by inflections that kstem strips.
         "tb-stemmed": "The National Strategies for Climate Changes 2050 set the targets.",

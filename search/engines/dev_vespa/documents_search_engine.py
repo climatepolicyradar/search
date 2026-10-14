@@ -102,7 +102,7 @@ _DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES = ",".join(
 _DEFAULT_MSM = 0.0
 # The default fieldset's profile, named on the query - see
 # passages_search_engine._QUERY_LINGUISTICS_PROFILE.
-_QUERY_LINGUISTICS_PROFILE = "passage_analysis"
+_QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # How much an exact match on the unstemmed search is weighted/boosted - see `_userQuery`.
 _DEFAULT_EXACT_WEIGHT = 1.0
 

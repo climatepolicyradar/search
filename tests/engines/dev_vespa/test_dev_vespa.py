@@ -854,7 +854,7 @@ def test_passage_search_engine_mixes_free_term_and_phrase() -> None:
         )
 
     request_body = mock_execute.call_args.kwargs["request_body"]
-    assert '{grammar.profile: "passage_analysis"}userInput(@query)' in request_body["yql"]
+    assert '{grammar.profile: "passage_analysis_kstem"}userInput(@query)' in request_body["yql"]
     assert "content_not_stemmed contains" in request_body["yql"]
     assert request_body["query"] == "brazil"
     assert request_body["exact_phrase_0"] == "net zero"
@@ -919,7 +919,7 @@ def test_document_search_engine_sends_default_target_hits() -> None:
 
     yql = _document_search_yql(engine)
 
-    assert '{totalTargetHits:2000, grammar.profile: "passage_analysis"}userInput(@query)' in yql
+    assert '{totalTargetHits:2000, grammar.profile: "passage_analysis_kstem"}userInput(@query)' in yql
     assert "userQuery()" not in yql
     assert engine.parameters["total_target_hits"] == 2000
 
@@ -934,7 +934,7 @@ def test_document_search_engine_forwards_target_hits() -> None:
 
     yql = _document_search_yql(engine)
 
-    assert '{totalTargetHits:200, grammar.profile: "passage_analysis"}userInput(@query)' in yql
+    assert '{totalTargetHits:200, grammar.profile: "passage_analysis_kstem"}userInput(@query)' in yql
     # The geography and identifier arms are untouched by the change.
     assert '{defaultIndex: "geographies"}userInput(@geo_query)' in yql
     assert '{defaultIndex: "identifiers"}userInput(@query)' in yql
@@ -1394,7 +1394,7 @@ def _passage_request_body(engine: DevVespaPassageSearchEngine, order_by: list[Or
 def test_passage_free_text_names_the_linguistics_profile() -> None:
     """A fieldset query stems with Vespa's fallback stemmer unless the profile is named."""
     body = _passage_request_body(DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS), [])
-    assert '{grammar.profile: "passage_analysis"}userInput(@query)' in body["yql"]
+    assert '{grammar.profile: "passage_analysis_kstem"}userInput(@query)' in body["yql"]
     assert "userQuery()" not in body["yql"]
 
 
@@ -1412,7 +1412,7 @@ def test_passage_exact_boost_can_be_switched_off() -> None:
     )
     assert "rank(" not in body["yql"]
     assert "input.query(exact_weight)" not in body
-    assert ' and ({grammar.profile: "passage_analysis"}userInput(@query))' in body["yql"]
+    assert ' and ({grammar.profile: "passage_analysis_kstem"}userInput(@query))' in body["yql"]
 
 
 def test_passage_exact_weight_is_not_sent_under_a_sort_override() -> None:
