@@ -54,11 +54,15 @@ class TestCaseOutcome(BaseModel, Generic[TModel]):
     ``comparison_results`` is the second arm of a test case that issues two
     queries. Storing it means a low overlap can be diagnosed from the report
     rather than by re-running the query.
+
+    ``detail`` is anything else the report should show, for a case whose verdict
+    rests on numbers that aren't in the results themselves.
     """
 
     passed: bool
     results: list[TModel]
     comparison_results: list[TModel] | None = None
+    detail: str | None = None
 
 
 class TestCase(BaseModel, ABC, Generic[TModel]):
@@ -673,6 +677,58 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
         )
 
 
+class SearchNarrowingTestCase(TestCase[TModel], Generic[TModel]):
+    """Adding words to a search should never make it match more documents (FUS-421)."""
+
+    broader_search_terms: str = Field(
+        description="A shorter query that `search_terms` adds words to."
+    )
+
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
+        """Run the test case against the given engine."""
+        broader, narrower = (
+            engine.search(
+                query=query,
+                pagination=Pagination(page_token=1, page_size=10),
+                order_by=[OrderBy(field="relevance", direction="desc")],
+                filters=self.filters(),
+            )
+            for query in (self.broader_search_terms, self.search_terms)
+        )
+        if broader.total_size is None or narrower.total_size is None:
+            raise ValueError(f"{type(engine).__name__} gave no total hit count")
+        # 0 <= 0 would pass without testing anything
+        if broader.total_size == 0:
+            raise ValueError(f"{self.broader_search_terms!r} matched no documents")
+
+        return TestCaseOutcome(
+            passed=narrower.total_size <= broader.total_size,
+            results=narrower.results,
+            comparison_results=broader.results,
+            detail=(
+                f"'{self.broader_search_terms}' matched {broader.total_size:,} "
+                f"documents, '{self.search_terms}' matched {narrower.total_size:,}"
+            ),
+        )
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.broader_search_terms,
+            self.corpus,
+            self.document_id,
+            self.principal_id,
+            self.topics,
+            self.topics_or,
+        )
+
+
 def all_words_in_string(include_words: list[str], string: str) -> bool:
     """Case-insensitive check for if all words are in a string, ignoring punctuation."""
     words = re.findall(r"\b\w+\b", string.lower())
@@ -685,6 +741,7 @@ def any_words_in_string(include_words: list[str], string: str) -> bool:
     words = re.findall(r"\b\w+\b", string.lower())
 
     return any(word.lower() in words for word in include_words)
+
 
 def phrase_in_string(phrase: str, string: str) -> bool:
     """Case-insensitive check for if a phrase appears in order, ignoring punctuation."""

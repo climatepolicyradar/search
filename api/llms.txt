@@ -49,7 +49,7 @@ No authentication — see Limits and etiquette.
 
 - `GET /search/documents` — search and filter documents.
 - `GET /search/documents:download` — the current document search (same
-  `query`/`filters`/`order_by` as above) as a CSV, one row per document,
+  `query`/`filters`/`order_by`/`msm` as above) as a CSV, one row per document,
   capped at `max_results` (default 500). No `page_token`/`page_size`/`fields`/
   `debug`/`bolding` — pagination is internal. Columns: `document_id`, `title`,
   `description`, one `attributes.<key>` per attribute present, one
@@ -64,6 +64,13 @@ No authentication — see Limits and etiquette.
 Shared parameters: `query`, `filters`, `order_by`, `page_token`, `page_size`.
 
 `query` runs exclusively on lexical search, ranked with `BM25`.
+
+`/documents` and `/documents:download` also take `msm` (Minimum Should Match,
+0–1, default 0): the fraction of the query's terms a document must contain in
+its title and geographies, its description, or its best-matching passage. At
+the default every term is optional, so adding words to a query can widen the
+results rather than narrow them; `msm=1` requires all of them. Pass the same
+`msm` to both routes, or a download will not match the search it came from.
 
 - `/documents` — rank profile in [documents.sd](https://github.com/climatepolicyradar/search/blob/main/vespa/app/schemas/documents.sd)
 - `/passages` — rank profile in [passages.sd](https://github.com/climatepolicyradar/search/blob/main/vespa/app/schemas/passages.sd)

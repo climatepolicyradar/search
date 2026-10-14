@@ -53,6 +53,7 @@ class TestResult(BaseModel, Generic[T]):
     search_engine_id: str
     search_results: list[T]
     comparison_search_results: list[T] | None = None
+    detail: str | None = None
     debug_info: list[dict[str, Any]] | None = None
 
     @model_validator(mode="after")
@@ -377,6 +378,7 @@ def run_tests_for_engine(
                 search_engine_id=engine.id,
                 search_results=outcome.results,
                 comparison_search_results=outcome.comparison_results,
+                detail=outcome.detail,
                 debug_info=debug_info,
             )
         engine_test_results.append(test_result)

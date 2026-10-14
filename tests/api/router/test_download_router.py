@@ -12,11 +12,20 @@ from search.engines import ListResponse, VespaError
 
 
 @pytest.fixture
-def document_client():
+def document_client_and_engine_cls():
     with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
+        mock_engine.search.return_value = ListResponse(
+            results=[], total_size=0, next_page_token=None
+        )
         mock_engine_cls.return_value = mock_engine
-        yield TestClient(app), mock_engine
+        yield TestClient(app), mock_engine_cls
+
+
+@pytest.fixture
+def document_client(document_client_and_engine_cls):
+    client, mock_engine_cls = document_client_and_engine_cls
+    yield client, mock_engine_cls.return_value
 
 
 def test_download_returns_csv_with_content_disposition(document_client) -> None:
@@ -45,8 +54,9 @@ def test_download_defaults_max_results_to_500(document_client) -> None:
         results=[], total_size=0, next_page_token=None
     )
 
-    client.get("/search/documents:download", params={"query": "toxic"})
+    response = client.get("/search/documents:download", params={"query": "toxic"})
 
+    assert response.status_code == HTTPStatus.OK
     _, kwargs = mock_engine.search.call_args
     assert kwargs["pagination"].page_size == 100
 
@@ -88,6 +98,39 @@ def test_download_rejects_non_positive_max_results(document_client) -> None:
     response = client.get(
         "/search/documents:download",
         params={"query": "toxic", "max_results": 0},
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_download_passes_msm_to_the_engine(document_client_and_engine_cls) -> None:
+    client, mock_engine_cls = document_client_and_engine_cls
+
+    response = client.get(
+        "/search/documents:download", params={"query": "toxic", "msm": 0.7}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    _, kwargs = mock_engine_cls.call_args
+    assert kwargs["msm"] == 0.7
+
+
+def test_download_defaults_msm_to_off(document_client_and_engine_cls) -> None:
+    client, mock_engine_cls = document_client_and_engine_cls
+
+    response = client.get("/search/documents:download", params={"query": "toxic"})
+
+    assert response.status_code == HTTPStatus.OK
+    _, kwargs = mock_engine_cls.call_args
+    assert kwargs["msm"] == 0.0
+
+
+@pytest.mark.parametrize("msm", [-0.1, 1.1])
+def test_download_rejects_out_of_range_msm(document_client, msm) -> None:
+    client, _ = document_client
+
+    response = client.get(
+        "/search/documents:download", params={"query": "toxic", "msm": msm}
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY

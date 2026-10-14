@@ -2,7 +2,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -65,6 +65,24 @@ ITEM_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
+# Shared by `/documents` and `/documents:download`: a download is the same search,
+# so the two must take the same threshold, or an export returns a wider set than
+# the page it was exported from. See FUS-421.
+MsmQuery = Annotated[
+    float,
+    Query(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum Should Match: the fraction of the query's terms a document "
+            "must contain, measured against its title and geographies, its "
+            "description, or its best-matching passage. 0 (default) leaves "
+            "every term optional; 1 requires all."
+        ),
+    ),
+]
+
+
 @router.get("/llms.txt", response_class=PlainTextResponse)
 def read_llms_txt() -> str:
     """
@@ -91,6 +109,7 @@ def download_documents(
             f"Defaults to {DEFAULT_MAX_RESULTS}."
         ),
     ),
+    msm: MsmQuery = _DEFAULT_MSM,
 ):
     """
     Stream the current search's results as a CSV, one row per document.
@@ -101,13 +120,14 @@ def download_documents(
     """
     logger.info(
         "Downloading document search as CSV "
-        "(query=%r, max_results=%s, filters_present=%s)",
+        "(query=%r, max_results=%s, filters_present=%s, msm=%s)",
         query,
         max_results,
         filters is not None,
+        msm,
     )
 
-    engine = DevVespaDocumentSearchEngine(settings=settings)
+    engine = DevVespaDocumentSearchEngine(settings=settings, msm=msm)
     try:
         documents = fetch_documents_for_download(
             engine,
@@ -168,17 +188,7 @@ def read_documents(
     order_by: list[OrderBy] = Depends(documents_order_by),
     debug: bool = False,
     bolding: bool = False,
-    msm: float = Query(
-        _DEFAULT_MSM,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Minimum Should Match: the fraction of the query's terms a document "
-            "must contain, measured against its title and geographies, its "
-            "description, or its best-matching passage. 0 (default) leaves "
-            "every term optional; 1 requires all."
-        ),
-    ),
+    msm: MsmQuery = _DEFAULT_MSM,
 ):
     start = time.perf_counter()
     logger.info(

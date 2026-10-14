@@ -1,3 +1,5 @@
+import os
+
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -11,6 +13,7 @@ from search.testcase import (
     RecallTestCase,
     RelativeOrderTestCase,
     SearchComparisonTestCase,
+    SearchNarrowingTestCase,
     all_words_in_string,
     any_words_in_string,
     phrase_in_string,
@@ -108,6 +111,21 @@ test_cases = [
             "CCLW.legislative.1776.2144",
         ],
         description="Searching for title + geography should return the correct document if geography is not in the document title (Energy Policy Act 2005 (Energy Bill))",
+    ),
+    # These pass at the default msm of 0.7 but fail at msm 0 (FUS-421). The two
+    # word query needs msm above 0.5 and the three word query above 0.67, or
+    # they still match documents missing one of their words
+    SearchNarrowingTestCase[Document](
+        category="over-broad results",
+        search_terms="parametric insurance",
+        broader_search_terms="parametric",
+        description="Adding a word should narrow the search.",
+    ),
+    SearchNarrowingTestCase[Document](
+        category="over-broad results",
+        search_terms="parametric insurance act",
+        broader_search_terms="parametric insurance",
+        description="Adding a third word should narrow it again.",
     ),
     # Multi-word geography aliases (FUS-423)
     FieldCharacteristicsTestCase[Document](
@@ -482,11 +500,19 @@ test_cases = [
 def relevance_tests_documents():
     """Run relevance tests for documents"""
 
+    # 0.7 by default because that is what the frontend sends with every text
+    # search (FUS-421), so the suite measures what users see, not the API default.
+    # Set RELEVANCE_MSM to try another threshold,
+    # e.g. RELEVANCE_MSM=0 DATA_DIR=./data/msm0 uv run relevance_tests/test_documents.py
+    msm = float(os.getenv("RELEVANCE_MSM", "0.7"))
+
     engines = [
         # BM25TitleVespaDocumentSearchEngine(),
-        DevVespaDocumentSearchEngine(settings=settings, debug=True),
+        DevVespaDocumentSearchEngine(settings=settings, debug=True, msm=msm),
         # Topic ranking off, to A/B the topic-filtered cases against text-only ranking.
-        DevVespaDocumentSearchEngine(settings=settings, debug=True, topic_weight=0.0),
+        DevVespaDocumentSearchEngine(
+            settings=settings, debug=True, topic_weight=0.0, msm=msm
+        ),
     ]
 
     run_relevance_tests_parallel(
