@@ -256,7 +256,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         default fieldset's own analysis profile, which a fieldset query otherwise would
         not. With `exact_weight`, the match is wrapped in `rank()` so the unstemmed
         `exact` fieldset scores literal matches without changing which documents
-        match..
+        match.
         """
         match = (
                        f"(({{totalTargetHits:{self.total_target_hits}, "
