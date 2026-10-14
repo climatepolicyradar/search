@@ -97,11 +97,14 @@ def derive_principal_id(record: dict) -> dict:
 def documents_feeder_flow(
     batch_size: int = DEFAULT_BATCH_SIZE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
-    s3_key: str = "latest",
+    s3_export_prefix: str | None = None,
 ) -> None:
+    bucket = "cpr-prod-snowflake-data-export"
+    prefix = "production/published/pipeline_data_in_vespa_documents_updates_v1/"
     vespa_feeder(
-        s3_bucket="cpr-prod-snowflake-data-export",
-        s3_key=f"production/published/pipeline_data_in_vespa_documents_updates_v1/{s3_key}",
+        s3_bucket=bucket,
+        s3_prefix=prefix,
+        s3_export_prefix=s3_export_prefix,
         derive_data_from_source=derive_document_data,
         batch_size=batch_size,
         sample_rate=sample_rate,

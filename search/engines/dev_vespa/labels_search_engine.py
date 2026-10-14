@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
@@ -105,23 +107,30 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
             if not isinstance(subconcept_labels, list):
                 subconcept_labels = []
 
-            label_source = fields.get("label_source", "")
-            if (
-                label_source is not None
-                and isinstance(label_source, str)
-                and label_source != ""
-            ):
-                try:
-                    label = DataInLabel.model_validate_json(label_source)
-                    labels.append(label)
-                except Exception:
-                    logger.warning(
-                        "Label source is invalid for hit id=%r", hit.get("id")
-                    )
-                    continue
-            else:
-                logger.warning("Label source is empty for hit id=%r", hit.get("id"))
+            label_data = {
+                "id": fields.get("id"),
+                "type": fields.get("type"),
+                "value": fields.get("value"),
+                "labels": [
+                    {
+                        "type": relationship.get("relationship"),
+                        "value": {
+                            "id": relationship.get("id"),
+                            "type": relationship.get("type"),
+                            "value": relationship.get("value"),
+                        },
+                        "timestamp": relationship.get("timestamp"),
+                    }
+                    for relationship in fields.get("labels", []) or []
+                ],
+            }
+            try:
+                label = DataInLabel.model_validate(label_data)
+            except ValidationError:
+                logger.warning("Label fields are invalid for hit id=%r", hit.get("id"))
                 continue
+
+            labels.append(label)
 
             if self.debug:
                 debug_info.append(

@@ -32,7 +32,8 @@ class VespaFeederDeployment:
     variant: str | None = None
     # e.g. parameters.sample_rate = 0.1 will get a determanist sample
     # to avoid long running tests.
-    # e.g. parameters.s3_key = "20260922T190625Z" will ensure you always have the same
+    # e.g. parameters.s3_export_prefix = "20260922T190625Z" will ensure you always
+    # have the same
     # data across tests.
     # This will not work for labels
     # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
@@ -49,7 +50,7 @@ class VespaFeederDeployment:
     #     parameters={
     #         "batch_size": 1,
     #         "sample_rate": 0.1,
-    #         "s3_key": "20260922T190625Z",
+    #         "s3_export_prefix": "20260922T190625Z",
     #     },
     # ),
     # VespaFeederDeployment(
@@ -63,7 +64,7 @@ class VespaFeederDeployment:
     #     parameters={
     #         "batch_size": 5,
     #         "sample_rate": 0.1,
-    #         "s3_key": "20260922T190625Z",
+    #         "s3_export_prefix": "20260922T190625Z",
     #     },
     # )
 
