@@ -362,8 +362,12 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
                     title=_merge_exact_bolding(fields, "title", MISSING_PLACEHOLDER),
-                    description=_merge_exact_bolding(
-                        fields, "description", MISSING_PLACEHOLDER
+                    # `description` is optional: leave it empty when absent
+                    # rather than showing a placeholder to users (FUS-649).
+                    description=(
+                        _merge_exact_bolding(fields, "description", "")
+                        if fields.get("description") is not None
+                        else None
                     ),
                     labels=labels,
                     attributes=source.get("attributes", {}),

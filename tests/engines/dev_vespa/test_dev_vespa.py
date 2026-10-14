@@ -1326,3 +1326,82 @@ def test_label_search_engine_reads_total_size_from_response() -> None:
         )
 
     assert result.total_size == 42
+
+
+def test_document_search_leaves_an_absent_description_empty() -> None:
+    """
+    A document with no description comes back as `None`, not `"MISSING"`.
+
+    `MISSING_PLACEHOLDER` is a debugging aid for values that should always
+    exist. `description` is genuinely optional (`str | None` on BaseDocument),
+    so an absent one must stay empty and let the card render nothing, rather
+    than printing the placeholder to users (FUS-649).
+    """
+    engine = _document_engine(bolding=True)
+
+    fake_response = {
+        "root": {
+            "children": [
+                {
+                    "id": "id:documents:documents::doc-0",
+                    "fields": {
+                        "document_source": (
+                            '{"id": "doc-0", "labels": [], "documents": []}'
+                        ),
+                        "title": "Third National Communication",
+                        # no `description` key at all
+                    },
+                }
+            ]
+        }
+    }
+
+    with patch.object(
+        documents_search_engine, "execute_vespa_query", return_value=fake_response
+    ):
+        result = engine.search(
+            query="communication",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert result.results[0].description is None
+
+
+def test_document_search_absent_description_survives_exact_bolding() -> None:
+    """
+    An absent description survives the exact-bolding merge.
+
+    When `description_not_stemmed` comes back without a base `description`,
+    the merge path dereferences the base value, so a `None` description must
+    short-circuit before `merge_bolded` rather than blowing up.
+    """
+    engine = _document_engine(bolding=True)
+
+    fake_response = {
+        "root": {
+            "children": [
+                {
+                    "id": "id:documents:documents::doc-0",
+                    "fields": {
+                        "document_source": (
+                            '{"id": "doc-0", "labels": [], "documents": []}'
+                        ),
+                        # no `description`, but the exact summary came back
+                        "description_not_stemmed": "<hi>needle</hi>",
+                    },
+                }
+            ]
+        }
+    }
+
+    with patch.object(
+        documents_search_engine, "execute_vespa_query", return_value=fake_response
+    ):
+        result = engine.search(
+            query="needle",
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[],
+        )
+
+    assert result.results[0].description is None
