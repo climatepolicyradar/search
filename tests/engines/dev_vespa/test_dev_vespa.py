@@ -1370,11 +1370,19 @@ def test_document_search_leaves_an_absent_description_empty() -> None:
 
 def test_document_search_absent_description_survives_exact_bolding() -> None:
     """
-    An absent description survives the exact-bolding merge.
+    An absent description is still `None` when the exact summary bolds it.
 
-    When `description_not_stemmed` comes back without a base `description`,
-    the merge path dereferences the base value, so a `None` description must
-    short-circuit before `merge_bolded` rather than blowing up.
+    A quoted query makes Vespa return `description_not_stemmed` alongside
+    `description`, and `_merge_exact_bolding` merges the two sets of `<hi>`
+    tags. Merging requires both copies to be the same underlying text, so
+    pairing an absent description with a bolded exact copy raises
+    `ValueError: Bolded copies of a field do not share the same text`.
+
+    The absence check therefore has to come before the merge, not after it.
+    On `main` this path already raised, because the old `MISSING_PLACEHOLDER`
+    default hit the same mismatch, so a quoted query over a description-less
+    document failed the whole request. This test pins the ordering that keeps
+    it fixed.
     """
     engine = _document_engine(bolding=True)
 
