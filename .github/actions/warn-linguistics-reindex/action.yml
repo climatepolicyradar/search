@@ -1,0 +1,59 @@
+name: Warn about linguistics reindex
+description: >
+  Comment on the PR when it changes the Lucene linguistics config, which needs a
+  manual Vespa reindex that the deploy will not trigger.
+
+# Vespa decides a deploy needs reindexing by diffing the `indexing:` scripts in
+# the schemas (IndexingScriptChangeValidator). The Lucene linguistics config
+# lives in services.xml / lucene-linguistics/, so changing a stemmer, tokenizer,
+# filter or the stopwords list alters the tokens that get indexed without Vespa
+# noticing. The deploy succeeds, no `indexing-change` validation fires, and no
+# reindex is triggered — leaving the stored index out of step with how queries
+# are analysed. See FUS-568 / vespa/app/lucene-linguistics/README.md.
+#
+# services.xml also holds unrelated config (nodes, resources, content cluster),
+# so the caller's paths filter is only a cheap pre-gate: the script parses the
+# file and compares the LuceneLinguistics component itself before we comment.
+
+inputs:
+  base-ref:
+    description: The branch this PR targets, e.g. main.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # The caller checks out with fetch-depth: 0 so the base ref is available
+    # to diff against.
+    - name: Check whether linguistics config changed
+      id: check
+      shell: bash
+      run: |
+        python3 scripts/vespa_linguistics/check_linguistics_change.py \
+          "origin/${{ inputs.base-ref }}" > result.txt
+        cat result.txt >> "$GITHUB_STEP_SUMMARY"
+        head -1 result.txt >> "$GITHUB_OUTPUT"
+        cat result.txt
+
+    - name: Comment on the PR
+      if: steps.check.outputs.changed == 'true'
+      uses: marocchino/sticky-pull-request-comment@v3
+      with:
+        header: linguistics-reindex
+        message: |
+          ### ⚠️ This PR changes the Lucene linguistics config
+
+          Deploying this will **not** reindex existing data. Vespa only detects
+          indexing changes by diffing the `indexing:` scripts in the schemas, so
+          changes to analysers, stemmers, tokenizers, filters or the stopwords
+          list pass validation silently.
+
+          Until a reindex runs, the stored index holds tokens produced by the
+          **old** analysis while queries are analysed with the **new** one, so
+          they only match where the two happen to agree.
+
+          **After this is merged and deployed**, trigger a reindex of the
+          `documents` and `passages` document types from the
+          [Vespa Cloud console](https://console.vespa-cloud.com/tenant/climate-policy-radar/application/search/prod/instance/search-production).
+
+          Relevance will be in flux while reindexing runs.
