@@ -303,6 +303,10 @@ schema documents {
         fields: labels_value
     }
 
+    fieldset exact {
+        fields: title_not_stemmed, description_not_stemmed, passages_text_not_stemmed
+    }
+
     rank-profile default {
         inputs {
             query(title_weight) double: 3.0
@@ -317,6 +321,7 @@ schema documents {
         inputs {
             query(topic_q) tensor<float>(concept{})
             query(topic_weight) double: 1.0
+            query(exact_weight) double: 1.0
         }
 
         function title_score () {
@@ -339,7 +344,7 @@ schema documents {
         }
 
         function exact_phrase_score() {
-            expression: bm25(title_not_stemmed) + bm25(description_not_stemmed) + bm25(passages_text_not_stemmed)
+            expression: query(exact_weight) * (bm25(title_not_stemmed) + bm25(description_not_stemmed) + bm25(passages_text_not_stemmed))
         }
 
         first-phase {
@@ -451,7 +456,7 @@ schema documents {
         # matchCount is carried as a diagnostic only: if coverageSum misbehaves,
         # switching passages_breadth_score() to it is a one-word change.
         # coverage() is carried so `?debug=true` answers "why was this dropped".
-        summary-features: title_score() description_score() passages_score() passages_breadth_score() geographies_score() bm25(title_geo) fieldMatch(title_geo).completeness fieldMatch(title_geo).queryCompleteness fieldMatch(title_geo).fieldCompleteness nativeProximity(title_geo) identifiers_score() topic_score() elementSimilarity(passages_text).coverageSum elementSimilarity(passages_text).matchCount elementSimilarity(passages_text).maxCoverage textSimilarity(description).queryCoverage coverage()
+        summary-features: title_score() description_score() passages_score() passages_breadth_score() geographies_score() bm25(title_geo) fieldMatch(title_geo).completeness fieldMatch(title_geo).queryCompleteness fieldMatch(title_geo).fieldCompleteness nativeProximity(title_geo) identifiers_score() topic_score() elementSimilarity(passages_text).coverageSum elementSimilarity(passages_text).matchCount elementSimilarity(passages_text).maxCoverage textSimilarity(description).queryCoverage coverage() exact_phrase_score()
     }
 
     rank-profile label-boosted inherits nativerank {
@@ -537,6 +542,8 @@ schema documents {
     }
 
     document-summary debug-summary inherits search-with-passages {
+        summary title_not_stemmed {}
+        summary description_not_stemmed {}
         summary title_tokens {
             source: title
             tokens

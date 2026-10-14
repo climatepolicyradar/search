@@ -100,7 +100,11 @@ _DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES = ",".join(
 # to be kept. Declared by `bm25-title-geo` and `unranked`, both defaulting to
 # 0.0, so sending it is a no-op until it is set.
 _DEFAULT_MSM = 0.0
-
+# The default fieldset's profile, named on the query - see
+# passages_search_engine._QUERY_LINGUISTICS_PROFILE.
+_QUERY_LINGUISTICS_PROFILE = "passage_analysis"
+# How much an exact match on the unstemmed search is weighted/boosted - see `_userQuery`.
+_DEFAULT_EXACT_WEIGHT = 1.0
 
 def _document_phrase_yql(count: int) -> str:
     """One phrase clause per quoted phrase, each matching title OR description OR passages."""
@@ -159,6 +163,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         passages_breadth_weight: float | None = _DEFAULT_PASSAGES_BREADTH_WEIGHT,
         total_target_hits: int = _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS,
         msm: float = _DEFAULT_MSM,
+        exact_weight: float | None = _DEFAULT_EXACT_WEIGHT,
     ) -> None:
         """
         Initialise the search engine.
@@ -190,10 +195,15 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             somewhere in this 200-page PDF".
             Only ``bm25-title-geo`` and ``unranked`` declare it; other profiles
             ignore it.
-        :raises ValueError: if ``msm`` is outside 0.0 - 1.0.
+        :param exact_weight: How much an exact (unstemmed) match of an unquoted
+            search term is weighted/boosted, via `exact_phrase_score()`.
+        :raises ValueError: if ``msm`` is outside 0.0 - 1.0 or ``exact_weight`` is negative.
         """
         if not 0.0 <= msm <= 1.0:
             raise ValueError(f"msm must be between 0.0 and 1.0, got {msm!r}")
+
+        if exact_weight is not None and exact_weight < 0:
+            raise ValueError(f"exact_weight must be >= 0, got {exact_weight!r}")
 
         self.debug = debug
         self.bolding = bolding
@@ -204,6 +214,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.topic_weight = topic_weight
         self.passages_breadth_weight = passages_breadth_weight
         self.total_target_hits = total_target_hits
+        self.exact_weight = exact_weight
 
     def _msm_request_fields(self, query: str | None) -> dict[str, float]:
         """
@@ -232,6 +243,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "passages_breadth_weight": self.passages_breadth_weight,
             "total_target_hits": self.total_target_hits,
             "msm": self.msm,
+            "exact_weight": self.exact_weight,
         }
 
     @property
@@ -240,11 +252,15 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         The text-matching half of the YQL, carrying the weakAnd retrieval depth.
 
         `userInput(@query)` rather than `userQuery()` because `totalTargetHits`
-        only binds to the former. Both build a weakAnd over the `default` fieldset
-        and are otherwise equivalent here.
+        only binds to the former. `grammar.profile` stems the query with the
+        default fieldset's own analysis profile, which a fieldset query otherwise would
+        not. With `exact_weight`, the match is wrapped in `rank()` so the unstemmed
+        `exact` fieldset scores literal matches without changing which documents
+        match.
         """
-        return (
-            f" and (({{totalTargetHits:{self.total_target_hits}}}userInput(@query)) "
+        match = (
+                       f"(({{totalTargetHits:{self.total_target_hits}, "
+            f'grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query)) '
             # As geographies and title_synonyms use different Lucene analyzers
             # to the default fieldset, they're referenced explicitly in the query
             # so they can be searched.
@@ -253,6 +269,12 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             # names carried by the field - see _resolve_geography_aliases.
             ' or ({defaultIndex: "geographies"}userInput(@geo_query))'
             ' or ({defaultIndex: "identifiers"}userInput(@query)))'
+        )
+        if self.exact_weight is None:
+            return f" and {match}"
+        return (
+            f" and rank({match}, "
+            '({defaultIndex: "exact", grammar: "any"}userInput(@query)))'
         )
 
     def search(
@@ -316,6 +338,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["input.query(passages_breadth_weight)"] = (
                 self.passages_breadth_weight
             )
+
+        if free_text and self.exact_weight is not None and not sort_overrides:
+            request_body["input.query(exact_weight)"] = self.exact_weight
 
         # `search-exact` adds the `*_not_stemmed` fields, which is where quoted
         # phrases match and so the only place they get bolded.

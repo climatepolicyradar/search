@@ -116,11 +116,9 @@
                                     <item key="ignoreCase">true</item>
                                 </conf>
                             </item>
+                            <!-- KStem -->
                             <item>
-                                <name>snowballPorter</name>
-                                <conf>
-                                    <item key="language">English</item>
-                                </conf>
+                                <name>kStem</name>
                             </item>
                         </tokenFilters>
                     </item>
@@ -168,11 +166,9 @@
                                     <item key="ignoreCase">true</item>
                                 </conf>
                             </item>
+                            <!-- KStem -->
                             <item>
-                                <name>snowballPorter</name>
-                                <conf>
-                                    <item key="language">English</item>
-                                </conf>
+                                <name>kStem</name>
                             </item>
                         </tokenFilters>
                     </item>

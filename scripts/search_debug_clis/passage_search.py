@@ -1,4 +1,5 @@
 import json
+import re
 
 import typer
 from rich.console import Console, Group
@@ -8,6 +9,7 @@ from rich.table import Table
 from rich.text import Text
 
 from api.routers import settings
+from search.bolding import Bolding
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaPassageSearchEngine, Filter
 
@@ -22,9 +24,13 @@ def truncate(s: str, max_len: int | None) -> str:
     return s
 
 
-def highlight(s: str, words: list[str]) -> Text:
-    t = Text(s)
-    t.highlight_words(words, style="bold yellow", case_sensitive=False)
+def bolded(text: str, boldings: list[Bolding], max_len: int | None) -> Text:
+    """`text` with Vespa's bolded spans styled, exactly as the frontend highlights them."""
+    t = Text(text.replace("\n", " "))
+    for b in boldings:
+        t.stylize("bold yellow", b.start_index, b.end_index)
+    if max_len is not None and len(t) > max_len:
+        t.truncate(max_len, overflow="ellipsis")
     return t
 
 
@@ -97,17 +103,36 @@ def search(
         help="Match passages carrying ANY of the given --topic values. "
         "Default is to require all of them i.e. AND",
     ),
+    exact_weight: float | None = typer.Option(
+        None,
+        "--exact-weight",
+        help="Exact-form boost weight. Omit for the engine default (1.0); 0 turns it off.",
+    ),
+    order: str = typer.Option(
+        "relevance", "--order", help="relevance | idx (idx = the API's in-document default)."
+    ),
 ):
     """Search for passages."""
-    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
+    engine = (
+        DevVespaPassageSearchEngine(settings=settings, debug=debug)
+        if exact_weight is None
+        else DevVespaPassageSearchEngine(
+            settings=settings, debug=debug, exact_weight=exact_weight
+        )
+    )
     results = engine.search(
         query=query,
         filters=_build_filters(document_id, filters, topic, topic_or),
         pagination=Pagination(page_token=page, page_size=page_size),
-        order_by=[OrderBy(field="relevance", direction="desc")],
+        order_by=[OrderBy(field=order, direction="desc" if order == "relevance" else "asc")],
+        bolding=True,
+    )
+    console.print(
+        f"[bold magenta]{query!r}  {engine.parameters}  order={order}  "
+        f"total={results.total_size}[/bold magenta]"
     )
 
-    words = query.split()
+    words = query.replace('"', " ").split()
 
     for i, passage in enumerate(results.results):
         relevance = None
@@ -147,10 +172,18 @@ def search(
                     max_len,
                 ),
             )
-        text_display = truncate(passage.text, max_len)
-        table.add_row("text", highlight(text_display, words))
-        if passage.tokens:
-            table.add_row("tokens", str(passage.tokens))
+        table.add_row("text", bolded(passage.text, passage.boldings, max_len))
+        table.add_row(
+            "bolded",
+            ", ".join(sorted({b.labelled_text for b in passage.boldings}))
+            or "[red]nothing bolded[/red]",
+        )
+        literal = [
+            w for w in words if re.search(rf"\b{re.escape(w)}\b", passage.text, re.IGNORECASE)
+        ]
+        table.add_row(
+            "literal words", ", ".join(literal) or "[red]none – stem-only match[/red]"
+        )
         if relevance is not None:
             table.add_row("relevance", str(relevance))
         if text_tokens:

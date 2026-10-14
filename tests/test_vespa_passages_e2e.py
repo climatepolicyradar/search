@@ -947,7 +947,7 @@ def test_quoted_passage_search_is_literal_phrase_match(vespa_app: Vespa):
         "tb-exact": "The National Strategy for Climate Change 2050 sets the target.",
         # Differs only by a stop word that passage_analysis removes.
         "tb-stopword": "The National Strategy on Climate Change 2050 sets the target.",
-        # Differs only by inflections that snowballPorter strips.
+        # Differs only by inflections that kstem strips.
         "tb-stemmed": "The National Strategies for Climate Changes 2050 set the targets.",
     }
     for block_id, text in passages.items():
@@ -1103,7 +1103,7 @@ def test_mixed_quoted_and_unquoted_passage_search(vespa_app: Vespa):
 
 
 def test_unquoted_passage_search_is_unaffected_by_exact_field(vespa_app: Vespa):
-    """An unquoted query still goes through userQuery() against `content`."""
+    """An unquoted query still matches through the stemmed `content` field."""
     principal = DocumentFactory.build(id="principal-plain", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
     _feed_passage(
@@ -1161,7 +1161,9 @@ def test_passage_fields_tokenize_differently(vespa_app: Vespa):
     literal = _flatten(fields["content_not_stemmed_tokens"])     # RENAMED from text_not_stemmed_tokens
 
     assert "for" not in stemmed, f"expected the stop word dropped from content: {stemmed}"
-    assert "strategi" in stemmed, f"expected content stemmed: {stemmed}"
+    assert "strategy" in stemmed and "strategi" not in stemmed, (
+        f"expected KStem to keep the dictionary word whole: {stemmed}"
+    )
     assert literal == [
         "national", "strategy", "for", "climate", "change", "2050",
     ], f"content_not_stemmed must be lowercased only: {literal}"

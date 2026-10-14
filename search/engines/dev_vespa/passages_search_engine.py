@@ -43,6 +43,14 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 
 
+# `content`'s profile, named on the query. Vespa only applies a field's
+# profile to query terms when the query names the field; through a fieldset it stems
+# with its fallback English stemmer instead.
+_QUERY_LINGUISTICS_PROFILE = "passage_analysis"
+# How much an exact match on the unstemmed query is weighted/boosted - see `_free_text_yql`.
+_DEFAULT_EXACT_WEIGHT = 1.0
+
+
 def _passage_phrase_yql(count: int) -> str:
     """One in-order phrase clause per quoted phrase."""
     return "".join(
@@ -78,13 +86,23 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         debug: bool = False,
         ranking_profile: str = _DEFAULT_PASSAGE_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
+        exact_weight: float | None = _DEFAULT_EXACT_WEIGHT,
     ) -> None:
-        """Initialise the search engine."""
+        """
+        Initialise the search engine.
+
+        :param exact_weight: How much an exact (unstemmed) match of an unquoted
+            search term is weighted/boosted.
+        :raises ValueError: if ``exact_weight`` is negative.
+        """
+        if exact_weight is not None and exact_weight < 0:
+            raise ValueError(f"exact_weight must be >= 0, got {exact_weight!r}")
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
         self.ranking_profile = ranking_profile
         self.topic_weight = topic_weight
+        self.exact_weight = exact_weight
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -92,7 +110,25 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         return {
             "ranking_profile": self.ranking_profile,
             "topic_weight": self.topic_weight,
+            "exact_weight": self.exact_weight,
         }
+
+    def _free_text_yql(self) -> str:
+        """
+        The free-text half of the YQL.
+
+        `grammar.profile` stems the query with `content`'s own analyzer, which a
+        fieldset query otherwise would not. With `exact_weight`, the match is wrapped
+        in `rank()`: the second operand matches the unstemmed `exact` fieldset for
+        scoring only, so which passages match is unchanged.
+        """
+        match = f'({{grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query))'
+        if self.exact_weight is None:
+            return f" and {match}"
+        return (
+            f" and rank({match}, "
+            '({defaultIndex: "exact", grammar: "any"}userInput(@query)))'
+        )
 
     def search(
         self,
@@ -116,7 +152,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
 
         yql = f"select * from sources passages where {where}"
         if free_text:
-            yql += " and userQuery()"
+            yql += self._free_text_yql()
         yql += _passage_phrase_yql(len(phrases))
 
         logger.info(
@@ -142,6 +178,9 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
+
+        if free_text and self.exact_weight is not None and not sort_overrides:
+            request_body["input.query(exact_weight)"] = self.exact_weight
 
         if free_text:
             request_body["query"] = _normalize_currency_symbols(free_text)
