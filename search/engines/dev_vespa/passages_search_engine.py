@@ -43,11 +43,11 @@ _DEFAULT_TOPIC_WEIGHT = 1.0
 _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 
 
-# `content`'s search-side profile, named on the query. Vespa only applies a field's
+# `content`'s profile, named on the query. Vespa only applies a field's
 # profile to query terms when the query names the field; through a fieldset it stems
-# with its fallback English stemmer instead, so "informal" would also search "inform".
+# with its fallback English stemmer instead.
 _QUERY_LINGUISTICS_PROFILE = "passage_analysis"
-# How much a literal match on the unstemmed copy adds - see `_free_text_yql`.
+# How much an exact match on the unstemmed query is weighted/boosted - see `_free_text_yql`.
 _DEFAULT_EXACT_WEIGHT = 1.0
 
 
@@ -91,10 +91,8 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         """
         Initialise the search engine.
 
-        :param exact_weight: How much a literal (unstemmed) match of an unquoted
-            term adds to its stemmed score, so "informal" outranks a passage that
-            only shares its stem ("information"). ``None`` leaves the unstemmed
-            copy out of unquoted queries.
+        :param exact_weight: How much an exact (unstemmed) match of an unquoted
+            search term is weighted/boosted.
         :raises ValueError: if ``exact_weight`` is negative.
         """
         if exact_weight is not None and exact_weight < 0:

@@ -100,10 +100,10 @@ _DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES = ",".join(
 # to be kept. Declared by `bm25-title-geo` and `unranked`, both defaulting to
 # 0.0, so sending it is a no-op until it is set.
 _DEFAULT_MSM = 0.0
-# The default fieldset's search-side profile, named on the query - see
+# The default fieldset's profile, named on the query - see
 # passages_search_engine._QUERY_LINGUISTICS_PROFILE.
 _QUERY_LINGUISTICS_PROFILE = "passage_analysis"
-# How much a literal match on the unstemmed copies adds - see `_userQuery`.
+# How much an exact match on the unstemmed search is weighted/boosted - see `_userQuery`.
 _DEFAULT_EXACT_WEIGHT = 1.0
 
 def _document_phrase_yql(count: int) -> str:
@@ -195,9 +195,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             somewhere in this 200-page PDF".
             Only ``bm25-title-geo`` and ``unranked`` declare it; other profiles
             ignore it.
-        :param exact_weight: How much a literal (unstemmed) match of an unquoted
-            term adds, via `exact_phrase_score()`. ``None`` leaves the unstemmed
-            copies out of unquoted queries.
+        :param exact_weight: How much an exact (unstemmed) match of an unquoted
+            search term is weighted/boosted, via `exact_phrase_score()`.
         :raises ValueError: if ``msm`` is outside 0.0 - 1.0 or ``exact_weight`` is negative.
         """
         if not 0.0 <= msm <= 1.0:

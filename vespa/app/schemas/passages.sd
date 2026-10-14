@@ -215,8 +215,6 @@ schema passages {
     rank-profile bm25_multiplicative inherits nativerank {
         inputs {
             query(prox_weight) double: 2.0
-            # Unquoted queries are only affected when the engine adds the
-            # exact `rank()` clause.
             query(exact_weight) double: 1.0
         }
 
