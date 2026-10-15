@@ -104,7 +104,11 @@ _DEFAULT_MSM = 0.0
 # passages_search_engine._QUERY_LINGUISTICS_PROFILE.
 _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # How much an exact match on the unstemmed search is weighted/boosted - see `_userQuery`.
-_DEFAULT_EXACT_WEIGHT = 1.0
+# Off for documents: `exact_phrase_score` sums bm25 over every passage, so on the full
+# corpus any boost let documents that merely mention the query words outrank the one
+# whose title it is.
+# `None` rather than 0.0 so quoted phrases keep the schema's default weight.
+_DEFAULT_EXACT_WEIGHT: float | None = None
 
 def _document_phrase_yql(count: int) -> str:
     """One phrase clause per quoted phrase, each matching title OR description OR passages."""
@@ -196,7 +200,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             Only ``bm25-title-geo`` and ``unranked`` declare it; other profiles
             ignore it.
         :param exact_weight: How much an exact (unstemmed) match of an unquoted
-            search term is weighted/boosted, via `exact_phrase_score()`.
+            search term is weighted/boosted, via `exact_phrase_score()`. ``None``
+            (the default) leaves the unstemmed copies out of unquoted queries.
         :raises ValueError: if ``msm`` is outside 0.0 - 1.0 or ``exact_weight`` is negative.
         """
         if not 0.0 <= msm <= 1.0:

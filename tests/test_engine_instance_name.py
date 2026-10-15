@@ -44,7 +44,7 @@ def test_engine_with_no_instance_matches_pre_feature_behaviour():
     assert full.instance_name is None
     assert full.id == generate_id(
         "DevVespaPassageSearchEngine (Passage)",
-        ("exact_weight", 1.0),
+        ("exact_weight", 0.1),
         ("ranking_profile", "bm25_multiplicative"),
         ("topic_weight", 1.0),
     )
@@ -64,7 +64,7 @@ def test_engine_id_factors_in_parameters():
     assert bm25.parameters == {
         "ranking_profile": "bm25",
         "topic_weight": 1.0,
-        "exact_weight": 1.0,
+        "exact_weight": 0.1,
     }
     assert default.id != bm25.id
 

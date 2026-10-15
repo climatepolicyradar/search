@@ -48,7 +48,7 @@ _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 # with its fallback English stemmer instead.
 _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # How much an exact match on the unstemmed query is weighted/boosted - see `_free_text_yql`.
-_DEFAULT_EXACT_WEIGHT = 1.0
+_DEFAULT_EXACT_WEIGHT = 0.1
 
 
 def _passage_phrase_yql(count: int) -> str:

@@ -106,7 +106,7 @@ def search(
     exact_weight: float | None = typer.Option(
         None,
         "--exact-weight",
-        help="Exact-form boost weight. Omit for the engine default (1.0); 0 turns it off.",
+        help="Exact-form boost weight. Omit for the engine default (0.1); 0 turns it off.",
     ),
     order: str = typer.Option(
         "relevance", "--order", help="relevance | idx (idx = the API's in-document default)."
