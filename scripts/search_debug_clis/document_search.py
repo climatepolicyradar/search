@@ -36,7 +36,7 @@ def search(
     exact_weight: float | None = typer.Option(
         None,
         "--exact-weight",
-        help="Exact-form boost weight. Omit for the engine default (1.0); 0 turns it off.",
+        help="Exact-form boost weight. Omit for the engine default (off); pass a weight to turn it on.",
     ),
 ):
     """Search for documents."""
