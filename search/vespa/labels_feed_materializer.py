@@ -1,9 +1,11 @@
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal, TypedDict
 
 import boto3
 import orjson
 from cpr_contracts import (
+    Document,
     DocumentLabelRelationship,
     Label,
     LabelLabelRelationship,
@@ -120,8 +122,11 @@ def _source_label_relationship_to_vespa_label(
         "description": "",
         "negative_labels": [],
         "label_source": value.model_dump_json(),
-        "labels": [_label_relationship_to_vespa_label_relationship(label_relationship) for label_relationship in value.labels],
-        "status": "active"
+        "labels": [
+            _label_relationship_to_vespa_label_relationship(label_relationship)
+            for label_relationship in value.labels
+        ],
+        "status": "active",
     }
     return vespa_label
 
@@ -172,15 +177,34 @@ def _wikibase_concept_to_vespa_label(concept: WikibaseConcept) -> VespaLabel:
     return vespa_label
 
 
-def labels_feed_materializer():
+def _merge_label(first: VespaLabel, second: VespaLabel) -> VespaLabel:
+    deduped: dict[str, VespaLabelLabelRelationship] = {
+        f"{item['relationship']}_{item['id']}": item
+        for item in [*first["labels"], *second["labels"]]
+    }
+
+    relations = sorted(deduped.values(), key=lambda rel: rel["id"])
+    return {**first, "labels": relations}
+
+
+def labels_from_documents(documents: Iterable[Document]) -> dict[str, VespaLabel]:
     labels: dict[str, VespaLabel] = {}
 
-    documents = read_documents()
     for document in documents:
         for label_rel in document.labels or []:
             vespa_label = _source_label_relationship_to_vespa_label(label_rel)
-            labels[vespa_label["id"]] = vespa_label
 
+            labels[vespa_label["id"]] = (
+                _merge_label(found, vespa_label)
+                if (found := labels.get(vespa_label["id"]))
+                else vespa_label
+            )
+
+    return labels
+
+
+def labels_feed_materializer():
+    labels = labels_from_documents(read_documents())
     inference_results = read_inference_results()
 
     # Get wikibase IDs and timestamps
@@ -214,16 +238,16 @@ def labels_feed_materializer():
     output_file = OUTPUT_CACHE_DIR / "labels_feed_materializer.jsonl"
     with output_file.open("wb") as f:
         for label in unique_labels:
-            vespa_update: VespaUpdate[VespaLabelUpdate] = _vespa_label_to_vespa_update(
-                label
-            )
+            vespa_update = _vespa_label_to_vespa_update(label)
             f.write(orjson.dumps(vespa_update) + b"\n")
+
 
     boto3.client("s3").upload_file(
         str(output_file),
         "cpr-cache",
         "search/vespa/labels_feed_materializer.jsonl",
     )
+
     print(f"Uploaded {len(labels)} labels to S3.")
 
 
