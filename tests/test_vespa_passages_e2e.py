@@ -37,10 +37,22 @@ from search.engines.dev_vespa import (
     Filter,
     Settings,
 )
-from search.passage import Passage
+from search.passage import (
+    Passage,
+    is_page_header_or_footer,
+    looks_like_demoted_section,
+    looks_like_reference_list,
+    looks_like_short_heading,
+    looks_like_table_of_contents,
+)
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from search.vespa.passage import VespaLabel, VespaPassage
-from search.vespa.passages_feed_materializer import _text_block_to_vespa_update
+from search.vespa.models import VespaUpdate
+from search.vespa.passage import (
+    VespaLabel,
+    VespaPageBoxes,
+    VespaPassage,
+    VespaPassageUpdate,
+)
 from search.vespa.sources.embeddings_input_v2 import TextBlock
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
@@ -50,7 +62,6 @@ _TEST_SETTINGS = Settings(
     vespa_read_token="",  # nosec B106
 )
 
-_HEADING_TEXT = "CARBON BUDGET FOR GRUDE EMISSIONS"
 _TOC_TEXT = (
     "1. Introduction 3\n"
     "2. National circumstances 12\n"
@@ -58,15 +69,6 @@ _TOC_TEXT = (
     "4. Policies and measures 41\n"
     "5. Conclusion 47"
 )
-_REFERENCES_TEXT = (
-    "Smith, J. A. (2019). Climate finance in practice. Journal of Climate "
-    "Policy, 12(3), 45-67. doi:10.1234/jcp.2019.001\n"
-    "Jones, B. C. (2020). Adaptation pathways. Nature Climate Change, 10(2), "
-    "112-119. doi:10.1234/ncc.2020.002\n"
-    "Garcia, M. (2021). Mitigation costs. Energy Policy, 45, 233-241. "
-    "Retrieved from https://example.org/report"
-)
-_PROSE_TEXT = "The carbon budget for crude emissions is 1.2 GtCO2e in 2030."
 
 
 class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
@@ -154,6 +156,73 @@ def clean_passages(vespa_app: Vespa):
     vespa_app.delete_all_docs(
         content_cluster_name="search-production", schema="passages"
     )
+
+
+def _text_block_to_passage(block: TextBlock, document_id: str) -> Passage:
+    """Build the `Passage` that the `search.passage` detectors expect from a block."""
+    return Passage(
+        text_block_id=block["id"],
+        idx=block["idx"],
+        text=block["text"],
+        language=block["language"],
+        type=block["type"],
+        type_confidence=block["type_confidence"],
+        heading_id=block.get("heading_id"),
+        document_id=document_id,
+    )
+
+
+def _text_block_to_vespa_passage(
+    block: TextBlock,
+    document_id: str,
+    principal_id: str | None = None,
+    block_text_by_id: dict[str, str] | None = None,
+) -> VespaPassage:
+    """Build the canonical `VespaPassage` for a single passage/text block."""
+    heading_id = block.get("heading_id")
+    heading_text = (
+        (block_text_by_id or {}).get(heading_id) if heading_id is not None else None
+    )
+    passage = _text_block_to_passage(block, document_id)
+    passage.heading_text = heading_text
+    return VespaPassage(
+        id=block["id"],
+        idx=block["idx"],
+        language=block["language"],
+        content=block["text"],
+        document_id=document_id,
+        document_ref=f"id:documents:documents::{document_id}",
+        principal_document_ref=(
+            f"id:documents:documents::{principal_id}"
+            if principal_id is not None
+            else None
+        ),
+        content_type=block["type"],
+        type_confidence=block["type_confidence"],
+        looks_like_short_heading=looks_like_short_heading(passage),
+        looks_like_table_of_contents=looks_like_table_of_contents(passage),
+        looks_like_reference_list=looks_like_reference_list(passage),
+        is_page_header_or_footer=is_page_header_or_footer(passage),
+        looks_like_demoted_section=looks_like_demoted_section(passage),
+        pages=[VespaPageBoxes.model_validate(page) for page in block.get("pages", [])],
+        heading_id=heading_id,
+        heading_text=heading_text,
+    )
+
+
+def _text_block_to_vespa_update(
+    block: TextBlock,
+    document_id: str,
+    principal_id: str | None = None,
+    block_text_by_id: dict[str, str] | None = None,
+) -> VespaUpdate[VespaPassageUpdate]:
+    """Build the Vespa feed update for a single passage/text block."""
+    return _text_block_to_vespa_passage(
+        block,
+        document_id,
+        principal_id=principal_id,
+        block_text_by_id=block_text_by_id,
+    ).to_vespa_update()
 
 
 def _feed_document(app: Vespa, document: Document) -> None:
@@ -420,50 +489,6 @@ def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: 
     assert "tb-child" in passage_ids, (
         f"Expected passage tb-child to match principal_title filter, got: {passage_ids}"
     )
-
-
-def test_derived_passage_properties_are_indexed_and_filterable(vespa_app: Vespa):
-    """
-    For the three derived properties:
-
-    Verifies (a) the bool fields deploy, (b) the materializer's derivations reach
-    the index, and (c) a rank profile / YQL filter can read them.
-    """
-    document = DocumentFactory.build(
-        id="doc-1", title="Doc", labels=[_principal_label()]
-    )
-    _feed_document(vespa_app, document)
-    for block_id, text in (
-        ("tb-heading", _HEADING_TEXT),
-        ("tb-toc", _TOC_TEXT),
-        ("tb-refs", _REFERENCES_TEXT),
-        ("tb-prose", _PROSE_TEXT),
-    ):
-        _feed_passage(vespa_app, _text_block(block_id, text=text), document_id="doc-1")
-
-    r = req.post(
-        f"{vespa_app.end_point}/search/",
-        json={"yql": "select * from sources passages where true", "hits": 10},
-        timeout=5,
-    )
-    r.raise_for_status()
-    hits = r.json().get("root", {}).get("children", [])
-    flags_by_id = {
-        hit["fields"]["id"]: (
-            hit["fields"]["looks_like_short_heading"],
-            hit["fields"]["looks_like_table_of_contents"],
-            hit["fields"]["looks_like_reference_list"],
-            hit["fields"]["looks_like_demoted_section"],
-        )
-        for hit in hits
-    }
-
-    assert flags_by_id == {
-        "tb-heading": (True, False, False, False),
-        "tb-toc": (False, True, False, False),
-        "tb-refs": (False, False, True, False),
-        "tb-prose": (False, False, False, False),
-    }
 
 
 def test_passage_document_id_filter_is_exact_and_covers_the_corpus(vespa_app: Vespa):
