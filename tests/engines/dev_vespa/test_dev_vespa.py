@@ -725,7 +725,7 @@ def test_passage_search_engine_forwards_topic_weight() -> None:
     assert engine.parameters == {
         "ranking_profile": "bm25_multiplicative",
         "topic_weight": 0.0,
-        "exact_weight": 1.0,
+        "exact_weight": 0.1,
     }
     assert engine.name == "DevVespaPassageSearchEngine"
 
@@ -1406,7 +1406,7 @@ def test_passage_exact_boost_is_on_by_default() -> None:
     body = _passage_request_body(DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS), [])
     assert " and rank(" in body["yql"]
     assert '({defaultIndex: "exact", grammar: "any"}userInput(@query)))' in body["yql"]
-    assert body["input.query(exact_weight)"] == 1.0
+    assert body["input.query(exact_weight)"] == 0.1
 
 
 def test_passage_exact_boost_can_be_switched_off() -> None:
@@ -1434,8 +1434,7 @@ def test_negative_exact_weight_raises() -> None:
         DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS, exact_weight=-1.0)
 
 
-def test_document_exact_boost_is_on_by_default() -> None:
-    engine = DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS)
+def _document_request_body(engine: DevVespaDocumentSearchEngine) -> dict:
     with patch.object(
         documents_search_engine, "execute_vespa_query", return_value={"root": {"children": []}}
     ) as mock_execute:
@@ -1444,12 +1443,32 @@ def test_document_exact_boost_is_on_by_default() -> None:
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
         )
-    body = mock_execute.call_args.kwargs["request_body"]
+    return mock_execute.call_args.kwargs["request_body"]
+
+
+def test_document_exact_boost_is_off_by_default() -> None:
+    """
+    Documents leave the unstemmed copies out of unquoted queries.
+
+    `exact_phrase_score` sums bm25 over every passage, so any boost let documents
+    that mention the query words often outrank the one whose title it is. `None`
+    (not 0.0) also leaves quoted phrases on the schema's default weight.
+    """
+    engine = DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS)
+    body = _document_request_body(engine)
+    assert "rank(" not in body["yql"]
+    assert "input.query(exact_weight)" not in body
+    assert '{totalTargetHits:2000, grammar.profile: "passage_analysis_kstem"}userInput(@query)' in body["yql"]
+    assert engine.parameters["exact_weight"] is None
+
+
+def test_document_exact_boost_can_be_switched_on() -> None:
+    body = _document_request_body(
+        DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS, exact_weight=0.5)
+    )
     assert body["yql"].count(" and rank(((") == 1
     assert '({defaultIndex: "exact", grammar: "any"}userInput(@query)))' in body["yql"]
-    assert body["input.query(exact_weight)"] == 1.0
-    assert engine.parameters["exact_weight"] == 1.0
-
+    assert body["input.query(exact_weight)"] == 0.5
 
 
 def test_document_search_leaves_an_absent_description_empty() -> None:
