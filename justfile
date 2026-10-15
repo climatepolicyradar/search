@@ -56,6 +56,11 @@ fix-vespa-rules-stopwords:
 check-vespa-rules-stopwords:
     uv run python scripts/vespa_rules/fix_rhs_stopwords_in_sr.py --check
 
+# Check whether a branch changes the Lucene linguistics config (which needs a
+# manual Vespa reindex after deploy -- see vespa/app/lucene-linguistics/README.md)
+check-linguistics-change base="origin/main":
+    uv run python scripts/vespa_linguistics/check_linguistics_change.py {{base}}
+
 # serve the API on a local development server with hot reloading
 serve-api:
     uv run uvicorn api.main:app --reload --port 8080

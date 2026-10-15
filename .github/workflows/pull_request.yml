@@ -17,6 +17,7 @@ jobs:
       run-test-vespa-feeder: ${{ steps.filter.outputs.run-test-vespa-feeder }}
       run-check-scripts-structure: ${{ steps.filter.outputs.run-check-scripts-structure }}
       run-check-vespa-rules-stopwords: ${{ steps.filter.outputs.run-check-vespa-rules-stopwords }}
+      run-warn-linguistics-reindex: ${{ steps.filter.outputs.run-warn-linguistics-reindex }}
       run-search-pulumi-preview: ${{ steps.filter.outputs.run-search-pulumi-preview }}
       run-k6-pulumi-preview: ${{ steps.filter.outputs.run-k6-pulumi-preview }}
     steps:
@@ -42,6 +43,10 @@ jobs:
               - 'vespa/app/rules/*.sr'
               - 'vespa/app/lucene-linguistics/en/stopwords.txt'
               - 'scripts/vespa_rules/**'
+            run-warn-linguistics-reindex:
+              - 'vespa/app/services.xml'
+              - 'vespa/app/lucene-linguistics/**'
+              - 'scripts/vespa_linguistics/**'
             run-search-pulumi-preview:
               - 'infra/**'
             run-k6-pulumi-preview:
@@ -126,6 +131,23 @@ jobs:
       - run: just install
       - name: Check .sr RHS entries don't spell out stopwords
         run: just check-vespa-rules-stopwords
+
+  warn-linguistics-reindex:
+    runs-on: ubuntu-latest
+    name: Warn that linguistics changes need a manual reindex
+    needs: [changes]
+    if: needs.changes.outputs.run-warn-linguistics-reindex == 'true'
+    permissions:
+      pull-requests: write
+    steps:
+      # Full history so the action can diff against the base ref. This checkout
+      # also makes the local composite action available.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/warn-linguistics-reindex
+        with:
+          base-ref: ${{ github.base_ref }}
 
   test:
     runs-on: ubuntu-latest
