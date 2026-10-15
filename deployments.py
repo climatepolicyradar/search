@@ -18,7 +18,6 @@ from prefect.variables import Variable
 
 from online_metrics.online_metrics_flow import collect_online_metrics
 from relevance_tests import test_documents, test_labels, test_passages
-from search.vespa.documents_feed_flow import documents_feed_flow
 from search.vespa.labels_feed_flow import labels_feed_flow
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -183,13 +182,6 @@ if __name__ == "__main__":
     )
 
     # Feeds
-    create_deployment(
-        flow=documents_feed_flow,
-        description="Materialize documents feed",
-        schedule="0 3 * * *",  # daily at 3am
-        flow_variables=DEFAULT_FLOW_VARIABLES
-        | {"ephemeralStorage": {"sizeInGiB": 100}},  # bump storage for 100GB
-    )
     create_deployment(
         flow=labels_feed_flow,
         description="Materialize labels feed",
