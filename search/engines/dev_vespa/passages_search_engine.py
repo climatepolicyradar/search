@@ -47,7 +47,7 @@ _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 # profile to query terms when the query names the field; through a fieldset it stems
 # with its fallback English stemmer instead.
 _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
-# How much an exact match on the unstemmed query is weighted/boosted - see `_free_text_yql`.
+# How much an exact match on the unstemmed query is weighted/boosted - see `_free_text_yql`. See PR #651 for how this was chosen.
 _DEFAULT_EXACT_WEIGHT = 0.1
 
 

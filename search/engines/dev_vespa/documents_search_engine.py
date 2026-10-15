@@ -108,6 +108,7 @@ _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # corpus any boost let documents that merely mention the query words outrank the one
 # whose title it is.
 # `None` rather than 0.0 so quoted phrases keep the schema's default weight.
+# See PR #651 for how this was chosen.
 _DEFAULT_EXACT_WEIGHT: float | None = None
 
 def _document_phrase_yql(count: int) -> str:
