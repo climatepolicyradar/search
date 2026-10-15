@@ -38,6 +38,9 @@ class LabelRelationship(BaseModel):
     # 👇 These are experimental and should not be relied on
     passages_id: str | None = None
     count: int | None = None
+    # Only present when this concept has been aggregated onto a Principal
+    # document from one of its related documents.
+    document_id: str | None = None
 
 
 class Item(BaseModel):

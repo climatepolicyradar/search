@@ -791,6 +791,7 @@ def test_document_get_renders_labels_and_concepts() -> None:
                     "value": "climate finance",
                     "count": 42,
                     "passages_id": "passages-0",
+                    "document_id": "doc-1",
                 }
             ],
         }
@@ -808,6 +809,8 @@ def test_document_get_renders_labels_and_concepts() -> None:
     assert concept_label.value.value == "climate finance"
     assert concept_label.count == 42
     assert concept_label.passages_id is None
+    assert concept_label.document_id == "doc-1"
+    assert source_label.document_id is None
 
 
 def test_passage_search_engine_quoted_query_builds_exact_phrase() -> None:
