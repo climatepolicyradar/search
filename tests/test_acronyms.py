@@ -36,7 +36,11 @@ from search.acronyms import expansion_patterns
     ],
 )
 def test_expansion_is_found_in_text(query: str, text: str, expected: str) -> None:
-    matches = [m.group(0) for p in expansion_patterns(query) for m in p.finditer(text)]
+    matches = [
+        match.group(0)
+        for pattern in expansion_patterns(query)
+        for match in pattern.finditer(text)
+    ]
     assert matches == [expected]
 
 

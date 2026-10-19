@@ -81,7 +81,12 @@ def merge_bolded(*bolded_texts: str) -> BoldedText:
         raise ValueError("Bolded copies of a field do not share the same text")
 
     return _merge_spans(
-        text, [(b.start_index, b.end_index) for p in parsed for b in p.boldings]
+        text,
+        [
+            (bolding.start_index, bolding.end_index)
+            for parsed_text in parsed
+            for bolding in parsed_text.boldings
+        ],
     )
 
 
@@ -113,12 +118,12 @@ def add_boldings(
     """
     if not patterns:
         return bolded
-    spans = [(b.start_index, b.end_index) for b in bolded.boldings]
+    spans = [(bolding.start_index, bolding.end_index) for bolding in bolded.boldings]
     spans += [
-        m.span(group)
-        for p in patterns
-        for m in p.finditer(bolded.text)
-        for group in range(1, p.groups + 1)
+        match.span(group)
+        for pattern in patterns
+        for match in pattern.finditer(bolded.text)
+        for group in range(1, pattern.groups + 1)
     ]
     return _merge_spans(bolded.text, spans)
 

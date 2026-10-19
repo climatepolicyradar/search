@@ -50,7 +50,7 @@ def _between_words() -> str:
     The rules leave stopwords out of the expansion (the index drops them), so
     the text may have any number of them in between.
     """
-    stopwords = [w.strip() for w in _STOPWORDS.read_text().splitlines() if w.strip()]
+    stopwords = [word.strip() for word in _STOPWORDS.read_text().splitlines() if word.strip()]
     return rf"\W+(?:(?:{'|'.join(map(re.escape, stopwords))})\W+)*"
 
 
