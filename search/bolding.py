@@ -107,14 +107,19 @@ def add_boldings(
     bolded: BoldedText, patterns: Sequence[re.Pattern[str]]
 ) -> BoldedText:
     """
-    `bolded` with every match of `patterns` bolded too.
+    `bolded` with each word of every match of `patterns` bolded too.
 
     For terms Vespa matched but could not bold itself - see `search/acronyms.py`.
     """
     if not patterns:
         return bolded
     spans = [(b.start_index, b.end_index) for b in bolded.boldings]
-    spans += [m.span() for p in patterns for m in p.finditer(bolded.text)]
+    spans += [
+        m.span(group)
+        for p in patterns
+        for m in p.finditer(bolded.text)
+        for group in range(1, p.groups + 1)
+    ]
     return _merge_spans(bolded.text, spans)
 
 

@@ -59,8 +59,9 @@ def _between_words() -> str:
 
 @functools.cache
 def _expansion_pattern(expansion: str) -> re.Pattern[str]:
+    # One group per word, so each is bolded on its own and the stopwords between are not.
     # `s?` so "nationally determined contributions" is bolded, as Vespa's stemming matched it.
-    words = (rf"{re.escape(word)}s?" for word in expansion.split())
+    words = (rf"({re.escape(word)}s?)" for word in expansion.split())
     return re.compile(rf"\b{_between_words().join(words)}\b", re.IGNORECASE)
 
 

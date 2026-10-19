@@ -166,7 +166,7 @@ def test_from_vespa_passage_bolds_acronym_expansions() -> None:
 
     assert [
         (h.start_index, h.end_index, h.labelled_text) for h in passage.boldings
-    ] == [(9, 35, "carbon capture and storage"), (37, 40, "CCS")]
+    ] == [(9, 15, "carbon"), (16, 23, "capture"), (28, 35, "storage"), (37, 40, "CCS")]
     for bolding in passage.boldings:
         assert (
             passage.text[bolding.start_index : bolding.end_index]
