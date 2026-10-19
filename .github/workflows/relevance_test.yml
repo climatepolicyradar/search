@@ -1,0 +1,32 @@
+name: Relevance Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  relevance_test:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Just
+        uses: extractions/setup-just@v4
+        with: { just-version: 1.36.0 }
+
+      - name: Set up AWS
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-relevance-tests-github-actions
+          role-session-name: GitHub_Relevance_Tests
+          aws-region: eu-west-1
+
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
