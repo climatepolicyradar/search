@@ -1,13 +1,11 @@
 """
 Acronym expansions from the Vespa query-rewrite rules, for bolding.
 
-`vespa/app/rules/documents.sr` rewrites an acronym to EQUIV(acronym,
-phrase(expansion)), so "CCS" also matches "carbon capture and storage". Vespa
-matches the expansion but never bolds it on the stemmed fields: its bolder needs
+`vespa/app/rules/documents.sr` rewrites an acronym to EQUIV(acronym,phrase(expansion)).
+Vespa matches the expansion but doesn't bold it on the stemmed fields; its bolder needs
 a phrase's words adjacent in the raw text, and they are not when
-- the text has a stopword between them ("carbon capture *and* storage") - the
-  index drops it, the bolder does not; or
-- a word is indexed with two stems ("nationally" -> national, nationally).
+- the text has a stopword between them (the index drops it, the bolder does not); or
+- a word is indexed with multiple stems.
 So the expansions are found in the returned text and bolded here instead.
 """
 
@@ -19,7 +17,6 @@ _VESPA_APP = Path(__file__).resolve().parents[1] / "vespa" / "app"
 _RULES = _VESPA_APP / "rules" / "documents.sr"
 _STOPWORDS = _VESPA_APP / "lucene-linguistics" / "en" / "stopwords.txt"
 
-# `ccs +> ="carbon capture storage";`, `evs, ev +> ="electric car" ="electric vehicle";`
 _EQUIV_RULE = re.compile(r'^(?P<lhs>[^#+]+?)\s*\+>\s*(?P<rhs>(?:="[^"]+"\s*)+);')
 _RHS_PHRASE = re.compile(r'="([^"]+)"')
 
@@ -27,7 +24,7 @@ _RHS_PHRASE = re.compile(r'="([^"]+)"')
 @functools.cache
 def _expansions() -> dict[str, tuple[str, ...]]:
     """
-    Acronym -> its expansions, from every `acronym +> ="expansion"` rule.
+    Acronyms and their expansions from rule base.
 
     :raises ValueError: if no rule parses, as bolding would otherwise silently
         stop covering expansions.

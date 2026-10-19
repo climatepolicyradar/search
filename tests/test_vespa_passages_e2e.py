@@ -444,18 +444,7 @@ def test_passage_bolding_covers_quoted_phrases(vespa_app: Vespa):
 
 
 def test_passage_bolding_covers_acronym_expansions(vespa_app: Vespa):
-    """
-    An acronym query bolds the expanded term it matched on, stopwords and all.
-
-    `ccs +> ="carbon capture storage"` (documents.sr, included by passages.sr)
-    retrieves passages that only spell the expansion out, so the expansion is
-    what the user matched on and it has to be bolded like any other hit -
-    otherwise a result comes back with nothing marked at all (FUS-663).
-
-    The RHS omits "and" because it is a stopword (en/stopwords.txt) that is
-    stripped at index time, so the phrase has to match across it. Bolding must
-    survive that same gap: real text writes "carbon capture and storage".
-    """
+    """An acronym query bolds the expanded term it matched on, including stopwords - see `search/acronyms.py`"""
     principal = DocumentFactory.build(id="principal-acro", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
     _feed_passage(

@@ -13,7 +13,7 @@ RUN uv sync --locked
 # Copy the application code
 COPY api/ api/
 COPY search/ search/
-# search/acronyms.py bolds acronym expansions from the Vespa app's own rules and stopwords
+# search/acronyms.py bolds acronym expansions from rules and stopwords
 COPY vespa/app/rules/documents.sr vespa/app/rules/documents.sr
 COPY vespa/app/lucene-linguistics/en/stopwords.txt vespa/app/lucene-linguistics/en/stopwords.txt
 
