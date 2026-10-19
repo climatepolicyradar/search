@@ -1,5 +1,6 @@
 import pytest
 
+from search.acronyms import expansion_patterns
 from search.bolding import bolding_to_labels, merge_bolded, render_bolded
 from search.passage import Passage
 from search.vespa.passage import VespaPassage
@@ -147,3 +148,43 @@ def test_from_vespa_passage_merges_exact_bolding() -> None:
 
     assert passage.text == "Brazil plans a carbon tax."
     assert [h.labelled_text for h in passage.boldings] == ["Brazil", "carbon", "tax"]
+
+
+def test_from_vespa_passage_bolds_acronym_expansions() -> None:
+    """An acronym's expansion, matched but not bolded by Vespa, is bolded too."""
+    vespa_passage = VespaPassage.model_validate(
+        {
+            "id": "tb-0",
+            "content": "Launched carbon capture and storage (<hi>CCS</hi>) pilot",
+            "document_id": "doc-0",
+        }
+    )
+
+    passage = Passage.from_vespa_passage(
+        vespa_passage, bolding=True, acronym_expansions=expansion_patterns("CCS")
+    )
+
+    assert [
+        (h.start_index, h.end_index, h.labelled_text) for h in passage.boldings
+    ] == [(9, 35, "carbon capture and storage"), (37, 40, "CCS")]
+    for bolding in passage.boldings:
+        assert (
+            passage.text[bolding.start_index : bolding.end_index]
+            == bolding.labelled_text
+        )
+
+
+def test_from_vespa_passage_skips_acronym_expansions_when_bolding_is_off() -> None:
+    vespa_passage = VespaPassage.model_validate(
+        {
+            "id": "tb-0",
+            "content": "Launched carbon capture and storage (CCS) pilot",
+            "document_id": "doc-0",
+        }
+    )
+
+    passage = Passage.from_vespa_passage(
+        vespa_passage, acronym_expansions=expansion_patterns("CCS")
+    )
+
+    assert passage.boldings == []

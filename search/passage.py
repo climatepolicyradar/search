@@ -3,7 +3,13 @@ from collections.abc import Callable
 
 from pydantic import BaseModel, Field, computed_field
 
-from search.bolding import BoldedText, Bolding, bolding_to_labels, merge_bolded
+from search.bolding import (
+    BoldedText,
+    Bolding,
+    add_boldings,
+    bolding_to_labels,
+    merge_bolded,
+)
 from search.span import BaseSpan
 from search.vespa.passage import VespaPassage
 
@@ -76,7 +82,10 @@ class Passage(BaseModel):
 
     @classmethod
     def from_vespa_passage(
-        cls, vespa_passage: VespaPassage, bolding: bool = False
+        cls,
+        vespa_passage: VespaPassage,
+        bolding: bool = False,
+        acronym_expansions: list[re.Pattern[str]] | None = None,
     ) -> "Passage":
         """
         Build the client-facing `Passage` from a canonical `VespaPassage`.
@@ -86,6 +95,8 @@ class Passage(BaseModel):
             with those tags stripped and `boldings` carries the spans they marked.
             A quoted query also returns `content_not_stemmed`, bolded with the
             phrases, and its spans are merged in.
+        :param acronym_expansions: Expansions of the query's acronyms, bolded too -
+            see search/acronyms.py.
         """
         data = vespa_passage.model_dump()
         if not bolding:
@@ -94,6 +105,8 @@ class Passage(BaseModel):
             bolded = merge_bolded(data["content"], data["content_not_stemmed"])
         else:
             bolded = bolding_to_labels(data["content"])
+        if bolding and acronym_expansions:
+            bolded = add_boldings(bolded, acronym_expansions)
         return cls(
             text_block_id=data["id"],
             idx=data["idx"],

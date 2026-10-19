@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from search.acronyms import expansion_patterns
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
@@ -206,10 +207,17 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         passages: list[Passage] = []
         debug_info: list[dict[str, Any]] = []
 
+        # Vespa matches acronym expansions but cannot bold them - see search/acronyms.py.
+        acronym_expansions = expansion_patterns(free_text) if bolding and free_text else []
+
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
             vespa_passage = VespaPassage.model_validate(fields)
-            passages.append(Passage.from_vespa_passage(vespa_passage, bolding=bolding))
+            passages.append(
+                Passage.from_vespa_passage(
+                    vespa_passage, bolding=bolding, acronym_expansions=acronym_expansions
+                )
+            )
             if self.debug:
                 debug_info.append(
                     {
