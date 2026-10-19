@@ -9,7 +9,13 @@ materialiser must store it in the same shape.
 from typing import Any
 
 import pytest
-from cpr_contracts import DocumentLabelRelationship, Label
+from cpr_contracts import (
+    Document,
+    DocumentLabelRelationship,
+    Label,
+    LabelLabelRelationship,
+    LabelWithoutLabelRelationships,
+)
 
 from search.data_in_models import Label as DataInLabel
 from search.vespa.labels_feed_materializer import (
@@ -17,6 +23,7 @@ from search.vespa.labels_feed_materializer import (
     _source_label_relationship_to_vespa_label,
     _vespa_label_to_vespa_update,
     _wikibase_concept_to_vespa_label,
+    labels_from_documents,
 )
 from search.vespa.sources.wikibase import (
     WikibaseConcept,
@@ -51,6 +58,55 @@ def test_source_label_relationship_to_vespa_label_label_source_round_trips() -> 
     assert parsed.id == "principal_law::Bavaria Climate Protection Act"
     assert parsed.type == "principal_law"
     assert parsed.value == "Bavaria Climate Protection Act"
+
+
+def _document_citing(law: str, country: str) -> Document:
+    return Document(
+        id=f"{country}.{law}",
+        title=f"A {country} case",
+        labels=[
+            DocumentLabelRelationship(
+                type="legal_concept",
+                value=Label(
+                    id=f"principal_law::{law}",
+                    type="principal_law",
+                    value=law,
+                    labels=[
+                        LabelLabelRelationship(
+                            type="subconcept_of",
+                            value=LabelWithoutLabelRelationships(
+                                id=f"principal_law::{country}",
+                                type="principal_law",
+                                value=country,
+                            ),
+                        ),
+                    ],
+                ),
+            ),
+        ],
+        documents=[],
+    )
+
+
+def test_labels_from_documents_keeps_every_parent_of_a_shared_label() -> None:
+    """
+    FUS-717: each document has its own copy of a label with a single parent.
+
+    A law tagged in several countries arrives once per country.
+    Keeping only the last copy filed it under one country.
+    """
+    labels = labels_from_documents(
+        [
+            _document_citing("Constitution", "Sweden"),
+            _document_citing("Constitution", "Mexico"),
+            _document_citing("Constitution", "Sweden"),
+        ]
+    )
+
+    assert [rel["id"] for rel in labels["principal_law::Constitution"]["labels"]] == [
+        "principal_law::Mexico",
+        "principal_law::Sweden",
+    ]
 
 
 def test_wikibase_concept_to_vespa_label_returns_vespa_label_shape() -> None:
