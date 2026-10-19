@@ -13,6 +13,9 @@ RUN uv sync --locked
 # Copy the application code
 COPY api/ api/
 COPY search/ search/
+# search/acronyms.py bolds acronym expansions from rules and stopwords
+COPY vespa/app/rules/documents.sr vespa/app/rules/documents.sr
+COPY vespa/app/lucene-linguistics/en/stopwords.txt vespa/app/lucene-linguistics/en/stopwords.txt
 
 # Create data directory (will be populated from S3 at runtime)
 RUN mkdir -p /app/data

@@ -443,6 +443,37 @@ def test_passage_bolding_covers_quoted_phrases(vespa_app: Vespa):
         assert [h.labelled_text for h in results.results[0].boldings] == expected, query
 
 
+def test_passage_bolding_covers_acronym_expansions(vespa_app: Vespa):
+    """An acronym query bolds the expanded term it matched on, including stopwords - see `search/acronyms.py`"""
+    principal = DocumentFactory.build(id="principal-acro", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-acro-and", "Chapter 7: Fostering the Carbon Capture and Storage Industry"),
+        document_id="principal-acro",
+    )
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-acro-plain", "The Carbon Capture Storage programme was funded."),
+        document_id="principal-acro",
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query="ccs", pagination=Pagination(page_token=1, page_size=10), order_by=[], bolding=True
+    )
+
+    bolded_by_block = {
+        p.text_block_id: [h.labelled_text for h in p.boldings] for p in results.results
+    }
+
+    # Both forms of the expansion are retrieved by the acronym...
+    assert set(bolded_by_block) == {"tb-acro-and", "tb-acro-plain"}
+    # ...and both are bolded, including the one separated by the "and" stopword.
+    assert bolded_by_block["tb-acro-plain"] == ["Carbon", "Capture", "Storage"]
+    assert bolded_by_block["tb-acro-and"] == ["Carbon", "Capture", "Storage"]
+
+
 def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: Vespa):
     """
     A passage's principal_title resolves via principal_document_ref.

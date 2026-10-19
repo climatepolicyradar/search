@@ -1,5 +1,8 @@
 """Vespa `<hi>` bolding, as tag-free text plus the spans the tags marked."""
 
+import re
+from collections.abc import Sequence
+
 from pydantic import BaseModel
 
 from search.span import BaseSpan
@@ -77,9 +80,20 @@ def merge_bolded(*bolded_texts: str) -> BoldedText:
     if any(p.text != text for p in parsed[1:]):
         raise ValueError("Bolded copies of a field do not share the same text")
 
-    spans = sorted((b.start_index, b.end_index) for p in parsed for b in p.boldings)
+    return _merge_spans(
+        text,
+        [
+            (bolding.start_index, bolding.end_index)
+            for parsed_text in parsed
+            for bolding in parsed_text.boldings
+        ],
+    )
+
+
+def _merge_spans(text: str, spans: list[tuple[int, int]]) -> BoldedText:
+    """`text` with `spans` bolded, overlapping or touching spans joined into one."""
     merged: list[list[int]] = []
-    for start, end in spans:
+    for start, end in sorted(spans):
         if merged and start <= merged[-1][1]:
             merged[-1][1] = max(merged[-1][1], end)
         else:
@@ -92,6 +106,26 @@ def merge_bolded(*bolded_texts: str) -> BoldedText:
             for start, end in merged
         ],
     )
+
+
+def add_boldings(
+    bolded: BoldedText, patterns: Sequence[re.Pattern[str]]
+) -> BoldedText:
+    """
+    `bolded` with each word of every match of `patterns` bolded too.
+
+    For terms Vespa matched but could not bold itself - see `search/acronyms.py`.
+    """
+    if not patterns:
+        return bolded
+    spans = [(bolding.start_index, bolding.end_index) for bolding in bolded.boldings]
+    spans += [
+        match.span(group)
+        for pattern in patterns
+        for match in pattern.finditer(bolded.text)
+        for group in range(1, pattern.groups + 1)
+    ]
+    return _merge_spans(bolded.text, spans)
 
 
 def render_bolded(bolded: BoldedText) -> str:
