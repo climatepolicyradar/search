@@ -135,7 +135,6 @@ def test_get_labels_taxonomy_exposes_every_category() -> None:
     ]
 
     assert {category["id"] for category in categories} == {
-        "category::Corporate Disclosure",
         "category::Global Stocktake",
         "category::Law",
         "category::Litigation",

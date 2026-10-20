@@ -14,35 +14,6 @@ from search.data_in_models import (
 climate = Label(type="domain", id="domain::Climate", value="Climate", labels=[])
 nature = Label(type="domain", id="domain::Nature", value="Nature", labels=[])
 
-# region corporate disclosure
-corporate_discloser = Label(
-    type="category",
-    id="category::Corporate Disclosure",
-    value="Corporate Disclosure",
-    labels=[],
-)
-corporate_voluntary_report = Label(
-    id="entity_type::Corporate voluntary report",
-    value="Corporate voluntary report",
-    type="entity_type",
-    labels=[
-        LabelRelationship(
-            type="subconcept_of",
-            value=corporate_discloser,
-        ),
-    ],
-)
-corporate_voluntary_filing = Label(
-    id="entity_type::Corporate voluntary filing",
-    value="Corporate voluntary filing",
-    type="entity_type",
-    labels=[
-        LabelRelationship(
-            type="subconcept_of",
-            value=corporate_discloser,
-        ),
-    ],
-)
 
 # region law
 law = Label(type="category", id="category::Law", value="Law", labels=[])
@@ -498,9 +469,6 @@ national_drought_plan = Label(
 labels_taxonomy = [
     climate,
     nature,
-    corporate_discloser,
-    corporate_voluntary_report,
-    corporate_voluntary_filing,
     law,
     framework_law,
     litigation,
