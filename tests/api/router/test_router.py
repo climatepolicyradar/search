@@ -190,7 +190,7 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     document_type_ids = [
         "entity_type::Nationally Determined Contribution (NDC)",
         "entity_type::National Adaptation Plan (NAP)",
-        "entity_type::Long-term low-emission development strategy",
+        "entity_type::Long-Term Low-Emission Development Strategy",
         "entity_type::Biennial Update Report (BUR)",
         "entity_type::Biennial Report (BR)",
         "entity_type::National Communication (NC)",
