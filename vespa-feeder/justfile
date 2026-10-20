@@ -16,3 +16,4 @@ push:
 
 deploy:
     uv run python deployments.py
+    uv run python automations.py
