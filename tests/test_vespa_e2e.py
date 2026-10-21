@@ -1692,7 +1692,32 @@ def test_msm_keeps_a_phrase_only_match(vespa_app: Vespa):
 
     assert ids["passage"] in {document.id for document in results.results}
 
+def test_msm_ignores_a_phrase_when_measuring_coverage(vespa_app: Vespa):
+    """A quoted phrase is a must-have, not a term MSM counts."""
+    ids = _msm_corpus(vespa_app)
 
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
+    results = engine.search(
+        query='parametric "insurance"',
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+
+    assert ids["split"] in {document.id for document in results.results}
+
+
+def test_msm_still_applies_to_free_text_beside_a_phrase(vespa_app: Vespa):
+    """Quoting one term must not switch MSM off for the rest of the query."""
+    ids = _msm_corpus(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
+    results = engine.search(
+        query='parametric rainfall "insurance"',
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+
+    assert {document.id for document in results.results} == {ids["split"]}
 # endregion Minimum Should Match (MSM)
 
 
