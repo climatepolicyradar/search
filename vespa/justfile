@@ -56,6 +56,28 @@ deploy:
     rm -f "$build_dir/services.xml.bak"
     uv run vespa deploy "$build_dir" --target http://localhost:19071/ --wait 300
 
+extract: \
+    extract-documents \
+    extract-documents-concepts \
+    extract-documents-principal-concepts \
+    extract-documents-passages \
+    extract-labels \
+    extract-passages
+
+start: up deploy
+
+[parallel]
+prepare: extract start
+
+load: \
+    prepare \
+    feed-documents \
+    feed-documents-concepts \
+    feed-documents-principal-concepts \
+    feed-documents-passages \
+    feed-labels \
+    feed-passages
+
 # Dev
 dev:
     just up
