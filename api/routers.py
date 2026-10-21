@@ -443,3 +443,93 @@ def read_passages(
         results=results.results,
         aggregations=None,
     )
+
+
+PassageMsmQuery = Annotated[
+    float,
+    Query(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum Should Match for `query`: the fraction of its terms a passage "
+            "must contain to match on the text. A passage matching `filters` is "
+            "kept regardless. 0 (default) leaves every term optional; 1 requires all."
+        ),
+    ),
+]
+
+
+@router.get(
+    "/passages/within",
+    response_model=SearchResponse[Passage],
+    responses=SEARCH_RESPONSES,
+)
+def read_passages_within(
+    filters: PassagesFilterDep,
+    document_id: list[str] = Query(
+        ...,
+        min_length=1,
+        description=(
+            "Search the passages of these documents. A Principal's id covers "
+            "every one of its members."
+        ),
+    ),
+    query: str | None = Query(None, description="What are you looking for?"),
+    msm: PassageMsmQuery = 0.0,
+    pagination: Pagination = Depends(pagination),
+    order_by: list[OrderBy] = Depends(passages_order_by),
+    bolding: bool = False,
+):
+    logger.info(
+        "Searching passages within documents (document_ids=%r, query=%r, "
+        "msm=%s, page_token=%s, page_size=%s, bolding=%s, filters_present=%s)",
+        document_id,
+        query,
+        msm,
+        pagination.page_token,
+        pagination.page_size,
+        bolding,
+        filters is not None,
+    )
+
+    engine = DevVespaPassageSearchEngine(settings=settings)
+    try:
+        results = engine.search_within(
+            document_ids=document_id,
+            query=query,
+            pagination=pagination,
+            order_by=order_by,
+            filters=filters,
+            msm=msm,
+            bolding=bolding,
+        )
+    except Exception:
+        logger.exception(
+            "Error: passages within documents search request failed "
+            "(document_ids=%r, query=%r, page_token=%s, page_size=%s)",
+            document_id,
+            query,
+            pagination.page_token,
+            pagination.page_size,
+        )
+        raise
+
+    logger.info(
+        "Success: passages within documents search request completed "
+        "(document_ids=%r, query=%r, results=%s, total_size=%s)",
+        document_id,
+        query,
+        len(results.results),
+        results.total_size,
+    )
+
+    return SearchResponse[Passage](
+        total_size=results.total_size,
+        page=0,
+        page_size=0,
+        total_pages=0,
+        next_page=None,
+        previous_page=None,
+        results=results.results,
+        aggregations=None,
+    )
