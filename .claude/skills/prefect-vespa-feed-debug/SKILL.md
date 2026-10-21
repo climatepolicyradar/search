@@ -147,6 +147,29 @@ To check current state for specific records:
    that look like 404s but aren't; retry those a few times before trusting a
    "missing" verdict.
 
+**Track record so far: every "missing" record checked has turned out to be
+present.** This recurs often (roughly half of daily passages runs in the week of
+2026-10-14 to 2026-10-20 hit it: always `batches that raised: 0`, always 1-4
+records short out of ~10-11M, always blank "sample failed documents"). Ran the
+full diff above on two separate incidents (2026-10-18 and 2026-10-20, ~71k IDs
+total across 4 flagged batches) — 0 were actually missing from Vespa both times.
+
+**Likely root cause (confirmed, not just a guess):** a known upstream
+`vespa feed` bug —
+[vespa-engine/vespa#37880](https://github.com/vespa-engine/vespa/issues/37880).
+A compressed request can race a pooled buffer that gets reused for the next
+document, so a write that actually succeeds server-side can still get reported
+as missing client-side. Fixed in
+[PR #38152](https://github.com/vespa-engine/vespa/pull/38152), merged
+2026-10-08, but not yet in a released `vespa-cli` build as of 2026-10-21 (latest
+is v8.763.13, which predates the fix) — `VESPA_CLI_VERSION` in
+`vespa-feeder/Dockerfile` still pins 8.675.23. Once a release containing the fix
+ships, bump that version and remove `_KNOWN_MISSING_RECORDS_BUG_NOTE` in
+`vespa_feeder.py` (it's already wired into both the run-summary artifact and the
+`VespaFeederFailed`/Slack message, so no further diagnosis should be needed
+until then — but re-verify a few "missing" counts for real after the bump before
+trusting it's fully resolved).
+
 ## Key files
 
 - `vespa-feeder/vespa_feeder.py` — batch feed, count reconciliation

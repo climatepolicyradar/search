@@ -817,6 +817,39 @@ def _feed_result(
     )
 
 
+def _missing_records_result(name: str, ok: int, missing: int) -> feeder.FeedResult:
+    """A batch that completed (no raise) but came back `missing` records short."""
+    return feeder.FeedResult(
+        feed_paths=[Path(name)],
+        input_count=ok + missing,
+        operation_count=ok + missing,
+        ok_count=ok,
+        feeder_error_count=0,
+        throttled_count=0,
+        other_http_error_count=0,
+        errors=[
+            feeder.VespaResponseError(
+                ok_count=ok,
+                operation_count=ok + missing,
+                throttled_count=0,
+                other_http_error_count=0,
+                failed_documents=[],
+            )
+        ],
+    )
+
+
+def _transport_giveup_result(name: str, ok: int, missing: int) -> feeder.FeedResult:
+    """A batch where the transport layer gave up - no response for some records."""
+    result = _missing_records_result(name, ok=ok, missing=missing)
+    result.feeder_error_count = missing
+    result.errors = [
+        feeder.VespaFeedError(feeder_error_count=missing, failed_documents=[]),
+        *result.errors,
+    ]
+    return result
+
+
 class _FakeFuture:
     """What `feed_batch.submit` hands back, wrapping one batch's outcome."""
 
@@ -900,6 +933,95 @@ def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
     assert "| Files processed | 2 |" in markdown
     assert "| Batches that raised | 1 |" in markdown
     assert "| `RuntimeError` | HeadObject: Not Found |" in markdown
+
+
+def test_vespa_feeder_downgrades_a_small_missing_count_to_a_warning(
+    monkeypatch, summary_artifacts, caplog
+):
+    """
+    Missing-only, within the known upstream bug's observed range: warn, don't fail.
+
+    Raising here trains people to ignore on_failure Slack alerts for a
+    pattern that's been confirmed harmless every time it's been checked - see
+    _KNOWN_MISSING_RECORDS_BUG_NOTE.
+    """
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [_FakeFuture(_missing_records_result("one.jsonl", ok=10, missing=2))]
+        ),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+        )
+
+    assert any(
+        "2 record(s) missing" in record.message for record in caplog.records
+    )
+    markdown = summary_artifacts[0]["markdown"]
+    assert "| Failed files | 1 |" in markdown
+
+
+def test_vespa_feeder_still_raises_past_the_known_bug_ceiling(
+    monkeypatch, summary_artifacts
+):
+    """A missing count past the known bug's observed range is treated as a new issue."""
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [
+                _FakeFuture(
+                    _missing_records_result(
+                        "one.jsonl",
+                        ok=10,
+                        missing=feeder._VESPA_MISSING_REPSPONSES_TOLERANCE + 1,
+                    )
+                )
+            ]
+        ),
+    )
+
+    with pytest.raises(feeder.VespaFeederFailed) as exc_info:
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+        )
+
+    assert "exceeds the known bug's observed range" in str(exc_info.value)
+
+
+def test_vespa_feeder_still_raises_on_a_transport_giveup_regardless_of_count(
+    monkeypatch, summary_artifacts
+):
+    """
+    A transport give-up (no response at all) is a different failure mode.
+
+    The known bug is specifically about a *received* response racing a
+    reused buffer - it says nothing about the transport giving up with no
+    response. Don't downgrade that just because the count is small.
+    """
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [_FakeFuture(_transport_giveup_result("one.jsonl", ok=10, missing=1))]
+        ),
+    )
+
+    with pytest.raises(feeder.VespaFeederFailed) as exc_info:
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+        )
+
+    assert "different failure mode than the known response-race bug" in str(
+        exc_info.value
+    )
 
 
 def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
