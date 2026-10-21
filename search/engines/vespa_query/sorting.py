@@ -144,14 +144,8 @@ def _ranking_overrides_for_passage_order_by(
     :rtype: dict[str, Any]
     :raises ValueError: if the field is not supported for passages
     """
-    # HACK: `attributes.published_date` isn't actually supported, but the frontend is currently sending it and we're 400-ing
-    # which is currently breaking the site. We should remove this once we work out why that is happening.
-    # @see: https://linear.app/climate-policy-radar/issue/FUS-733/remove-order-by-hack-to-allow-attributespublished-date-on-passages
-    order_by = [clause for clause in order_by if clause.field != "attributes.published_date"]
-
     if not order_by:
         return {}
-
     primary = order_by[0]
     if primary.field not in PASSAGE_SORT_API_FIELDS:
         raise ValueError(
