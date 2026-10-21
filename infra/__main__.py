@@ -7,6 +7,7 @@ import components.aws as components_aws
 import pulumi
 import pulumi_docker_build as docker_build
 from pulumi_aws import (
+    arn_build,
     ecr,
     ecs,
     get_caller_identity,
@@ -14,7 +15,7 @@ from pulumi_aws import (
     s3,
     ssm,
 )
-from pulumi_aws.ecs.express_gateway_service import (
+from pulumi_aws.ecs import (
     ExpressGatewayService,
     ExpressGatewayServicePrimaryContainerArgs,
     ExpressGatewayServicePrimaryContainerEnvironmentArgs,
@@ -263,30 +264,58 @@ elif stack != "review":
         ),
     )
 
-    search_api_github_actions_role = iam.Role(
-        f"{name}-{stack}-github-actions",
-        assume_role_policy=json.dumps(
-            {
-                "Statement": [
-                    {
-                        "Action": "sts:AssumeRoleWithWebIdentity",
-                        "Condition": {
-                            "StringEquals": {
-                                "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-                            },
-                            "StringLike": {
-                                "token.actions.githubusercontent.com:sub": "repo:climatepolicyradar/search:*"
-                            },
-                        },
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Federated": f"arn:aws:iam::{account_id}:oidc-provider/token.actions.githubusercontent.com"
-                        },
-                    }
-                ],
-                "Version": "2012-10-17",
-            }
+    github_assume_role_policy = iam.PolicyDocumentArgs(
+        version=iam.PolicyDocumentVersion.POLICY_DOCUMENT_VERSION_2012_10_17,
+        statement=[
+            iam.PolicyStatementArgs(
+                effect=iam.PolicyStatementEffect.ALLOW,
+                action="sts:AssumeRoleWithWebIdentity",
+                principal=iam.FederatedPrincipalArgs(
+                    federated=f"arn:aws:iam::{account_id}:oidc-provider/token.actions.githubusercontent.com",
+                ),
+                condition={
+                    "StringEquals": {
+                        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                    },
+                    "StringLike": {
+                        "token.actions.githubusercontent.com:sub": "repo:climatepolicyradar/search:*",
+                    },
+                },
+            ),
+        ],
+    )
+
+    relevance_tests_github_actions_role = iam.Role(
+        resource_name=f"{name}-{stack}-github-actions-relevance-tests",
+        name=f"{name}-{stack}-github-actions-relevance-tests",
+        assume_role_policy=github_assume_role_policy,
+        tags=tags,
+    )
+
+    relevance_tests_github_actions_role_policy = iam.RolePolicy(
+        resource_name=f"{name}-{stack}-github-actions-relevance-tests-policy",
+        role=relevance_tests_github_actions_role.name,
+        policy=iam.PolicyDocumentArgs(
+            version=iam.PolicyDocumentVersion.POLICY_DOCUMENT_VERSION_2012_10_17,
+            statement=[
+                iam.PolicyStatementArgs(
+                    resource=arn_build(
+                        service="s3",
+                        partition="aws",
+                        resource="cpr-cache/search/vespa/*",
+                        account_id="",
+                        region="",
+                    ),
+                    effect=iam.PolicyStatementEffect.ALLOW,
+                    action="s3:GetObject",
+                ),
+            ],
         ),
+    )
+
+    search_api_github_actions_role = iam.Role(
+        resource_name=f"{name}-{stack}-github-actions",
+        assume_role_policy=github_assume_role_policy,
         inline_policies=[
             {
                 "name": f"{name}-{stack}-github-actions",
