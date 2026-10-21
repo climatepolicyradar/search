@@ -850,6 +850,50 @@ def _transport_giveup_result(name: str, ok: int, missing: int) -> feeder.FeedRes
     return result
 
 
+@pytest.mark.parametrize(
+    "feed_results_errors,feed_results_exceptions,expected_state",
+    [
+        pytest.param([], [], "success", id="clean-run"),
+        pytest.param(
+            [_missing_records_result("a.jsonl", ok=10, missing=1)],
+            [],
+            "warn",
+            id="missing-only-within-tolerance",
+        ),
+        pytest.param(
+            [
+                _missing_records_result(
+                    "a.jsonl",
+                    ok=10,
+                    missing=feeder._VESPA_MISSING_REPSPONSES_TOLERANCE + 1,
+                )
+            ],
+            [],
+            "fail",
+            id="missing-only-exceeds-tolerance",
+        ),
+        pytest.param(
+            [_transport_giveup_result("a.jsonl", ok=10, missing=1)],
+            [],
+            "fail",
+            id="transport-giveup-regardless-of-count",
+        ),
+        pytest.param(
+            [], [RuntimeError("boom")], "fail", id="any-raised-exception"
+        ),
+        pytest.param(
+            [_missing_records_result("a.jsonl", ok=10, missing=1)],
+            [RuntimeError("boom")],
+            "fail",
+            id="missing-and-raised-is-still-fail",
+        ),
+    ],
+)
+def test_get_flow_state(feed_results_errors, feed_results_exceptions, expected_state):
+    flow_state = feeder._get_flow_state(feed_results_errors, feed_results_exceptions)
+    assert flow_state.state == expected_state
+
+
 class _FakeFuture:
     """What `feed_batch.submit` hands back, wrapping one batch's outcome."""
 
