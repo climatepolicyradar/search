@@ -164,7 +164,7 @@ as missing client-side. Fixed in
 2026-10-08, but not yet in a released `vespa-cli` build as of 2026-10-21 (latest
 is v8.763.13, which predates the fix) — `VESPA_CLI_VERSION` in
 `vespa-feeder/Dockerfile` still pins 8.675.23. Once a release containing the fix
-ships, bump that version and remove `_KNOWN_MISSING_RECORDS_BUG_NOTE` in
+ships, bump that version and remove `_VESPA_MISSING_REPSPONSES_NOTE` in
 `vespa_feeder.py` (it's already wired into both the run-summary artifact and the
 `VespaFeederFailed`/Slack message, so no further diagnosis should be needed
 until then — but re-verify a few "missing" counts for real after the bump before

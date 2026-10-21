@@ -731,7 +731,7 @@ def vespa_feeder(
             extra_note = ""
         elif flow_state.has_feeder_errors:
             extra_note = (
-                "Transport layer gave up for some records (no HTTP response "
+                " Transport layer gave up for some records (no HTTP response "
                 "received) - a different failure mode than the known "
                 "response-race bug, don't assume this is benign."
             )
