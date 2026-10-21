@@ -1679,6 +1679,20 @@ def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
     )
 
 
+def test_msm_keeps_a_phrase_only_match(vespa_app: Vespa):
+    """A quoted-only query has no free text for MSM to measure, so it must not drop anything."""
+    ids = _msm_corpus(vespa_app)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
+    results = engine.search(
+        query='"parametric insurance"',
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+
+    assert ids["passage"] in {document.id for document in results.results}
+
+
 # endregion Minimum Should Match (MSM)
 
 

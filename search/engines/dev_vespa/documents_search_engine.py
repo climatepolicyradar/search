@@ -236,7 +236,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.total_target_hits = total_target_hits
         self.exact_weight = exact_weight
 
-    def _msm_request_fields(self, query: str | None) -> dict[str, float]:
+    def _msm_request_fields(self, free_text: str) -> dict[str, float]:
         """
         The ``query(msm)`` input, for every query that must see the same document set.
 
@@ -245,12 +245,14 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         are separate Vespa queries, and a facet counted over a wider set than the
         results is the inconsistency FUS-475 was about.
 
-        Also empty when there is no query text. MSM is a rule about how many of
+        Also empty when there is no free text. MSM is a rule about how many of
         the query's terms a document must cover, and a filters-only browse has
         none - `coverage()` is 0 for every document, so any threshold above 0
-        would empty the whole corpus.
+        would empty the whole corpus. The same holds for a query that is only
+        quoted phrases: they match the `*_not_stemmed` fields, which `coverage()`
+        does not measure.
         """
-        if self.msm <= 0.0 or not query:
+        if self.msm <= 0.0 or not free_text:
             return {}
         return {"input.query(msm)": self.msm}
 
@@ -340,7 +342,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "ranking.profile": self.ranking_profile,
         }
         request_body.update(sort_overrides)
-        request_body.update(self._msm_request_fields(query))
+        request_body.update(self._msm_request_fields(free_text))
 
         if free_text:
             normalized_free_text = _normalize_currency_symbols(free_text)
@@ -568,7 +570,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
-            **self._msm_request_fields(query),
+            **self._msm_request_fields(free_text),
         }
         if free_text:
             request_body["query"] = free_text
@@ -648,7 +650,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
-            **self._msm_request_fields(query),
+            **self._msm_request_fields(free_text),
         }
         if free_text:
             request_body["query"] = free_text

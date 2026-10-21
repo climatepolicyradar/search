@@ -950,6 +950,7 @@ def test_document_search_engine_forwards_target_hits() -> None:
 def _document_search_request_body(
     engine: DevVespaDocumentSearchEngine,
     order_by: list[OrderBy] = [],  # noqa: B006 - read-only, never mutated
+    query: str = "parametric insurance act",
 ) -> dict:
     """Run a text search against a mocked Vespa and return the body it sent."""
     with patch.object(
@@ -958,7 +959,7 @@ def _document_search_request_body(
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
-            query="parametric insurance act",
+            query=query,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=order_by,
         )
@@ -1032,6 +1033,40 @@ def test_msm_reaches_aggregations_and_facets() -> None:
         body = call.kwargs["request_body"]
         assert body["input.query(msm)"] == 0.6
         assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
+
+
+def test_msm_is_off_for_a_phrase_only_query() -> None:
+    """
+    A quoted-only query has no free text, so `coverage()` is 0 for every document.
+
+    Sending `query(msm)` would drop the whole corpus - every quoted search on the
+    site returned nothing once the frontend started sending msm.
+    """
+    engine = _document_engine(msm=0.6)
+
+    body = _document_search_request_body(engine, query='"net zero"')
+
+    assert "input.query(msm)" not in body
+
+    with patch.object(
+        documents_search_engine,
+        "execute_vespa_query",
+        return_value={"root": {"children": []}},
+    ) as mock_execute:
+        engine.aggregations(query='"net zero"')
+        engine.labels_type_facets(query='"net zero"')
+
+    for call in mock_execute.call_args_list:
+        assert "input.query(msm)" not in call.kwargs["request_body"]
+
+
+def test_msm_still_applies_to_free_text_beside_a_phrase() -> None:
+    """Free text next to a phrase still has terms for `coverage()` to measure."""
+    engine = _document_engine(msm=0.6)
+
+    body = _document_search_request_body(engine, query='UK "net zero"')
+
+    assert body["input.query(msm)"] == 0.6
 
 
 @pytest.mark.parametrize("msm", [-0.1, 1.1, 2.0])
