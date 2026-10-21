@@ -209,9 +209,8 @@ _VESPA_MISSING_REPSPONSES_NOTE = (
     "https://github.com/vespa-engine/vespa/pull/38152, not yet in a released "
     "vespa-cli build as of 2026-10-21). A compressed request can race a pooled "
     "buffer reused for the next document, so a write that actually succeeded "
-    "can still get reported as missing. Every occurrence checked so far "
-    "(2026-10-18, 2026-10-20) turned out to be present in Vespa - see "
-    ".claude/skills/prefect-vespa-feed-debug/SKILL.md Step 4 before assuming "
+    "can still get reported as missing."
+    "@see: .claude/skills/prefect-vespa-feed-debug/SKILL.md Step 4 before assuming "
     "real data loss."
 )
 
