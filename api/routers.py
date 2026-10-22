@@ -28,6 +28,7 @@ from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
 )
+from search.label import LabelSearchResult
 from search.log import get_logger
 from search.passage import Passage
 
@@ -300,7 +301,7 @@ def read_documents(
 
 @router.get(
     "/labels",
-    response_model=SearchResponse[DataInLabel],
+    response_model=SearchResponse[LabelSearchResult],
     responses=SEARCH_RESPONSES,
 )
 def read_labels(
@@ -350,7 +351,7 @@ def read_labels(
         results.total_size,
     )
 
-    return SearchResponse[DataInLabel](
+    return SearchResponse[LabelSearchResult](
         total_size=results.total_size,
         page=0,
         page_size=0,
