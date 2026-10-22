@@ -6,7 +6,6 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from search.data_in_models import Label as DataInLabel
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
@@ -20,6 +19,7 @@ from search.engines.vespa_query.filters import (
     _build_filter_query,
 )
 from search.engines.vespa_query.query_text_modifiers import _strip_quotes
+from search.label import LabelSearchResult
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -33,10 +33,10 @@ labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
 }
 
 
-class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]):
+class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchResult]):
     """Search engine for labels in dev Vespa."""
 
-    model_class = DataInLabel
+    model_class = LabelSearchResult
 
     def __init__(self, settings: Settings, debug: bool = False) -> None:
         self.debug = debug
@@ -50,7 +50,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
         order_by: list[OrderBy],  # noqa: ARG002
         filters: Filter | None = None,
         label_type: str | None = None,
-    ) -> ListResponse[DataInLabel]:
+    ) -> ListResponse[LabelSearchResult]:
         """Fetch a list of relevant label search results."""
         if query:
             query = _strip_quotes(query)
@@ -95,7 +95,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
             request_body=request_body,
             request_context="labels.search",
         )
-        labels: list[DataInLabel] = []
+        labels: list[LabelSearchResult] = []
         debug_info: list[dict[str, Any]] = []
 
         for hit in response.get("root", {}).get("children", []):
@@ -111,6 +111,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
                 "id": fields.get("id"),
                 "type": fields.get("type"),
                 "value": fields.get("value"),
+                "alternative_labels": alternative_labels,
                 "labels": [
                     {
                         "type": relationship.get("relationship"),
@@ -125,7 +126,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[DataInLabel]
                 ],
             }
             try:
-                label = DataInLabel.model_validate(label_data)
+                label = LabelSearchResult.model_validate(label_data)
             except ValidationError:
                 logger.warning("Label fields are invalid for hit id=%r", hit.get("id"))
                 continue
