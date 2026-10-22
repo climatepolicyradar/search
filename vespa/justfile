@@ -54,6 +54,10 @@ deploy:
     cp -R ./app/. "$build_dir"
     sed -E -i.bak 's/[[:space:]]+deploy:[a-zA-Z]+="[^"]*"//g' "$build_dir/services.xml"
     rm -f "$build_dir/services.xml.bak"
+    perl -0pi -e '
+        s#(<container id="default".*?<nodes count="\d+">)#$1\n            <jvm allocated-memory="50%"/>#s;
+        s#</content>#    <config name="vespa.config.content.stor-filestor">\n            <num_threads>32</num_threads>\n            <async_operation_throttler>\n                <type>UNLIMITED</type>\n            </async_operation_throttler>\n        </config>\n        <config name="vespa.config.search.core.proton">\n            <indexing>\n                <optimize>LATENCY</optimize>\n            </indexing>\n        </config>\n        <engine>\n            <proton>\n                <sync-transactionlog>false</sync-transactionlog>\n                <tuning>\n                    <searchnode>\n                        <feeding>\n                            <concurrency>1.0</concurrency>\n                        </feeding>\n                    </searchnode>\n                </tuning>\n            </proton>\n        </engine>\n    </content>#;
+    ' "$build_dir/services.xml"
     uv run vespa deploy "$build_dir" --target http://localhost:19071/ --wait 300
 
 extract: \
