@@ -460,7 +460,7 @@ PassageMsmQuery = Annotated[
 
 
 @router.get(
-    "/passages/within",
+    "/passages:within",
     response_model=SearchResponse[Passage],
     responses=SEARCH_RESPONSES,
 )
