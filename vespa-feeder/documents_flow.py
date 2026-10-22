@@ -9,6 +9,14 @@ from vespa_feeder import (
 
 from prefect import flow
 
+# A clean run normally finishes in well under an hour (documents is a much
+# smaller corpus than passages - hundreds of thousands of docs vs. ~10M+
+# passage records). A wedged feed_batch worker leaves the run in `Running`
+# forever instead of failing - this bounds the worst case so
+# on_failure/on_crashed still fire instead of costing days. See
+# .claude/skills/prefect-vespa-feed-debug/SKILL.md.
+_FLOW_TIMEOUT_SECONDS = 3 * 60 * 60
+
 
 def _principal_id_from_document_source(document_source: dict) -> str | None:
     """
@@ -89,6 +97,7 @@ def derive_principal_id(record: dict) -> dict:
     description="Feed documents JSONL from S3 into Vespa, deriving principal_id per record",
     task_runner=task_runner(max_workers=4),
     log_prints=True,
+    timeout_seconds=_FLOW_TIMEOUT_SECONDS,
     on_completion=[SlackNotify.on_success],
     on_failure=[SlackNotify.on_failure],
     on_crashed=[SlackNotify.on_crashed],

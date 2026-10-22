@@ -192,12 +192,80 @@ class FeedResult:
 
 _GIVING_UP_RE = re.compile(r"^feed: (.+) for put (\S+): giving up", re.MULTILINE)
 
+# Every occurrence checked so far (2026-10-18, 2026-10-20) topped out at 4
+# missing in a run and turned out to be present in Vespa - see
+# _VESPA_MISSING_REPSPONSES_NOTE. This gives a comfortable margin above that
+# while still catching a run where "missing" genuinely means something
+# different (much larger scale, or a distinct bug wearing the same shape).
+# TODO: remove this, _VESPA_MISSING_REPSPONSES_NOTE and the branch in
+# vespa_feed that uses them once VESPA_CLI_VERSION in Dockerfile is bumped to
+# a release containing the fix - then re-verify a handful of "missing" counts
+# for real before trusting this is fully resolved.
+_VESPA_MISSING_REPSPONSES_TOLERANCE = 10
+
+_VESPA_MISSING_REPSPONSES_NOTE = (
+    "**Likely cause:** known upstream `vespa feed` bug - "
+    "https://github.com/vespa-engine/vespa/issues/37880 (fixed via "
+    "https://github.com/vespa-engine/vespa/pull/38152, not yet in a released "
+    "vespa-cli build as of 2026-10-21). A compressed request can race a pooled "
+    "buffer reused for the next document, so a write that actually succeeded "
+    "can still get reported as missing."
+    "@see: .claude/skills/prefect-vespa-feed-debug/SKILL.md Step 4 before assuming "
+    "real data loss."
+)
+
 
 def _parse_failed_documents(stderr: str) -> list[FailedDocument]:
     return [
         FailedDocument(doc_id=giving_up_match.group(2), error=giving_up_match.group(1))
         for giving_up_match in _GIVING_UP_RE.finditer(stderr)
     ]
+
+
+def _total_missing_responses(results: list["FeedResult"]) -> int:
+    return sum(r.operation_count - r.ok_count for r in results)
+
+
+@dataclass
+class _FlowState:
+    state: str  # "fail" | "warn" | "success"
+    total_missing_responses: int
+    has_exceptions: bool
+    has_feeder_errors: bool
+    missing_responses_exceeds_tolerance: bool
+
+
+def _get_flow_state(
+    feed_results_errors: list["FeedResult"],
+    feed_results_exceptions: list[BaseException],
+) -> _FlowState:
+    has_exceptions = bool(feed_results_exceptions)
+    has_feeder_errors = any(r.feeder_error_count > 0 for r in feed_results_errors)
+
+    # we sometimes get variance in the fed vs OK count - these are silent,
+    # with some known vespa bugs that can cause them. We add a tolerance on
+    # when to error based on what we have seen in production to avoid alert
+    # fatigue, but warn if any are missing.
+    total_missing_responses = _total_missing_responses(feed_results_errors)
+    has_missing = total_missing_responses > 0
+    missing_responses_exceeds_tolerance = (
+        total_missing_responses > _VESPA_MISSING_REPSPONSES_TOLERANCE
+    )
+
+    if has_exceptions or has_feeder_errors or missing_responses_exceeds_tolerance:
+        state = "fail"
+    elif has_missing:
+        state = "warn"
+    else:
+        state = "success"
+
+    return _FlowState(
+        state=state,
+        total_missing_responses=total_missing_responses,
+        has_exceptions=has_exceptions,
+        has_feeder_errors=has_feeder_errors,
+        missing_responses_exceeds_tolerance=missing_responses_exceeds_tolerance,
+    )
 
 
 def _build_run_summary_markdown(
@@ -208,7 +276,7 @@ def _build_run_summary_markdown(
     total_input = sum(r.input_count for r in successes)
     total_operation = sum(r.operation_count for r in successes)
     total_ok = sum(r.ok_count for r in successes)
-    total_missing = total_operation - total_ok
+    total_missing_responses = _total_missing_responses(successes)
     total_feeder_errors = sum(r.feeder_error_count for r in successes)
     total_throttled = sum(r.throttled_count for r in successes)
     total_other_http_errors = sum(r.other_http_error_count for r in successes)
@@ -231,7 +299,7 @@ def _build_run_summary_markdown(
         f"| Input records | {total_input} |\n"
         f"| Operations | {total_operation} |\n"
         f"| OK | {total_ok} |\n"
-        f"| **Missing (not recovered after retries)** | **{total_missing}** |\n"
+        f"| **Missing (not recovered after retries)** | **{total_missing_responses}** |\n"
         f"| — | — |\n"
         f"| _Transient, self-resolved (no data lost):_ | |\n"
         f"| Transport retries (feeder errors) | {total_feeder_errors} |\n"
@@ -258,6 +326,9 @@ def _build_run_summary_markdown(
                 f"{r.ok_count}/{r.operation_count} | "
                 f"{r.operation_count - r.ok_count} | {sample or '—'} |\n"
             )
+
+    if total_missing_responses:
+        markdown += f"\n{_VESPA_MISSING_REPSPONSES_NOTE}\n"
 
     if exceptions:
         markdown += (
@@ -652,12 +723,44 @@ def vespa_feeder(
             description="Aggregate summary of the vespa-feeder run across all files",
         )
 
-    if feed_results_errors or feed_results_exceptions:
+    flow_state = _get_flow_state(feed_results_errors, feed_results_exceptions)
+
+    if flow_state.state == "fail":
+        if flow_state.has_exceptions:
+            extra_note = ""
+        elif flow_state.has_feeder_errors:
+            extra_note = (
+                " Transport layer gave up for some records (no HTTP response "
+                "received) - a different failure mode than the known "
+                "response-race bug, don't assume this is benign."
+            )
+        elif flow_state.missing_responses_exceeds_tolerance:
+            extra_note = (
+                f" {flow_state.total_missing_responses} missing exceeds the "
+                f"known bug's observed range "
+                f"(<= {_VESPA_MISSING_REPSPONSES_TOLERANCE}) - treat as a new "
+                "issue, don't assume this is the known-benign pattern."
+            )
+        else:
+            extra_note = ""
+
         raise VespaFeederFailed(
             f"vespa_feed: of {len(feed_results) + len(feed_results_exceptions)} "
-            f"batch(es), {len(feed_results_errors)} lost records and "
+            f"batch(es), {flow_state.total_missing_responses} lost records and "
             f"{len(feed_results_exceptions)} raised. See the "
-            "vespa-feeder-run-summary artifact and per-batch error logs above.",
+            "vespa-feeder-run-summary artifact and per-batch error logs "
+            f"above.{extra_note}",
             feed_results_errors,
             feed_results_exceptions,
+        )
+    elif flow_state.state == "warn":
+        # Downgrade rather than fail: raising here trains people to ignore
+        # on_failure Slack alerts, and every occurrence checked so far was
+        # confirmed harmless (see _VESPA_MISSING_REPSPONSES_NOTE). Full
+        # detail is still in the artifact published above.
+        run_logger.warning(
+            f"vespa_feed: {flow_state.total_missing_responses} record(s) missing "
+            f"across {len(feed_results_errors)} batch(es), 0 raised - within the "
+            f"known bug's observed range (<= {_VESPA_MISSING_REPSPONSES_TOLERANCE}), "
+            f"not failing the run. {_VESPA_MISSING_REPSPONSES_NOTE}"
         )
