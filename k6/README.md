@@ -51,6 +51,9 @@ k6/
         labels/
           index.ts                # GET /search/labels (base query)
           filter-combinations.ts  # GET /search/labels?type=/filters=/page_token/page_size
+        labels-taxonomy/
+          index.ts                # GET /search/labels-taxonomy, cross-checked against
+                                   # GET /search/documents?filters= per label
 ```
 
 Every file in a route directory tests that one route — co-locating them means
@@ -145,6 +148,12 @@ combined) instead of sweeping. Its `load` thresholds are backed by real data:
 data until now — see the comment in that file and
 `k6/docs/load-threshold-methodology.md`.
 
+`labels-taxonomy/index.ts` has no `load` profile and never will: it's a
+correctness sweep (does every taxonomy label in `GET /search/labels-taxonomy`
+filter to at least one real document via `GET /search/documents?filters=`), run
+once per taxonomy entry, not a repeated/ramped request pattern — there's no
+capacity ceiling to find for a one-shot sweep.
+
 ## Metric tag naming: `name`
 
 Every `http.get` call passes an explicit `tags: { name: ... }`. Without it, k6
@@ -176,13 +185,14 @@ target instead) — it runs on `workflow_dispatch` (on demand) and, as a reusabl
 workflow, right after `deploy-api` succeeds in `merge_to_main.yml`, so a
 regression is flagged post-deploy rather than blocking the merge.
 
-The workflow has one job per `routes/<resource>/` group (currently just
-`smoke-documents`, scoped to `k6/tests/smoke-load/routes/documents/**/*.ts`)
-rather than one job covering all of `routes/`. Each job reports to its own
+The workflow runs one job per `routes/<resource>/` group, via a
+`strategy.matrix` over
+`resource: [documents, passages, labels, labels-taxonomy]` — each matrix value
+scopes `run-k6-action` to `k6/tests/smoke-load/routes/<resource>/**/*.ts` —
+rather than one job covering all of `routes/`. Each resource reports to its own
 Grafana Cloud k6 project — see the Grafana section below for why. Adding a new
-resource (e.g. passages, when that story lands) means adding a new
-`smoke-<resource>` job with its own path glob and project secret, not editing
-the existing one.
+resource means adding it to the matrix, the `case` in "Resolve project ID" that
+maps it to its secret, and the secret itself (below), not adding a new job.
 
 ## Grafana
 
@@ -202,12 +212,12 @@ the action is a wrapper over the same underlying k6 binary and behaviour.
 
 Each `routes/<resource>/` group reports to its own Grafana Cloud k6 project,
 rather than all of `search-api` sharing one. `search-api` currently serves
-`documents`, `passages`, and `labels` from one deployed service, but nothing
-here assumes that stays true — if a resource is ever split out into its own
-deployed API, its k6 results are already isolated in their own project rather
-than needing to be untangled out of a shared one after the fact. The cost is a
-little duplication today (one project, one secret, for `documents` alone),
-traded for not having to migrate dashboards/history later if the split happens.
+`documents`, `passages`, `labels`, and `labels-taxonomy` from one deployed
+service, but nothing here assumes that stays true — if a resource is ever split
+out into its own deployed API, its k6 results are already isolated in their own
+project rather than needing to be untangled out of a shared one after the fact.
+The cost is a little duplication today (one project, one secret, per resource),
+traded for not having to migrate dashboards/history later if a split happens.
 
 Requires these repo secrets. None exist yet as of writing — someone with Grafana
 admin access needs to generate them (Testing & synthetics → Performance →
@@ -219,12 +229,14 @@ personal token, since this is for CI, not an individual):
 - `K6_CLOUD_STACK_ID` — the numeric ID of the CPR Grafana Cloud stack (visible
   on the stack's Details page in the Cloud Portal — distinct from the stack slug
   that appears in the Grafana URL). Also shared.
-- `K6_CLOUD_<RESOURCE>_PROJECT_ID` — one per resource group (currently just
-  `K6_CLOUD_DOCUMENTS_PROJECT_ID`), the Grafana Cloud k6 project that resource's
-  runs report under. A Stack-level token must specify a project on every run, so
-  this isn't optional. Create the project first in Grafana (Testing & synthetics
-  → Performance → Projects → new project, named after the resource, e.g.
-  `documents`) — its ID only exists once the project does.
+- `K6_CLOUD_<RESOURCE>_PROJECT_ID` — one per resource group
+  (`K6_CLOUD_DOCUMENTS_PROJECT_ID`, `K6_CLOUD_PASSAGES_PROJECT_ID`,
+  `K6_CLOUD_LABELS_PROJECT_ID`, `K6_CLOUD_LABELS_TAXONOMY_PROJECT_ID`), the
+  Grafana Cloud k6 project that resource's runs report under. A Stack-level
+  token must specify a project on every run, so this isn't optional. Create the
+  project first in Grafana (Testing & synthetics → Performance → Projects → new
+  project, named after the resource, e.g. `documents`) — its ID only exists once
+  the project does.
 
 Until these secrets are set, the `k6 smoke tests` workflow will fail at the
 `run-k6-action` step with an authentication error — this is expected and does

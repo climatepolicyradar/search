@@ -70,7 +70,7 @@ const PROFILES = {
 // k6 requires `options` to be a named export — this is how it reads VU/
 // iteration config for the run, not a convention we chose.
 export const options = resolveProfile(
-  "documents: taxonomy filter coverage",
+  "labels-taxonomy: filter coverage",
   PROFILES,
 );
 
