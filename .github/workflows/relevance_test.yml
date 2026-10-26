@@ -7,31 +7,26 @@ on:
     branches: [tv/relevance-tests-gha]
 
 permissions:
+  actions: read
   id-token: write
   contents: read
 
 jobs:
   relevance_test:
+    name: relevance_test (${{ matrix.suite }})
     runs-on: ubuntu-latest
     environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - documents
+          - passages
+          - labels
 
     steps:
-      - name: Free disk space
-        run: sudo rm -rf /opt/hostedtoolcache /usr/share/dotnet /usr/local/lib/android /opt/ghc
-
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Set up Just
-        uses: extractions/setup-just@v4
-        with: { just-version: 1.58.0 }
-
-      - name: Set up AWS
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-production-github-actions-relevance-tests
-          role-session-name: GitHub_Relevance_Tests
-          aws-region: eu-west-1
 
       - uses: astral-sh/setup-uv@v7
         with: { enable-cache: true }
@@ -40,18 +35,8 @@ jobs:
         with:
           python-version-file: pyproject.toml
 
-      - name: Install Vespa CLI
+      - name: Run relevance tests
+        working-directory: ./relevance_tests
         env:
-          VESPA_CLI_VERSION: 8.250.43
-        run: |
-          mkdir vespa-cli
-          curl -fsSL https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz | \
-            tar -zxf - -C vespa-cli --strip-component=1
-          echo "$GITHUB_WORKSPACE/vespa-cli/bin" >> $GITHUB_PATH
-
-      - name: Install dependencies
-        run: just install
-
-      - name: Load Vespa
-        working-directory: ./vespa
-        run: just load
+          DISABLE_WANDB: "1"
+        run: uv run python -m test_${{ matrix.suite }}
