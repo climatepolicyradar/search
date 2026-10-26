@@ -24,13 +24,15 @@ import requests as req
 from cpr_contracts import (
     Document,
     DocumentLabelRelationship,
+    DocumentRelationship,
+    DocumentWithoutDocumentRelationships,
     Label,
 )
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
-from search.engines import Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DevVespaPassageSearchEngine,
     FieldFilter,
@@ -1225,3 +1227,158 @@ def test_passage_fields_tokenize_differently(vespa_app: Vespa):
     ], f"content_not_stemmed must be lowercased only: {literal}"
 
 # endregion Topic ranking
+
+
+
+def _member_of(principal_id: str) -> DocumentRelationship:
+    return DocumentRelationship(
+        type="member_of",
+        value=DocumentWithoutDocumentRelationships(id=principal_id, title="Principal"),
+    )
+
+
+def _feed_scoped_corpus(
+    vespa_app: Vespa,
+    passages: list[tuple[str, str, str, bool]],
+) -> None:
+    for principal_id in ("p-a", "p-b"):
+        principal = DocumentFactory.build(id=principal_id, labels=[_principal_label()])
+        _feed_document(vespa_app, principal)
+    for member_id, principal_id in (("m-a1", "p-a"), ("m-a2", "p-a"), ("m-b1", "p-b")):
+        member = DocumentFactory.build(
+            id=member_id,
+            labels=[],
+            documents=[_member_of(principal_id)],
+        )
+        _feed_document(vespa_app, member)
+    for block_id, document_id, content, has_topic in passages:
+        _feed_passage_with_labels(
+            vespa_app,
+            block_id,
+            document_id=document_id,
+            labels=[_concept_label(_CLIMATE_FINANCE)] if has_topic else [],
+            content=content,
+        )
+
+
+_TOPIC_FILTERS = Filter(
+    op="or",
+    filters=[
+        FieldFilter(
+            field="labels.value.id",
+            op="contains",
+            value=_CLIMATE_FINANCE,
+        ),
+    ],
+)
+
+_SCOPE_PASSAGES = [
+    ("tb-text", "m-a1", "Nature-based solutions restore wetlands.", False),
+    ("tb-topic", "m-a2", "Targets for twenty thirty.", True),
+    ("tb-neither", "m-a1", "Unrelated budget tables.", False),
+    ("tb-other", "m-b1", "Nature-based solutions abroad.", True),
+]
+
+
+@pytest.mark.parametrize(
+    ("document_ids", "expected"),
+    [
+        (["p-a"], ["tb-text", "tb-topic"]),
+        (["m-a1"], ["tb-text"]),
+        (["m-a2"], ["tb-topic"]),
+        (["m-a1", "m-b1"], ["tb-other", "tb-text"]),
+    ],
+)
+def test_passage_search_within_ors_query_and_filters(
+    vespa_app: Vespa,
+    document_ids: list[str],
+    expected: list[str],
+) -> None:
+    _feed_scoped_corpus(vespa_app, _SCOPE_PASSAGES)
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+
+    response = engine.search_within(
+        document_ids=document_ids,
+        query="nature-based solutions",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=_TOPIC_FILTERS,
+    )
+
+    assert sorted(p.text_block_id for p in response.results) == expected
+
+
+_MSM_PASSAGES = [
+    ("tb-full", "m-a1", "Coastal wetland restoration protects towns.", False),
+    ("tb-partial", "m-a1", "Coastal towns keep growing.", False),
+    ("tb-topic", "m-a2", "Budget tables for the year.", True),
+    ("tb-topic-partial", "m-a2", "Coastal budget lines.", True),
+]
+
+
+@pytest.mark.parametrize(
+    ("query", "msm", "order_by", "expected"),
+    [
+        (
+            "coastal wetland restoration",
+            0.9,
+            [],
+            ["tb-full", "tb-topic", "tb-topic-partial"],
+        ),
+        (
+            "coastal wetland restoration",
+            0.0,
+            [],
+            ["tb-full", "tb-partial", "tb-topic", "tb-topic-partial"],
+        ),
+        (
+            "coastal wetland restoration",
+            0.9,
+            [OrderBy(field="idx", direction="asc")],
+            ["tb-full", "tb-topic", "tb-topic-partial"],
+        ),
+        (
+            '"coastal wetland" restoration',
+            0.9,
+            [],
+            ["tb-full", "tb-topic", "tb-topic-partial"],
+        ),
+    ],
+)
+def test_labeled_msm_drops_low_coverage_text_but_keeps_filter_matches(
+    vespa_app: Vespa,
+    query: str,
+    msm: float,
+    order_by: list[OrderBy],
+    expected: list[str],
+) -> None:
+    _feed_scoped_corpus(vespa_app, _MSM_PASSAGES)
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, debug=True)
+
+    response = engine.search_within(
+        document_ids=["p-a"],
+        query=query,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=order_by,
+        filters=_TOPIC_FILTERS,
+        msm=msm,
+    )
+
+    found = sorted(p.text_block_id for p in response.results)
+    assert found == expected, engine.last_debug_info
+
+
+def test_labeled_msm_without_filters_is_plain_msm_on_the_text(vespa_app: Vespa) -> None:
+    _feed_scoped_corpus(vespa_app, _MSM_PASSAGES)
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, debug=True)
+
+    response = engine.search_within(
+        document_ids=["p-a"],
+        query="coastal wetland restoration",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        msm=0.9,
+    )
+
+    found = sorted(p.text_block_id for p in response.results)
+    assert found == ["tb-full"], engine.last_debug_info

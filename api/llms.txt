@@ -126,6 +126,18 @@ or a case's filings, or on `document_id` for one member:
   {"field": "principal_id", "op": "contains", "value": "Sabin.family.12165.0"}]}
 ```
 
+To find the passages that explain why a document matched, use
+`/search/passages:within?document_id=...`. Repeat `document_id` to search
+several documents; a Principal's id covers all its members. Here `query` and `filters` are ORed rather than ANDed: a
+passage matches if it contains the search text *or* satisfies the filters, and
+passages doing both rank higher. `msm` applies to the text only - a passage
+matching `filters` is kept whatever its coverage of the query:
+
+```
+/search/passages:within?document_id=Sabin.family.12165.0&query=nature-based+solutions&msm=0.7
+  &filters={"op":"or","filters":[{"field":"labels.value.id","op":"contains","value":"concept::Q1651"}]}
+```
+
 ### Same-element matching on passages and labels
 
 On `/passages` and `/labels`, `labels` is an array of structs, and `labels.*`
