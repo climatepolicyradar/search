@@ -9,6 +9,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from api.download import DEFAULT_MAX_RESULTS, fetch_documents_for_download, generate_csv
 from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
+from api.geographies_taxonomy import geographies_taxonomy
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
@@ -380,6 +381,38 @@ def read_labels_taxonomy():
         next_page=None,
         previous_page=None,
         results=labels_taxonomy,
+        aggregations=None,
+    )
+
+    
+GeographyType = Literal["region", "country", "subdivision"]
+
+
+@router.get("/geographies-taxonomy", response_model=SearchResponse[DataInLabel])
+def read_geographies_taxonomy(
+    geography_type: list[GeographyType] | None = Query(None, alias="type"),
+):
+    """
+    Lists the region/country/subdivision hierarchy from a hardcoded list.
+
+    @see: ./geographies_taxonomy.py for the reasons why.
+    """
+    logger.info("Getting geographies_taxonomy (type=%r)", geography_type)
+
+    results = (
+        [label for label in geographies_taxonomy if label.type in geography_type]
+        if geography_type
+        else geographies_taxonomy
+    )
+
+    return SearchResponse[DataInLabel](
+        total_size=len(results),
+        page=1,
+        page_size=1,
+        total_pages=1,
+        next_page=None,
+        previous_page=None,
+        results=results,
         aggregations=None,
     )
 
