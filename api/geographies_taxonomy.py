@@ -2068,7 +2068,7 @@ subdivision_US_GA = Label(
 subdivision_US_GU = Label(
     type="subdivision",
     id="subdivision::US-GU",
-    value="Guam (see also separate entry under GU)",
+    value="Guam",
     labels=[LabelRelationship(type="subconcept_of", value=country_USA)],
 )
 subdivision_US_HI = Label(
