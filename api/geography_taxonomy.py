@@ -2342,6 +2342,36 @@ subdivision_ZA_WC = Label(
     labels=[LabelRelationship(type="subconcept_of", value=country_ZAF)],
 )
 
+# The three below are confirmed in use on valid, published documents but are
+# missing from `published.labels`.
+
+# Not in the Snowflake table; tagged on real, published Sabin litigation docs
+# (e.g. Sabin.family.134140.0, Sabin.family.134136.0).
+subdivision_BR_RN = Label(
+    type="subdivision",
+    id="subdivision::BR-RN",
+    value="Rio Grande do Norte",
+    labels=[LabelRelationship(type="subconcept_of", value=country_BRA)],
+)
+
+# Not in the Snowflake table; tagged on a real, published Sabin litigation doc
+# (Sabin.family.16944.0).
+subdivision_CA_NS = Label(
+    type="subdivision",
+    id="subdivision::CA-NS",
+    value="Nova Scotia",
+    labels=[LabelRelationship(type="subconcept_of", value=country_CAN)],
+)
+
+# Not in the Snowflake table; comes from the admin service (CCLW/CPR national
+# law documents, e.g. CCLW.family.i00000218.n0000, CPR.family.i00002239.n0000).
+country_XKX = Label(
+    type="country",
+    id="country::XKX",
+    value="Kosovo",
+    labels=[LabelRelationship(type="subconcept_of", value=region_ECS)],
+)
+
 
 geography_taxonomy = [
     region_EAS,
@@ -2735,4 +2765,7 @@ geography_taxonomy = [
     subdivision_ZA_GP,
     subdivision_ZA_NL,
     subdivision_ZA_WC,
+    subdivision_BR_RN,
+    subdivision_CA_NS,
+    country_XKX,
 ]
