@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import StrEnum
 
-from search.data_in_models import Document
+from search.data_in_models import Document, DocumentWithoutRelationships
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter
 
@@ -49,38 +49,78 @@ def _published_date(document: Document) -> str:
     except ValueError:
         return ""
 
-def _labels(label_type: str, document: Document) -> str:
+def _from_labels(
+    *, relationship: str | None = None, label_type: str | None = None
+) -> Callable[[Document], str]:
     """
-    Return joined label values of the same type.
+    Build a column reader: a document in, its label values joined, out.
 
-    A document often carries more than one label of the same type, and the
-    CSV gives each type a single cell, so every value goes in it:
+    A label is attached to a document by a *relationship* and is itself of
+    some *type*, and a column selects on one or the other:
 
-    - _labels("geography", document)  # "Europe & Central Asia; Germany"
-    - _labels("category", document)   # "Policy"
+    - ``relationship="geography"`` spans three label types (country,
+      region, subdivision), and the column wants all of them.
+    - ``label_type="jurisdiction"`` picks one type out of a shared
+      relationship: `jurisdiction`, `principal_law` and `case_category`
+      all arrive under `legal_concept`, and each wants its own column, so
+      selecting by relationship would put all three in all three cells.
 
-    A document with no label of this type gives ``""``, an empty cell.
-    Otherwise one cell's worth of label values, separated by ``"; "``.
+    Passing both narrows on both. A document with no matching label gives
+    ``""``, an empty cell.
     """
-    # Separates the values of a column read from several labels of one type.
+    # Separates the values of a column read from several labels.
     _LABEL_VALUE_SEPARATOR = "; "
 
-    return _LABEL_VALUE_SEPARATOR.join(
-        label.value.value for label in document.labels if label.type == label_type
-    )
+    def read_column(document: Document) -> str:
+        """The matching label values of one document, as one cell's text."""
+        return _LABEL_VALUE_SEPARATOR.join(
+            label.value.value
+            for label in document.labels
+            if (relationship is None or label.type == relationship)
+            and (label_type is None or label.value.type == label_type)
+        )
 
-def _collection_title(document: Document) -> str:
-    """The title of the collection this document belongs to, or ``""``."""
+    return read_column
 
+def _from_collection(
+    field: Callable[[DocumentWithoutRelationships], str],
+) -> Callable[[Document], str]:
+    """
+    Build a column reader taking ``field`` off a document's collection.
+
+    The id and the title come from the same relationship, so they share one
+    lookup and differ only in which field they take off it. A document in no
+    collection gives ``""``, an empty cell.
+    """
     # The relationship from a principal to the collection it belongs to. The
     # reverse (`has_member`) points at the principal's own documents, not a
-    # collection, so we can't get a collection title that way.
+    # collection, so we can't reach a collection that way.
     _COLLECTION_RELATIONSHIP = "member_of"
 
-    for relationship in document.documents:
-        if relationship.type == _COLLECTION_RELATIONSHIP:
-            return relationship.value.title
-    return ""
+    def read_column(document: Document) -> str:
+        """``field`` off this document's collection, or ``""`` if it has none."""
+        for relationship in document.documents:
+            if relationship.type == _COLLECTION_RELATIONSHIP:
+                return field(relationship.value)
+        return ""
+
+    return read_column
+
+def _from_attribute(name: str) -> Callable[[Document], str]:
+    """
+    Build a column reader returning freeform attribute ``name`` as text.
+
+    `attributes` values may be numbers or booleans as well as strings, and
+    every cell is text, so the value is coerced. An absent attribute gives
+    ``""`` rather than failing the download.
+    """
+
+    def read_column(document: Document) -> str:
+        """The document's ``name`` attribute as text, or ``""`` if absent."""
+        value = document.attributes.get(name)
+        return "" if value is None else str(value)
+
+    return read_column
 
 ########################################################################
 # Theme/schema specific
@@ -102,12 +142,12 @@ DEFAULT_SCHEMA: CsvSchema = {
     "ID": lambda document: document.id,
     "TITLE": lambda document: document.title,
     "DESCRIPTION": lambda document: document.description or "",
-    "GEOGRAPHIES": lambda document: _labels("geography", document),
+    "GEOGRAPHIES": _from_labels(relationship="geography"),
     "PUBLISHED_DATE": _published_date,
-    "ENTITY_TYPE": lambda document: _labels("entity_type", document),
-    "CATEGORY": lambda document: _labels("category", document),
-    "PROVIDER": lambda document: _labels("provider", document),
-    "COLLECTION_TITLE": _collection_title,
+    "ENTITY_TYPE": _from_labels(relationship="entity_type"),
+    "CATEGORY": _from_labels(relationship="category"),
+    "PROVIDER": _from_labels(relationship="provider"),
+    "COLLECTION_TITLE": _from_collection(lambda collection: collection.title),
 }
 
 class Theme(StrEnum):
@@ -121,12 +161,42 @@ class Theme(StrEnum):
 # CPR, CCLW and MCF currently want identical columns, so they share one
 # schema. To give one of them its own columns, add an entry to `SCHEMAS`
 # below.
+# CCC is a case-level download, so it shares only the columns every app
+# has. The family/document-level ones (ENTITY_TYPE, CATEGORY, PROVIDER)
+# are constant across every case here and are dropped; COLLECTION_TITLE
+# is named BUNDLE_TITLE.
+#
+# TODO: FUS-819 - URL and BUNDLE_URL
+# Both belong here but are absent until the data behind them exists.
+# BUNDLE_URL cannot be built from a search result at all: `/collections/
+# [id]` resolves a slug, and no collection slug exists in Vespa.
+CCC_SCHEMA: CsvSchema = {
+    "ID": lambda document: document.id,
+    "TITLE": lambda document: document.title,
+    "DESCRIPTION": lambda document: document.description or "",
+    "BUNDLE_ID": _from_collection(lambda collection: collection.id),
+    "BUNDLE_TITLE": _from_collection(lambda collection: collection.title),
+    "GEOGRAPHIES": _from_labels(relationship="geography"),
+    "PUBLISHED_DATE": _published_date,
+    # Read from an attribute, not the `status` relationship: every case
+    # also carries `status::Principal`, so the relationship would give
+    # "Principal; Decided".
+    "CASE_STATUS": _from_attribute("case_status"),
+    "CASE_NUMBER": _from_attribute("identifier::case_number"),
+    "AT_ISSUE": _from_attribute("core_object"),
+    "ORIGINAL_CASE_NAME": _from_attribute("original_case_name"),
+    # These three share the `legal_concept` relationship, so each selects
+    # on its own label type.
+    "PRINCIPAL_LAWS": _from_labels(label_type="principal_law"),
+    "CASE_CATEGORIES": _from_labels(label_type="case_category"),
+    "JURISDICTIONS": _from_labels(label_type="jurisdiction"),
+}
+
 SCHEMAS: dict[Theme, CsvSchema] = {
     Theme.CPR: DEFAULT_SCHEMA,
     Theme.CCLW: DEFAULT_SCHEMA,
     Theme.MCF: DEFAULT_SCHEMA,
-    # TODO FUS-675: CCC's columns are different.
-    Theme.CCC: DEFAULT_SCHEMA, 
+    Theme.CCC: CCC_SCHEMA,
 }
 
 def schema_for_theme(theme: Theme | None) -> CsvSchema:
