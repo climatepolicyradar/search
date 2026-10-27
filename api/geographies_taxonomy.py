@@ -2326,7 +2326,7 @@ subdivision_US_WY = Label(
 subdivision_ZA_GP = Label(
     type="subdivision",
     id="subdivision::ZA-GP",
-    value="Guateng",
+    value="Gauteng",
     labels=[LabelRelationship(type="subconcept_of", value=country_ZAF)],
 )
 subdivision_ZA_NL = Label(
