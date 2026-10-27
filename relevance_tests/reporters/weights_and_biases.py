@@ -20,21 +20,25 @@ def init(dataset_name: str) -> Run:
 def report[O](run: Run, report: EvaluationReport[str, O, dict[str, str]]) -> None:
     rows: list[dict[str, Any]] = []
     for case in report.cases:
-        rows.append({
-            "case": case.name,
-            "query": case.inputs,
-            **(case.metadata or {}),
-            **{name: result.value for name, result in case.scores.items()},
-            **{name: result.value for name, result in case.assertions.items()},
-        })
+        rows.append(
+            {
+                "case": case.name,
+                "query": str(case.inputs),
+                **(case.metadata or {}),
+                **{name: result.value for name, result in case.scores.items()},
+                **{name: result.value for name, result in case.assertions.items()},
+            }
+        )
 
     for failure in report.failures:
-        rows.append({
-            "case": failure.name,
-            "query": failure.inputs,
-            **(failure.metadata or {}),
-            "error": failure.error_message,
-        })
+        rows.append(
+            {
+                "case": failure.name,
+                "query": str(failure.inputs),
+                **(failure.metadata or {}),
+                "error": failure.error_message,
+            }
+        )
 
     columns = list(dict.fromkeys(key for row in rows for key in row))
     data: list[Iterable[Any]] = [[row.get(col) for col in columns] for row in rows]

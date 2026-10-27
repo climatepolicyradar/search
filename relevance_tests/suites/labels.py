@@ -13,7 +13,7 @@ from search.label import LabelSearchResult
 
 
 @dataclass
-class LabelMatches(Matches[LabelSearchResult]):
+class LabelMatches[I](Matches[I, LabelSearchResult]):
     def text(self, result: LabelSearchResult) -> str:
         """The label's value and alternative labels, one per line."""
         return "\n".join([result.value, *result.alternative_labels])
@@ -356,7 +356,7 @@ for query in ["air pollution", "air pollution risk", "pollution risk", "air pol"
 
 
 def run_search(input: str) -> ListResponse[LabelSearchResult]:
-    return DevVespaLabelSearchEngine(settings=settings, debug=True).search(
+    return DevVespaLabelSearchEngine(settings=settings).search(
         order_by=[OrderBy(field="relevance", direction="desc")],
         pagination=Pagination(page_token=1, page_size=20),
         query=input,

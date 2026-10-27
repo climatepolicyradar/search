@@ -6,14 +6,14 @@ from relevance_tests.evaluators.evaluator import HasId, HasResults
 
 
 @dataclass
-class Precision(Evaluator[str, HasResults[HasId], object]):
+class Precision[I](Evaluator[I, HasResults[HasId], object]):
     expected: list[str]
     k: int = 10
     threshold: float = 1.0
 
     def evaluate(
         self,
-        ctx: EvaluatorContext[str, HasResults[HasId], object],
+        ctx: EvaluatorContext[I, HasResults[HasId], object],
     ) -> dict[str, EvaluationReason]:
         """Score the share of the top k results that are expected IDs."""
         top_k = [result.id for result in ctx.output.results[: self.k]]

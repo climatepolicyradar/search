@@ -1,36 +1,72 @@
 from contextlib import AbstractContextManager, nullcontext
 from datetime import datetime
-from enum import StrEnum
+from enum import StrEnum, auto
 from typing import Annotated, Any
 
 import typer
 from pydantic_evals.reporting import EvaluationReport
 from wandb import Run
 
-from relevance_tests import evals_labels
 from relevance_tests.reporters import html_report, weights_and_biases
+from relevance_tests.suites import documents, labels, passages, principals
 from search.config import TEST_RESULTS_DIR
 
 app = typer.Typer()
 
 
 class Suite(StrEnum):
-    labels = "labels"
+    labels = auto()
+    documents = auto()
+    document_comparisons = auto()
+    principals = auto()
+    principal_comparisons = auto()
+    passages = auto()
+    passage_comparisons = auto()
 
 
 class Report(StrEnum):
-    html = "html"
-    wandb = "wandb"
+    html = auto()
+    wandb = auto()
 
 
 def run_suite(
     suite: Suite,
-) -> EvaluationReport[str, Any, dict[str, str]]:
+) -> EvaluationReport[Any, Any, dict[str, str]]:
     match suite:
         case Suite.labels:
-            return evals_labels.dataset.evaluate_sync(
-                evals_labels.run_search,
-                max_concurrency=8,
+            return labels.dataset.evaluate_sync(
+                labels.run_search,
+                max_concurrency=4,
+            )
+        case Suite.documents:
+            return documents.dataset.evaluate_sync(
+                documents.run_search,
+                max_concurrency=4,
+            )
+        case Suite.document_comparisons:
+            return documents.comparisons.evaluate_sync(
+                documents.run_pair,
+                max_concurrency=4,
+            )
+        case Suite.principals:
+            return principals.dataset.evaluate_sync(
+                principals.run_search,
+                max_concurrency=4,
+            )
+        case Suite.principal_comparisons:
+            return principals.comparisons.evaluate_sync(
+                principals.run_pair,
+                max_concurrency=4,
+            )
+        case Suite.passages:
+            return passages.dataset.evaluate_sync(
+                passages.run_search,
+                max_concurrency=4,
+            )
+        case Suite.passage_comparisons:
+            return passages.comparisons.evaluate_sync(
+                passages.run_pair,
+                max_concurrency=4,
             )
 
 
@@ -47,7 +83,7 @@ def _init_wandb(
     return nullcontext()
 
 
-def _write_html(report: EvaluationReport[str, Any, dict[str, str]]) -> None:
+def _write_html(report: EvaluationReport[Any, Any, dict[str, str]]) -> None:
     name = f"{report.dataset_name or 'report'}_{datetime.now():%Y%m%d_%H%M}.html"
     html_report.report(report, (path := TEST_RESULTS_DIR / name))
     print(f"HTML report written to {path}")

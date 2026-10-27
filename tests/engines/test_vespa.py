@@ -117,7 +117,7 @@ DOCUMENT_ID = "CCLW.document.i00007398.n0000"
 
 
 def _topic(wikibase_id: str) -> FieldFilter:
-    """A topic condition as `search.testcase` builds it."""
+    """A topic condition as `build_topic_filter` in `relevance_tests/suites/documents.py` builds it."""
     return FieldFilter(
         field="labels.value.id", op="contains", value=f"concept::{wikibase_id}"
     )

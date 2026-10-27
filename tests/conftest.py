@@ -8,10 +8,7 @@ from hypothesis import find
 from hypothesis import strategies as st
 from moto import mock_aws
 
-from relevance_tests import TestResult
 from search import Primitive
-from search.identifiers import generate_id
-from search.testcase import RecallTestCase
 from tests.common_strategies import (
     document_strategy,
     label_strategy,
@@ -42,48 +39,12 @@ def ssm_client(mock_aws_creds):
         yield boto3.client("ssm", region_name="eu-west-1")
 
 
-_test_data_cache = {}
-
-
 def _generate_items(strategy, count: int) -> list[Primitive]:
     """Generate a specific number of items using a Hypothesis strategy."""
     return find(
         st.lists(strategy(), min_size=count, max_size=count),
         lambda _: True,
     )
-
-
-@pytest.fixture(scope="session")
-def _generate_test_data() -> dict[str, list[Primitive]]:
-    """Generate default test data once per test session (7 items each)."""
-
-    n_test_items = 7
-
-    if "documents" not in _test_data_cache:
-        _test_data_cache["documents"] = _generate_items(document_strategy, n_test_items)
-    if "passages" not in _test_data_cache:
-        _test_data_cache["passages"] = _generate_items(passage_strategy, n_test_items)
-    if "labels" not in _test_data_cache:
-        _test_data_cache["labels"] = _generate_items(label_strategy, n_test_items)
-    return _test_data_cache
-
-
-@pytest.fixture
-def test_documents(_generate_test_data):
-    """Generate a list of Document objects for testing using strategies (default: 7 items)."""
-    return _test_data_cache["documents"]
-
-
-@pytest.fixture
-def test_passages(_generate_test_data):
-    """Generate a list of Passage objects for testing using strategies (default: 7 items)."""
-    return _test_data_cache["passages"]
-
-
-@pytest.fixture
-def test_labels(_generate_test_data):
-    """Generate a list of Label objects for testing using strategies (default: 7 items)."""
-    return _test_data_cache["labels"]
 
 
 # Parametrizable fixtures for generating specific numbers of items
@@ -134,57 +95,3 @@ def generate_labels():
 
     return _generate
 
-
-@pytest.fixture
-def simple_test_case():
-    """
-    Create a simple TestCase for testing.
-
-    :return: A TestCase instance with basic search parameters
-    :rtype: TestCase
-    """
-    return RecallTestCase(
-        search_terms="climate change",
-        expected_result_ids=["pdhcqueu"],
-        description="Test case for climate change search",
-    )
-
-
-@pytest.fixture
-def another_test_case():
-    """
-    Create a different TestCase for testing comparisons.
-
-    :return: A TestCase instance with different parameters than simple_test_case
-    :rtype: TestCase
-    """
-    return RecallTestCase(
-        search_terms="flood risk",
-        expected_result_ids=["abcdwxyz"],
-        description="Test case for flood risk search",
-    )
-
-
-@pytest.fixture
-def simple_test_result(simple_test_case, test_labels):
-    """
-    Create a simple TestResult for testing.
-
-    Uses a fixed search engine ID and test labels for consistent test behavior.
-
-    :param simple_test_case: A simple test case fixture
-    :type simple_test_case: TestCase
-    :param test_labels: List of test label objects
-    :type test_labels: list[Label]
-    :return: A TestResult instance
-    :rtype: TestResult[Label]
-    """
-    # Create a deterministic engine ID for testing
-    engine_id = generate_id("JSONLabelSearchEngine")
-
-    return TestResult(
-        test_case=simple_test_case,
-        status="passed",
-        search_engine_id=engine_id,
-        search_results=test_labels[:3],  # Use first 3 labels
-    )

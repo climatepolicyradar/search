@@ -9,7 +9,7 @@ from relevance_tests.evaluators.evaluator import HasResults
 
 
 @dataclass
-class Matches[T](Evaluator[str, HasResults[T], object]):
+class Matches[I, T](Evaluator[I, HasResults[T], object]):
     pattern: str
     k: int = 20
     all_or_any: Literal["all", "any"] = "all"
@@ -21,7 +21,7 @@ class Matches[T](Evaluator[str, HasResults[T], object]):
 
     def evaluate(
         self,
-        ctx: EvaluatorContext[str, HasResults[T], object],
+        ctx: EvaluatorContext[I, HasResults[T], object],
     ) -> dict[str, EvaluationReason]:
         """Score the share of the top k results whose text matches the pattern."""
         regex = re.compile(self.pattern)
