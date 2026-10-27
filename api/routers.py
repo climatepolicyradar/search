@@ -9,6 +9,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from api.download import DEFAULT_MAX_RESULTS, fetch_documents_for_download, generate_csv
 from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
+from api.geographies_taxonomy import geographies_taxonomy
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
@@ -28,6 +29,7 @@ from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
 )
+from search.label import LabelSearchResult
 from search.log import get_logger
 from search.passage import Passage
 
@@ -300,7 +302,7 @@ def read_documents(
 
 @router.get(
     "/labels",
-    response_model=SearchResponse[DataInLabel],
+    response_model=SearchResponse[LabelSearchResult],
     responses=SEARCH_RESPONSES,
 )
 def read_labels(
@@ -350,7 +352,7 @@ def read_labels(
         results.total_size,
     )
 
-    return SearchResponse[DataInLabel](
+    return SearchResponse[LabelSearchResult](
         total_size=results.total_size,
         page=0,
         page_size=0,
@@ -379,6 +381,38 @@ def read_labels_taxonomy():
         next_page=None,
         previous_page=None,
         results=labels_taxonomy,
+        aggregations=None,
+    )
+
+    
+GeographyType = Literal["region", "country", "subdivision"]
+
+
+@router.get("/geographies-taxonomy", response_model=SearchResponse[DataInLabel])
+def read_geographies_taxonomy(
+    geography_type: list[GeographyType] | None = Query(None, alias="type"),
+):
+    """
+    Lists the region/country/subdivision hierarchy from a hardcoded list.
+
+    @see: ./geographies_taxonomy.py for the reasons why.
+    """
+    logger.info("Getting geographies_taxonomy (type=%r)", geography_type)
+
+    results = (
+        [label for label in geographies_taxonomy if label.type in geography_type]
+        if geography_type
+        else geographies_taxonomy
+    )
+
+    return SearchResponse[DataInLabel](
+        total_size=len(results),
+        page=1,
+        page_size=1,
+        total_pages=1,
+        next_page=None,
+        previous_page=None,
+        results=results,
         aggregations=None,
     )
 
@@ -427,6 +461,96 @@ def read_passages(
     logger.info(
         "Success: passage search request completed "
         "(query=%r, results=%s, total_size=%s)",
+        query,
+        len(results.results),
+        results.total_size,
+    )
+
+    return SearchResponse[Passage](
+        total_size=results.total_size,
+        page=0,
+        page_size=0,
+        total_pages=0,
+        next_page=None,
+        previous_page=None,
+        results=results.results,
+        aggregations=None,
+    )
+
+
+PassageMsmQuery = Annotated[
+    float,
+    Query(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum Should Match for `query`: the fraction of its terms a passage "
+            "must contain to match on the text. A passage matching `filters` is "
+            "kept regardless. 0 (default) leaves every term optional; 1 requires all."
+        ),
+    ),
+]
+
+
+@router.get(
+    "/passages:within",
+    response_model=SearchResponse[Passage],
+    responses=SEARCH_RESPONSES,
+)
+def read_passages_within(
+    filters: PassagesFilterDep,
+    document_id: list[str] = Query(
+        ...,
+        min_length=1,
+        description=(
+            "Search the passages of these documents. A Principal's id covers "
+            "every one of its members."
+        ),
+    ),
+    query: str | None = Query(None, description="What are you looking for?"),
+    msm: PassageMsmQuery = 0.0,
+    pagination: Pagination = Depends(pagination),
+    order_by: list[OrderBy] = Depends(passages_order_by),
+    bolding: bool = False,
+):
+    logger.info(
+        "Searching passages within documents (document_ids=%r, query=%r, "
+        "msm=%s, page_token=%s, page_size=%s, bolding=%s, filters_present=%s)",
+        document_id,
+        query,
+        msm,
+        pagination.page_token,
+        pagination.page_size,
+        bolding,
+        filters is not None,
+    )
+
+    engine = DevVespaPassageSearchEngine(settings=settings)
+    try:
+        results = engine.search_within(
+            document_ids=document_id,
+            query=query,
+            pagination=pagination,
+            order_by=order_by,
+            filters=filters,
+            msm=msm,
+            bolding=bolding,
+        )
+    except Exception:
+        logger.exception(
+            "Error: passages within documents search request failed "
+            "(document_ids=%r, query=%r, page_token=%s, page_size=%s)",
+            document_id,
+            query,
+            pagination.page_token,
+            pagination.page_size,
+        )
+        raise
+
+    logger.info(
+        "Success: passages within documents search request completed "
+        "(document_ids=%r, query=%r, results=%s, total_size=%s)",
+        document_id,
         query,
         len(results.results),
         results.total_size,

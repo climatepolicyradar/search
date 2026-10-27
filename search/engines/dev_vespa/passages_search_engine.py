@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from search.acronyms import expansion_patterns
@@ -16,6 +17,7 @@ from search.engines.vespa_query.filters import (
     ArrayStructField,
     Filter,
     _build_filter_query,
+    _build_filter_yql,
     _topic_ids_from_filters,
 )
 from search.engines.vespa_query.query_text_modifiers import (
@@ -48,17 +50,33 @@ _DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
 # profile to query terms when the query names the field; through a fieldset it stems
 # with its fallback English stemmer instead.
 _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
-# How much an exact match on the unstemmed query is weighted/boosted - see `_free_text_yql`. See PR #651 for how this was chosen.
+# How much an exact match on the unstemmed query is weighted/boosted - see `_free_text_match`. See PR #651 for how this was chosen.
 _DEFAULT_EXACT_WEIGHT = 0.1
 
 
-def _passage_phrase_yql(count: int) -> str:
+_SCOPE_YQL = "(document_id in (@document_ids) or principal_id in (@document_ids))"
+
+
+def _msm_request_fields(msm: float, free_text: str) -> dict[str, float]:
+    if msm <= 0.0 or not free_text:
+        return {}
+    return {"input.query(msm)": msm}
+
+
+def _passage_phrase_clauses(count: int) -> list[str]:
     """One in-order phrase clause per quoted phrase."""
-    return "".join(
-        " and content_not_stemmed contains "
+    return [
+        "content_not_stemmed contains "
         f"({{grammar.composite:'phrase'}}text(@exact_phrase_{i}))"
         for i in range(count)
-    )
+    ]
+
+
+def _and(clauses: list[str]) -> str | None:
+    if not clauses:
+        return None
+    joined = " and ".join(clauses)
+    return f"({joined})" if len(clauses) > 1 else joined
 
 
 def _passage_summary(*, debug: bool, bolding: bool, has_phrases: bool) -> str:
@@ -114,7 +132,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             "exact_weight": self.exact_weight,
         }
 
-    def _free_text_yql(self) -> str:
+    def _free_text_match(self) -> str:
         """
         The free-text half of the YQL.
 
@@ -125,11 +143,58 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         """
         match = f'({{grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query))'
         if self.exact_weight is None:
-            return f" and {match}"
+            return match
         return (
-            f" and rank({match}, "
+            f"rank({match}, "
             '({defaultIndex: "exact", grammar: "any"}userInput(@query)))'
         )
+
+    def _where_yql(
+        self,
+        free_text: str,
+        phrases: list[str],
+        filters: Filter | None,
+    ) -> str:
+        filter_query = (
+            ""
+            if filters is None
+            else _build_filter_query(
+                filter_group=filters,
+                field_map=passages_filter_field_to_vespa_field_map,
+                struct_map=passages_filter_struct_field_to_vespa_field_map,
+            )
+        )
+        text_query = "".join(
+            f" and {clause}" for clause in self._text_clauses(free_text, phrases)
+        )
+        return f"true{filter_query}{text_query}"
+
+    def _scoped_where_yql(
+        self,
+        free_text: str,
+        phrases: list[str],
+        filters: Filter | None,
+    ) -> str:
+        filter_yql = (
+            None
+            if filters is None
+            else _build_filter_yql(
+                filter_group=filters,
+                field_map=passages_filter_field_to_vespa_field_map,
+                struct_map=passages_filter_struct_field_to_vespa_field_map,
+            )
+        )
+        text_yql = _and(self._text_clauses(free_text, phrases))
+        matched = (
+            [f'({text_yql} or labeled({filter_yql}, "filters", 1.0))']
+            if filter_yql is not None and text_yql is not None
+            else [yql for yql in (text_yql, filter_yql) if yql]
+        )
+        return " and ".join(["true", _SCOPE_YQL, *matched])
+
+    def _text_clauses(self, free_text: str, phrases: list[str]) -> list[str]:
+        free_text_clauses = [self._free_text_match()] if free_text else []
+        return [*free_text_clauses, *_passage_phrase_clauses(len(phrases))]
 
     def search(
         self,
@@ -141,20 +206,8 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
         free_text, phrases = _parse_query(query) if query else ("", [])
-
-        where = "true"
-
-        if filters is not None:
-            where += _build_filter_query(
-                filters,
-                field_map=passages_filter_field_to_vespa_field_map,
-                struct_map=passages_filter_struct_field_to_vespa_field_map,
-            )
-
+        where = self._where_yql(free_text, phrases, filters)
         yql = f"select * from sources passages where {where}"
-        if free_text:
-            yql += self._free_text_yql()
-        yql += _passage_phrase_yql(len(phrases))
 
         logger.info(
             "🔎 Passage search query built (query=%r, free_text=%r, phrases=%r, yql=%s)",
@@ -164,6 +217,84 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             yql,
         )
 
+        request_body = self._request_body(
+            yql=yql,
+            free_text=free_text,
+            phrases=phrases,
+            filters=filters,
+            pagination=pagination,
+            order_by=order_by,
+            bolding=bolding,
+        )
+
+        return self._execute(
+            request_body=request_body,
+            free_text=free_text,
+            bolding=bolding,
+            request_context="passages.search",
+        )
+
+    def search_within(
+        self,
+        document_ids: list[str],
+        query: str | None,
+        pagination: Pagination,
+        order_by: list[OrderBy],
+        filters: Filter | None = None,
+        msm: float = 0.0,
+        bolding: bool = False,
+    ) -> ListResponse[Passage]:
+        """
+        Find passages within a set of parent documents.
+
+        This differs from `search` in that it ORs filters and the search query and supports MSM.
+        This is because a _document_ with e.g. "climate change" and topic:cop does not imply
+        the presence of a _passage_ with both set, hence wanting OR based searches for passages.
+        """
+
+        free_text, phrases = _parse_query(query) if query else ("", [])
+        where = self._scoped_where_yql(free_text, phrases, filters)
+        yql = f"select * from sources passages where {where}"
+
+        logger.info(
+            "🔎 Scoped passage search query built "
+            "(document_ids=%r, query=%r, msm=%s, yql=%s)",
+            document_ids,
+            query,
+            msm,
+            yql,
+        )
+
+        request_body = self._request_body(
+            yql=yql,
+            free_text=free_text,
+            phrases=phrases,
+            filters=filters,
+            pagination=pagination,
+            order_by=order_by,
+            bolding=bolding,
+        )
+
+        request_body["document_ids"] = ",".join(json.dumps(i) for i in document_ids)
+        request_body.update(_msm_request_fields(msm, free_text))
+
+        return self._execute(
+            request_context="passages.search_within",
+            request_body=request_body,
+            free_text=free_text,
+            bolding=bolding,
+        )
+
+    def _request_body(
+        self,
+        yql: str,
+        free_text: str,
+        phrases: list[str],
+        filters: Filter | None,
+        pagination: Pagination,
+        order_by: list[OrderBy],
+        bolding: bool,
+    ) -> dict[str, Any]:
         sort_overrides = _ranking_overrides_for_passage_order_by(order_by)
 
         request_body: dict[str, Any] = {
@@ -197,12 +328,20 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         # it has to be turned off explicitly.
         if not bolding:
             request_body["presentation.bolding"] = "false"
+        return request_body
 
+    def _execute(
+        self,
+        request_body: dict[str, Any],
+        free_text: str,
+        bolding: bool,
+        request_context: str,
+    ) -> ListResponse[Passage]:
         response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
-            request_context="passages.search",
+            request_context=request_context,
         )
         passages: list[Passage] = []
         debug_info: list[dict[str, Any]] = []

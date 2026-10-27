@@ -950,6 +950,7 @@ def test_document_search_engine_forwards_target_hits() -> None:
 def _document_search_request_body(
     engine: DevVespaDocumentSearchEngine,
     order_by: list[OrderBy] = [],  # noqa: B006 - read-only, never mutated
+    query: str = "parametric insurance act",
 ) -> dict:
     """Run a text search against a mocked Vespa and return the body it sent."""
     with patch.object(
@@ -958,7 +959,7 @@ def _document_search_request_body(
         return_value={"root": {"children": []}},
     ) as mock_execute:
         engine.search(
-            query="parametric insurance act",
+            query=query,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=order_by,
         )
@@ -1032,6 +1033,40 @@ def test_msm_reaches_aggregations_and_facets() -> None:
         body = call.kwargs["request_body"]
         assert body["input.query(msm)"] == 0.6
         assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
+
+
+def test_msm_is_off_for_a_phrase_only_query() -> None:
+    """
+    A quoted-only query has no free text, so `coverage()` is 0 for every document.
+
+    Sending `query(msm)` would drop the whole corpus - every quoted search on the
+    site returned nothing once the frontend started sending msm.
+    """
+    engine = _document_engine(msm=0.6)
+
+    body = _document_search_request_body(engine, query='"net zero"')
+
+    assert "input.query(msm)" not in body
+
+    with patch.object(
+        documents_search_engine,
+        "execute_vespa_query",
+        return_value={"root": {"children": []}},
+    ) as mock_execute:
+        engine.aggregations(query='"net zero"')
+        engine.labels_type_facets(query='"net zero"')
+
+    for call in mock_execute.call_args_list:
+        assert "input.query(msm)" not in call.kwargs["request_body"]
+
+
+def test_msm_still_applies_to_free_text_beside_a_phrase() -> None:
+    """Free text next to a phrase still has terms for `coverage()` to measure."""
+    engine = _document_engine(msm=0.6)
+
+    body = _document_search_request_body(engine, query='UK "net zero"')
+
+    assert body["input.query(msm)"] == 0.6
 
 
 @pytest.mark.parametrize("msm", [-0.1, 1.1, 2.0])
@@ -1560,3 +1595,74 @@ def test_document_search_absent_description_survives_exact_bolding() -> None:
         )
 
     assert result.results[0].description is None
+
+
+
+_QUERY_YQL = (
+    'rank(({grammar.profile: "passage_analysis_kstem"}userInput(@query)),'
+    ' ({defaultIndex: "exact", grammar: "any"}userInput(@query)))'
+)
+_TOPIC_YQL = 'labels contains sameElement(id contains "concept::Q1")'
+
+
+def _passage_engine() -> DevVespaPassageSearchEngine:
+    return DevVespaPassageSearchEngine(
+        settings=Settings(
+            vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+            vespa_read_token="test-read-token",  # nosec B106
+        ),
+    )
+
+
+def test_passage_search_and_query_and_filters() -> None:
+    filters = Filter(
+        op="or",
+        filters=[
+            FieldFilter(
+                field="labels.value.id",
+                op="contains",
+                value="concept::Q1",
+            ),
+        ],
+    )
+
+    where = _passage_engine()._where_yql("flood", [], filters)
+
+    assert where == f"true and {_TOPIC_YQL} and {_QUERY_YQL}"
+
+
+def test_passage_search_within_ors_query_and_filters() -> None:
+    filters = Filter(
+        op="or",
+        filters=[
+            FieldFilter(
+                field="labels.value.id",
+                value="concept::Q1",
+                op="contains",
+            ),
+        ],
+    )
+
+    where = _passage_engine()._scoped_where_yql("flood", [], filters)
+
+    assert where == (
+        "true"
+        " and (document_id in (@document_ids) or principal_id in (@document_ids))"
+        f' and ({_QUERY_YQL} or labeled({_TOPIC_YQL}, "filters", 1.0))'
+    )
+
+
+@pytest.mark.parametrize(
+    ("msm", "free_text", "expected"),
+    [
+        (0.7, "flood", {"input.query(msm)": 0.7}),
+        (0.0, "flood", {}),
+        (0.7, "", {}),
+    ],
+)
+def test_passage_msm_is_only_sent_with_free_text(
+    msm: float,
+    free_text: str,
+    expected: dict[str, float],
+) -> None:
+    assert passages_search_engine._msm_request_fields(msm, free_text) == expected

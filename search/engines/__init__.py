@@ -10,7 +10,7 @@ from search.data_in_models import Label as LabelModel
 from search.document import Document
 from search.engines.vespa_query.client import VespaError
 from search.identifiers import Identifier, generate_id
-from search.label import Label
+from search.label import Label, LabelSearchResult
 from search.passage import Passage
 
 if TYPE_CHECKING:
@@ -18,7 +18,9 @@ if TYPE_CHECKING:
 
 __all__ = ["VespaError"]
 
-TModel = TypeVar("TModel", Label, Passage, Document, DocumentModel, LabelModel)
+TModel = TypeVar(
+    "TModel", Label, Passage, Document, DocumentModel, LabelModel, LabelSearchResult
+)
 
 
 class ListResponse[T](BaseModel):
