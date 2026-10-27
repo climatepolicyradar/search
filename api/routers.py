@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from api.download import DEFAULT_MAX_RESULTS, fetch_documents_for_download, generate_csv
+from api.download import fetch_documents_for_download, generate_csv
 from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
@@ -103,11 +103,11 @@ def download_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     order_by: list[OrderBy] = Depends(documents_order_by),
     max_results: int = Query(
-        DEFAULT_MAX_RESULTS,
+        500,
         gt=0,
         description=(
             "Maximum number of documents to include, most-relevant first. "
-            f"Defaults to {DEFAULT_MAX_RESULTS}."
+            "Defaults to 500."
         ),
     ),
     msm: MsmQuery = _DEFAULT_MSM,

@@ -142,30 +142,8 @@ def schema_for_theme(theme: Theme | None) -> CsvSchema:
     return SCHEMAS.get(theme, DEFAULT_SCHEMA)
 
 ########################################################################
-# Building the CSV
+# Getting the data
 ########################################################################
-
-DEFAULT_MAX_RESULTS = 500
-
-def build_csv_rows(
-    documents: list[Document], theme: Theme | None = None
-) -> tuple[list[str], list[dict[str, str]]]:
-    """
-    Build the CSV header and rows for ``documents``.
-
-    :param documents: Document search results, already capped to the
-        request's ``max_results``.
-    :param theme: The app the download was requested from, which selects
-        the column set.
-    :return: ``(header, rows)`` - ``rows`` is one ``dict`` per document,
-        keyed by every column in ``header``.
-    """
-    schema = schema_for_theme(theme)
-    rows = [
-        {name: read(document) for name, read in schema.items()}
-        for document in documents
-    ]
-    return list(schema), rows
 
 def fetch_documents_for_download(
     engine: DevVespaDocumentSearchEngine,
@@ -217,6 +195,30 @@ def fetch_documents_for_download(
         if len(page) < page_size:
             break
     return results[:max_results]
+
+########################################################################
+# Building the CSV
+########################################################################
+
+def build_csv_rows(
+    documents: list[Document], theme: Theme | None = None
+) -> tuple[list[str], list[dict[str, str]]]:
+    """
+    Build the CSV header and rows for ``documents``.
+
+    :param documents: Document search results, already capped to the
+        request's ``max_results``.
+    :param theme: The app the download was requested from, which selects
+        the column set.
+    :return: ``(header, rows)`` - ``rows`` is one ``dict`` per document,
+        keyed by every column in ``header``.
+    """
+    schema = schema_for_theme(theme)
+    rows = [
+        {name: read(document) for name, read in schema.items()}
+        for document in documents
+    ]
+    return list(schema), rows
 
 def generate_csv(
     documents: list[Document], theme: Theme | None = None
