@@ -8,13 +8,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from api.download import (
-    DEFAULT_SCHEMA,
-    SCHEMAS,
-    Theme,
+    COLUMN_READERS,
+    DEFAULT_COLUMNS,
+    Column,
     build_csv_rows,
     fetch_documents_for_download,
     generate_csv,
-    schema_for_theme,
+    resolve_columns,
 )
 from search.data_in_models import (
     Document,
@@ -43,14 +43,14 @@ def _member_of(id_: str, title: str) -> DocumentRelationship:
     )
 
 
-def test_header_is_the_agreed_fixed_column_set_in_order() -> None:
+def test_default_columns_are_the_agreed_set_in_order() -> None:
     """
-    The mapping sheet pins both the names and the order.
+    The mapping sheet pins both the names and the order of the default set.
 
     URL and COLLECTION_DESCRIPTION are deliberately absent: they have no
     data behind them yet and are added, populated, by FUS-819/FUS-820.
     """
-    assert list(DEFAULT_SCHEMA) == [
+    assert [str(column) for column in DEFAULT_COLUMNS] == [
         "ID",
         "TITLE",
         "DESCRIPTION",
@@ -65,8 +65,8 @@ def test_header_is_the_agreed_fixed_column_set_in_order() -> None:
 
 def test_url_and_collection_description_columns_are_not_present() -> None:
     """Both wait on upstream data; see FUS-819 and FUS-820."""
-    assert "URL" not in list(DEFAULT_SCHEMA)
-    assert "COLLECTION_DESCRIPTION" not in list(DEFAULT_SCHEMA)
+    assert "URL" not in set(Column)
+    assert "COLLECTION_DESCRIPTION" not in set(Column)
 
 
 def test_header_does_not_vary_with_the_documents_returned() -> None:
@@ -89,7 +89,9 @@ def test_header_does_not_vary_with_the_documents_returned() -> None:
     rich_header, _ = build_csv_rows([rich])
     empty_header, _ = build_csv_rows([])
 
-    assert sparse_header == rich_header == empty_header == list(DEFAULT_SCHEMA)
+    assert sparse_header == rich_header == empty_header == [
+        str(column) for column in DEFAULT_COLUMNS
+    ]
 
 
 def test_row_maps_every_column_from_its_source_field() -> None:
@@ -240,7 +242,7 @@ def test_freeform_attributes_cannot_inject_or_overwrite_a_column() -> None:
 
     header, rows = build_csv_rows([doc])
 
-    assert header == list(DEFAULT_SCHEMA)
+    assert header == [str(column) for column in DEFAULT_COLUMNS]
     assert rows[0]["TITLE"] == "Real Title"
     assert "attributes.status" not in rows[0]
 
@@ -260,7 +262,7 @@ def test_one_row_per_document_in_order() -> None:
 def test_empty_documents_returns_the_header_and_no_rows() -> None:
     header, rows = build_csv_rows([])
 
-    assert header == list(DEFAULT_SCHEMA)
+    assert header == [str(column) for column in DEFAULT_COLUMNS]
     assert rows == []
 
 
@@ -279,7 +281,7 @@ def test_generate_csv_produces_parseable_csv_with_header_and_rows() -> None:
 
     reader = csv.DictReader(io.StringIO(csv_text))
     rows = list(reader)
-    assert reader.fieldnames == list(DEFAULT_SCHEMA)
+    assert reader.fieldnames == [str(column) for column in DEFAULT_COLUMNS]
     assert rows[0]["ID"] == "doc-1"
     assert rows[0]["PUBLISHED_DATE"] == "2021-01-01"
     assert rows[0]["CATEGORY"] == "Law"
@@ -290,54 +292,81 @@ def test_generate_csv_with_no_documents_produces_just_a_header() -> None:
 
     reader = csv.DictReader(io.StringIO(csv_text))
     assert list(reader) == []
-    assert reader.fieldnames == list(DEFAULT_SCHEMA)
+    assert reader.fieldnames == [str(column) for column in DEFAULT_COLUMNS]
 
 
-def test_cpr_cclw_and_mcf_share_one_schema() -> None:
+def test_every_column_has_a_reader() -> None:
     """
-    They happen to want identical columns, so they resolve to one object.
+    A column the API offers must never fall through to a `KeyError`.
 
-    This is a fact about the current mapping, not a constraint: giving any
-    of them its own columns means adding an entry to `SCHEMAS`.
+    The enum is the published vocabulary and the registry is what backs
+    it, so the two drifting apart would let a caller ask for a name the
+    API accepts and then fail mid-download.
     """
-    assert schema_for_theme(Theme.CPR) is schema_for_theme(Theme.CCLW)
-    assert schema_for_theme(Theme.CCLW) is schema_for_theme(Theme.MCF)
-    assert schema_for_theme(Theme.CPR) is DEFAULT_SCHEMA
+    assert set(COLUMN_READERS) == set(Column)
 
 
-def test_every_theme_resolves_to_a_schema() -> None:
-    """A theme the API accepts must never fall through to a KeyError."""
-    for theme in Theme:
-        assert theme in SCHEMAS
+def test_default_columns_are_all_real_columns() -> None:
+    """The fallback set cannot name a column that has no reader."""
+    assert set(DEFAULT_COLUMNS) <= set(Column)
 
 
-def test_an_unknown_theme_falls_back_to_the_default_schema() -> None:
-    """A caller that sends no theme, or a stale one, still gets a CSV."""
-    assert schema_for_theme(None) is DEFAULT_SCHEMA
+def test_no_columns_falls_back_to_the_default_set() -> None:
+    """A caller that names no columns still gets a usable CSV."""
+    assert resolve_columns(None) == DEFAULT_COLUMNS
+    assert resolve_columns([]) == DEFAULT_COLUMNS
 
 
-def test_theme_selects_the_header(monkeypatch) -> None:
-    """`build_csv_rows` emits the columns of the theme it is given."""
-    narrow = {"ID": lambda document: document.id}
-    monkeypatch.setitem(SCHEMAS, Theme.CPR, narrow)
+def test_requested_columns_determine_both_names_and_order() -> None:
+    """
+    The caller's order is the CSV's order, not the enum's.
 
+    Apps want the same columns in different orders, so the header must
+    follow the request rather than a fixed declaration order.
+    """
     header, rows = build_csv_rows(
-        [Document(id="doc-1", title="t")], theme=Theme.CPR
+        [Document(id="doc-1", title="t")],
+        columns=[Column.TITLE, Column.ID],
     )
 
-    assert header == ["ID"]
-    assert rows == [{"ID": "doc-1"}]
+    assert header == ["TITLE", "ID"]
+    assert rows == [{"TITLE": "t", "ID": "doc-1"}]
 
 
-def test_schema_columns_determine_both_names_and_order() -> None:
+def test_a_repeated_column_appears_once_in_its_first_position() -> None:
     """
-    A schema is an ordered mapping, so one declaration pins both.
+    A duplicate cannot produce two identically-named columns.
 
-    CCC needs different columns in a different order, so the two must not
-    drift apart into a separate name list and order list.
+    `csv.DictWriter` writes one key per field name, so a repeated column
+    would emit a duplicate header and shift the remaining columns out of
+    the order the caller asked for.
     """
-    header, _ = build_csv_rows([])
-    assert header == list(DEFAULT_SCHEMA)
+    header, rows = build_csv_rows(
+        [Document(id="doc-1", title="t")],
+        columns=[Column.TITLE, Column.ID, Column.TITLE],
+    )
+
+    assert header == ["TITLE", "ID"]
+    assert rows == [{"TITLE": "t", "ID": "doc-1"}]
+
+
+def test_a_column_name_always_reads_the_same_source() -> None:
+    """
+    One name means one source, whoever asks for it.
+
+    Apps name the same data differently, but the mapping from name to
+    source is the API's and does not vary per caller - so asking for a
+    column alongside different columns cannot change what it contains.
+    """
+    document = Document(id="doc-1", title="t")
+
+    alone, _ = build_csv_rows([document], columns=[Column.ID])
+    with_others, rows = build_csv_rows(
+        [document], columns=[Column.TITLE, Column.ID]
+    )
+
+    assert alone == ["ID"]
+    assert rows[0]["ID"] == "doc-1"
 
 
 def _make_engine(pages: list[list[Document]]) -> MagicMock:

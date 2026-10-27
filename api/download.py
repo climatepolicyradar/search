@@ -1,8 +1,12 @@
 """
 CSV building for `GET /search/documents:download`.
 
-A download's columns are fixed per theme, named and ordered by the
-agreed field mapping:
+A download's columns are chosen by the caller, from a closed vocabulary
+this module defines. The caller sends the column names it wants, in the
+order it wants them; this module owns what each name means.
+
+Column names and their intended per-app sets come from the agreed field
+mapping:
 @see https://docs.google.com/spreadsheets/d/1nc_0WtsU2syWcX-iB9iqW4hEYJAYduLQhW2pV1r0e3I
 
 They are deliberately not derived from whatever attributes and labels
@@ -12,6 +16,9 @@ is what this module contains logic for - is powered by Vespa, but
 `download all data` is powered by Snowflake), so downloads could not be
 relied on to have a stable shape by our users.
 
+The API does not know which app is asking. A caller that wants a
+particular app's column set sends that set; the mapping from app to
+columns lives with the caller, not here.
 """
 
 import csv
@@ -83,63 +90,88 @@ def _collection_title(document: Document) -> str:
     return ""
 
 ########################################################################
-# Theme/schema specific
+# Columns
 ########################################################################
 
-# A schema is an ordered mapping of column name to the function that reads
-# it from a document. Names and order live in one declaration so the two
-# cannot drift apart.
-CsvSchema = Mapping[str, Callable[[Document], str]]
+# What a column reader does: take a document, return one cell's text.
+ColumnReader = Callable[[Document], str]
 
-# Set default schema for all apps.
+
+class Column(StrEnum):
+    """
+    A column a caller may ask for.
+
+    The closed vocabulary of column names. A caller names columns from
+    this enum, so an unknown name is rejected by FastAPI before any
+    Vespa query runs, and the set of valid names is published in the
+    OpenAPI schema rather than having to be known out of band.
+    """
+
+    ID = "ID"
+    TITLE = "TITLE"
+    DESCRIPTION = "DESCRIPTION"
+    GEOGRAPHIES = "GEOGRAPHIES"
+    PUBLISHED_DATE = "PUBLISHED_DATE"
+    ENTITY_TYPE = "ENTITY_TYPE"
+    CATEGORY = "CATEGORY"
+    PROVIDER = "PROVIDER"
+    COLLECTION_TITLE = "COLLECTION_TITLE"
+
+
+# Each column name maps to exactly one reader, so a name always means the
+# same data wherever it is asked for. Two names may read the same source -
+# `COLLECTION_TITLE` and a future `BUNDLE_TITLE` are the same collection
+# field under the name a given app uses for it - but a name never changes
+# what it reads depending on who is asking.
 #
 # TODO: FUS-819 - URL
-# TODO: FUS-820 - COLLECTION_DESCRIPTION 
-# The above fields also belong here but are absent until the data
-# behind them exists. They are left out for now rather than left as
-# empty.
-DEFAULT_SCHEMA: CsvSchema = {
-    "ID": lambda document: document.id,
-    "TITLE": lambda document: document.title,
-    "DESCRIPTION": lambda document: document.description or "",
-    "GEOGRAPHIES": lambda document: _labels("geography", document),
-    "PUBLISHED_DATE": _published_date,
-    "ENTITY_TYPE": lambda document: _labels("entity_type", document),
-    "CATEGORY": lambda document: _labels("category", document),
-    "PROVIDER": lambda document: _labels("provider", document),
-    "COLLECTION_TITLE": _collection_title,
+# TODO: FUS-820 - COLLECTION_DESCRIPTION
+# The above columns also belong here but are absent until the data behind
+# them exists. They are left out for now rather than offered empty.
+COLUMN_READERS: Mapping[Column, ColumnReader] = {
+    Column.ID: lambda document: document.id,
+    Column.TITLE: lambda document: document.title,
+    Column.DESCRIPTION: lambda document: document.description or "",
+    Column.GEOGRAPHIES: lambda document: _labels("geography", document),
+    Column.PUBLISHED_DATE: _published_date,
+    Column.ENTITY_TYPE: lambda document: _labels("entity_type", document),
+    Column.CATEGORY: lambda document: _labels("category", document),
+    Column.PROVIDER: lambda document: _labels("provider", document),
+    Column.COLLECTION_TITLE: _collection_title,
 }
 
-class Theme(StrEnum):
-    """An app a download can be requested from."""
+# Sent when a caller names no columns. Keeping a default means an ad-hoc
+# caller - a person with curl, or an agent reading `llms.txt` - gets a
+# usable CSV without first having to discover the column vocabulary.
+DEFAULT_COLUMNS: tuple[Column, ...] = (
+    Column.ID,
+    Column.TITLE,
+    Column.DESCRIPTION,
+    Column.GEOGRAPHIES,
+    Column.PUBLISHED_DATE,
+    Column.ENTITY_TYPE,
+    Column.CATEGORY,
+    Column.PROVIDER,
+    Column.COLLECTION_TITLE,
+)
 
-    CPR = "cpr"
-    CCLW = "cclw"
-    MCF = "mcf"
-    CCC = "ccc"
 
-# CPR, CCLW and MCF currently want identical columns, so they share one
-# schema. To give one of them its own columns, add an entry to `SCHEMAS`
-# below.
-SCHEMAS: dict[Theme, CsvSchema] = {
-    Theme.CPR: DEFAULT_SCHEMA,
-    Theme.CCLW: DEFAULT_SCHEMA,
-    Theme.MCF: DEFAULT_SCHEMA,
-    # TODO FUS-675: CCC's columns are different.
-    Theme.CCC: DEFAULT_SCHEMA, 
-}
-
-def schema_for_theme(theme: Theme | None) -> CsvSchema:
+def resolve_columns(columns: list[Column] | None) -> tuple[Column, ...]:
     """
-    The schema for ``theme``, falling back to `DEFAULT_SCHEMA`.
+    The columns to emit, in the order they were asked for.
 
-    A caller that sends no theme - or one this API has not heard of, such as
-    a newer app against an older deployment - still gets a usable CSV rather
-    than an error.
+    Duplicates are dropped, keeping each column's first position, so a
+    repeated name cannot produce two identically-named CSV columns (which
+    `csv.DictWriter` would write twice from one key) or shift the rest of
+    the header out of the order the caller asked for.
+
+    :param columns: The caller's columns, or ``None`` when it named none.
+    :return: The resolved columns; `DEFAULT_COLUMNS` when none were named.
     """
-    if theme is None:
-        return DEFAULT_SCHEMA
-    return SCHEMAS.get(theme, DEFAULT_SCHEMA)
+    if not columns:
+        return DEFAULT_COLUMNS
+    return tuple(dict.fromkeys(columns))
+
 
 ########################################################################
 # Getting the data
@@ -201,27 +233,27 @@ def fetch_documents_for_download(
 ########################################################################
 
 def build_csv_rows(
-    documents: list[Document], theme: Theme | None = None
+    documents: list[Document], columns: list[Column] | None = None
 ) -> tuple[list[str], list[dict[str, str]]]:
     """
     Build the CSV header and rows for ``documents``.
 
     :param documents: Document search results, already capped to the
         request's ``max_results``.
-    :param theme: The app the download was requested from, which selects
-        the column set.
+    :param columns: The columns to emit, in order. ``None`` or empty gives
+        `DEFAULT_COLUMNS`.
     :return: ``(header, rows)`` - ``rows`` is one ``dict`` per document,
         keyed by every column in ``header``.
     """
-    schema = schema_for_theme(theme)
+    resolved = resolve_columns(columns)
     rows = [
-        {name: read(document) for name, read in schema.items()}
+        {str(column): COLUMN_READERS[column](document) for column in resolved}
         for document in documents
     ]
-    return list(schema), rows
+    return [str(column) for column in resolved], rows
 
 def generate_csv(
-    documents: list[Document], theme: Theme | None = None
+    documents: list[Document], columns: list[Column] | None = None
 ) -> Iterator[str]:
     """
     Yield CSV text chunks for ``documents``: a header line, then one per row.
@@ -229,7 +261,7 @@ def generate_csv(
     Reuses one ``StringIO`` buffer across rows (``seek(0)`` + ``truncate(0)``
     between writes) rather than allocating a fresh one per row.
     """
-    header, rows = build_csv_rows(documents, theme=theme)
+    header, rows = build_csv_rows(documents, columns=columns)
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=header)
     writer.writeheader()

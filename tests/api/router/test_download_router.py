@@ -149,8 +149,8 @@ def test_download_rejects_out_of_range_msm(document_client, msm) -> None:
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_download_accepts_a_theme_and_uses_its_columns(document_client) -> None:
-    """The theme selects the CSV's column set; see `api.download.SCHEMAS`."""
+def test_download_emits_the_requested_columns_in_order(document_client) -> None:
+    """The caller names the columns and their order; the API supplies them."""
     client, mock_engine = document_client
     mock_engine.search.return_value = ListResponse(
         results=[Document(id="doc-1", title="A Climate Document")],
@@ -159,16 +159,16 @@ def test_download_accepts_a_theme_and_uses_its_columns(document_client) -> None:
     )
 
     response = client.get(
-        "/search/documents:download", params={"query": "toxic", "theme": "cclw"}
+        "/search/documents:download",
+        params=[("query", "toxic"), ("columns", "TITLE"), ("columns", "ID")],
     )
 
     assert response.status_code == HTTPStatus.OK
-    header = response.text.splitlines()[0]
-    assert header.startswith("ID,TITLE,DESCRIPTION")
+    assert response.text.splitlines()[0] == "TITLE,ID"
 
 
-def test_download_without_a_theme_still_returns_a_csv(document_client) -> None:
-    """`theme` is optional, so existing callers keep working."""
+def test_download_without_columns_still_returns_a_csv(document_client) -> None:
+    """`columns` is optional, so an ad-hoc caller gets a usable CSV."""
     client, mock_engine = document_client
     mock_engine.search.return_value = ListResponse(
         results=[Document(id="doc-1", title="A Climate Document")],
@@ -182,18 +182,19 @@ def test_download_without_a_theme_still_returns_a_csv(document_client) -> None:
     assert response.text.splitlines()[0].startswith("ID,TITLE,DESCRIPTION")
 
 
-def test_download_rejects_a_theme_the_api_does_not_know(document_client) -> None:
+def test_download_rejects_a_column_the_api_does_not_know(document_client) -> None:
     """
-    An unknown theme is a client error, not a silent fallback.
+    An unknown column is a client error, not a silent omission.
 
-    `schema_for_theme` falls back for a `None`, but a value that reaches the
-    endpoint and is not a `Theme` means the caller and the API disagree -
-    better to say so than to hand back columns the caller did not ask for.
+    The caller asked for data it expects to find in the file. Dropping the
+    column quietly would hand back a CSV that is missing a column the
+    caller believes it requested, so say so instead.
     """
     client, _ = document_client
 
     response = client.get(
-        "/search/documents:download", params={"query": "toxic", "theme": "nope"}
+        "/search/documents:download",
+        params=[("query", "toxic"), ("columns", "NOPE")],
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
