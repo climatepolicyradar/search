@@ -149,18 +149,10 @@ class Theme(StrEnum):
     MCF = "mcf"
     CCC = "ccc"
 
-# CPR, CCLW and MCF currently want identical columns, so they share one
-# schema. To give one of them its own columns, add an entry to `SCHEMAS`
-# below.
-# CCC is a case-level download, so it shares only the columns every app
-# has. The family/document-level ones (ENTITY_TYPE, CATEGORY, PROVIDER)
-# are constant across every case here and are dropped; COLLECTION_TITLE
-# is named BUNDLE_TITLE.
-#
 # TODO: FUS-819 - URL and BUNDLE_URL
 # Both belong here but are absent until the data behind them exists.
-# BUNDLE_URL cannot be built from a search result at all: `/collections/
-# [id]` resolves a slug, and no collection slug exists in Vespa.
+# BUNDLE_URL cannot be built from a search result at all currently as
+# `/collections/[id]` needs a slug, and no collection slug exists in Vespa.
 CCC_SCHEMA: CsvSchema = {
     "ID": lambda document: document.id,
     "TITLE": lambda document: document.title,
@@ -183,6 +175,9 @@ CCC_SCHEMA: CsvSchema = {
     "JURISDICTIONS": _from_labels(label_type="jurisdiction"),
 }
 
+# CPR, CCLW and MCF currently want identical columns, so they share one
+# schema. To give one of them its own schema, add an entry to `SCHEMAS`
+# below.
 SCHEMAS: dict[Theme, CsvSchema] = {
     Theme.CPR: DEFAULT_SCHEMA,
     Theme.CCLW: DEFAULT_SCHEMA,
