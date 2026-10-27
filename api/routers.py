@@ -384,24 +384,35 @@ def read_labels_taxonomy():
         aggregations=None,
     )
 
+    
+GeographyType = Literal["region", "country", "subdivision"]
+
 
 @router.get("/geographies-taxonomy", response_model=SearchResponse[DataInLabel])
-def read_geographies_taxonomy():
+def read_geographies_taxonomy(
+    geography_type: list[GeographyType] | None = Query(None, alias="type"),
+):
     """
     Lists the region/country/subdivision hierarchy from a hardcoded list.
 
     @see: ./geographies_taxonomy.py for the reasons why.
     """
-    logger.info("Getting geographies_taxonomy")
+    logger.info("Getting geographies_taxonomy (type=%r)", geography_type)
+
+    results = (
+        [label for label in geographies_taxonomy if label.type in geography_type]
+        if geography_type
+        else geographies_taxonomy
+    )
 
     return SearchResponse[DataInLabel](
-        total_size=len(geographies_taxonomy),
+        total_size=len(results),
         page=1,
         page_size=1,
         total_pages=1,
         next_page=None,
         previous_page=None,
-        results=geographies_taxonomy,
+        results=results,
         aggregations=None,
     )
 

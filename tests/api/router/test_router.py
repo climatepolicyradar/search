@@ -279,6 +279,38 @@ def test_get_geographies_taxonomy_international_has_no_region() -> None:
     assert results_by_id["country::XAB"]["labels"] == []
 
 
+def test_get_geographies_taxonomy_filters_by_single_type() -> None:
+    client = TestClient(app)
+
+    response = client.get("/search/geographies-taxonomy", params={"type": "region"})
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total_size"] == len(body["results"]) == 7
+    assert {r["type"] for r in body["results"]} == {"region"}
+
+
+def test_get_geographies_taxonomy_filters_by_multiple_types() -> None:
+    client = TestClient(app)
+
+    response = client.get(
+        "/search/geographies-taxonomy",
+        params=[("type", "region"), ("type", "country")],
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert {r["type"] for r in body["results"]} == {"region", "country"}
+
+
+def test_get_geographies_taxonomy_rejects_unknown_type() -> None:
+    client = TestClient(app)
+
+    response = client.get("/search/geographies-taxonomy", params={"type": "planet"})
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
 def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
     """The root response is how an agent with no prior knowledge finds the docs."""
     client = TestClient(app)
