@@ -220,9 +220,7 @@ def test_get_geography_taxonomy_returns_non_empty_list() -> None:
 
 
 def test_get_geography_taxonomy_regions_are_roots() -> None:
-    """
-    The 7 World Bank regions have no parent - everything else nests under one.
-    """
+    """The 7 World Bank regions have no parent - everything else nests under one."""
     client = TestClient(app)
 
     response = client.get("/search/geography-taxonomy")
