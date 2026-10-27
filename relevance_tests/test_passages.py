@@ -24,6 +24,14 @@ from search.testcase import (
     phrase_in_string,
 )
 
+
+def _mentions_nature_based_solutions(text: str) -> bool:
+    """The phrase, singular or plural, hyphenated or not."""
+    return phrase_in_string("nature based solution", text) or phrase_in_string(
+        "nature based solutions", text
+    )
+
+
 test_cases = [
     FieldCharacteristicsTestCase[Passage](
         category="acronym",
@@ -126,9 +134,14 @@ test_cases = [
     FieldCharacteristicsTestCase[Passage](
         category="acronym",
         search_terms="nature-based solution",
-        characteristics_test=lambda passage: all_words_in_string(["nbs"], passage.text)
-        or all_words_in_string(["nature", "based", "solution"], passage.text),
-        description="Acronyms: search for nature-based solution should return NbS.",
+        characteristics_test=lambda passage: _mentions_nature_based_solutions(
+            passage.text
+        )
+        or any_words_in_string(["nbs"], passage.text),
+        description=(
+            "Acronyms: search for nature-based solution should return passages "
+            "mentioning nature-based solutions or NbS."
+        ),
         k=100,
         all_or_any="all",
         assert_results=True,
@@ -156,6 +169,55 @@ test_cases = [
         k=700,
         all_or_any="any",
         assert_results=True,
+    ),
+    # ========================================================================
+    # query rewrites: expansions shouldn't add wrong matches or lose right ones
+    # ========================================================================
+    # These pull against each other: an expansion that finds "NbS" also finds NBS
+    # meaning something else. Each is scoped to one document, where a stray match
+    # is visible; corpus-wide it ranks far below the top k.
+    FieldCharacteristicsTestCase[Passage](
+        category="query rewrites",
+        search_terms="nature-based solutions",
+        # Spatial Data Provenance Guidelines for Nature-Based Solutions (NbS)
+        document_id="UNFCCC.non-party.1716.0",
+        characteristics_test=lambda passage: any_words_in_string(["nbs"], passage.text)
+        and not any_words_in_string(
+            ["nature", "based", "solution", "solutions"], passage.text
+        ),
+        all_or_any="any",
+        k=20,
+        assert_results=True,
+        description="A nature-based solutions search should find passages that only say NbS.",
+        # problem - no rule expands nature-based solutions to NbS (documents.sr).
+        # solution - None. Not expected to pass.
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="query rewrites",
+        search_terms="nature-based solutions",
+        # Update of the Belgian National Energy and Climate Plan 2021-2030 (NECP 2025)
+        document_id="CCLW.document.i00009638.n0000",
+        characteristics_test=lambda passage: _mentions_nature_based_solutions(
+            passage.text
+        )
+        or any_words_in_string(["nbs"], passage.text),
+        all_or_any="all",
+        k=20,
+        assert_results=True,
+        description="A nature-based solutions search should not match 'NB', or the words apart.",
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="query rewrites",
+        search_terms="nature-based solutions",
+        # First Action Plan of the National Biodiversity Strategy 2030 (NBS 2030), Germany
+        document_id="UNFCCC.document.i00004983.n0000",
+        characteristics_test=lambda passage: _mentions_nature_based_solutions(
+            passage.text
+        ),
+        all_or_any="all",
+        k=5,
+        assert_results=True,
+        description="A nature-based solutions search should not match NBS meaning something else.",
     ),
 
     FieldCharacteristicsTestCase[Passage](

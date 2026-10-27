@@ -127,6 +127,37 @@ test_cases = [
         broader_search_terms="parametric insurance",
         description="Adding a third word should narrow it again.",
     ),
+    # A rewrite whose alternatives count as separate terms under msm can make the
+    # unquoted search match fewer documents than the quoted one.
+    SearchNarrowingTestCase[Document](
+        category="query rewrites",
+        search_terms='"nature based solutions"',
+        broader_search_terms="nature based solutions",
+        description="Quoting nature based solutions should narrow the search.",
+    ),
+    SearchNarrowingTestCase[Document](
+        category="query rewrites",
+        search_terms='"loss and damage"',
+        broader_search_terms="loss and damage",
+        description="Quoting a phrase with no rewrite rule should narrow the search.",
+    ),
+    SearchNarrowingTestCase[Document](
+        category="query rewrites",
+        search_terms='"ndc"',
+        broader_search_terms="ndc",
+        description="Quoting an acronym with a rewrite rule should narrow the search.",
+    ),
+    RecallTestCase[Document](
+        category="query rewrites",
+        search_terms="brazil nature based solutions",
+        # Brazil's Adaptation Climate Plan: Sectoral Plan for Transports
+        expected_result_ids=["CCLW.family.i00009503.n0000"],
+        k=20,
+        description="A Brazil document that mentions nature-based solutions should be found.",
+        # problem - msm checks one field at a time: "brazil" is in the title, the
+        # phrase only in passages.
+        # solution - None yet. Not expected to pass.
+    ),
     # Multi-word geography aliases (FUS-423)
     FieldCharacteristicsTestCase[Document](
         category="document name + geography",
