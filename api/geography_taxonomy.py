@@ -1,14 +1,18 @@
 """
 A hardcoded region -> country -> subdivision hierarchy.
 
-Generated from api/data/labels.csv plus ISO 3166-1/3166-2 data (via pycountry)
-for the subdivision -> country edges, and the World Bank's own country
-classification (api.worldbank.org/v2/country) for the country -> region
-edges - the region codes used throughout this codebase (EAS/ECS/LCN/MEA/
-NAC/SAS/SSF) are the World Bank's region scheme, not an ISO standard.
+Generated from the Snoflake `published.labels`
+```sql
+select * from published.labels where
+    type = 'subdivision'
+    or type = 'country'
+    or type = 'region';
+```
 
-Same rationale as labels_taxonomy.py: the equivalent hierarchy from the
-data-lake cannot currently be relied on.
+Same rationale as labels_taxonomy.py: the equivalent relationships from the
+data-lake is not available.
+
+Claude used to build the relationships.
 """
 
 from search.data_in_models import (
@@ -204,9 +208,9 @@ country_BWA = Label(
     value="Botswana",
     labels=[LabelRelationship(type="subconcept_of", value=region_SSF)],
 )
-country_CALF = Label(
+country_CAF = Label(
     type="country",
-    id="country::CALF",
+    id="country::CAF",
     value="Central African Republic",
     labels=[LabelRelationship(type="subconcept_of", value=region_SSF)],
 )
@@ -684,9 +688,9 @@ country_LKA = Label(
     value="Sri Lanka",
     labels=[LabelRelationship(type="subconcept_of", value=region_SAS)],
 )
-country_ALSO = Label(
+country_LSO = Label(
     type="country",
-    id="country::ALSO",
+    id="country::LSO",
     value="Lesotho",
     labels=[LabelRelationship(type="subconcept_of", value=region_SSF)],
 )
@@ -816,9 +820,9 @@ country_MYS = Label(
     value="Malaysia",
     labels=[LabelRelationship(type="subconcept_of", value=region_EAS)],
 )
-country_NAME = Label(
+country_NAM = Label(
     type="country",
-    id="country::NAME",
+    id="country::NAM",
     value="Namibia",
     labels=[LabelRelationship(type="subconcept_of", value=region_SSF)],
 )
@@ -1020,9 +1024,9 @@ country_SMR = Label(
     value="San Marino",
     labels=[LabelRelationship(type="subconcept_of", value=region_ECS)],
 )
-country_SOME = Label(
+country_SOM = Label(
     type="country",
-    id="country::SOME",
+    id="country::SOM",
     value="Somalia",
     labels=[LabelRelationship(type="subconcept_of", value=region_SSF)],
 )
@@ -1044,9 +1048,9 @@ country_STP = Label(
     value="Sao Tome and Principe",
     labels=[LabelRelationship(type="subconcept_of", value=region_SSF)],
 )
-country_SURE = Label(
+country_SUR = Label(
     type="country",
-    id="country::SURE",
+    id="country::SUR",
     value="Suriname",
     labels=[LabelRelationship(type="subconcept_of", value=region_LCN)],
 )
