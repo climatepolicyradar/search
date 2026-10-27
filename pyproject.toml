@@ -55,6 +55,9 @@ dev = [
   "pydantic-evals>=2.62.0",
 ]
 
+[tool.uv]
+constraint-dependencies = ["griffe>=2"]
+
 [tool.uv.sources]
 components = { git = "https://github.com/climatepolicyradar/infra", subdirectory = "components", tag = "v1.0.5" }
 cpr-contracts = { git = "https://github.com/climatepolicyradar/contracts", tag = "v0.1.3" }
