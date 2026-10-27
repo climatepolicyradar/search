@@ -46,6 +46,9 @@ change will be deployed to production search.
 The `query rewrites` relevance cases in `relevance_tests/` pin the trade-offs
 rules make. Some are expected to fail. Read them before adding a rule.
 
+- **Triggers match on stems.** Triggers and query words are stemmed with KStem
+  (the `en` analyzer in `services.xml`) before matching, so `pes` and `pe` both
+  fire the PES rule.
 - **Inserted terms use the fieldset's linguistics profile.** A single-field
   fieldset needs it set with `query-command`, or they aren't analysed the way
   the field is indexed.

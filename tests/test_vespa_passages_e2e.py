@@ -741,6 +741,14 @@ _REWRITE_PASSAGES = {
         "knowledge."
     ),
     "tb-words-apart": "Solutions based on the best evidence will protect nature.",
+    "tb-et-al": (
+        "Roy et al., Sustainable Development, Poverty Eradication and Reducing "
+        "Inequalities."
+    ),
+    "tb-ets-only": (
+        "None of the proposed regulations on cross-border cooperation and a global "
+        "emissions trading system seem capable of achieving consensus."
+    ),
 }
 
 
@@ -763,6 +771,48 @@ def _passage_ids(query: str) -> list[str]:
         order_by=[],
     )
     return [p.text_block_id for p in response.results]
+
+
+def _trace_messages(query: str, tracelevel: int = 1, **params: Any) -> list[str]:
+    """Vespa trace messages for `query`, sent as the passage engine sends free text."""
+    r = req.post(
+        f"{_TEST_SETTINGS.vespa_endpoint}search/",
+        json={
+            "yql": "select * from sources passages where "
+            '({grammar.profile: "passage_analysis_kstem"}userInput(@query))',
+            "query": query,
+            "model.language": "en",
+            "rules.rulebase": "passages",
+            "hits": 0,
+            "tracelevel": tracelevel,
+            **params,
+        },
+        timeout=10,
+    )
+    r.raise_for_status()
+    body = r.json()
+    assert "errors" not in body["root"], body["root"]["errors"]
+
+    messages: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "message" and isinstance(value, str):
+                    messages.append(value)
+                walk(value)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(body.get("trace", {}))
+    return messages
+
+
+def _is_rewritten(query: str) -> bool:
+    return any(
+        m.startswith("SemanticSearcher: Rewrote query") for m in _trace_messages(query)
+    )
 
 
 def test_nature_based_solutions_does_not_match_nota_bene(vespa_app: Vespa):
@@ -788,6 +838,32 @@ def test_nature_based_solutions_is_not_expanded_to_nbs(vespa_app: Vespa):
 
     assert "tb-nbs-only" not in _passage_ids("nature-based solutions")
     assert "tb-nbs-only" in _passage_ids("nbs")
+
+
+def test_et_al_does_not_fire_the_ets_rule(vespa_app: Vespa):
+    _feed_rewrite_passages(vespa_app)
+
+    ids = _passage_ids("et al")
+
+    assert "tb-et-al" in ids
+    assert "tb-ets-only" not in ids
+
+
+@pytest.mark.parametrize(
+    "query",
+    # Porter stems of real triggers.
+    ["et", "nd", "cc", "gi", "ei", "ep", "aw", "ni"],  # spellchecker:disable-line
+)
+def test_a_trigger_stem_does_not_fire_the_rule(vespa_app: Vespa, query: str):
+    assert not _is_rewritten(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["ETS", "NDS", "PES", "SIDS", "NDC", "NDCs", "NDC's", "EV", "EVs", "EV's"],  # spellchecker:disable-line
+)
+def test_a_trigger_fires_in_any_case_or_inflection(vespa_app: Vespa, query: str):
+    assert _is_rewritten(query)
 
 
 # endregion

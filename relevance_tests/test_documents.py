@@ -29,6 +29,28 @@ test_cases = [
         minimum_overlap=1.0,
         strict_order=False,
     ),
+    SearchComparisonTestCase[Document](
+        category="possessives",
+        search_terms="NDC's",
+        search_terms_to_compare="NDC",
+        description="A possessive acronym should return the same top documents as the acronym.",
+        k=20,
+        minimum_overlap=0.8,
+        strict_order=False,
+        # problem - the index keeps "NDC's" as its own word.
+        # solution - strip possessives in the index profiles (reindex). Not expected to pass.
+    ),
+    SearchComparisonTestCase[Document](
+        category="possessives",
+        search_terms="UNFCCC's",
+        search_terms_to_compare="UNFCCC",
+        description="A possessive should return the same top documents as the word.",
+        k=20,
+        minimum_overlap=0.8,
+        strict_order=False,
+        # problem - the index keeps "UNFCCC's" as its own word.
+        # solution - strip possessives in the index profiles (reindex). Not expected to pass.
+    ),
     PrecisionTestCase[Document](
         category="punctuation",
         search_terms="Directive (EU) 2022/2464 amending Regulation (EU) No 537/2014 and others, as regards corporate sustainability reporting (Corporate Sustainability Reporting Directive or CSRD)",
