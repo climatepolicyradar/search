@@ -49,16 +49,29 @@ def test_download_returns_csv_with_content_disposition(document_client) -> None:
 
 
 def test_download_defaults_max_results_to_500(document_client) -> None:
+    """
+    Omitting `max_results` caps the download at 500 rows.
+
+    The cap is asserted through the pages requested, since that is what
+    the endpoint does with it: 500 rows at 100 per page is 5 pages, each
+    asking for its own 100. Asserting one page's size alone would hold
+    for any default at all.
+    """
     client, mock_engine = document_client
     mock_engine.search.return_value = ListResponse(
-        results=[], total_size=0, next_page_token=None
+        results=[Document(id=f"doc-{i}", title="t") for i in range(100)],
+        total_size=500,
+        next_page_token=None,
     )
 
     response = client.get("/search/documents:download", params={"query": "toxic"})
 
     assert response.status_code == HTTPStatus.OK
-    _, kwargs = mock_engine.search.call_args
-    assert kwargs["pagination"].page_size == 100
+    page_sizes = [
+        call.kwargs["pagination"].page_size for call in mock_engine.search.call_args_list
+    ]
+    assert sum(page_sizes) == 500
+    assert page_sizes == [100] * 5
 
 
 def test_download_respects_max_results_query_param(document_client) -> None:
