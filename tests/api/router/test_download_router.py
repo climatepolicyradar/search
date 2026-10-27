@@ -134,3 +134,53 @@ def test_download_rejects_out_of_range_msm(document_client, msm) -> None:
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_download_accepts_a_theme_and_uses_its_columns(document_client) -> None:
+    """The theme selects the CSV's column set; see `api.download.SCHEMAS`."""
+    client, mock_engine = document_client
+    mock_engine.search.return_value = ListResponse(
+        results=[Document(id="doc-1", title="A Climate Document")],
+        total_size=1,
+        next_page_token=None,
+    )
+
+    response = client.get(
+        "/search/documents:download", params={"query": "toxic", "theme": "cclw"}
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    header = response.text.splitlines()[0]
+    assert header.startswith("ID,TITLE,DESCRIPTION")
+
+
+def test_download_without_a_theme_still_returns_a_csv(document_client) -> None:
+    """`theme` is optional, so existing callers keep working."""
+    client, mock_engine = document_client
+    mock_engine.search.return_value = ListResponse(
+        results=[Document(id="doc-1", title="A Climate Document")],
+        total_size=1,
+        next_page_token=None,
+    )
+
+    response = client.get("/search/documents:download", params={"query": "toxic"})
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.text.splitlines()[0].startswith("ID,TITLE,DESCRIPTION")
+
+
+def test_download_rejects_a_theme_the_api_does_not_know(document_client) -> None:
+    """
+    An unknown theme is a client error, not a silent fallback.
+
+    `schema_for_theme` falls back for a `None`, but a value that reaches the
+    endpoint and is not a `Theme` means the caller and the API disagree -
+    better to say so than to hand back columns the caller did not ask for.
+    """
+    client, _ = document_client
+
+    response = client.get(
+        "/search/documents:download", params={"query": "toxic", "theme": "nope"}
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY

@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from api.download import fetch_documents_for_download, generate_csv
+from api.download import Theme, fetch_documents_for_download, generate_csv
 from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
@@ -110,6 +110,13 @@ def download_documents(
             "Defaults to 500."
         ),
     ),
+    theme: Theme | None = Query(
+        None,
+        description=(
+            "The app the download was requested from, which selects the CSV's "
+            "columns. Omitted falls back to the default column set."
+        ),
+    ),
     msm: MsmQuery = _DEFAULT_MSM,
 ):
     """
@@ -121,11 +128,12 @@ def download_documents(
     """
     logger.info(
         "Downloading document search as CSV "
-        "(query=%r, max_results=%s, filters_present=%s, msm=%s)",
+        "(query=%r, max_results=%s, filters_present=%s, msm=%s, theme=%s)",
         query,
         max_results,
         filters is not None,
         msm,
+        theme,
     )
 
     engine = DevVespaDocumentSearchEngine(settings=settings, msm=msm)
@@ -152,7 +160,7 @@ def download_documents(
     )
 
     return StreamingResponse(
-        generate_csv(documents),
+        generate_csv(documents, theme=theme),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=search-results.csv"},
     )
