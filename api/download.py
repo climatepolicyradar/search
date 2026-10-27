@@ -32,14 +32,11 @@ from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter
 ########################################################################
 def _published_date(document: Document) -> str:
     """
-    Parse published date.
+    Read ``published_date`` as ``YYYY-MM-DD``.
 
-    ``published_date`` as ``YYYY-MM-DD``, or ``""`` when absent or
-    unparse-able.
-
-    Stored as an ISO 8601 timestamp (``2023-10-23T00:00:00Z``); the CSV wants
-    the date alone. A value that will not parse yields an empty cell rather
-    than failing the whole download.
+    It is stored as an ISO 8601 timestamp (``2023-10-23T00:00:00Z``) and the
+    CSV wants the date alone. A value that will not parse yields an empty
+    cell rather than failing the whole download.
     """
     raw = document.attributes.get("published_date")
     if not isinstance(raw, str):
@@ -53,22 +50,18 @@ def _from_labels(
     *, relationship: str | None = None, label_type: str | None = None
 ) -> Callable[[Document], str]:
     """
-    Build a column reader: a document in, its label values joined, out.
+    Build a column reader selecting labels on either of two axes.
 
     A label is attached to a document by a *relationship* and is itself of
-    some *type*, and a column selects on one or the other:
+    some *type*, and which one a column selects on is not interchangeable:
 
-    - ``relationship="geography"`` spans three label types (country,
-      region, subdivision), and the column wants all of them.
+    - ``relationship="geography"`` spans the country, region and
+      subdivision label types, and the column wants all three.
     - ``label_type="jurisdiction"`` picks one type out of a shared
       relationship: `jurisdiction`, `principal_law` and `case_category`
-      all arrive under `legal_concept`, and each wants its own column, so
-      selecting by relationship would put all three in all three cells.
-
-    Passing both narrows on both. A document with no matching label gives
-    ``""``, an empty cell.
+      all arrive under `legal_concept`, so selecting by relationship
+      would put all three in all three cells.
     """
-    # Separates the values of a column read from several labels.
     _LABEL_VALUE_SEPARATOR = "; "
 
     def read_column(document: Document) -> str:
@@ -88,9 +81,8 @@ def _from_collection(
     """
     Build a column reader taking ``field`` off a document's collection.
 
-    The id and the title come from the same relationship, so they share one
-    lookup and differ only in which field they take off it. A document in no
-    collection gives ``""``, an empty cell.
+    BUNDLE_ID and BUNDLE_TITLE come from the same relationship, so they
+    share one lookup and differ only in the field they take off it.
     """
     # The relationship from a principal to the collection it belongs to. The
     # reverse (`has_member`) points at the principal's own documents, not a
@@ -98,7 +90,6 @@ def _from_collection(
     _COLLECTION_RELATIONSHIP = "member_of"
 
     def read_column(document: Document) -> str:
-        """``field`` off this document's collection, or ``""`` if it has none."""
         for relationship in document.documents:
             if relationship.type == _COLLECTION_RELATIONSHIP:
                 return field(relationship.value)
@@ -110,13 +101,13 @@ def _from_attribute(name: str) -> Callable[[Document], str]:
     """
     Build a column reader returning freeform attribute ``name`` as text.
 
-    `attributes` values may be numbers or booleans as well as strings, and
-    every cell is text, so the value is coerced. An absent attribute gives
-    ``""`` rather than failing the download.
+    `attributes` is unvalidated and its values may be numbers or booleans,
+    so they are coerced rather than reaching the CSV writer as non-strings.
+    An absent attribute gives an empty cell rather than failing the
+    download.
     """
 
     def read_column(document: Document) -> str:
-        """The document's ``name`` attribute as text, or ``""`` if absent."""
         value = document.attributes.get(name)
         return "" if value is None else str(value)
 
