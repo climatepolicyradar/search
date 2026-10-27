@@ -2373,7 +2373,7 @@ country_XKX = Label(
 )
 
 
-geography_taxonomy = [
+geographies_taxonomy = [
     region_EAS,
     region_ECS,
     region_LCN,

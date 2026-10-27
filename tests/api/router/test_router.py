@@ -208,10 +208,10 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     assert btr_parent_ids == {"un_convention::UNFCCC"}
 
 
-def test_get_geography_taxonomy_returns_non_empty_list() -> None:
+def test_get_geographies_taxonomy_returns_non_empty_list() -> None:
     client = TestClient(app)
 
-    response = client.get("/search/geography-taxonomy")
+    response = client.get("/search/geographies-taxonomy")
 
     assert response.status_code == HTTPStatus.OK
     body = response.json()
@@ -219,11 +219,11 @@ def test_get_geography_taxonomy_returns_non_empty_list() -> None:
     assert len(body["results"]) > 0
 
 
-def test_get_geography_taxonomy_regions_are_roots() -> None:
+def test_get_geographies_taxonomy_regions_are_roots() -> None:
     """The 7 World Bank regions have no parent - everything else nests under one."""
     client = TestClient(app)
 
-    response = client.get("/search/geography-taxonomy")
+    response = client.get("/search/geographies-taxonomy")
 
     results_by_id = {
         result["id"]: result for result in response.json()["results"]
@@ -243,7 +243,7 @@ def test_get_geography_taxonomy_regions_are_roots() -> None:
         assert region["labels"] == [], f"{region['id']} is nested under another label"
 
 
-def test_get_geography_taxonomy_nests_subdivisions_under_their_country() -> None:
+def test_get_geographies_taxonomy_nests_subdivisions_under_their_country() -> None:
     """
     A subdivision's parent chain must reach region::* via exactly one country.
 
@@ -252,7 +252,7 @@ def test_get_geography_taxonomy_nests_subdivisions_under_their_country() -> None
     """
     client = TestClient(app)
 
-    response = client.get("/search/geography-taxonomy")
+    response = client.get("/search/geographies-taxonomy")
     results_by_id = {
         result["id"]: result for result in response.json()["results"]
     }
@@ -267,11 +267,11 @@ def test_get_geography_taxonomy_nests_subdivisions_under_their_country() -> None
     assert region_id == "region::LCN"
 
 
-def test_get_geography_taxonomy_international_has_no_region() -> None:
+def test_get_geographies_taxonomy_international_has_no_region() -> None:
     """country::XAB ("International") doesn't belong to a single region."""
     client = TestClient(app)
 
-    response = client.get("/search/geography-taxonomy")
+    response = client.get("/search/geographies-taxonomy")
     results_by_id = {
         result["id"]: result for result in response.json()["results"]
     }
