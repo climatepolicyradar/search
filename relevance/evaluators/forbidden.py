@@ -17,7 +17,7 @@ class Forbidden[I](Evaluator[I, HasResults[HasId], object]):
     ) -> dict[str, EvaluationReason]:
         """Score the share of forbidden IDs absent from the top k results."""
         top_k = {result.id for result in ctx.output.results[: self.k]}
-        present = [id for id in self.forbidden if id in top_k]
+        present = [forbidden_id for forbidden_id in self.forbidden if forbidden_id in top_k]
         reason = f"forbidden in top {self.k}: {present}" if present else None
         score = (len(self.forbidden) - len(present)) / len(self.forbidden)
 
