@@ -36,8 +36,8 @@ def _table(
     scores: list[str],
 ) -> wandb.EvalTable:
     present = list(dict.fromkeys(key for row in rows for key in row))
-    inputs = [col for col in present if col not in [*outputs, *scores]]
-    columns = [*inputs, *scores, *[col for col in outputs if col in present]]
+    inputs = [column for column in present if column not in [*outputs, *scores]]
+    columns = [*inputs, *scores, *[column for column in outputs if column in present]]
     data: list[Iterable[Any]] = [[row.get(col) for col in columns] for row in rows]
     return wandb.EvalTable(
         input_columns=inputs,
