@@ -1,12 +1,15 @@
+import json
 from contextlib import AbstractContextManager, nullcontext
 from datetime import datetime
 from enum import StrEnum, auto
+from functools import partial
 from typing import Annotated, Any
 
 import typer
 from pydantic_evals.reporting import EvaluationReport
 from wandb import Run
 
+from relevance.api.client import SearchClient
 from relevance.reporters import html_report, weights_and_biases
 from relevance.suites import documents, labels, passages, principals
 from search.config import TEST_RESULTS_DIR
@@ -31,47 +34,49 @@ class Report(StrEnum):
 
 def run_suite(
     suite: Suite,
+    client: SearchClient,
 ) -> EvaluationReport[Any, Any, dict[str, str]]:
     match suite:
         case Suite.labels:
             return labels.dataset.evaluate_sync(
-                labels.run_search,
+                partial(labels.run_search, client),
                 max_concurrency=4,
             )
         case Suite.documents:
             return documents.dataset.evaluate_sync(
-                documents.run_search,
+                partial(documents.run_search, client),
                 max_concurrency=4,
             )
         case Suite.document_comparisons:
             return documents.comparisons.evaluate_sync(
-                documents.run_pair,
+                partial(documents.run_pair, client),
                 max_concurrency=4,
             )
         case Suite.principals:
             return principals.dataset.evaluate_sync(
-                principals.run_search,
+                partial(principals.run_search, client),
                 max_concurrency=4,
             )
         case Suite.principal_comparisons:
             return principals.comparisons.evaluate_sync(
-                principals.run_pair,
+                partial(principals.run_pair, client),
                 max_concurrency=4,
             )
         case Suite.passages:
             return passages.dataset.evaluate_sync(
-                passages.run_search,
+                partial(passages.run_search, client),
                 max_concurrency=4,
             )
         case Suite.passage_comparisons:
             return passages.comparisons.evaluate_sync(
-                passages.run_pair,
+                partial(passages.run_pair, client),
                 max_concurrency=4,
             )
 
 
 SuiteParam = Annotated[Suite, typer.Option()]
 ReportParam = Annotated[list[Report] | None, typer.Option("--report")]
+UrlParam = Annotated[str | None, typer.Option()]
 
 
 def _init_wandb(
@@ -86,15 +91,27 @@ def _init_wandb(
 def _write_html(report: EvaluationReport[Any, Any, dict[str, str]]) -> None:
     name = f"{report.dataset_name or 'report'}_{datetime.now():%Y%m%d_%H%M}.html"
     html_report.report(report, (path := TEST_RESULTS_DIR / name))
-    print(f"HTML report written to {path}")
+    typer.echo(f"HTML report written to {path}")
 
 
 @app.command()
-def main(suite: SuiteParam, reports: ReportParam = None) -> None:
+def suites() -> None:
+    typer.echo(json.dumps([suite.value for suite in Suite]))
+
+
+@app.command()
+def run(
+    suite: SuiteParam,
+    reports: ReportParam = None,
+    url: UrlParam = None,
+) -> None:
     reports = reports or []
 
-    with _init_wandb(suite, reports) as run:
-        report = run_suite(suite)
+    with (
+        SearchClient.create(url) as client,
+        _init_wandb(suite, reports) as run,
+    ):
+        report = run_suite(suite, client)
         if run is not None:
             weights_and_biases.report(run, report)
         if Report.html in reports:

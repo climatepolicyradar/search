@@ -1,24 +1,31 @@
 from pydantic_evals import Dataset
 
-from api.routers import settings
+from relevance.api.client import SearchClient
+from relevance.api.models import (
+    DocumentsRequest,
+    FieldFilter,
+    Filter,
+    SearchResponse,
+)
 from relevance.evaluators.overlap import Overlap
 from relevance.evaluators.precision import Precision
 from relevance.evaluators.recall import Recall
 from relevance.suites.documents import (
+    MSM,
     DocumentMatches,
     DocumentQuery,
     QueryPair,
     SearchPair,
 )
 from search.data_in_models import Document
-from search.engines import ListResponse, OrderBy, Pagination
-from search.engines.dev_vespa import DevVespaPrincipalDocumentSearchEngine
-
-# 0.7 because that is what the frontend sends with every text search (FUS-421)
-engine = DevVespaPrincipalDocumentSearchEngine(settings=settings, msm=0.7)
 
 
-dataset = Dataset[DocumentQuery, ListResponse[Document], dict[str, str]](
+def principal_filter(filters: Filter | None) -> Filter:
+    principal = FieldFilter.contains("labels.value.id", "status::Principal")
+    return Filter.and_(principal, filters) if filters else Filter.and_(principal)
+
+
+dataset = Dataset[DocumentQuery, SearchResponse[Document], dict[str, str]](
     name="principals",
     cases=[],
 )
@@ -562,12 +569,17 @@ dataset.add_case(
 )
 
 
-def run_search(input: DocumentQuery) -> ListResponse[Document]:
-    return engine.search(
-        order_by=[OrderBy(field="relevance", direction="desc")],
-        pagination=Pagination(page_token=1, page_size=20),
-        query=input.query,
-        filters=input.filters(),
+def run_search(
+    client: SearchClient,
+    input: DocumentQuery,
+) -> SearchResponse[Document]:
+    return client.documents(
+        DocumentsRequest(
+            query=input.query,
+            filters=principal_filter(input.filters()),
+            page_size=20,
+            msm=MSM,
+        )
     )
 
 
@@ -594,16 +606,25 @@ comparisons.add_case(
 )
 
 
-def run_pair(input: QueryPair) -> SearchPair:
+def run_pair(
+    client: SearchClient,
+    input: QueryPair,
+) -> SearchPair:
     return SearchPair(
-        first=engine.search(
-            order_by=[OrderBy(field="relevance", direction="desc")],
-            pagination=Pagination(page_token=1, page_size=20),
-            query=input.query,
+        first=client.documents(
+            DocumentsRequest(
+                query=input.query,
+                filters=principal_filter(None),
+                page_size=20,
+                msm=MSM,
+            )
         ),
-        second=engine.search(
-            order_by=[OrderBy(field="relevance", direction="desc")],
-            pagination=Pagination(page_token=1, page_size=20),
-            query=input.other,
+        second=client.documents(
+            DocumentsRequest(
+                query=input.other,
+                filters=principal_filter(None),
+                page_size=20,
+                msm=MSM,
+            )
         ),
     )
