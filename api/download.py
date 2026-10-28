@@ -33,10 +33,14 @@ from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter
 
-
 ########################################################################
 # Helper functions
 ########################################################################
+
+# What a column reader does: take a document, return one cell's text.
+ColumnReader = Callable[[Document], str]
+
+
 def _published_date(document: Document) -> str:
     """
     Parse published date.
@@ -56,15 +60,15 @@ def _published_date(document: Document) -> str:
     except ValueError:
         return ""
 
-def _labels(label_type: str, document: Document) -> str:
+def _from_labels(label_type: str) -> ColumnReader:
     """
-    Return joined label values of the same type.
+    Build a column reader joining the label values of one type.
 
     A document often carries more than one label of the same type, and the
     CSV gives each type a single cell, so every value goes in it:
 
-    - _labels("geography", document)  # "Europe & Central Asia; Germany"
-    - _labels("category", document)   # "Policy"
+    - _from_labels("geography")  # "Europe & Central Asia; Germany"
+    - _from_labels("category")   # "Policy"
 
     A document with no label of this type gives ``""``, an empty cell.
     Otherwise one cell's worth of label values, separated by ``"; "``.
@@ -72,30 +76,52 @@ def _labels(label_type: str, document: Document) -> str:
     # Separates the values of a column read from several labels of one type.
     _LABEL_VALUE_SEPARATOR = "; "
 
-    return _LABEL_VALUE_SEPARATOR.join(
-        label.value.value for label in document.labels if label.type == label_type
-    )
+    def read_column(document: Document) -> str:
+        """The matching label values of one document, as one cell's text."""
+        return _LABEL_VALUE_SEPARATOR.join(
+            label.value.value for label in document.labels if label.type == label_type
+        )
 
-def _collection_title(document: Document) -> str:
-    """The title of the collection this document belongs to, or ``""``."""
+    return read_column
 
+def _from_collection(field: str) -> ColumnReader:
+    """
+    Build a column reader taking ``field`` off a document's collection.
+
+    A document that belongs to no collection gives ``""``, so a column
+    reads as empty rather than failing the download.
+    """
     # The relationship from a principal to the collection it belongs to. The
     # reverse (`has_member`) points at the principal's own documents, not a
-    # collection, so we can't get a collection title that way.
+    # collection, so we can't get a collection that way.
     _COLLECTION_RELATIONSHIP = "member_of"
 
-    for relationship in document.documents:
-        if relationship.type == _COLLECTION_RELATIONSHIP:
-            return relationship.value.title
-    return ""
+    def read_column(document: Document) -> str:
+        """The collection's ``field`` for one document, or ``""``."""
+        for relationship in document.documents:
+            if relationship.type == _COLLECTION_RELATIONSHIP:
+                return getattr(relationship.value, field)
+        return ""
+
+    return read_column
+
+def _from_document(field: str) -> ColumnReader:
+    """
+    Build a column reader taking ``field`` straight off the document.
+
+    ``description`` is optional on a document, so a missing value gives an
+    empty cell rather than the string ``"None"``.
+    """
+
+    def read_column(document: Document) -> str:
+        """One document's ``field``, as text."""
+        return getattr(document, field) or ""
+
+    return read_column
 
 ########################################################################
 # Columns
 ########################################################################
-
-# What a column reader does: take a document, return one cell's text.
-ColumnReader = Callable[[Document], str]
-
 
 class Column(StrEnum):
     """
@@ -129,15 +155,15 @@ class Column(StrEnum):
 # The above columns also belong here but are absent until the data behind
 # them exists. They are left out for now rather than offered empty.
 COLUMN_READERS: Mapping[Column, ColumnReader] = {
-    Column.ID: lambda document: document.id,
-    Column.TITLE: lambda document: document.title,
-    Column.DESCRIPTION: lambda document: document.description or "",
-    Column.GEOGRAPHIES: lambda document: _labels("geography", document),
+    Column.ID: _from_document("id"),
+    Column.TITLE: _from_document("title"),
+    Column.DESCRIPTION: _from_document("description"),
+    Column.GEOGRAPHIES: _from_labels("geography"),
     Column.PUBLISHED_DATE: _published_date,
-    Column.ENTITY_TYPE: lambda document: _labels("entity_type", document),
-    Column.CATEGORY: lambda document: _labels("category", document),
-    Column.PROVIDER: lambda document: _labels("provider", document),
-    Column.COLLECTION_TITLE: _collection_title,
+    Column.ENTITY_TYPE: _from_labels("entity_type"),
+    Column.CATEGORY: _from_labels("category"),
+    Column.PROVIDER: _from_labels("provider"),
+    Column.COLLECTION_TITLE: _from_collection("title"),
 }
 
 # Sent when a caller names no columns. Keeping a default means an ad-hoc

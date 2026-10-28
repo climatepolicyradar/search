@@ -306,6 +306,20 @@ def test_every_column_has_a_reader() -> None:
     assert set(COLUMN_READERS) == set(Column)
 
 
+def test_every_reader_runs_against_a_document() -> None:
+    """
+    Each registered reader returns a string for a real document.
+
+    The field-reading factories take their field by name, so a mistyped
+    name is not caught by the type checker. Running every reader once
+    against a `Document` catches it here rather than mid-download.
+    """
+    document = Document(id="doc-1", title="A Climate Document")
+
+    for column, read in COLUMN_READERS.items():
+        assert isinstance(read(document), str), column
+
+
 def test_default_columns_are_all_real_columns() -> None:
     """The fallback set cannot name a column that has no reader."""
     assert set(DEFAULT_COLUMNS) <= set(Column)
