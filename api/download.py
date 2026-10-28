@@ -24,17 +24,14 @@ columns lives with the caller, not here.
 import csv
 import io
 import math
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import StrEnum
 
-from search.data_in_models import Document
+from search.data_in_models import Document, DocumentWithoutRelationships
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter
-
-# Column readers should take a document & return one cell's text.
-ColumnReader = Callable[[Document], str]
 
 
 def _published_date(document: Document) -> str:
@@ -56,68 +53,42 @@ def _published_date(document: Document) -> str:
     except ValueError:
         return ""
 
-def _from_labels(label_type: str) -> ColumnReader:
+
+def _labels(document: Document, label_type: str) -> str:
     """
-    Build a column reader joining the label values of one type.
+    Join the label values of one type.
 
     A document often carries more than one label of the same type, and the
     CSV gives each type a single cell, so every value goes in it:
 
-    - _from_labels("geography")  # "Europe & Central Asia; Germany"
-    - _from_labels("category")   # "Policy"
+    - _labels(document, "geography")  # "Europe & Central Asia; Germany"
+    - _labels(document, "category")   # "Policy"
 
     A document with no label of this type gives ``""``, an empty cell.
-    Otherwise one cell's worth of label values, separated by ``"; "``.
     """
     _LABEL_VALUE_SEPARATOR = "; "
 
-    def read_column(document: Document) -> str:
-        """
-        The matching label values of one document, as one cell's text.
+    return _LABEL_VALUE_SEPARATOR.join(
+        label.value.value for label in document.labels if label.type == label_type
+    )
 
-        Separates the values of a column read from several labels of one
-        type.
-        """
-        return _LABEL_VALUE_SEPARATOR.join(
-            label.value.value for label in document.labels if label.type == label_type
-        )
 
-    return read_column
-
-def _from_collection(field: str) -> ColumnReader:
+def _collection(document: Document) -> DocumentWithoutRelationships | None:
     """
-    Build a column reader taking ``field`` off a document's collection.
+    The collection a document belongs to, or ``None``.
 
-    A document that belongs to no collection gives ``""``, so a column
-    reads as empty rather than failing the download.
+    A document that belongs to no collection gives ``None``, so a column
+    reading off it is empty rather than failing the download.
     """
     # The relationship from a principal to the collection it belongs to. The
     # reverse (`has_member`) points at the principal's own documents, not a
     # collection, so we can't get a collection that way.
     _COLLECTION_RELATIONSHIP = "member_of"
 
-    def read_column(document: Document) -> str:
-        """The collection's ``field`` for one document, or ``""``."""
-        for relationship in document.documents:
-            if relationship.type == _COLLECTION_RELATIONSHIP:
-                return getattr(relationship.value, field)
-        return ""
-
-    return read_column
-
-def _from_document(field: str) -> ColumnReader:
-    """
-    Build a column reader taking ``field`` straight off the document.
-
-    ``description`` is optional on a document, so a missing value gives an
-    empty cell rather than the string ``"None"``.
-    """
-
-    def read_column(document: Document) -> str:
-        """One document's ``field``, as text."""
-        return getattr(document, field) or ""
-
-    return read_column
+    for relationship in document.documents:
+        if relationship.type == _COLLECTION_RELATIONSHIP:
+            return relationship.value
+    return None
 
 
 class Column(StrEnum):
@@ -141,27 +112,48 @@ class Column(StrEnum):
     COLLECTION_TITLE = "COLLECTION_TITLE"
 
 
-# Each column name maps to exactly one reader, so a name always means the
-# same data wherever it is asked for. Two names may read the same source -
-# `COLLECTION_TITLE` and a future `BUNDLE_TITLE` are the same collection
-# field under the name a given app uses for it - but a name never changes
-# what it reads depending on who is asking.
-#
-# TODO: FUS-819 - URL
-# TODO: FUS-820 - COLLECTION_DESCRIPTION
-# The above columns also belong here but are absent until the data behind
-# them exists. They are left out for now rather than offered empty.
-COLUMN_READERS: Mapping[Column, ColumnReader] = {
-    Column.ID: _from_document("id"),
-    Column.TITLE: _from_document("title"),
-    Column.DESCRIPTION: _from_document("description"),
-    Column.GEOGRAPHIES: _from_labels("geography"),
-    Column.PUBLISHED_DATE: _published_date,
-    Column.ENTITY_TYPE: _from_labels("entity_type"),
-    Column.CATEGORY: _from_labels("category"),
-    Column.PROVIDER: _from_labels("provider"),
-    Column.COLLECTION_TITLE: _from_collection("title"),
-}
+def read_column(document: Document, column: Column) -> str:
+    """
+    One cell's text: the field ``column`` names, off ``document``.
+
+    A column name always means the same data wherever it is asked for. Two
+    names may read the same source - `COLLECTION_TITLE` and a future
+    `BUNDLE_TITLE` are the same collection field under the name a given app
+    uses for it - but a name never changes what it reads depending on who
+    is asking.
+
+    Matching on the column rather than looking a reader up in a table means
+    a column added to `Column` without a branch here is a type error, not a
+    `KeyError` part-way through a download.
+
+    TODO: FUS-819 - URL
+    TODO: FUS-820 - COLLECTION_DESCRIPTION
+    The above columns also belong here but are absent until the data behind
+    them exists. They are left out for now rather than offered empty.
+    """
+    match column:
+        case Column.ID:
+            return document.id
+        case Column.TITLE:
+            return document.title
+        # `description` is optional on a document, so a missing value gives
+        # an empty cell rather than the string `"None"`.
+        case Column.DESCRIPTION:
+            return document.description or ""
+        case Column.GEOGRAPHIES:
+            return _labels(document, "geography")
+        case Column.PUBLISHED_DATE:
+            return _published_date(document)
+        case Column.ENTITY_TYPE:
+            return _labels(document, "entity_type")
+        case Column.CATEGORY:
+            return _labels(document, "category")
+        case Column.PROVIDER:
+            return _labels(document, "provider")
+        case Column.COLLECTION_TITLE:
+            collection = _collection(document)
+            return collection.title if collection else ""
+
 
 # Sent when a caller names no columns. Keeping a default means an ad-hoc
 # caller - a person with curl, or an agent reading `llms.txt` - gets a
@@ -202,7 +194,7 @@ def fetch_documents_for_download(
     order_by: list[OrderBy],
     filters: Filter | None,
     max_results: int,
-    internal_page_size: int = 100
+    internal_page_size: int = 100,
 ) -> list[Document]:
     """
     Fetch up to ``max_results`` documents, paging the engine internally.
@@ -212,7 +204,7 @@ def fetch_documents_for_download(
     round trip at a time. Results are then reassembled in page order and
     truncated at the first short/empty page - Vespa has no more matches past
     that point, mirroring the previous sequential early-stop behaviour.
-    
+
     :param internal_page_size int: Default value is 100 as this is under
         Vespa's own default `hits`/`offset` ceiling (~400), so a single
         `max_results` request never trips `VespaError` by asking one page
@@ -236,9 +228,7 @@ def fetch_documents_for_download(
         return response.results
 
     with ThreadPoolExecutor(max_workers=page_count) as pool:
-        pages = list(
-            pool.map(fetch_page, range(1, page_count + 1), page_sizes)
-        )
+        pages = list(pool.map(fetch_page, range(1, page_count + 1), page_sizes))
 
     results: list[Document] = []
     for page, page_size in zip(pages, page_sizes):
@@ -263,10 +253,11 @@ def build_csv_rows(
     """
     resolved = resolve_columns(columns)
     rows = [
-        {str(column): COLUMN_READERS[column](document) for column in resolved}
+        {str(column): read_column(document, column) for column in resolved}
         for document in documents
     ]
     return [str(column) for column in resolved], rows
+
 
 def generate_csv(
     documents: list[Document], columns: list[Column] | None = None

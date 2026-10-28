@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from api.download import (
-    COLUMN_READERS,
     DEFAULT_COLUMNS,
     Column,
     build_csv_rows,
     fetch_documents_for_download,
     generate_csv,
+    read_column,
     resolve_columns,
 )
 from search.data_in_models import (
@@ -295,33 +295,23 @@ def test_generate_csv_with_no_documents_produces_just_a_header() -> None:
     assert reader.fieldnames == [str(column) for column in DEFAULT_COLUMNS]
 
 
-def test_every_column_has_a_reader() -> None:
+def test_every_column_can_be_read_from_a_document() -> None:
     """
-    A column the API offers must never fall through to a `KeyError`.
+    A column the API offers must never fall through.
 
-    The enum is the published vocabulary and the registry is what backs
-    it, so the two drifting apart would let a caller ask for a name the
-    API accepts and then fail mid-download.
-    """
-    assert set(COLUMN_READERS) == set(Column)
-
-
-def test_every_reader_runs_against_a_document() -> None:
-    """
-    Each registered reader returns a string for a real document.
-
-    The field-reading factories take their field by name, so a mistyped
-    name is not caught by the type checker. Running every reader once
-    against a `Document` catches it here rather than mid-download.
+    `read_column` matches on the column, so a column with no branch is a
+    type error rather than a failure part-way through a download. This
+    covers the same ground at runtime, for a document carrying none of
+    the fields the columns name.
     """
     document = Document(id="doc-1", title="A Climate Document")
 
-    for column, read in COLUMN_READERS.items():
-        assert isinstance(read(document), str), column
+    for column in Column:
+        assert isinstance(read_column(document, column), str), column
 
 
 def test_default_columns_are_all_real_columns() -> None:
-    """The fallback set cannot name a column that has no reader."""
+    """The fallback set cannot name a column the vocabulary lacks."""
     assert set(DEFAULT_COLUMNS) <= set(Column)
 
 
