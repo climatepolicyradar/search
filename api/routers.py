@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from api.download import DEFAULT_MAX_RESULTS, fetch_documents_for_download, generate_csv
+from api.download import Column, fetch_documents_for_download, generate_csv
 from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.geographies_taxonomy import geographies_taxonomy
 from api.health import router as health_router
@@ -104,11 +104,18 @@ def download_documents(
     query: str | None = Query(None, description="What are you looking for?"),
     order_by: list[OrderBy] = Depends(documents_order_by),
     max_results: int = Query(
-        DEFAULT_MAX_RESULTS,
+        500,
         gt=0,
         description=(
             "Maximum number of documents to include, most-relevant first. "
-            f"Defaults to {DEFAULT_MAX_RESULTS}."
+            "Defaults to 500."
+        ),
+    ),
+    columns: list[Column] | None = Query(
+        None,
+        description=(
+            "The columns to include, in the order given. Repeat the parameter "
+            "per column. Omitted gives the default column set."
         ),
     ),
     msm: MsmQuery = _DEFAULT_MSM,
@@ -122,11 +129,12 @@ def download_documents(
     """
     logger.info(
         "Downloading document search as CSV "
-        "(query=%r, max_results=%s, filters_present=%s, msm=%s)",
+        "(query=%r, max_results=%s, filters_present=%s, msm=%s, columns=%s)",
         query,
         max_results,
         filters is not None,
         msm,
+        columns,
     )
 
     engine = DevVespaDocumentSearchEngine(settings=settings, msm=msm)
@@ -153,7 +161,7 @@ def download_documents(
     )
 
     return StreamingResponse(
-        generate_csv(documents),
+        generate_csv(documents, columns=columns),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=search-results.csv"},
     )

@@ -49,16 +49,29 @@ def test_download_returns_csv_with_content_disposition(document_client) -> None:
 
 
 def test_download_defaults_max_results_to_500(document_client) -> None:
+    """
+    Omitting `max_results` caps the download at 500 rows.
+
+    The cap is asserted through the pages requested, since that is what
+    the endpoint does with it: 500 rows at 100 per page is 5 pages, each
+    asking for its own 100. Asserting one page's size alone would hold
+    for any default at all.
+    """
     client, mock_engine = document_client
     mock_engine.search.return_value = ListResponse(
-        results=[], total_size=0, next_page_token=None
+        results=[Document(id=f"doc-{i}", title="t") for i in range(100)],
+        total_size=500,
+        next_page_token=None,
     )
 
     response = client.get("/search/documents:download", params={"query": "toxic"})
 
     assert response.status_code == HTTPStatus.OK
-    _, kwargs = mock_engine.search.call_args
-    assert kwargs["pagination"].page_size == 100
+    page_sizes = [
+        call.kwargs["pagination"].page_size for call in mock_engine.search.call_args_list
+    ]
+    assert sum(page_sizes) == 500
+    assert page_sizes == [100] * 5
 
 
 def test_download_respects_max_results_query_param(document_client) -> None:
@@ -131,6 +144,57 @@ def test_download_rejects_out_of_range_msm(document_client, msm) -> None:
 
     response = client.get(
         "/search/documents:download", params={"query": "toxic", "msm": msm}
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_download_emits_the_requested_columns_in_order(document_client) -> None:
+    """The caller names the columns and their order; the API supplies them."""
+    client, mock_engine = document_client
+    mock_engine.search.return_value = ListResponse(
+        results=[Document(id="doc-1", title="A Climate Document")],
+        total_size=1,
+        next_page_token=None,
+    )
+
+    response = client.get(
+        "/search/documents:download",
+        params=[("query", "toxic"), ("columns", "TITLE"), ("columns", "ID")],
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.text.splitlines()[0] == "TITLE,ID"
+
+
+def test_download_without_columns_still_returns_a_csv(document_client) -> None:
+    """`columns` is optional, so an ad-hoc caller gets a usable CSV."""
+    client, mock_engine = document_client
+    mock_engine.search.return_value = ListResponse(
+        results=[Document(id="doc-1", title="A Climate Document")],
+        total_size=1,
+        next_page_token=None,
+    )
+
+    response = client.get("/search/documents:download", params={"query": "toxic"})
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.text.splitlines()[0].startswith("ID,TITLE,DESCRIPTION")
+
+
+def test_download_rejects_a_column_the_api_does_not_know(document_client) -> None:
+    """
+    An unknown column is a client error, not a silent omission.
+
+    The caller asked for data it expects to find in the file. Dropping the
+    column quietly would hand back a CSV that is missing a column the
+    caller believes it requested, so say so instead.
+    """
+    client, _ = document_client
+
+    response = client.get(
+        "/search/documents:download",
+        params=[("query", "toxic"), ("columns", "NOPE")],
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
