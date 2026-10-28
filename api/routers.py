@@ -12,9 +12,10 @@ from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.geographies_taxonomy import geographies_taxonomy
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
-from api.models import Aggregations, Facets, ItemResponse, SearchResponse
+from api.models import Aggregations, Facets, ItemResponse, SearchResponse, TaxonomyNode
 from api.settings import settings
 from api.state import HttpxDep
+from api.taxonomy import taxonomy, tree
 from api.utils import (
     DocumentsEngineDep,
     LabelsEngineDep,
@@ -435,6 +436,31 @@ async def aggregate_geographies(
     )
 
     return ItemResponse(data=results)
+
+
+@router.get(
+    "/taxonomy",
+    response_model=ItemResponse[list[TaxonomyNode]],
+    responses=SEARCH_RESPONSES,
+)
+async def read_taxonomy(
+    filters: DocumentsFilterDep,
+    httpx: HttpxDep,
+    label_type: list[str] | None = Query(None, alias="type"),
+):
+    """Lists label trees of the given types, with document counts."""
+    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
+    nodes = tree(taxonomy, label_type)
+
+    counts = await engine.label_counts(
+        label_types=sorted(set().union(*(node.types() for node in nodes))),
+        filters=filters,
+    )
+
+    for node in nodes:
+        node.set_count(counts)
+
+    return ItemResponse(data=[node.response() for node in nodes])
 
 
 @router.get(
