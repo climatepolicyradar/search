@@ -678,10 +678,10 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
 
 
 class SearchNarrowingTestCase(TestCase[TModel], Generic[TModel]):
-    """Adding words to a search should never make it match more documents (FUS-421)."""
+    """Adding or quoting words should never make a search match more documents."""
 
     broader_search_terms: str = Field(
-        description="A shorter query that `search_terms` adds words to."
+        description="`search_terms` with words removed or quotes dropped."
     )
 
     def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
