@@ -3,8 +3,9 @@ name: Relevance Tests
 on:
   workflow_dispatch:
   workflow_call:
-  push:
-    branches: [tv/fus-818-relevance-test-http]
+  schedule:
+    - cron: 0 8 * * *
+      timezone: Europe/London
 
 permissions:
   actions: read
