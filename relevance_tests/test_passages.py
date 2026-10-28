@@ -61,6 +61,17 @@ test_cases = [
         minimum_overlap=0.8,
         strict_order=False,
     ),
+    SearchComparisonTestCase[Passage](
+        category="possessives",
+        search_terms="NDC's",
+        search_terms_to_compare="NDC",
+        description="A possessive acronym should return the same top passages as the acronym.",
+        k=20,
+        minimum_overlap=0.8,
+        strict_order=False,
+        # problem - the index keeps "NDC's" as its own word.
+        # solution - strip possessives in the index profiles (reindex). Not expected to pass.
+    ),
     FieldCharacteristicsTestCase[Passage](
         category="search term + geography",
         search_terms="brazil nature based solutions",
@@ -218,6 +229,19 @@ test_cases = [
         k=5,
         assert_results=True,
         description="A nature-based solutions search should not match NBS meaning something else.",
+    ),
+    FieldCharacteristicsTestCase[Passage](
+        category="query rewrites",
+        search_terms="et al",
+        # Emma Johanna Kiehm, et al. v. State of Brandenburg
+        principal_id="Sabin.family.14620.0",
+        characteristics_test=lambda passage: any_words_in_string(
+            ["et", "al"], passage.text
+        ),
+        all_or_any="all",
+        k=50,
+        assert_results=True,
+        description="'et' should not fire the ETS acronym rule.",
     ),
 
     FieldCharacteristicsTestCase[Passage](
