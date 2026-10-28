@@ -1,3 +1,4 @@
+import json
 from contextlib import AbstractContextManager, nullcontext
 from datetime import datetime
 from enum import StrEnum, auto
@@ -90,11 +91,16 @@ def _init_wandb(
 def _write_html(report: EvaluationReport[Any, Any, dict[str, str]]) -> None:
     name = f"{report.dataset_name or 'report'}_{datetime.now():%Y%m%d_%H%M}.html"
     html_report.report(report, (path := TEST_RESULTS_DIR / name))
-    print(f"HTML report written to {path}")
+    typer.echo(f"HTML report written to {path}")
 
 
 @app.command()
-def main(
+def suites() -> None:
+    typer.echo(json.dumps([suite.value for suite in Suite]))
+
+
+@app.command()
+def run(
     suite: SuiteParam,
     reports: ReportParam = None,
     url: UrlParam = None,
