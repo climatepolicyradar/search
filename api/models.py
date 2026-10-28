@@ -31,6 +31,14 @@ class Facets(BaseModel):
     )
 
 
+class TaxonomyNode(BaseModel):
+    id: str
+    type: str
+    value: str
+    count: int
+    children: list["TaxonomyNode"]
+
+
 class ItemResponse[T](BaseModel):
     data: T
 

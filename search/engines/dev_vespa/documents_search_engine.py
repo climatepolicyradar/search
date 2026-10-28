@@ -612,6 +612,56 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             )
         return count_aggregations
 
+    def label_counts(
+        self,
+        filters: Filter | None,
+        label_types: list[str],
+    ) -> dict[str, int]:
+        """Return document counts keyed by label id, for labels of the given types."""
+        where = "true"
+        if filters is not None:
+            where += _build_filter_query(
+                filters,
+                field_map=documents_filter_field_to_vespa_field_map,
+                struct_map=documents_filter_struct_field_to_vespa_field_map,
+            )
+
+        label_types_pattern = "|".join(re.escape(t) for t in label_types)
+        grouping = G.all(
+            G.group("labels_type_id_value_attribute"),
+            G.filter_(
+                G.regex(
+                    pattern=f"^({label_types_pattern})::.*",
+                    expr="labels_type_id_value_attribute",
+                )
+            ),
+            G.max(5000),
+            G.each(G.output(G.count())),
+        )
+
+        yql = (
+            "select labels_type_id_value_attribute from documents "
+            f"where {where} | {grouping}"
+        )
+
+        response = execute_vespa_query(
+            endpoint=f"{self.settings.vespa_endpoint}/search",
+            token=self.settings.vespa_read_token,
+            request_body={"yql": yql, "hits": 0, "timeout": "5s"},
+            request_context="documents.label_counts",
+        )
+
+        root_children: list[dict] = response.get("root", {}).get("children") or []
+        groups: list[dict] = (root_children[0].get("children", []) if root_children else [])
+
+        counts: dict[str, int] = {}
+        for group in groups:
+            for group_value in group.get("children", []):
+                count = group_value.get("fields", {}).get("count()", 0)
+                _, label_id, _ = self.parse_label_type_id_value(group_value["value"])
+                counts[label_id] = count
+        return counts
+
     def _run_facet_query(
         self,
         query: str | None,
