@@ -72,7 +72,8 @@ def _from_labels(label_type: str) -> ColumnReader:
     _LABEL_VALUE_SEPARATOR = "; "
 
     def read_column(document: Document) -> str:
-        """The matching label values of one document, as one cell's text.
+        """
+        The matching label values of one document, as one cell's text.
 
         Separates the values of a column read from several labels of one
         type.
