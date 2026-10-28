@@ -37,3 +37,11 @@ jobs:
           PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
           PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
         run: just deploy
+  notify-failure:
+    needs: deploy
+    if: failure()
+    uses: ./.github/workflows/notify-deploy-failure.yml
+    secrets: inherit
+    with:
+      environment: production
+      heading: vespa-feeder deploy failed

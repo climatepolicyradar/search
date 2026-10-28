@@ -219,7 +219,7 @@ test_cases = [
                 "resilien" in lbl.lower()
                 or "infrastructur" in lbl.lower()
                 or "construct" in lbl.lower()
-                for lbl in label.all_labels
+                for lbl in [label.value, *label.alternative_labels]
             )
         ),
         all_or_any="any",
@@ -231,7 +231,7 @@ test_cases = [
         characteristics_test=lambda label: (
             any(
                 "wind" in lbl.lower() or "energy" in lbl.lower()
-                for lbl in label.all_labels
+                for lbl in [label.value, *label.alternative_labels]
             )
             or label.id == "entity_type::Roadmap"
         ),

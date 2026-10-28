@@ -81,6 +81,7 @@ lint:
     - linters: [typos]
       paths:
         - relevance_tests/**
+        - relevance/**
         # ISO 3166-1/3166-2 country and subdivision codes were being corrected from
         # (CAF, LSO, NAM, SOM, SUR, ...) => (CAFE, ALSO, NAME, SOME, SURE, ...)
         - api/geographies_taxonomy.py

@@ -13,6 +13,7 @@ from passages_flow import (
     passages_feeder_flow,
 )
 from prefect.docker import DockerImage
+from prefect.schedules import Cron
 from prefect.variables import Variable
 
 from prefect import Flow
@@ -76,7 +77,7 @@ _FEEDS: list[VespaFeederDeployment] = [
     VespaFeederDeployment(
         flow=documents_feeder_flow,
         cron="30 8 * * *",
-        job_variables={"cpu": 1024, "memory": 2048},
+        job_variables={"cpu": 1024, "memory": 4096},
     ),
     # Passages
     VespaFeederDeployment(
@@ -121,7 +122,7 @@ if __name__ == "__main__":
             ),
             job_variables=job_variables,
             parameters=feed.parameters,
-            cron=feed.cron,
+            schedule=Cron(feed.cron, slug=deployment_name) if feed.cron else None,
             build=False,
             push=False,
         )

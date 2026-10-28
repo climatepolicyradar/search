@@ -15,10 +15,10 @@ from search.engines.dev_vespa import (
     normalise_topic_id,
 )
 from search.identifiers import Identifier, generate_id
-from search.label import Label
+from search.label import Label, LabelSearchResult
 from search.passage import Passage
 
-TModel = TypeVar("TModel", Label, Passage, Document)
+TModel = TypeVar("TModel", Label, LabelSearchResult, Passage, Document)
 
 
 def _topic_condition(topic: str) -> FieldFilter:
