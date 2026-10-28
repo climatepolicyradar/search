@@ -1,8 +1,8 @@
 import pytest
 from pydantic_evals.evaluators import EvaluationReason
 
-from relevance_tests.evaluators.narrows import Narrows
-from relevance_tests.tests.fakes import Pair, Results, context
+from relevance.evaluators.narrows import Narrows
+from relevance.tests.fakes import Pair, Results, context
 
 
 def pair(narrower: int | None, broader: int | None) -> Pair:

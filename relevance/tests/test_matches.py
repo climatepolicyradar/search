@@ -4,8 +4,8 @@ from typing import Literal
 import pytest
 from pydantic_evals.evaluators import EvaluationReason
 
-from relevance_tests.evaluators.matches import Matches
-from relevance_tests.tests.fakes import Result, Results, context
+from relevance.evaluators.matches import Matches
+from relevance.tests.fakes import Result, Results, context
 
 
 @dataclass

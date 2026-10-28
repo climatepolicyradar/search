@@ -26,18 +26,12 @@ just test-functional
 
 ## Relevance tests
 
-Relevance tests live in `relevance_tests/suites/` as pydantic-evals datasets.
-They grade the relevance of a search engine's results using a set of real search
-terms, and the IDs of the results we expect to be returned.
+Relevance tests live in the `tests/relevance/` directory. They use the core
+classes in this repo to grade the relevance of a search engine's results using a
+set of real search terms, and the IDs of the results we expect to be returned.
 
-You can run every suite with the following command:
+You can run the relevance tests with the following command:
 
 ```bash
 just test-relevance
-```
-
-or one suite, optionally writing an HTML report:
-
-```bash
-uv run python -m relevance_tests --suite passages --report html
 ```

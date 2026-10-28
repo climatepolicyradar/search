@@ -1,0 +1,757 @@
+import re
+from abc import ABC, abstractmethod
+from typing import Callable, Generic, Literal, TypeVar
+
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
+
+from search.corpora import Corpus, build_corpus_filter
+from search.data_in_models import Document
+from search.engines import OrderBy, Pagination, SearchEngine
+from search.engines.dev_vespa import (
+    TOPIC_FILTER_FIELD,
+    Condition,
+    FieldFilter,
+    Filter,
+    normalise_topic_id,
+)
+from search.identifiers import Identifier, generate_id
+from search.label import Label
+from search.passage import Passage
+
+TModel = TypeVar("TModel", Label, Passage, Document)
+
+
+def _topic_condition(topic: str) -> FieldFilter:
+    """One topic condition. A bare wikibase id is given the `concept::` prefix."""
+    return FieldFilter(
+        field=TOPIC_FILTER_FIELD, op="contains", value=normalise_topic_id(topic)
+    )
+
+
+def _build_topic_filter(topics: list[str], topics_or: bool) -> Filter | None:
+    """
+    Group the topics into a single condition, AND by default, OR with `topics_or`.
+
+    Each topic sits in its own nested group because topics in a group would get collapsed
+    by the engine into a single `sameElement(...)`, so match nothing. See
+    `_build_filter_yql` in `search/engines/vespa_query/filters.py`.
+    """
+    if not topics:
+        return None
+    conditions: list[Condition | Filter] = [_topic_condition(topic) for topic in topics]
+    if topics_or:
+        return Filter(op="or", filters=conditions)
+    return Filter(
+        op="and",
+        filters=[Filter(op="or", filters=[condition]) for condition in conditions],
+    )
+
+
+class TestCaseOutcome(BaseModel, Generic[TModel]):
+    """
+    What running one test case against an engine produced.
+
+    ``comparison_results`` is the second arm of a test case that issues two
+    queries. Storing it means a low overlap can be diagnosed from the report
+    rather than by re-running the query.
+
+    ``detail`` is anything else the report should show, for a case whose verdict
+    rests on numbers that aren't in the results themselves.
+    """
+
+    passed: bool
+    results: list[TModel]
+    comparison_results: list[TModel] | None = None
+    detail: str | None = None
+
+
+class TestCase(BaseModel, ABC, Generic[TModel]):
+    """A test case"""
+
+    __test__ = False
+
+    category: str | None = None
+    search_terms: str
+    description: str
+    corpus: Corpus | None = None
+    # Passage-only filters: restrict results to a single document / principal.
+    document_id: str | None = None
+    principal_id: str | None = None
+    # Concept (topic) wikibase IDs, e.g. ["Q567", "Q1651"]. A result must carry
+    # every listed concept to match, unless `topics_or` is set. On documents these
+    # also drive topic ranking - see `_topic_ids_from_filters` in
+    # search/engines/vespa_query/filters.py.
+    topics: list[str] | None = None
+    topics_or: bool = Field(
+        description=(
+            "Match passages carrying ANY of the given topics. "
+            "Default is to require all of them i.e. AND."
+        ),
+        default=False,
+    )
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def normalize_category(cls, value: str | None) -> str | None:
+        """Normalize category: convert to lowercase with underscores."""
+        if value is None:
+            return value
+        return value.strip().lower().replace("-", "_").replace(" ", "_")
+
+    def filters(self) -> Filter | None:
+        """Vespa filter for this test case's corpus/document/principal/topics, or None."""
+        conditions: list[Condition | Filter] = []
+        if topic_filter := _build_topic_filter(self.topics or [], self.topics_or):
+            conditions.append(topic_filter)
+        if self.corpus is not None:
+            conditions.append(build_corpus_filter(self.corpus))
+        if self.document_id is not None:
+            conditions.append(
+                FieldFilter(field="document_id", op="contains", value=self.document_id)
+            )
+        if self.principal_id is not None:
+            conditions.append(
+                FieldFilter(
+                    field="principal_id", op="contains", value=self.principal_id
+                )
+            )
+        if not conditions:
+            return None
+        return Filter(op="and", filters=conditions)
+
+    @property
+    def name(self) -> str:
+        """The name of the test case type (its class name)"""
+        return self.__class__.__name__
+
+    def diagnose(self, search_results: list[TModel]) -> str:  # noqa: ARG002
+        """
+        Return a diagnostic string explaining a test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A human-readable string describing why the test likely failed.
+        """
+        return ""
+
+    @abstractmethod
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
+        """Run the test case against the given engine."""
+
+        raise NotImplementedError
+
+    @computed_field
+    @property
+    @abstractmethod
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        raise NotImplementedError
+
+
+class PrecisionTestCase(TestCase[TModel], Generic[TModel]):
+    """Dictates which should be the top results for a given search"""
+
+    expected_result_ids: list[str] = Field(
+        description="The expected IDs for the top results."
+    )
+    strict_order: bool = Field(
+        description=(
+            "Whether the expected family slugs should be in the exact order specified."
+        ),
+        default=False,
+    )
+
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
+        """Run the test case against the given engine."""
+
+        search_results = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters=self.filters(),
+        )
+        result_ids = [result.id for result in search_results.results]
+
+        result_ids_limited = result_ids[: len(self.expected_result_ids)]
+
+        if self.strict_order:
+            passed = self.expected_result_ids == result_ids_limited
+        else:
+            passed = sorted(self.expected_result_ids) == sorted(result_ids_limited)
+
+        return TestCaseOutcome(passed=passed, results=search_results.results)
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a precision test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing where expected IDs actually ranked.
+        """
+        result_ids = [result.id for result in search_results]
+        id_to_rank = {rid: i + 1 for i, rid in enumerate(result_ids)}
+        n = len(self.expected_result_ids)
+
+        lines = [f"Expected top {n} results (strict_order={self.strict_order}):"]
+        for i, expected_id in enumerate(self.expected_result_ids):
+            expected_rank = i + 1
+            actual_rank = id_to_rank.get(expected_id)
+            if actual_rank is None:
+                lines.append(
+                    f"  '{expected_id}': expected rank {expected_rank}, "
+                    f"not found in results"
+                )
+            else:
+                lines.append(
+                    f"  '{expected_id}': expected rank {expected_rank}, "
+                    f"found at rank {actual_rank}"
+                )
+
+        actual_top = result_ids[:n]
+        lines.append(f"Actual top {n}: {actual_top}")
+        return "\n".join(lines)
+
+    @model_validator(mode="after")
+    def check_expected_result_ids_unique(self):
+        """Check that the expected family slugs are unique."""
+        if len(self.expected_result_ids) != len(set(self.expected_result_ids)):
+            raise ValueError("expected_result_ids must be unique")
+        return self
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.expected_result_ids,
+            self.strict_order,
+            self.corpus,
+            self.topics,
+            self.topics_or,
+        )
+
+
+class RecallTestCase(TestCase[TModel], Generic[TModel]):
+    """Dictates which results should be anywhere in the top K results for a given search."""
+
+    expected_result_ids: list[str] = Field(
+        description="IDs which should appear in the top k results."
+    )
+    forbidden_result_ids: list[str] | None = Field(
+        description="IDs which should not appear in the top k results.",
+        default=None,
+    )
+    k: int = Field(
+        description="The number of results to check for the expected results.",
+        default=20,
+        gt=0,
+    )
+
+    @model_validator(mode="after")
+    def check_expected_result_ids_unique(self):
+        """Check that the expected family slugs are unique."""
+        if len(self.expected_result_ids) != len(set(self.expected_result_ids)):
+            raise ValueError("expected_result_ids must be unique")
+        return self
+
+    @model_validator(mode="after")
+    def check_forbidden_result_ids_unique(self):
+        """Check that the expected family slugs are unique."""
+        if self.forbidden_result_ids is not None and len(
+            self.forbidden_result_ids
+        ) != len(set(self.forbidden_result_ids)):
+            raise ValueError("forbidden_result_ids must be unique")
+        return self
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a recall test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing which expected IDs were found or missing,
+            and any forbidden IDs that appeared.
+        """
+        result_ids = [result.id for result in search_results]
+        id_to_rank = {rid: i + 1 for i, rid in enumerate(result_ids)}
+
+        lines = [f"Recall check in top {self.k} results ({len(result_ids)} returned):"]
+
+        missing = []
+        found = []
+        for expected_id in self.expected_result_ids:
+            rank = id_to_rank.get(expected_id)
+            if rank is None:
+                missing.append(expected_id)
+            else:
+                found.append((expected_id, rank))
+
+        if found:
+            lines.append("  Found:")
+            for eid, rank in found:
+                # Ranks beyond k are returned for context but don't count as recalled.
+                outside = " (outside top k)" if rank > self.k else ""
+                lines.append(f"    '{eid}' at rank {rank}{outside}")
+        if missing:
+            lines.append("  Missing:")
+            for eid in missing:
+                lines.append(f"    '{eid}'")
+
+        if self.forbidden_result_ids:
+            forbidden_present = [
+                (fid, id_to_rank[fid])
+                for fid in self.forbidden_result_ids
+                if fid in id_to_rank
+            ]
+            if forbidden_present:
+                lines.append("  Forbidden IDs present:")
+                for fid, rank in forbidden_present:
+                    outside = " (outside top k)" if rank > self.k else ""
+                    lines.append(f"    '{fid}' at rank {rank}{outside}")
+
+        return "\n".join(lines)
+
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
+        """Run the test case against the given engine."""
+
+        search_results = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=max(10, self.k)),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters=self.filters(),
+        )
+        # page_size has a floor of 10, so the response can be longer than k. Truncate
+        # to k before checking, otherwise a k below 10 is silently treated as 10.
+        result_ids = [result.id for result in search_results.results[: self.k]]
+
+        expected_ids_not_in_response = set(self.expected_result_ids).difference(
+            set(result_ids)
+        )
+        forbidden_ids_in_response = (
+            set(self.forbidden_result_ids).intersection(set(result_ids))
+            if self.forbidden_result_ids is not None
+            else None
+        )
+
+        failed = expected_ids_not_in_response or forbidden_ids_in_response
+        passed = not failed
+
+        return TestCaseOutcome(passed=passed, results=search_results.results)
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.expected_result_ids,
+            self.forbidden_result_ids,
+            self.k,
+            self.corpus,
+            self.topics,
+            self.topics_or,
+        )
+
+
+class RelativeOrderTestCase(TestCase[TModel], Generic[TModel]):
+    """
+    Dictates that one result should rank above another for a given search.
+
+    Useful for expressing a relative preference between two known results without
+    committing to their absolute ranks. The higher result must appear in the top k
+    results; the lower result may be absent, which counts as ranking below.
+    """
+
+    higher_result_id: str = Field(
+        description="The ID which should rank above lower_result_id."
+    )
+    lower_result_id: str = Field(
+        description="The ID which should rank below higher_result_id."
+    )
+    k: int = Field(
+        description="The number of results to check the relative order within.",
+        default=20,
+        gt=0,
+    )
+
+    @model_validator(mode="after")
+    def check_result_ids_differ(self):
+        """Check that the two result IDs are different."""
+        if self.higher_result_id == self.lower_result_id:
+            raise ValueError("higher_result_id and lower_result_id must be different")
+        return self
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a relative order test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing where each of the two IDs actually ranked.
+        """
+        result_ids = [result.id for result in search_results]
+        id_to_rank = {rid: i + 1 for i, rid in enumerate(result_ids)}
+        higher_rank = id_to_rank.get(self.higher_result_id)
+        lower_rank = id_to_rank.get(self.lower_result_id)
+
+        lines = [
+            f"Relative order check in top {self.k} results "
+            f"({len(result_ids)} returned):",
+            f"  '{self.higher_result_id}' (expected higher): "
+            + (f"rank {higher_rank}" if higher_rank is not None else "not found"),
+            f"  '{self.lower_result_id}' (expected lower): "
+            + (f"rank {lower_rank}" if lower_rank is not None else "not found"),
+        ]
+        if higher_rank is None:
+            lines.append(
+                "  The expected-higher result must appear in the top k results to pass."
+            )
+
+        return "\n".join(lines)
+
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
+        """Run the test case against the given engine."""
+
+        search_results = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=max(10, self.k)),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters=self.filters(),
+        )
+        results = search_results.results[: self.k]
+        result_ids = [result.id for result in results]
+
+        if self.higher_result_id not in result_ids:
+            # Can't demonstrate the ordering if the higher result isn't there.
+            passed = False
+        elif self.lower_result_id not in result_ids:
+            # The higher result is present and the lower one ranks below the cutoff.
+            passed = True
+        else:
+            passed = result_ids.index(self.higher_result_id) < result_ids.index(
+                self.lower_result_id
+            )
+
+        return TestCaseOutcome(passed=passed, results=results)
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.higher_result_id,
+            self.lower_result_id,
+            self.k,
+            self.corpus,
+            self.document_id,
+            self.principal_id,
+            self.topics,
+            self.topics_or,
+        )
+
+
+class FieldCharacteristicsTestCase(TestCase[TModel], Generic[TModel]):
+    """Dictates characteristics that any or all of the top k results should have for a given search."""
+
+    characteristics_test: Callable[[TModel], bool] = Field(
+        description="A function which takes the primitive type as input and returns True if the expected characteristics for the field value are met, and False otherwise.",
+        exclude=True,
+    )
+    k: int = Field(
+        description="The number of results to check for the expected results.",
+        default=20,
+        gt=0,
+    )
+    all_or_any: Literal["all", "any"] = Field(
+        description="Whether all or any of the results should match the test characteristics.",
+        default="all",
+    )
+    assert_results: bool = Field(
+        description="Whether to assert that results should be returned for a search. Checks that more than 0 results are returned.",
+        default=True,
+    )
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a field characteristics test failure.
+
+        :param search_results: The search results returned by the engine.
+        :returns: A string showing how many results passed or failed the
+            characteristics test.
+        """
+        total = len(search_results)
+        passing = sum(1 for r in search_results if self.characteristics_test(r))
+        failing = total - passing
+
+        lines = [
+            f"Characteristics test ({self.all_or_any} of {self.k}): "
+            f"{passing}/{total} passed, {failing}/{total} failed"
+        ]
+
+        if self.k > len(search_results):
+            lines.append(
+                f"  NOTE: Only {len(search_results)} results were returned, but k={self.k}. "
+                "This test is evaluated against the returned results only."
+            )
+
+        if self.assert_results and total == 0:
+            lines.append("  No results returned (assert_results=True)")
+
+        return "\n".join(lines)
+
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
+        """Run the test case against the given engine."""
+
+        search_results = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=self.k),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters=self.filters(),
+        )
+        results = search_results.results[: self.k]
+        passing_results = [
+            result for result in results if self.characteristics_test(result)
+        ]
+
+        passed = False
+        if self.all_or_any == "all":
+            passed = len(passing_results) == len(results)
+        elif self.all_or_any == "any":
+            passed = len(passing_results) > 0
+
+        if self.assert_results:
+            passed = passed and (len(results) > 0)
+
+        return TestCaseOutcome(passed=passed, results=results)
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.all_or_any,
+            self.k,
+            self.corpus,
+            self.document_id,
+            self.principal_id,
+            self.topics,
+            self.topics_or,
+        )
+
+
+class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
+    """
+    Compare two searches to each other. Compares the top k results.
+
+    This test case runs two different searches and checks that they have a minimum
+    proportion of overlapping results. Optionally, it can also check that the order
+    of the overlapping results is the same.
+    """
+
+    search_terms_to_compare: str = Field(
+        description="The terms to compare search_terms to."
+    )
+    k: int = Field(
+        description="The number of results to compare.",
+        default=20,
+        gt=0,
+    )
+    minimum_overlap: float = Field(
+        description="The desired proportion of the top k results which should overlap.",
+        gt=0,
+        le=1,
+    )
+    strict_order: bool = Field(
+        description=(
+            "Whether the overlapping results should be in the exact order specified."
+        ),
+        default=False,
+    )
+
+    @model_validator(mode="after")
+    def check_comparison_terms(self):
+        """Check that the comparison terms are different from the search terms."""
+        if self.search_terms == self.search_terms_to_compare:
+            raise ValueError(
+                "search_terms and search_terms_to_compare must be different"
+            )
+        return self
+
+    def diagnose(self, search_results: list[TModel]) -> str:
+        """
+        Return diagnostic info for a search comparison test failure.
+
+        :param search_results: The search results from the first query.
+            The second query's results are rendered separately by the report,
+            from ``TestCaseOutcome.comparison_results``.
+        :returns: A string showing comparison metadata and the first
+            query's result IDs.
+        """
+        result_ids_1 = [r.id for r in search_results[: self.k]]
+        lines = [
+            f"Comparison: '{self.search_terms}' vs '{self.search_terms_to_compare}'",
+            f"  Required overlap: {self.minimum_overlap:.0%} of top {self.k} "
+            f"(strict_order={self.strict_order})",
+            f"  Results for '{self.search_terms}': {result_ids_1}",
+            f"  (Results for '{self.search_terms_to_compare}' are listed "
+            "separately in the report)",
+        ]
+        return "\n".join(lines)
+
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
+        """Run the test case against the given engine."""
+
+        filters = self.filters()
+        search_results_1 = engine.search(
+            query=self.search_terms,
+            pagination=Pagination(page_token=1, page_size=self.k),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters=filters,
+        )
+        search_results_2 = engine.search(
+            query=self.search_terms_to_compare,
+            pagination=Pagination(page_token=1, page_size=self.k),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters=filters,
+        )
+
+        results_1_limited = search_results_1.results[: self.k]
+        results_2_limited = search_results_2.results[: self.k]
+
+        result_ids_1 = [result.id for result in results_1_limited]
+        result_ids_2 = [result.id for result in results_2_limited]
+
+        if self.strict_order:
+            # Count matching IDs in the same positions
+            overlap_count = sum(
+                1 for id1, id2 in zip(result_ids_1, result_ids_2) if id1 == id2
+            )
+        else:
+            # Count IDs that appear in both lists regardless of position
+            overlap_count = len(set(result_ids_1).intersection(set(result_ids_2)))
+
+        # Divide by the number of results actually comparable rather than by k: if
+        # either query returns fewer than k results, overlap_count can never reach k
+        # and a minimum_overlap of 1.0 would be unreachable however well search does.
+        comparable = min(len(result_ids_1), len(result_ids_2))
+        overlap_proportion = overlap_count / comparable if comparable > 0 else 0
+        passed = overlap_proportion >= self.minimum_overlap
+
+        return TestCaseOutcome(
+            passed=passed,
+            results=search_results_1.results,
+            comparison_results=search_results_2.results,
+        )
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.search_terms_to_compare,
+            self.minimum_overlap,
+            self.strict_order,
+            self.k,
+            self.corpus,
+            self.document_id,
+            self.principal_id,
+            self.topics,
+            self.topics_or,
+        )
+
+
+class SearchNarrowingTestCase(TestCase[TModel], Generic[TModel]):
+    """Adding words to a search should never make it match more documents (FUS-421)."""
+
+    broader_search_terms: str = Field(
+        description="A shorter query that `search_terms` adds words to."
+    )
+
+    def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:
+        """Run the test case against the given engine."""
+        broader, narrower = (
+            engine.search(
+                query=query,
+                pagination=Pagination(page_token=1, page_size=10),
+                order_by=[OrderBy(field="relevance", direction="desc")],
+                filters=self.filters(),
+            )
+            for query in (self.broader_search_terms, self.search_terms)
+        )
+        if broader.total_size is None or narrower.total_size is None:
+            raise ValueError(f"{type(engine).__name__} gave no total hit count")
+        # 0 <= 0 would pass without testing anything
+        if broader.total_size == 0:
+            raise ValueError(f"{self.broader_search_terms!r} matched no documents")
+
+        return TestCaseOutcome(
+            passed=narrower.total_size <= broader.total_size,
+            results=narrower.results,
+            comparison_results=broader.results,
+            detail=(
+                f"'{self.broader_search_terms}' matched {broader.total_size:,} "
+                f"documents, '{self.search_terms}' matched {narrower.total_size:,}"
+            ),
+        )
+
+    @computed_field
+    @property
+    def id(self) -> Identifier:
+        """Generated ID for a TestCase"""
+
+        return generate_id(
+            self.name,
+            self.category,
+            self.search_terms,
+            self.broader_search_terms,
+            self.corpus,
+            self.document_id,
+            self.principal_id,
+            self.topics,
+            self.topics_or,
+        )
+
+
+def all_words_in_string(include_words: list[str], string: str) -> bool:
+    """Case-insensitive check for if all words are in a string, ignoring punctuation."""
+    words = re.findall(r"\b\w+\b", string.lower())
+
+    return all(word.lower() in words for word in include_words)
+
+
+def any_words_in_string(include_words: list[str], string: str) -> bool:
+    """Case-insensitive check for if any words are in a string."""
+    words = re.findall(r"\b\w+\b", string.lower())
+
+    return any(word.lower() in words for word in include_words)
+
+
+def phrase_in_string(phrase: str, string: str) -> bool:
+    """Case-insensitive check for if a phrase appears in order, ignoring punctuation."""
+    phrase_words = re.findall(r"\b\w+\b", phrase.lower())
+    words = re.findall(r"\b\w+\b", string.lower())
+
+    if not phrase_words:
+        return False
+
+    return any(
+        words[i : i + len(phrase_words)] == phrase_words
+        for i in range(len(words) - len(phrase_words) + 1)
+    )

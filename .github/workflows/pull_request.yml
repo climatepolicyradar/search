@@ -28,6 +28,7 @@ jobs:
           filters: |
             run-test:
               - 'api/**'
+              - 'relevance/**'
               - 'relevance_tests/**'
               - 'scripts/vespa_rules/**'
               - 'search/**'

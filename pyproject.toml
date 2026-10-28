@@ -73,7 +73,7 @@ allow-direct-references = true
 packages = ["search"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "relevance_tests/tests"]
+testpaths = ["tests", "relevance/tests"]
 
 [tool.pylint."messages control"]
 disable = ["logging-fstring-interpolation"] # W1203: allow f-strings in logging

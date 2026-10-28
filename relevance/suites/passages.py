@@ -6,13 +6,13 @@ from pydantic_evals import Dataset
 from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
 
 from api.routers import settings
-from relevance_tests.evaluators.evaluator import HasResults
-from relevance_tests.evaluators.forbidden import Forbidden
-from relevance_tests.evaluators.matches import Matches
-from relevance_tests.evaluators.overlap import Overlap
-from relevance_tests.evaluators.recall import Recall
-from relevance_tests.evaluators.relative_order import RanksAbove
-from relevance_tests.suites.documents import QueryPair, build_topic_filter
+from relevance.evaluators.evaluator import HasResults
+from relevance.evaluators.forbidden import Forbidden
+from relevance.evaluators.matches import Matches
+from relevance.evaluators.overlap import Overlap
+from relevance.evaluators.recall import Recall
+from relevance.evaluators.relative_order import RanksAbove
+from relevance.suites.documents import QueryPair, build_topic_filter
 from search.engines import ListResponse, OrderBy, Pagination
 from search.engines.dev_vespa import (
     Condition,

@@ -4,12 +4,12 @@ from pydantic import BaseModel
 from pydantic_evals import Dataset
 
 from api.routers import settings
-from relevance_tests.evaluators.matches import Matches
-from relevance_tests.evaluators.narrows import Narrows
-from relevance_tests.evaluators.overlap import Overlap
-from relevance_tests.evaluators.precision import Precision
-from relevance_tests.evaluators.recall import Recall
-from relevance_tests.evaluators.relative_order import RanksAbove
+from relevance.evaluators.matches import Matches
+from relevance.evaluators.narrows import Narrows
+from relevance.evaluators.overlap import Overlap
+from relevance.evaluators.precision import Precision
+from relevance.evaluators.recall import Recall
+from relevance.evaluators.relative_order import RanksAbove
 from search.corpora import Corpus, build_corpus_filter
 from search.data_in_models import Document
 from search.engines import ListResponse, OrderBy, Pagination

@@ -1,10 +1,10 @@
 from pydantic_evals import Dataset
 
 from api.routers import settings
-from relevance_tests.evaluators.overlap import Overlap
-from relevance_tests.evaluators.precision import Precision
-from relevance_tests.evaluators.recall import Recall
-from relevance_tests.suites.documents import (
+from relevance.evaluators.overlap import Overlap
+from relevance.evaluators.precision import Precision
+from relevance.evaluators.recall import Recall
+from relevance.suites.documents import (
     DocumentMatches,
     DocumentQuery,
     QueryPair,

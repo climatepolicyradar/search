@@ -7,8 +7,8 @@ import typer
 from pydantic_evals.reporting import EvaluationReport
 from wandb import Run
 
-from relevance_tests.reporters import html_report, weights_and_biases
-from relevance_tests.suites import documents, labels, passages, principals
+from relevance.reporters import html_report, weights_and_biases
+from relevance.suites import documents, labels, passages, principals
 from search.config import TEST_RESULTS_DIR
 
 app = typer.Typer()

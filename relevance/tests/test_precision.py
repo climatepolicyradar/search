@@ -1,7 +1,7 @@
 from pydantic_evals.evaluators import EvaluationReason
 
-from relevance_tests.evaluators.precision import Precision
-from relevance_tests.tests.fakes import context, results
+from relevance.evaluators.precision import Precision
+from relevance.tests.fakes import context, results
 
 
 def test_all_expected_in_top_k_passes() -> None:

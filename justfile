@@ -32,17 +32,13 @@ test +OPTS="":
 
 # test only the functional behaviour of the code (not relevance)
 test-functional +OPTS="":
-    uv run pytest --disable-pytest-warnings --color=yes --verbose {{ OPTS }}
+    uv run pytest --disable-pytest-warnings --color=yes --verbose --ignore=relevance_tests {{ OPTS }}
 
 # test only the relevance of search results
 test-relevance +OPTS="":
-    uv run python -m relevance_tests --suite labels {{ OPTS }}
-    uv run python -m relevance_tests --suite documents {{ OPTS }}
-    uv run python -m relevance_tests --suite document_comparisons {{ OPTS }}
-    uv run python -m relevance_tests --suite principals {{ OPTS }}
-    uv run python -m relevance_tests --suite principal_comparisons {{ OPTS }}
-    uv run python -m relevance_tests --suite passages {{ OPTS }}
-    uv run python -m relevance_tests --suite passage_comparisons {{ OPTS }}
+    uv run relevance_tests/test_labels.py {{ OPTS }}
+    uv run relevance_tests/test_passages.py {{ OPTS }}
+    uv run relevance_tests/test_documents.py {{ OPTS }}
 
 # run linters and code formatters on relevant files
 lint:

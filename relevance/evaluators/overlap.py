@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
 
-from relevance_tests.evaluators.evaluator import HasId, HasResults, HasSearchPair
+from relevance.evaluators.evaluator import HasId, HasResults, HasSearchPair
 
 
 @dataclass

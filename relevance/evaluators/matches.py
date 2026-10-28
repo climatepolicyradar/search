@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
 
-from relevance_tests.evaluators.evaluator import HasResults
+from relevance.evaluators.evaluator import HasResults
 
 
 @dataclass

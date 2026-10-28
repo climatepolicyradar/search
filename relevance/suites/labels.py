@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from pydantic_evals import Dataset
 
 from api.routers import settings
-from relevance_tests.evaluators.forbidden import Forbidden
-from relevance_tests.evaluators.matches import Matches
-from relevance_tests.evaluators.precision import Precision
-from relevance_tests.evaluators.recall import Recall
+from relevance.evaluators.forbidden import Forbidden
+from relevance.evaluators.matches import Matches
+from relevance.evaluators.precision import Precision
+from relevance.evaluators.recall import Recall
 from search.engines import ListResponse, OrderBy, Pagination
 from search.engines.dev_vespa.labels_search_engine import DevVespaLabelSearchEngine
 from search.label import LabelSearchResult

@@ -1,8 +1,8 @@
 import pytest
 from pydantic_evals.evaluators import EvaluationReason
 
-from relevance_tests.evaluators.relative_order import RanksAbove
-from relevance_tests.tests.fakes import context, results
+from relevance.evaluators.relative_order import RanksAbove
+from relevance.tests.fakes import context, results
 
 
 @pytest.mark.parametrize(

@@ -1,7 +1,7 @@
 from pydantic_evals.evaluators import EvaluationReason
 
-from relevance_tests.evaluators.overlap import Overlap
-from relevance_tests.tests.fakes import Pair, context, results
+from relevance.evaluators.overlap import Overlap
+from relevance.tests.fakes import Pair, context, results
 
 
 def test_identical_lists_fully_overlap() -> None:

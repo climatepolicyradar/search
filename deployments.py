@@ -17,6 +17,7 @@ from prefect.schedules import Cron
 from prefect.variables import Variable
 
 from online_metrics.online_metrics_flow import collect_online_metrics
+from relevance_tests import test_documents, test_labels, test_passages
 from search.vespa.labels_feed_flow import labels_feed_flow
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -152,7 +153,26 @@ if __name__ == "__main__":
         "ephemeralStorage": {"sizeInGiB": 30}
     }
 
+    # Running relevance tests
+    rrule_relevance_tests = "RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=-1MO;BYHOUR=21;BYMINUTE=0"  # last Monday of every month at 21:00
+
     rrule_online_metrics = "RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=1MO;BYHOUR=21;BYMINUTE=0"  # first Monday of every month at 21:00
+
+    create_deployment(
+        flow=test_documents.relevance_tests_documents,  # type: ignore
+        description="Run relevance tests for documents",
+        rrule=rrule_relevance_tests,
+    )
+    create_deployment(
+        flow=test_labels.relevance_tests_labels,  # type: ignore
+        description="Run relevance tests for labels",
+        rrule=rrule_relevance_tests,
+    )
+    create_deployment(
+        flow=test_passages.relevance_tests_passages,  # type: ignore
+        description="Run relevance tests for passages",
+        rrule=rrule_relevance_tests,
+    )
 
     # Online metrics
     create_deployment(

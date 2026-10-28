@@ -21,11 +21,22 @@ from pathlib import Path
 from vespa.application import Vespa
 from vespa.io import VespaQueryResponse
 
-from relevance_tests.suites import documents, labels, passages, principals
+from relevance_tests import (
+    test_documents,
+    test_labels,
+    test_passages,
+    test_principal_documents,
+)
 
 pytest_plugins = ["tests.vespa_e2e"]
 
 _SNAPSHOT_PATH = Path(__file__).parent / "data" / "relevance_query_rewrite_snapshot.json"
+_MODULE_RULEBASE = [
+    (test_documents, None),
+    (test_principal_documents, None),
+    (test_passages, "passages"),
+    (test_labels, "labels"),
+]
 _RULEBASE_SOURCE = {None: "documents", "passages": "passages", "labels": "labels"}
 
 
@@ -85,28 +96,14 @@ def get_rule_rewrite(vespa_app: Vespa, query: str, rulebase: str | None) -> str:
 
 
 def _current_pairs() -> list[tuple[str | None, str]]:
-    queries: dict[str | None, list[str]] = {
-        None: [
-            *(case.inputs.query for case in documents.dataset.cases),
-            *(case.inputs.query for case in principals.dataset.cases),
-            *(case.inputs.query for case in documents.comparisons.cases),
-            *(case.inputs.other for case in documents.comparisons.cases),
-            *(case.inputs.query for case in principals.comparisons.cases),
-            *(case.inputs.other for case in principals.comparisons.cases),
-        ],
-        "passages": [
-            *(case.inputs.query for case in passages.dataset.cases),
-            *(case.inputs.query for case in passages.comparisons.cases),
-            *(case.inputs.other for case in passages.comparisons.cases),
-        ],
-        "labels": [case.inputs for case in labels.dataset.cases],
-    }
-    pairs = {
-        (rulebase, query)
-        for rulebase, rulebase_queries in queries.items()
-        for query in rulebase_queries
-        if query
-    }
+    pairs: set[tuple[str | None, str]] = set()
+    for module, rulebase in _MODULE_RULEBASE:
+        for case in module.test_cases:
+            if case.search_terms:
+                pairs.add((rulebase, case.search_terms))
+            compare = getattr(case, "search_terms_to_compare", None)
+            if compare:
+                pairs.add((rulebase, compare))
     return sorted(pairs, key=lambda p: (p[0] or "", p[1]))
 
 

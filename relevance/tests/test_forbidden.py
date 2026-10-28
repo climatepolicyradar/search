@@ -1,7 +1,7 @@
 from pydantic_evals.evaluators import EvaluationReason
 
-from relevance_tests.evaluators.forbidden import Forbidden
-from relevance_tests.tests.fakes import context, results
+from relevance.evaluators.forbidden import Forbidden
+from relevance.tests.fakes import context, results
 
 
 def test_no_forbidden_results_passes() -> None:
