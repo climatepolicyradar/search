@@ -85,3 +85,11 @@ jobs:
         run: pulumi up --stack ${{ inputs.stack }}/${{ inputs.environment }} --yes --skip-preview
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+  notify-failure:
+    needs: pulumi_up
+    if: failure()
+    uses: ./.github/workflows/notify-deploy-failure.yml
+    secrets: inherit
+    with:
+      environment: ${{ inputs.environment }}
+      heading: pulumi up of ${{ inputs.stack }} failed
