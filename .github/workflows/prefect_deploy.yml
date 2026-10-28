@@ -46,3 +46,11 @@ jobs:
           # Mirrors the test job in merge_to_main.yml.
           VESPA_ENDPOINT: http://localhost:8080/
           VESPA_READ_TOKEN: ""
+  notify-failure:
+    needs: deploy
+    if: failure()
+    uses: ./.github/workflows/notify-deploy-failure.yml
+    secrets: inherit
+    with:
+      environment: production
+      heading: Prefect deploy failed
