@@ -33,11 +33,7 @@ from search.data_in_models import Document
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter
 
-########################################################################
-# Helper functions
-########################################################################
-
-# What a column reader does: take a document, return one cell's text.
+# Column readers should take a document & return one cell's text.
 ColumnReader = Callable[[Document], str]
 
 
@@ -73,11 +69,14 @@ def _from_labels(label_type: str) -> ColumnReader:
     A document with no label of this type gives ``""``, an empty cell.
     Otherwise one cell's worth of label values, separated by ``"; "``.
     """
-    # Separates the values of a column read from several labels of one type.
     _LABEL_VALUE_SEPARATOR = "; "
 
     def read_column(document: Document) -> str:
-        """The matching label values of one document, as one cell's text."""
+        """The matching label values of one document, as one cell's text.
+
+        Separates the values of a column read from several labels of one
+        type.
+        """
         return _LABEL_VALUE_SEPARATOR.join(
             label.value.value for label in document.labels if label.type == label_type
         )
@@ -119,9 +118,6 @@ def _from_document(field: str) -> ColumnReader:
 
     return read_column
 
-########################################################################
-# Columns
-########################################################################
 
 class Column(StrEnum):
     """
@@ -199,10 +195,6 @@ def resolve_columns(columns: list[Column] | None) -> tuple[Column, ...]:
     return tuple(dict.fromkeys(columns))
 
 
-########################################################################
-# Getting the data
-########################################################################
-
 def fetch_documents_for_download(
     engine: DevVespaDocumentSearchEngine,
     query: str | None,
@@ -254,9 +246,6 @@ def fetch_documents_for_download(
             break
     return results[:max_results]
 
-########################################################################
-# Building the CSV
-########################################################################
 
 def build_csv_rows(
     documents: list[Document], columns: list[Column] | None = None
