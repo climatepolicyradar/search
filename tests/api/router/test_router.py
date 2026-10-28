@@ -208,6 +208,109 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     assert btr_parent_ids == {"un_convention::UNFCCC"}
 
 
+def test_get_geographies_taxonomy_returns_non_empty_list() -> None:
+    client = TestClient(app)
+
+    response = client.get("/search/geographies-taxonomy")
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total_size"] > 0
+    assert len(body["results"]) > 0
+
+
+def test_get_geographies_taxonomy_regions_are_roots() -> None:
+    """The 7 World Bank regions have no parent - everything else nests under one."""
+    client = TestClient(app)
+
+    response = client.get("/search/geographies-taxonomy")
+
+    results_by_id = {
+        result["id"]: result for result in response.json()["results"]
+    }
+    regions = [r for r in results_by_id.values() if r["type"] == "region"]
+
+    assert {r["id"] for r in regions} == {
+        "region::EAS",
+        "region::ECS",
+        "region::LCN",
+        "region::MEA",
+        "region::NAC",
+        "region::SAS",
+        "region::SSF",
+    }
+    for region in regions:
+        assert region["labels"] == [], f"{region['id']} is nested under another label"
+
+
+def test_get_geographies_taxonomy_nests_subdivisions_under_their_country() -> None:
+    """
+    A subdivision's parent chain must reach region::* via exactly one country.
+
+    Quintana Roo (Mexico) is the concrete case that motivated this file: it's
+    entirely missing its country/region nesting from the data-in-api source.
+    """
+    client = TestClient(app)
+
+    response = client.get("/search/geographies-taxonomy")
+    results_by_id = {
+        result["id"]: result for result in response.json()["results"]
+    }
+
+    quintana_roo = results_by_id["subdivision::MX-ROO"]
+    assert quintana_roo["value"] == "Quintana Roo"
+    country_id = quintana_roo["labels"][0]["value"]["id"]
+    assert country_id == "country::MEX"
+
+    mexico = results_by_id[country_id]
+    region_id = mexico["labels"][0]["value"]["id"]
+    assert region_id == "region::LCN"
+
+
+def test_get_geographies_taxonomy_international_has_no_region() -> None:
+    """country::XAB ("International") doesn't belong to a single region."""
+    client = TestClient(app)
+
+    response = client.get("/search/geographies-taxonomy")
+    results_by_id = {
+        result["id"]: result for result in response.json()["results"]
+    }
+
+    assert results_by_id["country::XAB"]["labels"] == []
+
+
+def test_get_geographies_taxonomy_filters_by_single_type() -> None:
+    client = TestClient(app)
+
+    response = client.get("/search/geographies-taxonomy", params={"type": "region"})
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["total_size"] == len(body["results"]) == 7
+    assert {r["type"] for r in body["results"]} == {"region"}
+
+
+def test_get_geographies_taxonomy_filters_by_multiple_types() -> None:
+    client = TestClient(app)
+
+    response = client.get(
+        "/search/geographies-taxonomy",
+        params=[("type", "region"), ("type", "country")],
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert {r["type"] for r in body["results"]} == {"region", "country"}
+
+
+def test_get_geographies_taxonomy_rejects_unknown_type() -> None:
+    client = TestClient(app)
+
+    response = client.get("/search/geographies-taxonomy", params={"type": "planet"})
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
 def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
     """The root response is how an agent with no prior knowledge finds the docs."""
     client = TestClient(app)

@@ -82,3 +82,11 @@ jobs:
             echo "::error::Deployment did not succeed (status=${STATUS})"
             exit 1
           fi
+  notify-failure:
+    needs: deploy-api
+    if: failure()
+    uses: ./.github/workflows/notify-deploy-failure.yml
+    secrets: inherit
+    with:
+      environment: production
+      heading: API deploy failed

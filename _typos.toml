@@ -6,5 +6,12 @@ extend-ignore-re = ["(?Rm)^.*(#|//)\\s*spellchecker:disable-line$"]
 [default.extend-words]
 tak = "tak" # Polish for 'yes' - a questionnaire answer token in search/passage.py
 
+[files]
+extend-exclude = [
+  # ISO 3166-1/3166-2 country and subdivision codes were being corrected from
+  # (CAF, LSO, NAM, SOM, SUR, ...) => (CAFE, ALSO, NAME, SOME, SURE, ...)
+  "api/geography_taxonomy.py",
+]
+
 [default.extend-identifiers]
 ANDed = "ANDed" # past tense of the boolean AND, used in filter-building docs/comments

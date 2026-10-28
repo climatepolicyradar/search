@@ -34,3 +34,11 @@ jobs:
         working-directory: ./vespa
       - run: vespa prod deploy ./app
         working-directory: ./vespa
+  notify-failure:
+    needs: vespa_deploy
+    if: failure()
+    uses: ./.github/workflows/notify-deploy-failure.yml
+    secrets: inherit
+    with:
+      environment: production
+      heading: Vespa deploy failed
