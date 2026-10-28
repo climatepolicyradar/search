@@ -13,6 +13,7 @@ from passages_flow import (
     passages_feeder_flow,
 )
 from prefect.docker import DockerImage
+from prefect.schedules import Cron
 from prefect.variables import Variable
 
 from prefect import Flow
@@ -121,7 +122,7 @@ if __name__ == "__main__":
             ),
             job_variables=job_variables,
             parameters=feed.parameters,
-            cron=feed.cron,
+            schedule=Cron(feed.cron, slug=deployment_name) if feed.cron else None,
             build=False,
             push=False,
         )
