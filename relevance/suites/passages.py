@@ -5,7 +5,13 @@ from pydantic import BaseModel
 from pydantic_evals import Dataset
 from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
 
-from api.routers import settings
+from relevance.api.client import SearchClient
+from relevance.api.models import (
+    FieldFilter,
+    Filter,
+    FilteredSearchRequest,
+    SearchResponse,
+)
 from relevance.evaluators.evaluator import HasResults
 from relevance.evaluators.forbidden import Forbidden
 from relevance.evaluators.matches import Matches
@@ -13,13 +19,6 @@ from relevance.evaluators.overlap import Overlap
 from relevance.evaluators.recall import Recall
 from relevance.evaluators.relative_order import RanksAbove
 from relevance.suites.documents import QueryPair, build_topic_filter
-from search.engines import ListResponse, OrderBy, Pagination
-from search.engines.dev_vespa import (
-    Condition,
-    DevVespaPassageSearchEngine,
-    FieldFilter,
-    Filter,
-)
 from search.passage import (
     Passage,
     looks_like_questionnaire,
@@ -90,27 +89,22 @@ class PassageQuery(BaseModel):
 
     def filters(self) -> Filter | None:
         """Vespa filter for the query's topics and document, or None."""
-        conditions: list[Condition | Filter] = []
+        conditions: list[FieldFilter | Filter] = []
         if topic_filter := build_topic_filter(self.topics):
             conditions.append(topic_filter)
         if self.document_id is not None:
-            conditions.append(
-                FieldFilter(field="document_id", op="contains", value=self.document_id)
-            )
+            conditions.append(FieldFilter.contains("document_id", self.document_id))
         if not conditions:
             return None
-        return Filter(op="and", filters=conditions)
+        return Filter.and_(*conditions)
 
 
 class PassagePair(BaseModel):
-    first: ListResponse[Passage]
-    second: ListResponse[Passage]
+    first: SearchResponse[Passage]
+    second: SearchResponse[Passage]
 
 
-engine = DevVespaPassageSearchEngine(settings=settings)
-
-
-dataset = Dataset[PassageQuery, ListResponse[Passage], dict[str, str]](
+dataset = Dataset[PassageQuery, SearchResponse[Passage], dict[str, str]](
     name="passages",
     cases=[],
 )
@@ -894,12 +888,16 @@ dataset.add_case(
 )
 
 
-def run_search(input: PassageQuery) -> ListResponse[Passage]:
-    return engine.search(
-        order_by=[OrderBy(field="relevance", direction="desc")],
-        pagination=Pagination(page_token=1, page_size=input.page_size),
-        query=input.query,
-        filters=input.filters(),
+def run_search(
+    client: SearchClient,
+    input: PassageQuery,
+) -> SearchResponse[Passage]:
+    return client.passages(
+        FilteredSearchRequest(
+            query=input.query,
+            filters=input.filters(),
+            page_size=input.page_size,
+        )
     )
 
 
@@ -923,16 +921,23 @@ comparisons.add_case(
 )
 
 
-def run_pair(input: QueryPair) -> PassagePair:
+def run_pair(
+    client: SearchClient,
+    input: QueryPair,
+) -> PassagePair:
     return PassagePair(
-        first=engine.search(
-            order_by=[OrderBy(field="relevance", direction="desc")],
-            pagination=Pagination(page_token=1, page_size=50),
-            query=input.query,
+        first=client.passages(
+            FilteredSearchRequest(
+                query=input.query,
+                filters=None,
+                page_size=50,
+            )
         ),
-        second=engine.search(
-            order_by=[OrderBy(field="relevance", direction="desc")],
-            pagination=Pagination(page_token=1, page_size=50),
-            query=input.other,
+        second=client.passages(
+            FilteredSearchRequest(
+                query=input.other,
+                filters=None,
+                page_size=50,
+            )
         ),
     )

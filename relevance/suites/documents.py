@@ -3,24 +3,22 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 from pydantic_evals import Dataset
 
-from api.routers import settings
+from relevance.api.client import SearchClient
+from relevance.api.models import (
+    DocumentsRequest,
+    FieldFilter,
+    Filter,
+    SearchResponse,
+)
 from relevance.evaluators.matches import Matches
 from relevance.evaluators.narrows import Narrows
 from relevance.evaluators.overlap import Overlap
 from relevance.evaluators.precision import Precision
 from relevance.evaluators.recall import Recall
 from relevance.evaluators.relative_order import RanksAbove
-from search.corpora import Corpus, build_corpus_filter
+from search.corpora import CORPUS_PROVIDERS, Corpus
 from search.data_in_models import Document
-from search.engines import ListResponse, OrderBy, Pagination
-from search.engines.dev_vespa import (
-    TOPIC_FILTER_FIELD,
-    Condition,
-    DevVespaDocumentSearchEngine,
-    FieldFilter,
-    Filter,
-    normalise_topic_id,
-)
+from search.engines.dev_vespa import TOPIC_FILTER_FIELD, normalise_topic_id
 
 
 @dataclass
@@ -49,21 +47,22 @@ def build_topic_filter(topics: list[str]) -> Filter | None:
     """
     if not topics:
         return None
-    return Filter(
-        op="and",
-        filters=[
-            Filter(
-                op="or",
-                filters=[
-                    FieldFilter(
-                        field=TOPIC_FILTER_FIELD,
-                        op="contains",
-                        value=normalise_topic_id(topic),
-                    )
-                ],
+    return Filter.and_(
+        *(
+            Filter.or_(
+                FieldFilter.contains(TOPIC_FILTER_FIELD, normalise_topic_id(topic))
             )
             for topic in topics
-        ],
+        )
+    )
+
+
+def build_corpus_filter(corpus: Corpus) -> Filter:
+    return Filter.or_(
+        *(
+            FieldFilter.contains("labels.value.id", f"agent::{provider}")
+            for provider in CORPUS_PROVIDERS[corpus]
+        )
     )
 
 
@@ -74,14 +73,14 @@ class DocumentQuery(BaseModel):
 
     def filters(self) -> Filter | None:
         """Vespa filter for the query's topics and corpus, or None."""
-        conditions: list[Condition | Filter] = []
+        conditions: list[FieldFilter | Filter] = []
         if topic_filter := build_topic_filter(self.topics):
             conditions.append(topic_filter)
         if self.corpus is not None:
             conditions.append(build_corpus_filter(self.corpus))
         if not conditions:
             return None
-        return Filter(op="and", filters=conditions)
+        return Filter.and_(*conditions)
 
 
 class QueryPair(BaseModel):
@@ -90,15 +89,15 @@ class QueryPair(BaseModel):
 
 
 class SearchPair(BaseModel):
-    first: ListResponse[Document]
-    second: ListResponse[Document]
+    first: SearchResponse[Document]
+    second: SearchResponse[Document]
 
 
 # 0.7 because that is what the frontend sends with every text search (FUS-421),
-engine = DevVespaDocumentSearchEngine(settings=settings, msm=0.7)
+MSM = 0.7
 
 
-dataset = Dataset[DocumentQuery, ListResponse[Document], dict[str, str]](
+dataset = Dataset[DocumentQuery, SearchResponse[Document], dict[str, str]](
     name="documents",
     cases=[],
 )
@@ -596,12 +595,17 @@ dataset.add_case(
 )
 
 
-def run_search(input: DocumentQuery) -> ListResponse[Document]:
-    return engine.search(
-        order_by=[OrderBy(field="relevance", direction="desc")],
-        pagination=Pagination(page_token=1, page_size=20),
-        query=input.query,
-        filters=input.filters(),
+def run_search(
+    client: SearchClient,
+    input: DocumentQuery,
+) -> SearchResponse[Document]:
+    return client.documents(
+        DocumentsRequest(
+            query=input.query,
+            filters=input.filters(),
+            page_size=20,
+            msm=MSM,
+        )
     )
 
 
@@ -645,16 +649,25 @@ comparisons.add_case(
 )
 
 
-def run_pair(input: QueryPair) -> SearchPair:
+def run_pair(
+    client: SearchClient,
+    input: QueryPair,
+) -> SearchPair:
     return SearchPair(
-        first=engine.search(
-            order_by=[OrderBy(field="relevance", direction="desc")],
-            pagination=Pagination(page_token=1, page_size=20),
-            query=input.query,
+        first=client.documents(
+            DocumentsRequest(
+                query=input.query,
+                filters=None,
+                page_size=20,
+                msm=MSM,
+            )
         ),
-        second=engine.search(
-            order_by=[OrderBy(field="relevance", direction="desc")],
-            pagination=Pagination(page_token=1, page_size=20),
-            query=input.other,
+        second=client.documents(
+            DocumentsRequest(
+                query=input.other,
+                filters=None,
+                page_size=20,
+                msm=MSM,
+            )
         ),
     )

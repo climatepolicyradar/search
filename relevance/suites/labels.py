@@ -2,13 +2,12 @@ from dataclasses import dataclass
 
 from pydantic_evals import Dataset
 
-from api.routers import settings
+from relevance.api.client import SearchClient
+from relevance.api.models import SearchRequest, SearchResponse
 from relevance.evaluators.forbidden import Forbidden
 from relevance.evaluators.matches import Matches
 from relevance.evaluators.precision import Precision
 from relevance.evaluators.recall import Recall
-from search.engines import ListResponse, OrderBy, Pagination
-from search.engines.dev_vespa.labels_search_engine import DevVespaLabelSearchEngine
 from search.label import LabelSearchResult
 
 
@@ -45,7 +44,7 @@ CONCEPT_SUBSIDY_REMOVAL = "concept::Q1275"
 CONCEPT_TARGET = "concept::Q1651"
 
 
-dataset = Dataset[str, ListResponse[LabelSearchResult], dict[str, str]](
+dataset = Dataset[str, SearchResponse[LabelSearchResult], dict[str, str]](
     name="labels",
     cases=[],
 )
@@ -355,9 +354,13 @@ for query in ["air pollution", "air pollution risk", "pollution risk", "air pol"
     )
 
 
-def run_search(input: str) -> ListResponse[LabelSearchResult]:
-    return DevVespaLabelSearchEngine(settings=settings).search(
-        order_by=[OrderBy(field="relevance", direction="desc")],
-        pagination=Pagination(page_token=1, page_size=20),
-        query=input,
+def run_search(
+    client: SearchClient,
+    input: str,
+) -> SearchResponse[LabelSearchResult]:
+    return client.labels(
+        SearchRequest(
+            query=input,
+            page_size=20,
+        )
     )
