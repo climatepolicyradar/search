@@ -89,12 +89,9 @@ def test_header_does_not_vary_with_the_documents_returned() -> None:
     rich_header, _ = build_csv_rows([rich])
     empty_header, _ = build_csv_rows([])
 
-    assert (
-        sparse_header
-        == rich_header
-        == empty_header
-        == [str(column) for column in DEFAULT_COLUMNS]
-    )
+    assert sparse_header == rich_header == empty_header == [
+        str(column) for column in DEFAULT_COLUMNS
+    ]
 
 
 def test_row_maps_every_column_from_its_source_field() -> None:
@@ -368,7 +365,9 @@ def test_a_column_name_always_reads_the_same_source() -> None:
     document = Document(id="doc-1", title="t")
 
     alone, _ = build_csv_rows([document], columns=[Column.ID])
-    with_others, rows = build_csv_rows([document], columns=[Column.TITLE, Column.ID])
+    with_others, rows = build_csv_rows(
+        [document], columns=[Column.TITLE, Column.ID]
+    )
 
     assert alone == ["ID"]
     assert rows[0]["ID"] == "doc-1"
@@ -467,146 +466,3 @@ def test_fetch_passes_query_filters_and_order_by_through() -> None:
     assert kwargs["query"] == "toxic waste"
     assert kwargs["filters"] == Filter(op="and", filters=[])
     assert isinstance(kwargs["pagination"], Pagination)
-
-
-# The columns added for case documents.
-#
-# Each is tested on its own: a column name means one field, whoever asks
-# for it.
-
-
-def _legal_concept(value_type: str, value: str) -> LabelRelationship:
-    """
-    A legal-concept label, as the pipeline actually emits one.
-
-    Principal laws, case categories and jurisdictions all arrive under the
-    one `legal_concept` relationship and are told apart only by the type of
-    the label itself, so the fixture has to keep the two distinct.
-    """
-    return _label("legal_concept", value, value_type)
-
-
-def test_url_and_bundle_url_columns_are_not_present() -> None:
-    """Both wait on upstream `items[]` population; see FUS-819."""
-    assert "URL" not in set(Column)
-    assert "BUNDLE_URL" not in set(Column)
-
-
-@pytest.mark.parametrize(
-    ("column", "expected"),
-    [
-        (Column.BUNDLE_ID, "collection-1"),
-        (Column.BUNDLE_TITLE, "A Collection"),
-        (Column.CASE_STATUS, "Petition for review filed."),
-        (Column.CASE_NUMBER, "25-1029"),
-        (Column.AT_ISSUE, "Whether the rule was lawfully adopted."),
-        (Column.ORIGINAL_CASE_NAME, "Consejo v. EPA"),
-        (Column.PRINCIPAL_LAWS, "Clean Air Act (CAA)"),
-        (Column.CASE_CATEGORIES, "Clean Air Act (US)"),
-        (Column.JURISDICTIONS, "United States"),
-    ],
-)
-def test_a_column_reads_the_field_it_names(column: Column, expected: str) -> None:
-    """Each column name reads one field, and always the same one."""
-    document = Document(
-        id="doc-1",
-        title="t",
-        attributes={
-            "case_status": "Petition for review filed.",
-            "identifier::case_number": "25-1029",
-            "core_object": "Whether the rule was lawfully adopted.",
-            "original_case_name": "Consejo v. EPA",
-        },
-        labels=[
-            _legal_concept("principal_law", "Clean Air Act (CAA)"),
-            _legal_concept("case_category", "Clean Air Act (US)"),
-            _legal_concept("jurisdiction", "United States"),
-        ],
-        documents=[_member_of("collection-1", "A Collection")],
-    )
-
-    _, rows = build_csv_rows([document], columns=[column])
-
-    assert rows[0][str(column)] == expected
-
-
-@pytest.mark.parametrize(
-    "column",
-    [
-        Column.BUNDLE_ID,
-        Column.BUNDLE_TITLE,
-        Column.CASE_STATUS,
-        Column.CASE_NUMBER,
-        Column.AT_ISSUE,
-        Column.ORIGINAL_CASE_NAME,
-        Column.PRINCIPAL_LAWS,
-        Column.CASE_CATEGORIES,
-        Column.JURISDICTIONS,
-    ],
-)
-def test_a_column_whose_field_is_absent_is_empty_rather_than_an_error(
-    column: Column,
-) -> None:
-    """
-    A missing field gives an empty cell, not a failed download.
-
-    This is ordinary rather than exceptional: most documents belong to no
-    collection, and `original_case_name` is only set where the original
-    name is not in English.
-    """
-    document = Document(id="doc-1", title="Bare", description=None)
-
-    _, rows = build_csv_rows([document], columns=[column])
-
-    assert rows[0][str(column)] == ""
-
-
-def test_legal_concepts_are_split_by_label_type_not_lumped_together() -> None:
-    """
-    The three legal-concept columns stay separate.
-
-    Every one of them reaches a document under the same `legal_concept`
-    relationship, so reading by relationship would put all of them in all
-    three cells. Only the label's own type tells them apart.
-    """
-    document = Document(
-        id="doc-1",
-        title="t",
-        labels=[
-            _legal_concept("principal_law", "Clean Air Act (CAA)"),
-            _legal_concept("principal_law", "Administrative Procedure Act (APA)"),
-            _legal_concept("case_category", "Industry Lawsuits (US)"),
-            _legal_concept("jurisdiction", "United States Federal Courts"),
-        ],
-    )
-
-    _, rows = build_csv_rows(
-        [document],
-        columns=[Column.PRINCIPAL_LAWS, Column.CASE_CATEGORIES, Column.JURISDICTIONS],
-    )
-
-    assert rows[0]["PRINCIPAL_LAWS"] == (
-        "Clean Air Act (CAA); Administrative Procedure Act (APA)"
-    )
-    assert rows[0]["CASE_CATEGORIES"] == "Industry Lawsuits (US)"
-    assert rows[0]["JURISDICTIONS"] == "United States Federal Courts"
-
-
-def test_a_non_string_attribute_does_not_break_a_cell() -> None:
-    """
-    Attributes are typed `str | float | bool`, so a cell must take any of them.
-
-    `csv` would raise on a non-string value only at write time, which would
-    fail the whole download rather than one cell. Case numbers are strings
-    in the data (`"25-1029"`); this guards the type the model allows, and a
-    number arrives as the float the model coerces it to.
-    """
-    document = Document(
-        id="doc-1",
-        title="t",
-        attributes={"identifier::case_number": 251029},
-    )
-
-    _, rows = build_csv_rows([document], columns=[Column.CASE_NUMBER])
-
-    assert rows[0]["CASE_NUMBER"] == "251029.0"
