@@ -11,7 +11,7 @@ from search import config
 def init(dataset_name: str) -> Run:
     return wandb.init(
         config={"dataset": dataset_name},
-        project=f"{config.WANDB_PROJECT_PREFIX_OFFLINE_TESTS}_{dataset_name}",
+        project="search_relevance",
         entity=config.WANDB_ENTITY,
         mode="online",
     )
