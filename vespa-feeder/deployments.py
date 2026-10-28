@@ -76,7 +76,7 @@ _FEEDS: list[VespaFeederDeployment] = [
     VespaFeederDeployment(
         flow=documents_feeder_flow,
         cron="30 8 * * *",
-        job_variables={"cpu": 1024, "memory": 2048},
+        job_variables={"cpu": 1024, "memory": 4096},
     ),
     # Passages
     VespaFeederDeployment(
