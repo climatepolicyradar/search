@@ -35,10 +35,10 @@ nz +> ="net zero";
 # re-written to 'nz' or 'net' or 'zero' which was too vague.
 # "net zero" is still tokenised so that results include 'net-zero', for example.
 
-# Stays `?`. Vespa rejects it as EQUIV ("Equiv can only have word,
-# wordAlternatives, int, exact, or phrase as children") because the trigger is
-# three words, not one. Term count stays inflated for this rule alone.
-nature based solution -> ?"nature based solution" ?"nbs";
+# Searched as a phrase so the words don't match separately. Not expanded to
+# "nbs": NBS often means something else in our corpus. See the `query rewrites`
+# relevance cases.
+nature based solution -> "nature based solution";
 evs, ev +> ="electric car" ="electric vehicle";
 
 adb +> ="asian development bank";

@@ -73,6 +73,39 @@ def _labels(document: Document, label_type: str) -> str:
     )
 
 
+def _label_type(document: Document, value_type: str) -> str:
+    """
+    Join the values of labels of one *label* type.
+
+    Not the same as `_labels`, which reads a label's relationship to the
+    document. Principal laws, case categories and jurisdictions all reach
+    a document under the single `legal_concept` relationship and are told
+    apart only by the type of the label itself, so reading them by
+    relationship would put all three in all three columns.
+
+    A document with no such label gives ``""``, an empty cell.
+    """
+    _LABEL_VALUE_SEPARATOR = "; "
+
+    return _LABEL_VALUE_SEPARATOR.join(
+        label.value.value for label in document.labels if label.value.type == value_type
+    )
+
+
+def _attribute(document: Document, key: str) -> str:
+    """
+    Take ``key`` out of a document's attributes, as text.
+
+    An absent attribute gives ``""``, so a document missing one reads as
+    an empty cell rather than failing the download. Attributes are typed
+    ``str | float | bool``, so the value is stringified: `csv` would
+    otherwise raise on a non-string only at write time, failing the whole
+    download for one cell.
+    """
+    value = document.attributes.get(key)
+    return "" if value is None else str(value)
+
+
 def _collection(document: Document) -> DocumentWithoutRelationships | None:
     """
     The collection a document belongs to, or ``None``.
@@ -110,6 +143,15 @@ class Column(StrEnum):
     CATEGORY = "CATEGORY"
     PROVIDER = "PROVIDER"
     COLLECTION_TITLE = "COLLECTION_TITLE"
+    BUNDLE_ID = "BUNDLE_ID"
+    BUNDLE_TITLE = "BUNDLE_TITLE"
+    CASE_STATUS = "CASE_STATUS"
+    CASE_NUMBER = "CASE_NUMBER"
+    AT_ISSUE = "AT_ISSUE"
+    ORIGINAL_CASE_NAME = "ORIGINAL_CASE_NAME"
+    PRINCIPAL_LAWS = "PRINCIPAL_LAWS"
+    CASE_CATEGORIES = "CASE_CATEGORIES"
+    JURISDICTIONS = "JURISDICTIONS"
 
 
 def read_column(document: Document, column: Column) -> str:
@@ -153,6 +195,28 @@ def read_column(document: Document, column: Column) -> str:
         case Column.COLLECTION_TITLE:
             collection = _collection(document)
             return collection.title if collection else ""
+        # `BUNDLE_*` names the collection a document belongs to, so it
+        # reads the same source as `COLLECTION_TITLE` above.
+        case Column.BUNDLE_ID:
+            collection = _collection(document)
+            return collection.id if collection else ""
+        case Column.BUNDLE_TITLE:
+            collection = _collection(document)
+            return collection.title if collection else ""
+        case Column.CASE_STATUS:
+            return _attribute(document, "case_status")
+        case Column.CASE_NUMBER:
+            return _attribute(document, "identifier::case_number")
+        case Column.AT_ISSUE:
+            return _attribute(document, "core_object")
+        case Column.ORIGINAL_CASE_NAME:
+            return _attribute(document, "original_case_name")
+        case Column.PRINCIPAL_LAWS:
+            return _label_type(document, "principal_law")
+        case Column.CASE_CATEGORIES:
+            return _label_type(document, "case_category")
+        case Column.JURISDICTIONS:
+            return _label_type(document, "jurisdiction")
 
 
 # Sent when a caller names no columns. Keeping a default means an ad-hoc

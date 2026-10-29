@@ -11,6 +11,22 @@
             <config name="com.yahoo.language.lucene.lucene-analysis">
                 <configDir>lucene-linguistics</configDir>
                 <analysis>
+                    <item key="en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>englishPossessive</name>
+                            </item>
+                            <item>
+                                <name>kStem</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
                     <item key="profile=title_analysis;language=en">
                         <tokenizer>
                             <name>standard</name>

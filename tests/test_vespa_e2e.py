@@ -1856,5 +1856,48 @@ def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa):
     assert net_zero.id in found
 
 
+def test_nature_based_solutions_survives_msm(vespa_app: Vespa):
+    """A phrase-only document is kept at msm 0.7; an NbS-only one isn't matched."""
+    phrase = DocumentFactory.build(
+        title="Regional adaptation plan", description="A plan", labels=[]
+    )
+    acronym = DocumentFactory.build(
+        title="Data standards report", description="A report", labels=[]
+    )
+    _feed_document(vespa_app, phrase)
+    _feed_document(vespa_app, acronym)
+    _feed_passages(
+        vespa_app,
+        phrase.id,
+        [
+            "It will take into account the priorities set out in the European "
+            "Adaptation Strategy (2021), namely: nature-based solutions, "
+            "improving knowledge."
+        ],
+    )
+    _feed_passages(
+        vespa_app,
+        acronym.id,
+        ["4. Methods to Create an Open Standard Framework for NbS Data"],
+    )
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
+
+    def search(query: str):
+        return engine.search(
+            query=query,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+        )
+
+    unquoted = search("nature based solutions")
+    quoted = search('"nature based solutions"')
+    found = {d.id for d in unquoted.results}
+
+    assert phrase.id in found
+    assert acronym.id not in found
+    assert quoted.total_size is not None and unquoted.total_size is not None
+    assert quoted.total_size <= unquoted.total_size
+
+
 # endregion Query rewrites (EQUIV)
 

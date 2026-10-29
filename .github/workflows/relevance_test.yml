@@ -1,0 +1,66 @@
+name: Relevance Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  schedule:
+    - cron: 0 8 * * *
+      timezone: Europe/London
+
+permissions:
+  actions: read
+  id-token: write
+  contents: read
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.suites.outputs.suites }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: pyproject.toml
+
+      - name: List suites
+        id: suites
+        run: echo "suites=$(uv run python -m relevance suites)" >> "$GITHUB_OUTPUT"
+
+  relevance_test:
+    name: relevance_test (${{ matrix.suite }})
+    needs: suites
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.suites.outputs.suites) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: pyproject.toml
+
+      - name: Run relevance tests
+        run: >-
+          uv run python -m relevance run
+          --suite ${{ matrix.suite }}
+          --url https://api.climatepolicyradar.org
+          --report html
+
+      - name: Upload report
+        uses: actions/upload-artifact@v7
+        with:
+          path: data/test_results/*.html
+          archive: false
