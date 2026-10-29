@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from search.acronyms import expansion_patterns
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
@@ -27,6 +26,7 @@ from search.engines.vespa_query.query_text_modifiers import (
 from search.engines.vespa_query.sorting import _ranking_overrides_for_passage_order_by
 from search.log import get_logger
 from search.passage import Passage
+from search.query_rewrites import expansion_patterns
 from search.vespa.passage import VespaPassage
 
 logger = get_logger(__name__)
@@ -346,15 +346,15 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         passages: list[Passage] = []
         debug_info: list[dict[str, Any]] = []
 
-        # Vespa matches acronym expansions but cannot bold them - see search/acronyms.py.
-        acronym_expansions = expansion_patterns(free_text) if bolding and free_text else []
+        # Vespa matches rule expansions but cannot bold them - see search/query_rewrites.py.
+        rule_expansions = expansion_patterns(free_text) if bolding and free_text else []
 
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
             vespa_passage = VespaPassage.model_validate(fields)
             passages.append(
                 Passage.from_vespa_passage(
-                    vespa_passage, bolding=bolding, acronym_expansions=acronym_expansions
+                    vespa_passage, bolding=bolding, rule_expansions=rule_expansions
                 )
             )
             if self.debug:

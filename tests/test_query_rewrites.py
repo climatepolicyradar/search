@@ -1,6 +1,6 @@
 import pytest
 
-from search.acronyms import expansion_patterns
+from search.query_rewrites import expansion_patterns
 
 
 @pytest.mark.parametrize(

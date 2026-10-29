@@ -473,7 +473,7 @@ def test_passage_bolding_of_a_quoted_word_skips_longer_words_it_prefixes(vespa_a
 
 
 def test_passage_bolding_covers_acronym_expansions(vespa_app: Vespa):
-    """An acronym query bolds the expanded term it matched on, including stopwords - see `search/acronyms.py`"""
+    """An acronym query bolds the expanded term it matched on, including stopwords - see `search/query_rewrites.py`"""
     principal = DocumentFactory.build(id="principal-acro", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
     _feed_passage(

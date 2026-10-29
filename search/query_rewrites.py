@@ -42,7 +42,7 @@ def _expansions() -> dict[str, tuple[str, ...]]:
         for trigger in match["lhs"].split(","):
             out[trigger.strip()] = phrases
     if not out:
-        raise ValueError(f"No acronym rules parsed from {_RULES}")
+        raise ValueError(f"No rewrite rules parsed from {_RULES}")
     return out
 
 
