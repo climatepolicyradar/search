@@ -114,7 +114,7 @@ def add_boldings(
     """
     `bolded` with each word of every match of `patterns` bolded too.
 
-    For terms Vespa matched but could not bold itself - see `search/acronyms.py`.
+    For terms Vespa matched but could not bold itself - see `search/query_rewrites.py`.
     """
     if not patterns:
         return bolded

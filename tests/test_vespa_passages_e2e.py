@@ -523,7 +523,7 @@ def test_passage_bolding_of_a_quoted_word_skips_longer_words_it_prefixes(vespa_a
 
 
 def test_passage_bolding_covers_acronym_expansions(vespa_app: Vespa):
-    """An acronym query bolds the expanded term it matched on, including stopwords - see `search/acronyms.py`"""
+    """An acronym query bolds the expanded term it matched on, including stopwords - see `search/query_rewrites.py`"""
     principal = DocumentFactory.build(id="principal-acro", labels=[_principal_label()])
     _feed_document(vespa_app, principal)
     _feed_passage(
@@ -739,6 +739,41 @@ def test_rewrite_rule_does_not_bypass_filters(
     )
 
 
+@pytest.mark.parametrize(("case_id", "query", "rewrite_text"), _rewrite_rule_cases())
+def test_rewrite_rule_highlights_what_it_matched(
+    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+):
+    """A passage matched through a rule's production highlights every word of it (FUS-847)."""
+    principal = DocumentFactory.build(
+        id=f"principal-highlight-{case_id}", labels=[_principal_label()]
+    )
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block(f"tb-highlight-{case_id}", rewrite_text),
+        document_id=principal.id,
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    response = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=Filter(
+            op="and",
+            filters=[
+                FieldFilter(field="document_id", op="contains", value=principal.id)
+            ],
+        ),
+        bolding=True,
+    )
+
+    assert [p.text_block_id for p in response.results] == [f"tb-highlight-{case_id}"]
+    assert [b.labelled_text for b in response.results[0].boldings] == (
+        rewrite_text.split()
+    ), f"{query!r} matched {rewrite_text!r} but did not highlight all of it"
+
+
 @pytest.mark.parametrize(
     ("case_id", "query", "text", "should_match"),
     [
@@ -915,6 +950,24 @@ def test_nature_based_solutions_is_not_expanded_to_nbs(vespa_app: Vespa):
 
     assert "tb-nbs-only" not in _passage_ids("nature-based solutions")
     assert "tb-nbs-only" in _passage_ids("nbs")
+
+
+def test_nature_based_solutions_highlights_the_phrase(vespa_app: Vespa):
+    _feed_rewrite_passages(vespa_app)
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+
+    for query in ("nature based solutions", "Nature-Based Solution's"):
+        response = engine.search(
+            query=query,
+            pagination=Pagination(page_token=1, page_size=50),
+            order_by=[],
+            bolding=True,
+        )
+        bolded_by_block = {
+            p.text_block_id: [b.labelled_text for b in p.boldings]
+            for p in response.results
+        }
+        assert bolded_by_block["tb-phrase"] == ["nature", "based", "solutions"], query
 
 
 def test_et_al_does_not_fire_the_ets_rule(vespa_app: Vespa):

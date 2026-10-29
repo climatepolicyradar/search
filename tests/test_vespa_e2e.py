@@ -543,6 +543,37 @@ def test_document_rewrite_rule_does_not_bypass_filters(
     )
 
 
+@pytest.mark.parametrize(
+    ("case_id", "query", "rewrite_text"), _document_rewrite_rule_cases()
+)
+def test_document_rewrite_rule_highlights_what_it_matched(
+    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+):
+    """A title and description matched through a rule's production highlight every word of it (FUS-847)."""
+    doc_id = f"e2e-rewrite-highlight-{case_id}"
+    _feed_document_with_id(
+        vespa_app,
+        DocumentFactory.build(
+            id=doc_id, title=rewrite_text, description=rewrite_text, labels=[]
+        ),
+    )
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        filters=Filter(
+            op="and", filters=[FieldFilter(field="id", op="contains", value=doc_id)]
+        ),
+    ).results
+
+    highlighted = " ".join(f"<hi>{word}</hi>" for word in rewrite_text.split())
+    assert [(d.title, d.description) for d in results] == [
+        (highlighted, highlighted)
+    ], f"{query!r} matched {rewrite_text!r} but did not highlight all of it"
+
+
 def test_principal_search_rewrite_rule_does_not_bypass_status_filter(
     vespa_app: Vespa,
 ):
@@ -1955,6 +1986,33 @@ def test_nature_based_solutions_survives_msm(vespa_app: Vespa):
     assert acronym.id not in found
     assert quoted.total_size is not None and unquoted.total_size is not None
     assert quoted.total_size <= unquoted.total_size
+
+
+def test_nature_based_solutions_highlights_the_phrase_in_title_and_description(
+    vespa_app: Vespa,
+):
+    doc = DocumentFactory.build(
+        title="Federal Action Plan on Nature-Based Solutions for Climate and Biodiversity",
+        description="Scaling up nature-based solutions.",
+        labels=[],
+    )
+    _feed_document_with_id(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
+    results = engine.search(
+        query="nature based solutions",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        filters=Filter(
+            op="and", filters=[FieldFilter(field="id", op="contains", value=doc.id)]
+        ),
+    ).results
+
+    assert [d.id for d in results] == [doc.id]
+    assert "<hi>Nature</hi>-<hi>Based</hi> <hi>Solutions</hi>" in results[0].title
+    assert "<hi>nature</hi>-<hi>based</hi> <hi>solutions</hi>" in (
+        results[0].description or ""
+    )
 
 
 # endregion Query rewrites (EQUIV)

@@ -12,7 +12,6 @@ import requests
 from pydantic import TypeAdapter
 from vespa.querybuilder import Grouping as G
 
-from search.acronyms import expansion_patterns
 from search.bolding import (
     add_boldings,
     bolding_to_labels,
@@ -52,6 +51,7 @@ from search.engines.vespa_query.query_text_modifiers import (
 from search.engines.vespa_query.sorting import _ranking_overrides_for_document_order_by
 from search.label import Label
 from search.log import get_logger
+from search.query_rewrites import expansion_patterns
 
 logger = get_logger(__name__)
 
@@ -135,21 +135,21 @@ def _merge_exact_bolding(
     fields: dict[str, Any],
     field: str,
     default: str,
-    acronym_expansions: list[re.Pattern[str]],
+    rule_expansions: list[re.Pattern[str]],
 ) -> str:
     """
-    `field` with the quoted phrases and acronym expansions bolded too.
+    `field` with the quoted phrases and rule expansions bolded too.
 
     The `search-exact` summary returns `<field>_not_stemmed`, bolded with the
     phrases, next to `<field>`, bolded with the free text. Merge the two, then
-    bold the expansions Vespa matched but could not bold - see search/acronyms.py.
+    bold the expansions Vespa matched but could not bold - see search/query_rewrites.py.
     """
     value = fields.get(field, default)
     exact = fields.get(f"{field}_not_stemmed")
-    if exact is None and not acronym_expansions:
+    if exact is None and not rule_expansions:
         return value
     bolded = merge_bolded(value, exact) if exact is not None else bolding_to_labels(value)
-    return render_bolded(add_boldings(bolded, acronym_expansions))
+    return render_bolded(add_boldings(bolded, rule_expansions))
 
 
 class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]):
@@ -384,8 +384,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         documents = []
         debug_info: list[dict[str, Any]] = []
 
-        # Vespa matches acronym expansions but cannot bold them - see search/acronyms.py.
-        acronym_expansions = (
+        # Vespa matches rule expansions but cannot bold them - see search/query_rewrites.py.
+        rule_expansions = (
             expansion_patterns(free_text) if self.bolding and free_text else []
         )
 
@@ -412,13 +412,13 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 Document(
                     id=source.get("id", MISSING_PLACEHOLDER),
                     title=_merge_exact_bolding(
-                        fields, "title", MISSING_PLACEHOLDER, acronym_expansions
+                        fields, "title", MISSING_PLACEHOLDER, rule_expansions
                     ),
                     # `description` is optional: leave it empty when absent
                     # rather than showing a placeholder to users (FUS-649).
                     description=(
                         _merge_exact_bolding(
-                            fields, "description", "", acronym_expansions
+                            fields, "description", "", rule_expansions
                         )
                         if fields.get("description") is not None
                         else None

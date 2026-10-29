@@ -1,8 +1,8 @@
 import pytest
 
-from search.acronyms import expansion_patterns
 from search.bolding import bolding_to_labels, merge_bolded, render_bolded
 from search.passage import Passage
+from search.query_rewrites import expansion_patterns
 from search.vespa.passage import VespaPassage
 
 
@@ -161,7 +161,7 @@ def test_from_vespa_passage_bolds_acronym_expansions() -> None:
     )
 
     passage = Passage.from_vespa_passage(
-        vespa_passage, bolding=True, acronym_expansions=expansion_patterns("CCS")
+        vespa_passage, bolding=True, rule_expansions=expansion_patterns("CCS")
     )
 
     assert [
@@ -180,7 +180,7 @@ def test_from_vespa_passage_skips_acronym_expansions_when_bolding_is_off() -> No
     )
 
     passage = Passage.from_vespa_passage(
-        vespa_passage, acronym_expansions=expansion_patterns("CCS")
+        vespa_passage, rule_expansions=expansion_patterns("CCS")
     )
 
     assert passage.boldings == []

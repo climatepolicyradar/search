@@ -85,7 +85,7 @@ class Passage(BaseModel):
         cls,
         vespa_passage: VespaPassage,
         bolding: bool = False,
-        acronym_expansions: list[re.Pattern[str]] | None = None,
+        rule_expansions: list[re.Pattern[str]] | None = None,
     ) -> "Passage":
         """
         Build the client-facing `Passage` from a canonical `VespaPassage`.
@@ -95,8 +95,8 @@ class Passage(BaseModel):
             with those tags stripped and `boldings` carries the spans they marked.
             A quoted query also returns `content_not_stemmed`, bolded with the
             phrases, and its spans are merged in.
-        :param acronym_expansions: Expansions of the query's acronyms, bolded too -
-            see search/acronyms.py.
+        :param rule_expansions: Phrases the rewrite rules expanded the query to, bolded too -
+            see search/query_rewrites.py.
         """
         data = vespa_passage.model_dump()
         if not bolding:
@@ -105,8 +105,8 @@ class Passage(BaseModel):
             bolded = merge_bolded(data["content"], data["content_not_stemmed"])
         else:
             bolded = bolding_to_labels(data["content"])
-        if bolding and acronym_expansions:
-            bolded = add_boldings(bolded, acronym_expansions)
+        if bolding and rule_expansions:
+            bolded = add_boldings(bolded, rule_expansions)
         return cls(
             text_block_id=data["id"],
             idx=data["idx"],
