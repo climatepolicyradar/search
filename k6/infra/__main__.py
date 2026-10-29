@@ -47,7 +47,7 @@ from pulumiverse_grafana import Provider, k6
 # package.
 K6_DIR = Path(__file__).resolve().parent.parent
 
-SMOKE_RESOURCES = ["documents", "passages", "labels"]
+SMOKE_RESOURCES = ["documents", "passages", "labels", "labels-taxonomy"]
 
 
 @dataclass(frozen=True)
