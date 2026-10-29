@@ -626,23 +626,18 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 struct_map=documents_filter_struct_field_to_vespa_field_map,
             )
 
-        label_types_pattern = "|".join(re.escape(t) for t in label_types)
-        grouping = G.all(
-            G.group("labels_type_id_value_attribute"),
-            G.filter_(
-                G.regex(
-                    pattern=f"^({label_types_pattern})::.*",
-                    expr="labels_type_id_value_attribute",
-                )
-            ),
-            G.max(5000),
-            G.each(G.output(G.count())),
+        if not label_types:
+            return {}
+
+        quoted_types = ", ".join(json.dumps(t) for t in label_types)
+
+        grouping = (
+            "all(group(labels.id) "
+            f"filter(in(labels.type, {quoted_types})) "
+            "max(5000) each(output(count())))"
         )
 
-        yql = (
-            "select labels_type_id_value_attribute from documents "
-            f"where {where} | {grouping}"
-        )
+        yql = f"select labels.id from documents where {where} | {grouping}"
 
         response = execute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
@@ -657,9 +652,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         counts: dict[str, int] = {}
         for group in groups:
             for group_value in group.get("children", []):
-                count = group_value.get("fields", {}).get("count()", 0)
-                _, label_id, _ = self.parse_label_type_id_value(group_value["value"])
-                counts[label_id] = count
+                counts[group_value["value"]] = group_value["fields"]["count()"]
         return counts
 
     def _run_facet_query(
