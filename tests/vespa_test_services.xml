@@ -237,6 +237,27 @@
     </container>
     <content id="search-production" version="1.0">
         <min-redundancy>1</min-redundancy>
+        <!-- Mirrors the juniperrc override in vespa/app/services.xml - see the comment there. -->
+        <config name="vespa.config.search.summary.juniperrc">
+            <override>
+                <item>
+                    <fieldname>title_not_stemmed</fieldname>
+                    <stem_max_extend>0</stem_max_extend>
+                </item>
+                <item>
+                    <fieldname>description_not_stemmed</fieldname>
+                    <stem_max_extend>0</stem_max_extend>
+                </item>
+                <item>
+                    <fieldname>passages_text_not_stemmed</fieldname>
+                    <stem_max_extend>0</stem_max_extend>
+                </item>
+                <item>
+                    <fieldname>content_not_stemmed</fieldname>
+                    <stem_max_extend>0</stem_max_extend>
+                </item>
+            </override>
+        </config>
         <documents>
             <!-- global is required on 'documents' so the passages schema can import fields from it via its reference<documents> field. -->
             <document type="documents" mode="index" global="true" />

@@ -376,6 +376,43 @@
         <tuning>
             <max-document-size>200MiB</max-document-size>
         </tuning>
+        <!-- Exact-match highlighting for quoted phrases.
+
+             Juniper, the summary highlighter, does its own crude stemming: a query
+             term longer than `stem_min_length` (5) bytes also bolds any word it
+             prefixes, up to `stem_max_extend` (3) bytes longer. So `"forest"` bolded
+             "forests" and "forestry" even though the phrase only matched "forest",
+             while `"grid"` (too short to extend) looked fine.
+
+             The `*_not_stemmed` fields are where quoted phrases match, and their
+             promise is an exact match, so prefix extension is switched off for them
+             only. Unquoted search on the stemmed fields keeps the default.
+
+             passages_text_not_stemmed has no summary today; it is listed so the
+             rule still holds if one is added.
+
+             @see: https://docs.vespa.ai/en/document-summaries.html#dynamic-snippet-configuration
+             @see: https://github.com/vespa-engine/vespa/blob/master/searchsummary/src/vespa/searchsummary/config/juniperrc.def -->
+        <config name="vespa.config.search.summary.juniperrc">
+            <override>
+                <item>
+                    <fieldname>title_not_stemmed</fieldname>
+                    <stem_max_extend>0</stem_max_extend>
+                </item>
+                <item>
+                    <fieldname>description_not_stemmed</fieldname>
+                    <stem_max_extend>0</stem_max_extend>
+                </item>
+                <item>
+                    <fieldname>passages_text_not_stemmed</fieldname>
+                    <stem_max_extend>0</stem_max_extend>
+                </item>
+                <item>
+                    <fieldname>content_not_stemmed</fieldname>
+                    <stem_max_extend>0</stem_max_extend>
+                </item>
+            </override>
+        </config>
         <documents>
             <document type="documents" mode="index" global="true" />
             <document type="passages" mode="index" global="true" />
