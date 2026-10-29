@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 from api.main import API_TITLE, API_VERSION, app
 from search.data_in_models import Document
 from search.engines import ListResponse, VespaError
+from search.engines.dev_vespa import CountAggregation
+from search.label import Label
 
 
 @pytest.fixture
@@ -315,6 +317,131 @@ def test_get_geographies_taxonomy_rejects_unknown_type() -> None:
     response = client.get("/search/geographies-taxonomy", params={"type": "planet"})
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+@pytest.fixture
+def geographies_aggregate_client():
+    """Provide a test client with the document engine's aggregations mocked."""
+    with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        yield TestClient(app), mock_engine
+
+
+def _aggregation(label_type: str, label_id: str, count: int) -> CountAggregation[Label]:
+    return CountAggregation[Label](
+        count=count,
+        value=Label(id=label_id, type=label_type, value=label_id),
+    )
+
+
+def test_aggregate_geographies_drops_non_geography_labels(
+    geographies_aggregate_client,
+) -> None:
+    """
+    The engine groups every label and concept, not just geographies.
+
+    Anything outside region/country/subdivision must not leak into a
+    geographies endpoint.
+    """
+    client, mock_engine = geographies_aggregate_client
+    mock_engine.aggregations.return_value = [
+        _aggregation("country", "AUS", 10),
+        _aggregation("category", "Law", 99),
+        _aggregation("region", "oceania", 5),
+        _aggregation("subdivision", "AU-NSW", 2),
+        _aggregation("author", "someone", 7),
+    ]
+
+    response = client.get("/search/geographies:aggregate")
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()["data"]
+    assert {a["value"]["type"] for a in data} == {"country", "region", "subdivision"}
+
+
+def test_aggregate_geographies_filters_by_requested_type(
+    geographies_aggregate_client,
+) -> None:
+    client, mock_engine = geographies_aggregate_client
+    mock_engine.aggregations.return_value = [
+        _aggregation("country", "AUS", 10),
+        _aggregation("region", "oceania", 5),
+        _aggregation("subdivision", "AU-NSW", 2),
+    ]
+
+    response = client.get(
+        "/search/geographies:aggregate",
+        params={"labels.value.type": "subdivision"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()["data"]
+    assert [a["value"]["id"] for a in data] == ["AU-NSW"]
+
+
+def test_aggregate_geographies_filters_by_multiple_types(
+    geographies_aggregate_client,
+) -> None:
+    client, mock_engine = geographies_aggregate_client
+    mock_engine.aggregations.return_value = [
+        _aggregation("country", "AUS", 10),
+        _aggregation("region", "oceania", 5),
+        _aggregation("subdivision", "AU-NSW", 2),
+    ]
+
+    response = client.get(
+        "/search/geographies:aggregate",
+        params=[
+            ("labels.value.type", "region"),
+            ("labels.value.type", "country"),
+        ],
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    data = response.json()["data"]
+    assert {a["value"]["type"] for a in data} == {"region", "country"}
+
+
+def test_aggregate_geographies_preserves_counts(
+    geographies_aggregate_client,
+) -> None:
+    client, mock_engine = geographies_aggregate_client
+    mock_engine.aggregations.return_value = [_aggregation("country", "AUS", 42)]
+
+    response = client.get("/search/geographies:aggregate")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["data"][0]["count"] == 42
+
+
+def test_aggregate_geographies_rejects_unknown_type(
+    geographies_aggregate_client,
+) -> None:
+    client, _ = geographies_aggregate_client
+
+    response = client.get(
+        "/search/geographies:aggregate",
+        params={"labels.value.type": "planet"},
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_aggregate_geographies_passes_query_and_filters_to_the_engine(
+    geographies_aggregate_client,
+) -> None:
+    """The endpoint's contract is that it scopes to the same set as /documents."""
+    client, mock_engine = geographies_aggregate_client
+    mock_engine.aggregations.return_value = []
+
+    response = client.get(
+        "/search/geographies:aggregate",
+        params={"query": "flooding"},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert mock_engine.aggregations.call_args.kwargs["query"] == "flooding"
 
 
 def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
