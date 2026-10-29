@@ -15,6 +15,7 @@ from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.settings import settings
 from api.utils import (
+    PassagesEngineDep,
     documents_order_by,
     order_by,
     pagination,
@@ -28,7 +29,6 @@ from search.engines.dev_vespa import (
     CountAggregation,
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
-    DevVespaPassageSearchEngine,
 )
 from search.label import Label, LabelSearchResult
 from search.log import get_logger
@@ -497,6 +497,7 @@ def aggregate_geographies(
 )
 def read_passages(
     filters: PassagesFilterDep,
+    engine: PassagesEngineDep,
     query: str | None = Query(None, description="What are you looking for?"),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(passages_order_by),
@@ -504,15 +505,15 @@ def read_passages(
 ):
     logger.info(
         "Searching passages (query=%r, page_token=%s, page_size=%s, bolding=%s, "
-        "filters_present=%s)",
+        "rank_profile=%s, filters_present=%s)",
         query,
         pagination.page_token,
         pagination.page_size,
         bolding,
+        engine.ranking_profile,
         filters is not None,
     )
 
-    engine = DevVespaPassageSearchEngine(settings=settings)
     try:
         results = engine.search(
             query=query,
@@ -572,6 +573,7 @@ PassageMsmQuery = Annotated[
 )
 def read_passages_within(
     filters: PassagesFilterDep,
+    engine: PassagesEngineDep,
     document_id: list[str] = Query(
         ...,
         min_length=1,
@@ -588,17 +590,18 @@ def read_passages_within(
 ):
     logger.info(
         "Searching passages within documents (document_ids=%r, query=%r, "
-        "msm=%s, page_token=%s, page_size=%s, bolding=%s, filters_present=%s)",
+        "msm=%s, page_token=%s, page_size=%s, bolding=%s, rank_profile=%s, "
+        "filters_present=%s)",
         document_id,
         query,
         msm,
         pagination.page_token,
         pagination.page_size,
         bolding,
+        engine.ranking_profile,
         filters is not None,
     )
 
-    engine = DevVespaPassageSearchEngine(settings=settings)
     try:
         results = engine.search_within(
             document_ids=document_id,

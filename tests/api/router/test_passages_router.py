@@ -4,13 +4,14 @@ import base64
 import zlib
 from collections.abc import Generator
 from http import HTTPStatus
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from api.filters import _NOT_DEFLATED
 from api.main import app
+from api.utils import passages_engine
 from search.engines import ListResponse, OrderBy
 from search.engines.dev_vespa import FieldFilter, Filter
 from search.passage import Passage
@@ -20,12 +21,12 @@ type PassagesClient = tuple[TestClient, MagicMock]
 
 @pytest.fixture
 def passages_client() -> Generator[PassagesClient]:
-    """Provide a test client with the passage engine mocked."""
-    with patch("api.routers.DevVespaPassageSearchEngine") as mock_engine_cls:
-        mock_engine = MagicMock()
-        mock_engine.last_debug_info = None
-        mock_engine_cls.return_value = mock_engine
-        yield TestClient(app), mock_engine
+    """Provide a test client with the passage engine replaced by a fake."""
+    mock_engine = MagicMock()
+    mock_engine.last_debug_info = None
+    app.dependency_overrides[passages_engine] = lambda: mock_engine
+    yield TestClient(app), mock_engine
+    del app.dependency_overrides[passages_engine]
 
 
 def _passage(text_block_id: str = "block-1") -> Passage:
@@ -238,3 +239,13 @@ def test_read_passages_order_by_unsupported_field_returns_400(
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     mock_engine.search.assert_not_called()
+
+
+def test_read_passages_with_invalid_rank_returns_422() -> None:
+    client = TestClient(app)
+
+    response = client.get(
+        "/search/passages", params={"query": "toxic", "rank_profile": "bogus"}
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
