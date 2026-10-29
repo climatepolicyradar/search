@@ -13,7 +13,7 @@ from search.engines.dev_vespa.passages_search_engine import (
     _DEFAULT_PASSAGE_RANK_PROFILE,
 )
 
-RankProfile = Literal["nativerank", "bm25_multiplicative", "unranked"]
+RankProfile = Literal["nativerank", "bm25_multiplicative", "bm25_topic_boost", "unranked"]
 
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
@@ -151,9 +151,9 @@ def documents_order_by(
 
 RankProfileQueryDep = Annotated[RankProfile | None, Query()]
 
-def passages_engine(rank: RankProfileQueryDep = None) -> DevVespaPassageSearchEngine:
+def passages_engine(rank_profile: RankProfileQueryDep = None) -> DevVespaPassageSearchEngine:
     return DevVespaPassageSearchEngine(
-        ranking_profile=rank or _DEFAULT_PASSAGE_RANK_PROFILE,
+        ranking_profile=rank_profile or _DEFAULT_PASSAGE_RANK_PROFILE,
         settings=settings,
     )
 

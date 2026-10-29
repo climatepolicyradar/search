@@ -40,7 +40,7 @@ class SearchRequest(BaseModel):
 
 class FilteredSearchRequest(SearchRequest):
     filters: Filter | None
-    rank: RankProfile | None = None
+    rank_profile: RankProfile | None = None
 
     @field_serializer("filters", when_used="unless-none")
     def _serialize_filters(self, filters: Filter) -> str:

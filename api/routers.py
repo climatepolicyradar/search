@@ -505,7 +505,7 @@ def read_passages(
 ):
     logger.info(
         "Searching passages (query=%r, page_token=%s, page_size=%s, bolding=%s, "
-        "rank=%s, filters_present=%s)",
+        "rank_profile=%s, filters_present=%s)",
         query,
         pagination.page_token,
         pagination.page_size,
@@ -590,7 +590,7 @@ def read_passages_within(
 ):
     logger.info(
         "Searching passages within documents (document_ids=%r, query=%r, "
-        "msm=%s, page_token=%s, page_size=%s, bolding=%s, rank=%s, "
+        "msm=%s, page_token=%s, page_size=%s, bolding=%s, rank_profile=%s, "
         "filters_present=%s)",
         document_id,
         query,

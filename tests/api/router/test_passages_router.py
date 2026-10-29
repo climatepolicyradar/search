@@ -245,7 +245,7 @@ def test_read_passages_with_invalid_rank_returns_422() -> None:
     client = TestClient(app)
 
     response = client.get(
-        "/search/passages", params={"query": "toxic", "rank": "bogus"}
+        "/search/passages", params={"query": "toxic", "rank_profile": "bogus"}
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
