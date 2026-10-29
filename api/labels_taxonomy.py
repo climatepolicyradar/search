@@ -324,6 +324,12 @@ party = Label(
     type="author_type",
     labels=[LabelRelationship(type="subconcept_of", value=global_stocktake)],
 )
+non_party = Label(
+    id="author_type::Non-Party",
+    value="Non-Party",
+    type="author_type",
+    labels=[LabelRelationship(type="subconcept_of", value=global_stocktake)],
+)
 
 # region un submission
 un_submission = Label(
@@ -525,4 +531,5 @@ labels_taxonomy = [
     global_stocktake,
     gst1,
     party,
+    non_party,
 ]
