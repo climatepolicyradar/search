@@ -485,6 +485,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     async def aget(self, document_id: str) -> Document | None:
         """Fetch a single document by id, parsed from its stored document_source."""
         endpoint = f"{self.settings.vespa_endpoint}/document/v1/documents/documents/docid/{document_id}"
+        headers = (
+            {"Authorization": f"Bearer {self.settings.vespa_read_token}"}
+            if self.settings.vespa_read_token
+            else {}
+        )
         logger.info("Vespa request started [documents.get]")
         try:
             async with httpx.AsyncClient() as client:
@@ -494,9 +499,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                         "fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"
                     },
                     timeout=API_TIMEOUT,
-                    headers={
-                        "Authorization": f"Bearer {self.settings.vespa_read_token}"
-                    },
+                    headers=headers,
                 )
         except Exception as exc:
             raise VespaError("Vespa request failed", status_code=None) from exc

@@ -40,11 +40,16 @@ class HealthResponse(BaseModel):
 
 async def probe_vespa() -> None:
     """Vespa's own health endpoint - the discriminator between us and them."""
+    headers = (
+        {"Authorization": f"Bearer {settings.vespa_read_token}"}
+        if settings.vespa_read_token
+        else {}
+    )
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{settings.vespa_endpoint}/state/v1/health",
             timeout=API_TIMEOUT,
-            headers={"Authorization": f"Bearer {settings.vespa_read_token}"},
+            headers=headers,
         )
     if response.status_code != HTTPStatus.OK:
         raise VespaError(
