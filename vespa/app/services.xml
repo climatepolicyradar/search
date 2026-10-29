@@ -410,6 +410,11 @@
              passages_text_not_stemmed has no summary today; it is listed so the
              rule still holds if one is added.
 
+             An item replaces the one Vespa generates for its field, so it restates
+             the whole-field sizes Vespa gives `bolding: on` fields. Without them the
+             field comes back as a short snippet, which `merge_bolded` in
+             search/bolding.py can't line up with the stemmed copy of the same text.
+
              @see: https://docs.vespa.ai/en/document-summaries.html#dynamic-snippet-configuration
              @see: https://github.com/vespa-engine/vespa/blob/master/searchsummary/src/vespa/searchsummary/config/juniperrc.def -->
         <config name="vespa.config.search.summary.juniperrc">
@@ -417,18 +422,34 @@
                 <item>
                     <fieldname>title_not_stemmed</fieldname>
                     <stem_max_extend>0</stem_max_extend>
+                    <length>67108864</length>
+                    <max_matches>1</max_matches>
+                    <min_length>8192</min_length>
+                    <surround_max>67108864</surround_max>
                 </item>
                 <item>
                     <fieldname>description_not_stemmed</fieldname>
                     <stem_max_extend>0</stem_max_extend>
+                    <length>67108864</length>
+                    <max_matches>1</max_matches>
+                    <min_length>8192</min_length>
+                    <surround_max>67108864</surround_max>
                 </item>
                 <item>
                     <fieldname>passages_text_not_stemmed</fieldname>
                     <stem_max_extend>0</stem_max_extend>
+                    <length>67108864</length>
+                    <max_matches>1</max_matches>
+                    <min_length>8192</min_length>
+                    <surround_max>67108864</surround_max>
                 </item>
                 <item>
                     <fieldname>content_not_stemmed</fieldname>
                     <stem_max_extend>0</stem_max_extend>
+                    <length>67108864</length>
+                    <max_matches>1</max_matches>
+                    <min_length>8192</min_length>
+                    <surround_max>67108864</surround_max>
                 </item>
             </override>
         </config>
