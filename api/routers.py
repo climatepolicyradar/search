@@ -1,5 +1,5 @@
+import asyncio
 import time
-from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated, Any, Literal, get_args
@@ -100,7 +100,7 @@ def read_llms_txt() -> str:
     "/documents:download",
     responses=SEARCH_RESPONSES,
 )
-def download_documents(
+async def download_documents(
     filters: DocumentsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
     order_by: list[OrderBy] = Depends(documents_order_by),
@@ -140,7 +140,7 @@ def download_documents(
 
     engine = DevVespaDocumentSearchEngine(settings=settings, msm=msm)
     try:
-        documents = fetch_documents_for_download(
+        documents = await fetch_documents_for_download(
             engine,
             query=query,
             order_by=order_by,
@@ -173,11 +173,11 @@ def download_documents(
     response_model=ItemResponse[Document],
     responses=ITEM_RESPONSES,
 )
-def read_document(document_id: str):
+async def read_document(document_id: str):
     engine = DevVespaDocumentSearchEngine(settings=settings)
     # `VespaError` deliberately propagates: `api.main.handle_vespa_error` turns
     # backend failure into a 503 for every route.
-    result = engine.get(document_id)
+    result = await engine.aget(document_id)
     if result is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Document not found"
@@ -190,7 +190,7 @@ def read_document(document_id: str):
     response_model=SearchResponse[Document],
     responses=SEARCH_RESPONSES,
 )
-def read_documents(
+async def read_documents(
     filters: DocumentsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
     # @see: https://google.aip.dev/157#read-masks-as-a-request-field
@@ -221,11 +221,11 @@ def read_documents(
         settings=settings, debug=debug, bolding=bolding, msm=msm
     )
     aggregation_engines = {
-        "aggregations.labels": engine.aggregations,
+        "aggregations.labels": engine.aaggregations,
     }
     facet_engines = {
-        "facets.labels.value.type": engine.labels_value_type_facets,
-        "facets.labels.type": engine.labels_type_facets,
+        "facets.labels.value.type": engine.alabels_value_type_facets,
+        "facets.labels.type": engine.alabels_type_facets,
     }
     # Iterate the dispatch maps rather than `requested_fields` so the order is
     # deterministic and an unrecognised field cannot reach a lookup.
@@ -236,39 +236,30 @@ def read_documents(
         field for field in facet_engines if field in requested_fields
     ]
     try:
-        workers = 1 + len(requested_aggregation_fields) + len(requested_facet_fields)
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            f_search = pool.submit(
-                engine.search,
-                query=query,
-                pagination=pagination,
-                order_by=order_by,
-                filters=filters,
-            )
-            f_aggregations = {
-                field: pool.submit(
-                    aggregation_engines[field],
-                    query=query,
-                    filters=filters,
-                )
-                for field in requested_aggregation_fields
-            }
-            f_facets = {
-                field: pool.submit(
-                    facet_engines[field],
-                    query=query,
-                    filters=filters,
-                )
-                for field in requested_facet_fields
-            }
-        results = f_search.result()
+        results, extra_results = await asyncio.gather(
+            engine.asearch(
+                query=query, pagination=pagination, order_by=order_by, filters=filters
+            ),
+            asyncio.gather(
+                *(
+                    aggregation_engines[field](query=query, filters=filters)
+                    for field in requested_aggregation_fields
+                ),
+                *(
+                    facet_engines[field](query=query, filters=filters)
+                    for field in requested_facet_fields
+                ),
+            ),
+        )
+        aggregation_results = extra_results[: len(requested_aggregation_fields)]
+        facet_results = extra_results[len(requested_aggregation_fields) :]
         aggregations_data = {
-            field.removeprefix("aggregations."): future.result()
-            for field, future in f_aggregations.items()
+            field.removeprefix("aggregations."): result
+            for field, result in zip(requested_aggregation_fields, aggregation_results)
         }
         facets_data = {
-            field.removeprefix("facets."): future.result()
-            for field, future in f_facets.items()
+            field.removeprefix("facets."): result
+            for field, result in zip(requested_facet_fields, facet_results)
         }
     except Exception:
         logger.exception(
@@ -314,7 +305,7 @@ def read_documents(
     response_model=SearchResponse[LabelSearchResult],
     responses=SEARCH_RESPONSES,
 )
-def read_labels(
+async def read_labels(
     filters: LabelsFilterDep,
     query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
@@ -334,7 +325,7 @@ def read_labels(
 
     engine = DevVespaLabelSearchEngine(settings=settings)
     try:
-        results = engine.search(
+        results = await engine.asearch(
             query=query,
             filters=filters,
             pagination=pagination,
@@ -431,7 +422,7 @@ def read_geographies_taxonomy(
     response_model=ItemResponse[list[CountAggregation[Label]]],
     responses=SEARCH_RESPONSES,
 )
-def aggregate_geographies(
+async def aggregate_geographies(
     filters: DocumentsFilterDep,
     geography_type: list[GeographyType] | None = Query(
         None,
@@ -465,7 +456,7 @@ def aggregate_geographies(
 
     engine = DevVespaDocumentSearchEngine(settings=settings)
     try:
-        aggregations = engine.aggregations(query=query, filters=filters)
+        aggregations = await engine.aaggregations(query=query, filters=filters)
     except Exception:
         logger.exception(
             "Error: geography aggregation request failed (query=%r, geography_type=%r)",
@@ -495,7 +486,7 @@ def aggregate_geographies(
     response_model=SearchResponse[Passage],
     responses=SEARCH_RESPONSES,
 )
-def read_passages(
+async def read_passages(
     filters: PassagesFilterDep,
     engine: PassagesEngineDep,
     query: str | None = Query(None, description="What are you looking for?"),
@@ -515,7 +506,7 @@ def read_passages(
     )
 
     try:
-        results = engine.search(
+        results = await engine.asearch(
             query=query,
             pagination=pagination,
             order_by=order_by,
@@ -571,7 +562,7 @@ PassageMsmQuery = Annotated[
     response_model=SearchResponse[Passage],
     responses=SEARCH_RESPONSES,
 )
-def read_passages_within(
+async def read_passages_within(
     filters: PassagesFilterDep,
     engine: PassagesEngineDep,
     document_id: list[str] = Query(
@@ -603,7 +594,7 @@ def read_passages_within(
     )
 
     try:
-        results = engine.search_within(
+        results = await engine.asearch_within(
             document_ids=document_id,
             query=query,
             pagination=pagination,

@@ -3033,6 +3033,7 @@ dependencies = [
     { name = "cpr-contracts" },
     { name = "duckdb" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "httpx" },
     { name = "moto" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-distro" },
@@ -3072,6 +3073,7 @@ dev = [
     { name = "pulumiverse-grafana" },
     { name = "pydantic-evals" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "wandb", extra = ["eval-table"] },
 ]
 research = [
@@ -3086,6 +3088,7 @@ requires-dist = [
     { name = "cpr-contracts", git = "https://github.com/climatepolicyradar/contracts?tag=v0.1.3" },
     { name = "duckdb", specifier = ">=1.5.6" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.143.3" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "moto", specifier = ">=5.2.4" },
     { name = "opentelemetry-api", specifier = ">=1.45.1,<2.0.0" },
     { name = "opentelemetry-distro", specifier = ">=0.59b0" },
@@ -3125,6 +3128,7 @@ dev = [
     { name = "pulumiverse-grafana", specifier = ">=2.44.0" },
     { name = "pydantic-evals", specifier = ">=2.62.0" },
     { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.0.0" },
     { name = "wandb", extras = ["eval-table"], specifier = ">=0.31.0" },
 ]
 research = [

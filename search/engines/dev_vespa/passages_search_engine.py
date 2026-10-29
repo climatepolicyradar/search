@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -10,7 +11,7 @@ from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
     Settings,
     _get_total_count,
-    execute_vespa_query,
+    aexecute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
@@ -205,6 +206,25 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         bolding: bool = False,
     ) -> ListResponse[Passage]:
         """Fetch a list of relevant passage search results."""
+        return asyncio.run(
+            self.asearch(
+                query=query,
+                pagination=pagination,
+                order_by=order_by,
+                filters=filters,
+                bolding=bolding,
+            )
+        )
+
+    async def asearch(
+        self,
+        query: str | None,
+        pagination: Pagination,
+        order_by: list[OrderBy],
+        filters: Filter | None = None,
+        bolding: bool = False,
+    ) -> ListResponse[Passage]:
+        """Fetch a list of relevant passage search results."""
         free_text, phrases = _parse_query(query) if query else ("", [])
         where = self._where_yql(free_text, phrases, filters)
         yql = f"select * from sources passages where {where}"
@@ -227,7 +247,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             bolding=bolding,
         )
 
-        return self._execute(
+        return await self._aexecute(
             request_body=request_body,
             free_text=free_text,
             bolding=bolding,
@@ -235,6 +255,35 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         )
 
     def search_within(
+        self,
+        document_ids: list[str],
+        query: str | None,
+        pagination: Pagination,
+        order_by: list[OrderBy],
+        filters: Filter | None = None,
+        msm: float = 0.0,
+        bolding: bool = False,
+    ) -> ListResponse[Passage]:
+        """
+        Find passages within a set of parent documents.
+
+        This differs from `search` in that it ORs filters and the search query and supports MSM.
+        This is because a _document_ with e.g. "climate change" and topic:cop does not imply
+        the presence of a _passage_ with both set, hence wanting OR based searches for passages.
+        """
+        return asyncio.run(
+            self.asearch_within(
+                document_ids=document_ids,
+                query=query,
+                pagination=pagination,
+                order_by=order_by,
+                filters=filters,
+                msm=msm,
+                bolding=bolding,
+            )
+        )
+
+    async def asearch_within(
         self,
         document_ids: list[str],
         query: str | None,
@@ -278,7 +327,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         request_body["document_ids"] = ",".join(json.dumps(i) for i in document_ids)
         request_body.update(_msm_request_fields(msm, free_text))
 
-        return self._execute(
+        return await self._aexecute(
             request_context="passages.search_within",
             request_body=request_body,
             free_text=free_text,
@@ -330,14 +379,14 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             request_body["presentation.bolding"] = "false"
         return request_body
 
-    def _execute(
+    async def _aexecute(
         self,
         request_body: dict[str, Any],
         free_text: str,
         bolding: bool,
         request_context: str,
     ) -> ListResponse[Passage]:
-        response = execute_vespa_query(
+        response = await aexecute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,

@@ -21,11 +21,11 @@ particular app's column set sends that set; the mapping from app to
 columns lives with the caller, not here.
 """
 
+import asyncio
 import csv
 import io
 import math
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import StrEnum
 
@@ -252,7 +252,7 @@ def resolve_columns(columns: list[Column] | None) -> tuple[Column, ...]:
     return tuple(dict.fromkeys(columns))
 
 
-def fetch_documents_for_download(
+async def fetch_documents_for_download(
     engine: DevVespaDocumentSearchEngine,
     query: str | None,
     order_by: list[OrderBy],
@@ -282,8 +282,8 @@ def fetch_documents_for_download(
         for page_token in range(1, page_count + 1)
     ]
 
-    def fetch_page(page_token: int, page_size: int) -> list[Document]:
-        response = engine.search(
+    async def fetch_page(page_token: int, page_size: int) -> list[Document]:
+        response = await engine.asearch(
             query=query,
             pagination=Pagination(page_token=page_token, page_size=page_size),
             order_by=order_by,
@@ -291,8 +291,12 @@ def fetch_documents_for_download(
         )
         return response.results
 
-    with ThreadPoolExecutor(max_workers=page_count) as pool:
-        pages = list(pool.map(fetch_page, range(1, page_count + 1), page_sizes))
+    pages = await asyncio.gather(
+        *(
+            fetch_page(page_token, page_size)
+            for page_token, page_size in zip(range(1, page_count + 1), page_sizes)
+        )
+    )
 
     results: list[Document] = []
     for page, page_size in zip(pages, page_sizes):
