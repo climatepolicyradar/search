@@ -672,12 +672,6 @@ def test_rewrite_rule_does_not_bypass_filters(
             True,
         ),
         (
-            "nature-based-solution",
-            "nature based solution test",
-            "The nbs programme funded mangrove restoration.",
-            True,
-        ),
-        (
             "gga",
             "gga test",
             "Progress on the global goal on adaptation was reviewed.",
@@ -729,6 +723,150 @@ def test_passage_search_applies_rulebase_rewrites(
         assert f"tb-{case_id}" not in ids, (
             f"'{query}' should not match out-of-order text {text!r}, got ids: {ids}"
         )
+
+
+# region Query-rewrite side effects
+
+_REWRITE_PASSAGES = {
+    "tb-nb": (
+        "Opportunities for change have been indicated, particularly to reduce CH4 "
+        "emissions per kg of meat produced (NB: the criterion of emissions per kg "
+        "of meat is useful, but must absolutely be accompanied by an analysis of "
+        "emissions per hectare)."
+    ),
+    "tb-nbs-only": "4. Methods to Create an Open Standard Framework for NbS Data",
+    "tb-phrase": (
+        "It will take into account the priorities set out in the European "
+        "Adaptation Strategy (2021), namely: nature-based solutions, improving "
+        "knowledge."
+    ),
+    "tb-words-apart": "Solutions based on the best evidence will protect nature.",
+    "tb-et-al": (
+        "Roy et al., Sustainable Development, Poverty Eradication and Reducing "
+        "Inequalities."
+    ),
+    "tb-ets-only": (
+        "None of the proposed regulations on cross-border cooperation and a global "
+        "emissions trading system seem capable of achieving consensus."
+    ),
+}
+
+
+def _feed_rewrite_passages(app: Vespa) -> None:
+    principal = DocumentFactory.build(
+        id="principal-rewrites", labels=[_principal_label()]
+    )
+    _feed_document(app, principal)
+    for block_id, text in _REWRITE_PASSAGES.items():
+        _feed_passage(
+            app, _text_block(block_id, text), document_id="principal-rewrites"
+        )
+
+
+def _passage_ids(query: str) -> list[str]:
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    response = engine.search(
+        query=query,
+        pagination=Pagination(page_token=1, page_size=50),
+        order_by=[],
+    )
+    return [p.text_block_id for p in response.results]
+
+
+def _trace_messages(query: str, tracelevel: int = 1, **params: Any) -> list[str]:
+    """Vespa trace messages for `query`, sent as the passage engine sends free text."""
+    r = req.post(
+        f"{_TEST_SETTINGS.vespa_endpoint}search/",
+        json={
+            "yql": "select * from sources passages where "
+            '({grammar.profile: "passage_analysis_kstem"}userInput(@query))',
+            "query": query,
+            "model.language": "en",
+            "rules.rulebase": "passages",
+            "hits": 0,
+            "tracelevel": tracelevel,
+            **params,
+        },
+        timeout=10,
+    )
+    r.raise_for_status()
+    body = r.json()
+    assert "errors" not in body["root"], body["root"]["errors"]
+
+    messages: list[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "message" and isinstance(value, str):
+                    messages.append(value)
+                walk(value)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(body.get("trace", {}))
+    return messages
+
+
+def _is_rewritten(query: str) -> bool:
+    return any(
+        m.startswith("SemanticSearcher: Rewrote query") for m in _trace_messages(query)
+    )
+
+
+def test_nature_based_solutions_does_not_match_nota_bene(vespa_app: Vespa):
+    _feed_rewrite_passages(vespa_app)
+
+    ids = _passage_ids("nature-based solutions")
+
+    assert "tb-phrase" in ids
+    assert "tb-nb" not in ids
+
+
+def test_nature_based_solutions_is_searched_as_a_phrase(vespa_app: Vespa):
+    _feed_rewrite_passages(vespa_app)
+
+    for query in ("nature based solutions", "Nature-Based Solution's"):
+        ids = _passage_ids(query)
+        assert "tb-phrase" in ids
+        assert "tb-words-apart" not in ids
+
+
+def test_nature_based_solutions_is_not_expanded_to_nbs(vespa_app: Vespa):
+    _feed_rewrite_passages(vespa_app)
+
+    assert "tb-nbs-only" not in _passage_ids("nature-based solutions")
+    assert "tb-nbs-only" in _passage_ids("nbs")
+
+
+def test_et_al_does_not_fire_the_ets_rule(vespa_app: Vespa):
+    _feed_rewrite_passages(vespa_app)
+
+    ids = _passage_ids("et al")
+
+    assert "tb-et-al" in ids
+    assert "tb-ets-only" not in ids
+
+
+@pytest.mark.parametrize(
+    "query",
+    # Porter stems of real triggers.
+    ["et", "nd", "cc", "gi", "ei", "ep", "aw", "ni"],  # spellchecker:disable-line
+)
+def test_a_trigger_stem_does_not_fire_the_rule(vespa_app: Vespa, query: str):
+    assert not _is_rewritten(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["ETS", "NDS", "PES", "SIDS", "NDC", "NDCs", "NDC's", "EV", "EVs", "EV's"],  # spellchecker:disable-line
+)
+def test_a_trigger_fires_in_any_case_or_inflection(vespa_app: Vespa, query: str):
+    assert _is_rewritten(query)
+
+
+# endregion
 
 
 def test_passage_labels_are_returned_and_filterable(vespa_app: Vespa):

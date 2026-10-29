@@ -18,6 +18,25 @@
             <config name="com.yahoo.language.lucene.lucene-analysis">
                 <configDir>lucene-linguistics</configDir>
                 <analysis>
+                    <!-- Profileless English analyzer: compiles semantic-rule triggers
+                         and stems query terms before rule matching. Lucene's default
+                         is Porter, which stems `ets` to `et`. -->
+                    <item key="en">
+                        <tokenizer>
+                            <name>standard</name>
+                        </tokenizer>
+                        <tokenFilters>
+                            <item>
+                                <name>lowercase</name>
+                            </item>
+                            <item>
+                                <name>englishPossessive</name>
+                            </item>
+                            <item>
+                                <name>kStem</name>
+                            </item>
+                        </tokenFilters>
+                    </item>
                     <!-- title_index_analysis_kstem: passage_analysis_kstem plus acronym+ordinal
                          splitting.
 

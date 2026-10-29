@@ -161,8 +161,11 @@ schema passages {
         }
     }
 
+    # A single-field fieldset doesn't inherit its field's linguistics profile, so
+    # rule-inserted terms wouldn't be analysed the way `content` is indexed.
     fieldset default {
         fields: content
+        query-command: "linguistics-profile passage_analysis_kstem"
     }
 
     fieldset exact {

@@ -15,10 +15,10 @@ from search.engines.dev_vespa import (
     normalise_topic_id,
 )
 from search.identifiers import Identifier, generate_id
-from search.label import Label
+from search.label import Label, LabelSearchResult
 from search.passage import Passage
 
-TModel = TypeVar("TModel", Label, Passage, Document)
+TModel = TypeVar("TModel", Label, LabelSearchResult, Passage, Document)
 
 
 def _topic_condition(topic: str) -> FieldFilter:
@@ -678,10 +678,10 @@ class SearchComparisonTestCase(TestCase[TModel], Generic[TModel]):
 
 
 class SearchNarrowingTestCase(TestCase[TModel], Generic[TModel]):
-    """Adding words to a search should never make it match more documents (FUS-421)."""
+    """Adding or quoting words should never make a search match more documents."""
 
     broader_search_terms: str = Field(
-        description="A shorter query that `search_terms` adds words to."
+        description="`search_terms` with words removed or quotes dropped."
     )
 
     def run_against(self, engine: SearchEngine) -> TestCaseOutcome[TModel]:

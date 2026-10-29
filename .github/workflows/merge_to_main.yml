@@ -39,6 +39,7 @@ jobs:
           filters: |
             run-test:
               - 'api/**'
+              - 'relevance/**'
               - 'relevance_tests/**'
               - 'search/**'
               - 'tests/**'
@@ -62,6 +63,7 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - 'online_metrics/**'
+              - 'relevance/**'
               - 'relevance_tests/**'
               - 'search/vespa/**'
             run-vespa-feeder-deploy:

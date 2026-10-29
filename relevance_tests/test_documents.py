@@ -29,6 +29,28 @@ test_cases = [
         minimum_overlap=1.0,
         strict_order=False,
     ),
+    SearchComparisonTestCase[Document](
+        category="possessives",
+        search_terms="NDC's",
+        search_terms_to_compare="NDC",
+        description="A possessive acronym should return the same top documents as the acronym.",
+        k=20,
+        minimum_overlap=0.8,
+        strict_order=False,
+        # problem - the index keeps "NDC's" as its own word.
+        # solution - strip possessives in the index profiles (reindex). Not expected to pass.
+    ),
+    SearchComparisonTestCase[Document](
+        category="possessives",
+        search_terms="UNFCCC's",
+        search_terms_to_compare="UNFCCC",
+        description="A possessive should return the same top documents as the word.",
+        k=20,
+        minimum_overlap=0.8,
+        strict_order=False,
+        # problem - the index keeps "UNFCCC's" as its own word.
+        # solution - strip possessives in the index profiles (reindex). Not expected to pass.
+    ),
     PrecisionTestCase[Document](
         category="punctuation",
         search_terms="Directive (EU) 2022/2464 amending Regulation (EU) No 537/2014 and others, as regards corporate sustainability reporting (Corporate Sustainability Reporting Directive or CSRD)",
@@ -126,6 +148,37 @@ test_cases = [
         search_terms="parametric insurance act",
         broader_search_terms="parametric insurance",
         description="Adding a third word should narrow it again.",
+    ),
+    # A rewrite whose alternatives count as separate terms under msm can make the
+    # unquoted search match fewer documents than the quoted one.
+    SearchNarrowingTestCase[Document](
+        category="query rewrites",
+        search_terms='"nature based solutions"',
+        broader_search_terms="nature based solutions",
+        description="Quoting nature based solutions should narrow the search.",
+    ),
+    SearchNarrowingTestCase[Document](
+        category="query rewrites",
+        search_terms='"loss and damage"',
+        broader_search_terms="loss and damage",
+        description="Quoting a phrase with no rewrite rule should narrow the search.",
+    ),
+    SearchNarrowingTestCase[Document](
+        category="query rewrites",
+        search_terms='"ndc"',
+        broader_search_terms="ndc",
+        description="Quoting an acronym with a rewrite rule should narrow the search.",
+    ),
+    RecallTestCase[Document](
+        category="query rewrites",
+        search_terms="brazil nature based solutions",
+        # Brazil's Adaptation Climate Plan: Sectoral Plan for Transports
+        expected_result_ids=["CCLW.family.i00009503.n0000"],
+        k=20,
+        description="A Brazil document that mentions nature-based solutions should be found.",
+        # problem - msm checks one field at a time: "brazil" is in the title, the
+        # phrase only in passages.
+        # solution - None yet. Not expected to pass.
     ),
     # Multi-word geography aliases (FUS-423)
     FieldCharacteristicsTestCase[Document](
