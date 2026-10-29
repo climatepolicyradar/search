@@ -1,4 +1,3 @@
-import os
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
@@ -8,13 +7,13 @@ from pydantic import BaseModel
 from pydantic_evals.reporting import EvaluationReport
 from wandb import Run
 
+from relevance.reporters import common
 from search import config
 
 
 def init(dataset_name: str) -> Run:
-    branch = os.getenv("GITHUB_REF_NAME", "local")
     return wandb.init(
-        name=f"{branch}-{datetime.now():%y-%m-%d-%H%M}",
+        name=f"{common.branch()}-{datetime.now():%y-%m-%d-%H%M}",
         project=f"search_relevance_{dataset_name}",
         config={"dataset": dataset_name},
         entity=config.WANDB_ENTITY,
