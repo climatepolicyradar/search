@@ -1,15 +1,41 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from api.geographies_taxonomy import geographies_taxonomy
 from api.labels_taxonomy import labels_taxonomy
 from api.models import TaxonomyNode
 from search.data_in_models import Label
+from search.label import LabelSearchResult
 
 taxonomy: list[Label] = [
     *geographies_taxonomy, 
     *labels_taxonomy,
 ]
 
+
+
+def _as_search_result(label: Label) -> LabelSearchResult:
+    return LabelSearchResult(
+        id=label.id,
+        type=label.type,
+        value=label.value,
+        labels=label.labels,
+    )
+
+
+def merge(
+    hardcoded: Sequence[Label],
+    fetched: Sequence[LabelSearchResult],
+) -> list[LabelSearchResult]:
+    """Combine the hardcoded taxonomy with fetched labels, hardcoded winning an id clash."""
+    by_id: dict[str, LabelSearchResult] = {
+        label.id: _as_search_result(label) for label in hardcoded
+    }
+
+    for label in fetched:
+        by_id.setdefault(label.id, label)
+
+    return list(by_id.values())
 
 
 @dataclass
@@ -20,6 +46,7 @@ class LabelNode:
     count: int 
     is_root: bool
     children: list["LabelNode"]
+    alternative_labels: list[str]
 
     def types(self) -> set[str]:
         """Return every label type in this subtree."""
@@ -53,22 +80,30 @@ class LabelNode:
             type=self.type,
             value=self.value,
             count=self.count,
+            alternative_labels=self.alternative_labels,
             children=[child.response() for child in self.children],
         )
    
 
 
-def tree(input: list[Label], subtrees: list[str] | None) -> list[LabelNode]:
+def tree(
+    input: Sequence[LabelSearchResult],
+    subtrees: list[str] | None,
+) -> list[LabelNode]:
     by_id: dict[str, LabelNode] = {}
 
-    def node(label: Label) -> LabelNode:
+    def node(label: LabelSearchResult) -> LabelNode:
        if label.id in by_id:
-           return by_id[label.id]
+           existing = by_id[label.id]
+           alternatives = [*existing.alternative_labels, *label.alternative_labels]
+           existing.alternative_labels = list(dict.fromkeys(alternatives))
+           return existing
 
        node = LabelNode(
            id=label.id, 
            type=label.type, 
            value=label.value, 
+           alternative_labels=list(dict.fromkeys(label.alternative_labels)),
            is_root=True,
            children=[],
            count=0, 
@@ -81,7 +116,7 @@ def tree(input: list[Label], subtrees: list[str] | None) -> list[LabelNode]:
         us = node(label)
         for parent_label in label.labels:
             if parent_label.type == "subconcept_of":
-                parent = node(parent_label.value)
+                parent = node(_as_search_result(parent_label.value))
                 parent.children.append(us)
                 us.is_root = False
 

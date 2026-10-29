@@ -15,7 +15,7 @@ from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse, TaxonomyNode
 from api.settings import settings
 from api.state import HttpxDep
-from api.taxonomy import taxonomy, tree
+from api.taxonomy import merge, taxonomy, tree
 from api.utils import (
     DocumentsEngineDep,
     LabelsEngineDep,
@@ -446,13 +446,18 @@ async def aggregate_geographies(
 async def read_taxonomy(
     filters: DocumentsFilterDep,
     httpx: HttpxDep,
+    label_engine: LabelsEngineDep,
     label_type: list[str] | None = Query(None, alias="type"),
 ):
     """Lists label trees of the given types, with document counts."""
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
-    nodes = tree(taxonomy, label_type)
+    logger.info("Getting taxonomy (type=%r)", label_type)
 
-    counts = await engine.label_counts(
+    document_engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
+
+    merged = merge(taxonomy, await label_engine.all_labels())
+    nodes = tree(merged, label_type)
+
+    counts = await document_engine.label_counts(
         label_types=sorted(set().union(*(node.types() for node in nodes))),
         filters=filters,
     )

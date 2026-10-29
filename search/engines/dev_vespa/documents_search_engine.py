@@ -852,7 +852,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         grouping = (
             "all(group(labels.id) "
             f"filter(in(labels.type, {quoted_types})) "
-            "max(5000) each(output(count())))"
+            "max(10000) each(output(count())))"
         )
 
         yql = f"select labels.id from documents where {where} | {grouping}"
