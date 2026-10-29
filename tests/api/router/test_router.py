@@ -1,7 +1,7 @@
 """Tests for ``GET /search/documents/{document_id}``."""
 
 from http import HTTPStatus
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,13 +18,16 @@ def document_client():
     """Provide a test client with the document engine mocked."""
     with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
+        mock_engine.aget = AsyncMock()
+        mock_engine.asearch = AsyncMock()
+        mock_engine.aaggregations = AsyncMock()
         mock_engine_cls.return_value = mock_engine
         yield TestClient(app), mock_engine
 
 
 def test_get_document_returns_200_when_found(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.get.return_value = Document(
+    mock_engine.aget.return_value = Document(
         id="doc-1",
         title="A Climate Document",
         description="About climate.",
@@ -34,12 +37,12 @@ def test_get_document_returns_200_when_found(document_client) -> None:
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["data"]["id"] == "doc-1"
-    mock_engine.get.assert_called_once_with("doc-1")
+    mock_engine.aget.assert_called_once_with("doc-1")
 
 
 def test_get_document_returns_404_when_not_found(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.get.return_value = None
+    mock_engine.aget.return_value = None
 
     response = client.get("/search/documents/missing-id")
 
@@ -48,7 +51,7 @@ def test_get_document_returns_404_when_not_found(document_client) -> None:
 
 def test_get_document_returns_503_on_vespa_error(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.get.side_effect = VespaError("Vespa is down", status_code=None)
+    mock_engine.aget.side_effect = VespaError("Vespa is down", status_code=None)
 
     response = client.get("/search/documents/doc-1")
 
@@ -64,7 +67,7 @@ def test_aggregations_are_omitted_unless_requested(document_client) -> None:
     query or receive the payload.
     """
     client, mock_engine = document_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 
@@ -72,17 +75,17 @@ def test_aggregations_are_omitted_unless_requested(document_client) -> None:
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["aggregations"] is None
-    mock_engine.aggregations.assert_not_called()
+    mock_engine.aaggregations.assert_not_called()
 
 
 def test_aggregations_are_returned_when_requested(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
     # An empty aggregation set is a legitimate result, and must still be
     # reported as `[]` rather than collapsing back into "not requested".
-    mock_engine.aggregations.return_value = []
+    mock_engine.aaggregations.return_value = []
 
     response = client.get(
         "/search/documents",
@@ -91,7 +94,7 @@ def test_aggregations_are_returned_when_requested(document_client) -> None:
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["aggregations"] == {"labels": []}
-    mock_engine.aggregations.assert_called_once()
+    mock_engine.aaggregations.assert_called_once()
 
 
 def test_an_unknown_field_is_rejected(document_client) -> None:

@@ -3,7 +3,7 @@
 import csv
 import io
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -390,7 +390,7 @@ def _make_engine(pages: list[list[Document]]) -> MagicMock:
             results=pages[page_token - 1], total_size=None, next_page_token=None
         )
 
-    engine.search.side_effect = search
+    engine.asearch = AsyncMock(side_effect=search)
     return engine
 
 
@@ -398,7 +398,7 @@ def _docs(*ids: str) -> list[Document]:
     return [Document(id=i, title=i, description=None) for i in ids]
 
 
-def test_fetch_combines_multiple_pages_up_to_max_results() -> None:
+async def test_fetch_combines_multiple_pages_up_to_max_results() -> None:
     """
     Pages are fetched concurrently, then reassembled in page order.
 
@@ -407,7 +407,7 @@ def test_fetch_combines_multiple_pages_up_to_max_results() -> None:
     """
     engine = _make_engine([_docs("a", "b"), _docs("c")])
 
-    results = fetch_documents_for_download(
+    results = await fetch_documents_for_download(
         engine,
         query="x",
         order_by=[],
@@ -417,10 +417,10 @@ def test_fetch_combines_multiple_pages_up_to_max_results() -> None:
     )
 
     assert [d.id for d in results] == ["a", "b", "c"]
-    assert engine.search.call_count == 2
+    assert engine.asearch.call_count == 2
 
 
-def test_fetch_truncates_after_a_short_page() -> None:
+async def test_fetch_truncates_after_a_short_page() -> None:
     """
     A page shorter than requested means Vespa has no more results.
 
@@ -429,33 +429,35 @@ def test_fetch_truncates_after_a_short_page() -> None:
     """
     engine = _make_engine([_docs("a", "b"), _docs("c")])
 
-    results = fetch_documents_for_download(
+    results = await fetch_documents_for_download(
         engine, query="x", order_by=[], filters=None, max_results=200
     )
 
     assert [d.id for d in results] == ["a", "b"]
 
 
-def test_fetch_propagates_a_page_failure() -> None:
+async def test_fetch_propagates_a_page_failure() -> None:
     """
     A failed page's exception surfaces to the caller, not just its siblings.
 
-    Pages are fetched concurrently via a thread pool; this confirms that
+    Pages are fetched concurrently via asyncio.gather; this confirms that
     doesn't swallow a `VespaError` raised by one of the underlying calls.
     """
     engine = MagicMock()
-    engine.search.side_effect = VespaError("Vespa request failed", status_code=None)
+    engine.asearch = AsyncMock(
+        side_effect=VespaError("Vespa request failed", status_code=None)
+    )
 
     with pytest.raises(VespaError):
-        fetch_documents_for_download(
+        await fetch_documents_for_download(
             engine, query="x", order_by=[], filters=None, max_results=200
         )
 
 
-def test_fetch_passes_query_filters_and_order_by_through() -> None:
+async def test_fetch_passes_query_filters_and_order_by_through() -> None:
     engine = _make_engine([_docs("a")])
 
-    fetch_documents_for_download(
+    await fetch_documents_for_download(
         engine,
         query="toxic waste",
         order_by=[],
@@ -463,7 +465,7 @@ def test_fetch_passes_query_filters_and_order_by_through() -> None:
         max_results=10,
     )
 
-    _, kwargs = engine.search.call_args
+    _, kwargs = engine.asearch.call_args
     assert kwargs["query"] == "toxic waste"
     assert kwargs["filters"] == Filter(op="and", filters=[])
     assert isinstance(kwargs["pagination"], Pagination)

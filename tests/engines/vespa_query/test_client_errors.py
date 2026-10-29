@@ -3,13 +3,15 @@ Tests that a failed Vespa request is raised rather than turned into no results.
 
 "Vespa is broken" and "nothing matched your query" are different answers.
 Collapsing the first into the second leaves clients unable to tell them apart,
-so every failure mode of :func:`execute_vespa_query` must raise
+so every failure mode of :func:`aexecute_vespa_query` must raise
 :class:`VespaError`, and no caller may catch it to return an empty result.
 """
 
+import asyncio
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 import requests
 from pydantic import AnyHttpUrl
@@ -51,17 +53,29 @@ def _response(
     return response
 
 
+class _FakeAsyncClient:
+    """Stands in for ``httpx.AsyncClient``, delegating ``post`` to a fake sync callable."""
+
+    def __init__(self, post_fn) -> None:
+        self._post_fn = post_fn
+
+    async def post(self, *args, **kwargs):
+        return self._post_fn(*args, **kwargs)
+
+
 def _execute(post_fn) -> dict:
-    return dev_vespa.execute_vespa_query(
-        endpoint="http://localhost:8080/search",
-        token="test-read-token",  # nosec B106
-        request_body={"yql": "select * from sources documents where true"},
-        request_context="test.context",
-        post_fn=post_fn,
+    return asyncio.run(
+        dev_vespa.aexecute_vespa_query(
+            endpoint="http://localhost:8080/search",
+            token="test-read-token",  # nosec B106
+            request_body={"yql": "select * from sources documents where true"},
+            request_context="test.context",
+            client=_FakeAsyncClient(post_fn),
+        )
     )
 
 
-# region execute_vespa_query failure modes
+# region aexecute_vespa_query failure modes
 
 
 def test_execute_raises_when_the_request_never_reaches_vespa() -> None:
@@ -138,7 +152,7 @@ def test_execute_returns_the_decoded_body_on_success() -> None:
     assert _execute(post_fn) == body
 
 
-# endregion execute_vespa_query failure modes
+# endregion aexecute_vespa_query failure modes
 
 # region Callers must not swallow VespaError
 
@@ -149,22 +163,22 @@ def failing_query():
     with (
         patch.object(
             dev_vespa,
-            "execute_vespa_query",
+            "aexecute_vespa_query",
             side_effect=VespaError("Vespa is down", status_code=None),
         ) as mock_execute,
         patch.object(
             documents_search_engine,
-            "execute_vespa_query",
+            "aexecute_vespa_query",
             side_effect=VespaError("Vespa is down", status_code=None),
         ),
         patch.object(
             passages_search_engine,
-            "execute_vespa_query",
+            "aexecute_vespa_query",
             side_effect=VespaError("Vespa is down", status_code=None),
         ),
         patch.object(
             labels_search_engine,
-            "execute_vespa_query",
+            "aexecute_vespa_query",
             side_effect=VespaError("Vespa is down", status_code=None),
         ),
     ):
@@ -229,14 +243,8 @@ def test_label_search_propagates_vespa_error(settings, failing_query) -> None:
 
 
 def _patch_http(response: MagicMock):
-    """
-    Intercept the real ``requests.post`` at the session layer.
-
-    ``execute_vespa_query``'s ``post_fn`` default is bound to ``requests.post``
-    at import time, so replacing the module attribute has no effect. Patching
-    ``Session.request`` leaves the real ``requests.post`` in the path.
-    """
-    return patch.object(requests.sessions.Session, "request", return_value=response)
+    """Intercept the real ``httpx.AsyncClient.post`` at the client layer."""
+    return patch.object(httpx.AsyncClient, "post", new=AsyncMock(return_value=response))
 
 
 def test_document_search_surfaces_an_http_failure_end_to_end(settings) -> None:
