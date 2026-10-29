@@ -1,12 +1,12 @@
 """Health probes for the search API."""
 
-from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
+from collections.abc import Awaitable, Callable
 from http import HTTPStatus
 from time import perf_counter
 from typing import Literal
 
-import requests
+import httpx
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
@@ -38,13 +38,14 @@ class HealthResponse(BaseModel):
     probes: list[ProbeResult]
 
 
-def probe_vespa() -> None:
+async def probe_vespa() -> None:
     """Vespa's own health endpoint - the discriminator between us and them."""
-    response = requests.get(
-        f"{settings.vespa_endpoint}/state/v1/health",
-        timeout=API_TIMEOUT,
-        headers={"Authorization": f"Bearer {settings.vespa_read_token}"},
-    )
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{settings.vespa_endpoint}/state/v1/health",
+            timeout=API_TIMEOUT,
+            headers={"Authorization": f"Bearer {settings.vespa_read_token}"},
+        )
     if response.status_code != HTTPStatus.OK:
         raise VespaError(
             f"Vespa returned status {response.status_code} [health.vespa]",
@@ -58,15 +59,15 @@ def probe_vespa() -> None:
         )
 
 
-def probe_documents_search() -> None:
-    DevVespaDocumentSearchEngine(settings=settings).search(
+async def probe_documents_search() -> None:
+    await DevVespaDocumentSearchEngine(settings=settings).asearch(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
     )
 
 
-def probe_documents_get() -> None:
+async def probe_documents_get() -> None:
     """
     Fetch a document by id, via the top hit rather than a pinned id.
 
@@ -74,7 +75,7 @@ def probe_documents_get() -> None:
     document was unpublished - that is a corpus change, not a service failure.
     """
     engine = DevVespaDocumentSearchEngine(settings=settings)
-    results = engine.search(
+    results = await engine.asearch(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
@@ -85,7 +86,7 @@ def probe_documents_get() -> None:
             "[health.documents.get]",
             status_code=None,
         )
-    if engine.get(results.results[0].id) is None:
+    if await engine.aget(results.results[0].id) is None:
         raise VespaError(
             "Vespa returned status 404 for a document it had just returned as a "
             "hit [health.documents.get]",
@@ -93,16 +94,16 @@ def probe_documents_get() -> None:
         )
 
 
-def probe_labels_search() -> None:
-    DevVespaLabelSearchEngine(settings=settings).search(
+async def probe_labels_search() -> None:
+    await DevVespaLabelSearchEngine(settings=settings).asearch(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
     )
 
 
-def probe_passages_search() -> None:
-    DevVespaPassageSearchEngine(settings=settings).search(
+async def probe_passages_search() -> None:
+    await DevVespaPassageSearchEngine(settings=settings).asearch(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
@@ -111,7 +112,7 @@ def probe_passages_search() -> None:
 
 # A probe raises on failure and returns on success. Anything that is not a 2xx
 # from Vespa already raises `VespaError` on the way up.
-Probe = Callable[[], None]
+Probe = Callable[[], Awaitable[None]]
 
 PROBES: dict[str, Probe] = {
     "vespa": probe_vespa,
@@ -124,14 +125,14 @@ PROBES: dict[str, Probe] = {
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-def run_probe(name: str, probe: Probe) -> ProbeResult:
+async def run_probe(name: str, probe: Probe) -> ProbeResult:
     """Run one probe and turn its outcome into a result row."""
     started = perf_counter()
     healthy = True
     # As a failure here is data over an actual fault, it is OK to swallow the exception:
     # one dead probe must not hide the other four. Why it failed is in the log.
     try:
-        probe()
+        await probe()
     except Exception:
         logger.exception(f"Error: health probe failed (probe={name})")
         healthy = False
@@ -150,14 +151,11 @@ def run_probe(name: str, probe: Probe) -> ProbeResult:
         HTTPStatus.SERVICE_UNAVAILABLE: {"description": "At least one probe failed."}
     },
 )
-def read_health(response: Response) -> HealthResponse:
+async def read_health(response: Response) -> HealthResponse:
     """Run every probe concurrently and report each one."""
-    with ThreadPoolExecutor(max_workers=len(PROBES)) as pool:
-        futures = {
-            name: pool.submit(run_probe, name, probe) for name, probe in PROBES.items()
-        }
-    # `run_probe` never raises, so every future has a result.
-    probes = [futures[name].result() for name in PROBES]
+    probes = await asyncio.gather(
+        *(run_probe(name, probe) for name, probe in PROBES.items())
+    )
 
     healthy = all(probe.healthy for probe in probes)
     response.status_code = HTTPStatus.OK if healthy else HTTPStatus.SERVICE_UNAVAILABLE
@@ -176,7 +174,7 @@ def read_health(response: Response) -> HealthResponse:
         HTTPStatus.SERVICE_UNAVAILABLE: {"description": "The probe failed."},
     },
 )
-def read_probe(probe_id: str, response: Response) -> ProbeResult:
+async def read_probe(probe_id: str, response: Response) -> ProbeResult:
     """Run one probe used in our canaries in ./observability."""
     probe = PROBES.get(probe_id)
     if probe is None:
@@ -184,7 +182,7 @@ def read_probe(probe_id: str, response: Response) -> ProbeResult:
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Unknown probe {probe_id!r}. Available: {', '.join(PROBES)}",
         )
-    result = run_probe(probe_id, probe)
+    result = await run_probe(probe_id, probe)
     response.status_code = (
         HTTPStatus.OK if result.healthy else HTTPStatus.SERVICE_UNAVAILABLE
     )

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any
+from typing import Any, Protocol
 
-import requests
+import httpx
 from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings
 
@@ -16,6 +16,21 @@ logger = get_logger(__name__)
 
 API_TIMEOUT = 5  # seconds
 HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS = 512
+
+
+class AsyncPostClient(Protocol):
+    """The slice of ``httpx.AsyncClient`` this module needs, for fake injection in tests."""
+
+    async def post(
+        self,
+        url: str,
+        *,
+        json: dict[str, Any],
+        timeout: float,
+        headers: dict[str, str],
+    ) -> httpx.Response:
+        """Send a POST request."""
+        ...
 
 
 class Settings(BaseSettings):
@@ -72,13 +87,13 @@ class VespaError(Exception):
         self.status_code = status_code
 
 
-def execute_vespa_query(
+async def aexecute_vespa_query(
     *,
     endpoint: str,
     token: str,
     request_body: dict[str, Any],
     request_context: str,
-    post_fn=requests.post,
+    client: AsyncPostClient | None = None,
 ) -> dict[str, Any]:
     """
     Execute a Vespa query and emit contextual logs.
@@ -91,8 +106,9 @@ def execute_vespa_query(
     :type request_body: dict[str, Any]
     :param request_context: Context label for logs.
     :type request_context: str
-    :param post_fn: HTTP post callable for dependency injection in tests.
-    :type post_fn: typing.Callable[..., requests.Response]
+    :param client: HTTP client for dependency injection in tests. A fresh,
+        ad hoc client is opened and closed around the call when omitted.
+    :type client: AsyncPostClient | None
     :return: Decoded JSON response.
     :rtype: dict[str, Any]
     :raises VespaError: if the request never reached Vespa, Vespa returned a
@@ -115,14 +131,25 @@ def execute_vespa_query(
 
     started = time.perf_counter()
     try:
-        response = post_fn(
-            endpoint,
-            json=request_body,
-            timeout=API_TIMEOUT,
-            headers={
-                "Authorization": f"Bearer {token}",
-            },
-        )
+        if client is None:
+            async with httpx.AsyncClient() as owned_client:
+                response = await owned_client.post(
+                    endpoint,
+                    json=request_body,
+                    timeout=API_TIMEOUT,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                    },
+                )
+        else:
+            response = await client.post(
+                endpoint,
+                json=request_body,
+                timeout=API_TIMEOUT,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
     except Exception as exc:
         logger.exception(
             "Error: Vespa request failed before a response was received [%s] "

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from http import HTTPStatus
 from typing import Any
 
-import requests
+import httpx
 from pydantic import TypeAdapter
 from vespa.querybuilder import Grouping as G
 
@@ -31,7 +31,7 @@ from search.engines.vespa_query.client import (
     HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
     Settings,
     _get_total_count,
-    execute_vespa_query,
+    aexecute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
@@ -307,6 +307,20 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         filters: Filter | None = None,
     ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
+        return asyncio.run(
+            self.asearch(
+                query=query, pagination=pagination, order_by=order_by, filters=filters
+            )
+        )
+
+    async def asearch(
+        self,
+        query: str | None,
+        pagination: Pagination,
+        order_by: list[OrderBy],
+        filters: Filter | None = None,
+    ) -> ListResponse[Document]:
+        """Fetch a list of relevant search results."""
 
         where = "true "
 
@@ -375,7 +389,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         if not self.bolding:
             request_body["presentation.bolding"] = "false"
 
-        response = execute_vespa_query(
+        response = await aexecute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -466,17 +480,24 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
     def get(self, document_id: str) -> Document | None:
         """Fetch a single document by id, parsed from its stored document_source."""
+        return asyncio.run(self.aget(document_id))
+
+    async def aget(self, document_id: str) -> Document | None:
+        """Fetch a single document by id, parsed from its stored document_source."""
         endpoint = f"{self.settings.vespa_endpoint}/document/v1/documents/documents/docid/{document_id}"
         logger.info("Vespa request started [documents.get]")
         try:
-            response = requests.get(
-                endpoint,
-                params={
-                    "fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"
-                },
-                timeout=API_TIMEOUT,
-                headers={"Authorization": f"Bearer {self.settings.vespa_read_token}"},
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    endpoint,
+                    params={
+                        "fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"
+                    },
+                    timeout=API_TIMEOUT,
+                    headers={
+                        "Authorization": f"Bearer {self.settings.vespa_read_token}"
+                    },
+                )
         except Exception as exc:
             raise VespaError("Vespa request failed", status_code=None) from exc
         if response.status_code == HTTPStatus.NOT_FOUND:
@@ -513,6 +534,14 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         return label_type, label_id, label_value
 
     def aggregations(
+        self,
+        query: str | None,
+        filters: Filter | None = None,
+    ) -> list[CountAggregation[Label]]:
+        """Return aggregations (label/concept groups with counts) filtered by the search query."""
+        return asyncio.run(self.aaggregations(query=query, filters=filters))
+
+    async def aaggregations(
         self,
         query: str | None,
         filters: Filter | None = None,
@@ -577,7 +606,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["geo_query"] = _resolve_geography_aliases(free_text)
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
-        response = execute_vespa_query(
+        response = await aexecute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -612,7 +641,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             )
         return count_aggregations
 
-    def _run_facet_query(
+    async def _arun_facet_query(
         self,
         query: str | None,
         where_filter: Filter | None,
@@ -657,7 +686,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             request_body["geo_query"] = _resolve_geography_aliases(free_text)
         for i, phrase in enumerate(phrases):
             request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
-        response = execute_vespa_query(
+        response = await aexecute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,
@@ -702,6 +731,26 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         Example:
         - (category::1 OR category::2) OR (geography::USA OR geography::GBR)
         """
+        return asyncio.run(
+            self.alabels_value_type_facets(query=query, filters=filters)
+        )
+
+    async def alabels_value_type_facets(
+        self,
+        query: str | None,
+        filters: Filter | None = None,
+    ) -> dict[str, list[CountAggregation[Label]]]:
+        """
+        Compute disjunctive facet counts partitioned by `label.type`. AKA faceted search.
+
+        The query generally coming across is
+        - grouped by `label.type`
+        - each filter within that is joined by `OR`
+        - each group is joined by `AND`
+
+        Example:
+        - (category::1 OR category::2) OR (geography::USA OR geography::GBR)
+        """
         facet_label_types = _get_label_types_from_filters(filters)
         facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
         for label_type in facet_label_types:
@@ -710,22 +759,21 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 lambda c, t=label_type: _facet_filter_label_type(c) == t,
             )
 
-        responses: dict[str, dict[str, dict[tuple[str, str], tuple[Label, int]]]] = {}
-        with ThreadPoolExecutor(max_workers=max(1, len(facet_requests))) as pool:
-            futures = {
-                pool.submit(
-                    self._run_facet_query,
+        names = list(facet_requests.keys())
+        facet_results = await asyncio.gather(
+            *(
+                self._arun_facet_query(
                     query,
-                    plan,
+                    facet_requests[name],
                     [
                         "labels_type_id_value_attribute",
                         "concepts_type_id_value_attribute",
                     ],
-                ): name
-                for name, plan in facet_requests.items()
-            }
-            for future in as_completed(futures):
-                responses[futures[future]] = future.result()
+                )
+                for name in names
+            )
+        )
+        responses = dict(zip(names, facet_results))
 
         result: dict[str, list[CountAggregation[Label]]] = {}
         for label_type, labels_for_type in responses["filtered_labels"].items():
@@ -749,6 +797,14 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         filters: Filter | None = None,
     ) -> dict[str, list[CountAggregation[Label]]]:
         """Compute disjunctive facet counts partitioned by `label.relationship`."""
+        return asyncio.run(self.alabels_type_facets(query=query, filters=filters))
+
+    async def alabels_type_facets(
+        self,
+        query: str | None,
+        filters: Filter | None = None,
+    ) -> dict[str, list[CountAggregation[Label]]]:
+        """Compute disjunctive facet counts partitioned by `label.relationship`."""
         facet_label_types = _get_label_types_from_filters(filters)
         facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
         for label_type in facet_label_types:
@@ -757,19 +813,18 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 lambda c, t=label_type: _facet_filter_label_type(c) == t,
             )
 
-        responses: dict[str, dict[str, dict[tuple[str, str], tuple[Label, int]]]] = {}
-        with ThreadPoolExecutor(max_workers=max(1, len(facet_requests))) as pool:
-            futures = {
-                pool.submit(
-                    self._run_facet_query,
+        names = list(facet_requests.keys())
+        facet_results = await asyncio.gather(
+            *(
+                self._arun_facet_query(
                     query,
-                    plan,
+                    facet_requests[name],
                     ["labels_relationship_id_value_attribute"],
-                ): name
-                for name, plan in facet_requests.items()
-            }
-            for future in as_completed(futures):
-                responses[futures[future]] = future.result()
+                )
+                for name in names
+            )
+        )
+        responses = dict(zip(names, facet_results))
 
         result: dict[str, list[CountAggregation[Label]]] = {}
         for label_type, labels_for_type in responses["filtered_labels"].items():

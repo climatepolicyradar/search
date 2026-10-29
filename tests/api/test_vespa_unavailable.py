@@ -11,7 +11,7 @@ logged as a success hides the outage from whoever is on call.
 
 import logging
 from http import HTTPStatus
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,6 +32,10 @@ def document_engine():
     with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
         mock_engine.last_debug_info = None
+        mock_engine.aget = AsyncMock()
+        mock_engine.asearch = AsyncMock()
+        mock_engine.aaggregations = AsyncMock()
+        mock_engine.alabels_value_type_facets = AsyncMock()
         mock_engine_cls.return_value = mock_engine
         yield mock_engine
 
@@ -40,6 +44,7 @@ def document_engine():
 def passage_engine():
     mock_engine = MagicMock()
     mock_engine.last_debug_info = None
+    mock_engine.asearch = AsyncMock()
     app.dependency_overrides[passages_engine] = lambda: mock_engine
     yield mock_engine
     del app.dependency_overrides[passages_engine]
@@ -50,6 +55,7 @@ def label_engine():
     with patch("api.routers.DevVespaLabelSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
         mock_engine.last_debug_info = None
+        mock_engine.asearch = AsyncMock()
         mock_engine_cls.return_value = mock_engine
         yield mock_engine
 
@@ -62,13 +68,13 @@ def _assert_unavailable(response) -> None:
 
 
 def test_get_document_returns_503(client, document_engine) -> None:
-    document_engine.get.side_effect = VespaError("Vespa is down", status_code=None)
+    document_engine.aget.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(client.get("/search/documents/doc-1"))
 
 
 def test_search_documents_returns_503(client, document_engine) -> None:
-    document_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
+    document_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(client.get("/search/documents", params={"query": "toxic"}))
 
@@ -77,10 +83,10 @@ def test_search_documents_returns_503_when_only_aggregations_fail(
     client, document_engine
 ) -> None:
     """Search and aggregations are fanned out together; either failing is a 503."""
-    document_engine.search.return_value = ListResponse(
+    document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
-    document_engine.aggregations.side_effect = VespaError(
+    document_engine.aaggregations.side_effect = VespaError(
         "Vespa is down", status_code=None
     )
 
@@ -95,11 +101,11 @@ def test_search_documents_returns_503_when_only_aggregations_fail(
 def test_search_documents_returns_503_when_only_facets_fail(
     client, document_engine
 ) -> None:
-    document_engine.search.return_value = ListResponse(
+    document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
-    document_engine.aggregations.return_value = []
-    document_engine.labels_value_type_facets.side_effect = VespaError(
+    document_engine.aaggregations.return_value = []
+    document_engine.alabels_value_type_facets.side_effect = VespaError(
         "Vespa is down", status_code=None
     )
 
@@ -112,13 +118,13 @@ def test_search_documents_returns_503_when_only_facets_fail(
 
 
 def test_search_passages_returns_503(client, passage_engine) -> None:
-    passage_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
+    passage_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(client.get("/search/passages", params={"query": "toxic"}))
 
 
 def test_search_labels_returns_503(client, label_engine) -> None:
-    label_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
+    label_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(client.get("/search/labels", params={"query": "toxic"}))
 
@@ -167,7 +173,7 @@ def test_the_upstream_status_maps_to_the_status_we_return(
     404 and 429 mean the same thing to both, so they pass through.
     """
     route = request.node.callspec.params["engine_for"]
-    engine_for.search.side_effect = VespaError(
+    engine_for.asearch.side_effect = VespaError(
         "Vespa returned status [ctx]: upstream detail", status_code=upstream
     )
 
@@ -185,7 +191,7 @@ def test_a_503_is_not_logged_as_a_success(client, document_engine, caplog) -> No
     grepping and error alerting - the same blind spot, one layer up, as
     answering a failed query with a 200.
     """
-    document_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
+    document_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
     with caplog.at_level(logging.INFO, logger="api.main"):
         client.get("/search/documents", params={"query": "toxic"})
@@ -218,7 +224,7 @@ def test_a_400_is_logged_as_rejected_not_as_an_error(client, caplog) -> None:
 
 
 def test_a_200_is_still_logged_as_a_success(client, document_engine, caplog) -> None:
-    document_engine.search.return_value = ListResponse(
+    document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 
@@ -236,7 +242,7 @@ def test_a_200_is_still_logged_as_a_success(client, document_engine, caplog) -> 
 
 def test_no_matches_is_still_a_200(client, document_engine) -> None:
     """The counterpart to the above: an empty result set is a successful answer."""
-    document_engine.search.return_value = ListResponse(
+    document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 

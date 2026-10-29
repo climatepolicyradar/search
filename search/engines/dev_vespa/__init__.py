@@ -40,7 +40,7 @@ from search.engines.dev_vespa.passages_search_engine import (
 from search.engines.vespa_query.client import (
     HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
     Settings,
-    execute_vespa_query,
+    aexecute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
     TOPIC_FILTER_FIELD,
@@ -91,9 +91,9 @@ __all__ = [
     "_ranking_overrides_for_document_order_by",
     "_ranking_overrides_for_passage_order_by",
     "_topic_ids_from_filters",
+    "aexecute_vespa_query",
     "documents_filter_field_to_vespa_field_map",
     "documents_filter_struct_field_to_vespa_field_map",
-    "execute_vespa_query",
     "labels_filter_field_to_vespa_field_map",
     "labels_filter_struct_field_to_vespa_field_map",
     "normalise_topic_id",
