@@ -422,7 +422,7 @@ def read_geographies_taxonomy(
     response_model=ItemResponse[list[CountAggregation[Label]]],
     responses=SEARCH_RESPONSES,
 )
-def aggregate_geographies(
+async def aggregate_geographies(
     filters: DocumentsFilterDep,
     geography_type: list[GeographyType] | None = Query(
         None,
@@ -456,7 +456,7 @@ def aggregate_geographies(
 
     engine = DevVespaDocumentSearchEngine(settings=settings)
     try:
-        aggregations = engine.aggregations(query=query, filters=filters)
+        aggregations = await engine.aaggregations(query=query, filters=filters)
     except Exception:
         logger.exception(
             "Error: geography aggregation request failed (query=%r, geography_type=%r)",
