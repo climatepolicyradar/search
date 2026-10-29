@@ -445,6 +445,33 @@ def test_passage_bolding_covers_quoted_phrases(vespa_app: Vespa):
         assert [h.labelled_text for h in results.results[0].boldings] == expected, query
 
 
+def test_passage_bolding_of_a_quoted_word_skips_longer_words_it_prefixes(vespa_app: Vespa):
+    """
+    `"forest"` bolds "forest" only, not "forests" or "forestry".
+
+    Juniper prefix-extends query terms over 5 bytes by up to 3 bytes unless
+    `stem_max_extend` is 0 for the field - see the juniperrc block in services.xml.
+    """
+    principal = DocumentFactory.build(id="principal-qprefix", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app,
+        _text_block("tb-qprefix", "Forest and forestry policy for national forests."),
+        document_id="principal-qprefix",
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    results = engine.search(
+        query='"forest"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        bolding=True,
+    )
+
+    assert [p.text_block_id for p in results.results] == ["tb-qprefix"]
+    assert [b.labelled_text for b in results.results[0].boldings] == ["Forest"]
+
+
 def test_passage_bolding_covers_acronym_expansions(vespa_app: Vespa):
     """An acronym query bolds the expanded term it matched on, including stopwords - see `search/acronyms.py`"""
     principal = DocumentFactory.build(id="principal-acro", labels=[_principal_label()])
