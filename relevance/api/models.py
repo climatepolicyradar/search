@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_serializer
 
+from api.utils import RankProfile
+
 
 class FieldFilter(BaseModel):
     op: Literal["contains"]
@@ -38,6 +40,7 @@ class SearchRequest(BaseModel):
 
 class FilteredSearchRequest(SearchRequest):
     filters: Filter | None
+    rank: RankProfile | None = None
 
     @field_serializer("filters", when_used="unless-none")
     def _serialize_filters(self, filters: Filter) -> str:

@@ -1,9 +1,19 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, status
 
+from api.settings import settings
 from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import DOCUMENT_SORT_API_FIELDS, PASSAGE_SORT_API_FIELDS
+from search.engines.dev_vespa import (
+    DOCUMENT_SORT_API_FIELDS,
+    PASSAGE_SORT_API_FIELDS,
+    DevVespaPassageSearchEngine,
+)
+from search.engines.dev_vespa.passages_search_engine import (
+    _DEFAULT_PASSAGE_RANK_PROFILE,
+)
+
+RankProfile = Literal["nativerank", "bm25_multiplicative", "unranked"]
 
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
@@ -137,6 +147,17 @@ def documents_order_by(
                 ),
             )
     return clauses
+
+
+RankProfileQueryDep = Annotated[RankProfile | None, Query()]
+
+def passages_engine(rank: RankProfileQueryDep = None) -> DevVespaPassageSearchEngine:
+    return DevVespaPassageSearchEngine(
+        ranking_profile=rank or _DEFAULT_PASSAGE_RANK_PROFILE,
+        settings=settings,
+    )
+
+PassagesEngineDep = Annotated[DevVespaPassageSearchEngine, Depends(passages_engine)]
 
 
 def passages_order_by(
