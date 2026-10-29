@@ -24,6 +24,7 @@ class Suite(StrEnum):
     principals = auto()
     principal_comparisons = auto()
     passages = auto()
+    passages_within = auto()
     passage_comparisons = auto()
 
 
@@ -65,6 +66,11 @@ def run_suite(
         case Suite.passages:
             return passages.dataset.evaluate_sync(
                 partial(passages.run_search, client),
+                max_concurrency=4,
+            )
+        case Suite.passages_within:
+            return passages.within.evaluate_sync(
+                partial(passages.run_search_within, client),
                 max_concurrency=4,
             )
         case Suite.passage_comparisons:
