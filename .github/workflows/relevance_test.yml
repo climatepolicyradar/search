@@ -36,6 +36,7 @@ jobs:
     name: relevance_test (${{ matrix.suite }})
     needs: suites
     runs-on: ubuntu-latest
+    environment: relevance-tests
     strategy:
       fail-fast: false
       matrix:
@@ -53,11 +54,14 @@ jobs:
           python-version-file: pyproject.toml
 
       - name: Run relevance tests
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
         run: >-
           uv run python -m relevance run
           --suite ${{ matrix.suite }}
           --url https://api.climatepolicyradar.org
           --report html
+          --report wandb
 
       - name: Upload report
         uses: actions/upload-artifact@v7
