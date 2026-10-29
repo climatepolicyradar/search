@@ -151,7 +151,7 @@ def test_get_labels_taxonomy_exposes_every_category() -> None:
 
 def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     """
-    GST1 and Party must nest under Global Stocktake.
+    GST1, Party, and Non-Party must nest under Global Stocktake.
 
     to their existing UNFCCC parent) so they render under both branches. They
     nest directly under Party, not under any further grouping label, because
@@ -185,6 +185,12 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     assert party["value"] == "Party"
     assert party["labels"][0]["type"] == "subconcept_of"
     assert party["labels"][0]["value"]["id"] == "category::Global Stocktake"
+
+    non_party = results_by_id["author_type::Non-Party"]
+    assert non_party["type"] == "author_type"
+    assert non_party["value"] == "Non-Party"
+    assert non_party["labels"][0]["type"] == "subconcept_of"
+    assert non_party["labels"][0]["value"]["id"] == "category::Global Stocktake"
 
     document_type_ids = [
         "entity_type::Nationally Determined Contribution (NDC)",
