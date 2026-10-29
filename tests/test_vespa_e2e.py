@@ -26,6 +26,7 @@ from pydantic import AnyHttpUrl
 from vespa.application import Vespa
 from vespa.deployment import VespaDocker
 
+from search.bolding import bolding_to_labels
 from search.engines import OrderBy, Pagination, VespaError
 from search.engines.dev_vespa import (
     AttributesCondition,
@@ -1290,6 +1291,63 @@ def test_quoted_document_search_bolds_only_the_literal_word(vespa_app: Vespa):
         order_by=[OrderBy(field="relevance", direction="desc")],
     ).results
     assert "<hi>forests</hi>" in (unquoted[0].description or "")
+
+
+# Longer than the 256-byte snippet Juniper returns by default.
+_LONG_TEXT = (
+    "The national strategy sets out how the country will manage its land over the "
+    "coming decade, including commitments on agriculture, water and urban growth. "
+    "It covers the protection of every forest, and all forests and forestry "
+    "operations on public land, alongside measures for grasslands and wetlands. "
+    "Implementation will be reviewed every five years by an independent panel, "
+    "which will report to parliament on progress against each of the targets set "
+    "out in this document and recommend changes where targets are being missed."
+)
+
+
+@pytest.mark.parametrize(
+    ("query", "bolded"),
+    [
+        pytest.param('"forest"', ["forest"], id="quoted"),
+        # The stemmed field keeps Juniper's prefix extension - see services.xml.
+        pytest.param("forest", ["forest", "forests", "forestry"], id="unquoted"),
+    ],
+)
+def test_document_bolding_keeps_long_text_whole(
+    vespa_app: Vespa, query: str, bolded: list[str]
+):
+    """
+    Bolding only marks the matched words; it never changes or shortens the text.
+
+    Juniper returns a snippet of a long field unless its juniperrc item asks for
+    the whole field - see services.xml. A quoted query bolds two copies of the
+    text, and a snippet of one can't be merged with the whole of the other.
+    """
+    doc = DocumentFactory.build(
+        id="doc-long", title="Land strategy", description=_LONG_TEXT, labels=[]
+    )
+    _feed_document_with_id(vespa_app, doc)
+
+    def description(bolding: bool) -> str:
+        results = DevVespaDocumentSearchEngine(
+            settings=_TEST_SETTINGS, bolding=bolding
+        ).search(
+            query=query,
+            pagination=Pagination(page_token=1, page_size=10),
+            order_by=[OrderBy(field="relevance", direction="desc")],
+            filters=Filter(
+                op="and",
+                filters=[FieldFilter(field="id", op="contains", value=doc.id)],
+            ),
+        ).results
+        assert [d.id for d in results] == [doc.id]
+        return results[0].description or ""
+
+    with_bolding = bolding_to_labels(description(bolding=True))
+
+    assert with_bolding.text == _LONG_TEXT
+    assert description(bolding=False) == _LONG_TEXT
+    assert [b.labelled_text for b in with_bolding.boldings] == bolded
 
 
 def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):

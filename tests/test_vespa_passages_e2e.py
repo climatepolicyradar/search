@@ -409,6 +409,56 @@ def test_passage_bolding_wraps_matched_terms_only_when_asked(vespa_app: Vespa):
     assert plain.results[0].boldings == []
 
 
+# Longer than the 256-byte snippet Juniper returns by default.
+_LONG_TEXT = (
+    "The national strategy sets out how the country will manage its land over the "
+    "coming decade, including commitments on agriculture, water and urban growth. "
+    "It covers the protection of every forest, and all forests and forestry "
+    "operations on public land, alongside measures for grasslands and wetlands. "
+    "Implementation will be reviewed every five years by an independent panel, "
+    "which will report to parliament on progress against each of the targets set "
+    "out in this document and recommend changes where targets are being missed."
+)
+
+
+@pytest.mark.parametrize(
+    ("query", "bolded"),
+    [
+        pytest.param('"forest"', ["forest"], id="quoted"),
+        # The stemmed field keeps Juniper's prefix extension - see services.xml.
+        pytest.param("forest", ["forest", "forests", "forestry"], id="unquoted"),
+    ],
+)
+def test_passage_bolding_keeps_long_text_whole(
+    vespa_app: Vespa, query: str, bolded: list[str]
+):
+    """
+    Bolding only marks the matched words; it never changes or shortens the text.
+
+    Juniper returns a snippet of a long field unless its juniperrc item asks for
+    the whole field - see services.xml. A quoted query bolds two copies of the
+    text, and a snippet of one can't be merged with the whole of the other.
+    """
+    principal = DocumentFactory.build(id="principal-long", labels=[_principal_label()])
+    _feed_document(vespa_app, principal)
+    _feed_passage(
+        vespa_app, _text_block("tb-long", _LONG_TEXT), document_id="principal-long"
+    )
+
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS)
+    pagination = Pagination(page_token=1, page_size=10)
+    with_bolding = engine.search(
+        query=query, pagination=pagination, order_by=[], bolding=True
+    ).results
+    without_bolding = engine.search(
+        query=query, pagination=pagination, order_by=[]
+    ).results
+
+    assert [p.text for p in with_bolding] == [_LONG_TEXT]
+    assert [p.text for p in without_bolding] == [_LONG_TEXT]
+    assert [b.labelled_text for b in with_bolding[0].boldings] == bolded
+
+
 def test_passage_bolding_covers_quoted_phrases(vespa_app: Vespa):
     """
     A quoted phrase is bolded, alone or alongside free text.
