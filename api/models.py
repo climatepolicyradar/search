@@ -35,6 +35,7 @@ class TaxonomyNode(BaseModel):
     id: str
     type: str
     value: str
+    alternative_labels: list[str]
     count: int
     children: list["TaxonomyNode"]
 

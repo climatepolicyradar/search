@@ -14,7 +14,7 @@ from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse, TaxonomyNode
 from api.settings import settings
-from api.taxonomy import taxonomy, tree
+from api.taxonomy import merge, taxonomy, tree
 from api.utils import (
     documents_order_by,
     order_by,
@@ -436,10 +436,15 @@ def read_taxonomy(
     label_type: list[str] | None = Query(None, alias="type"),
 ):
     """Lists label trees of the given types, with document counts."""
-    engine = DevVespaDocumentSearchEngine(settings=settings)
-    nodes = tree(taxonomy, label_type)
+    logger.info("Getting taxonomy (type=%r)", label_type)
 
-    counts = engine.label_counts(
+    label_engine = DevVespaLabelSearchEngine(settings=settings)
+    document_engine = DevVespaDocumentSearchEngine(settings=settings)
+
+    merged = merge(taxonomy, label_engine.all_labels())
+    nodes = tree(merged, label_type)
+
+    counts = document_engine.label_counts(
         label_types=sorted(set().union(*(node.types() for node in nodes))),
         filters=filters,
     )

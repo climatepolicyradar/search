@@ -32,6 +32,37 @@ labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
     "labels.value.type": ArrayStructField("labels", "type"),
 }
 
+_ALL_LABELS_HITS = 10_000
+
+
+def _label_from_hit(hit: dict[str, Any]) -> LabelSearchResult:
+    fields = hit.get("fields", {})
+
+    alternative_labels = fields.get("alternative_labels", [])
+    if not isinstance(alternative_labels, list):
+        alternative_labels = []
+
+    return LabelSearchResult.model_validate(
+        {
+            "id": fields.get("id"),
+            "type": fields.get("type"),
+            "value": fields.get("value"),
+            "alternative_labels": alternative_labels,
+            "labels": [
+                {
+                    "type": relationship.get("relationship"),
+                    "value": {
+                        "id": relationship.get("id"),
+                        "type": relationship.get("type"),
+                        "value": relationship.get("value"),
+                    },
+                    "timestamp": relationship.get("timestamp"),
+                }
+                for relationship in fields.get("labels", []) or []
+            ],
+        }
+    )
+
 
 class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchResult]):
     """Search engine for labels in dev Vespa."""
@@ -100,33 +131,8 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
 
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
-            alternative_labels = fields.get("alternative_labels", [])
-            if not isinstance(alternative_labels, list):
-                alternative_labels = []
-            subconcept_labels = fields.get("subconcept_labels", [])
-            if not isinstance(subconcept_labels, list):
-                subconcept_labels = []
-
-            label_data = {
-                "id": fields.get("id"),
-                "type": fields.get("type"),
-                "value": fields.get("value"),
-                "alternative_labels": alternative_labels,
-                "labels": [
-                    {
-                        "type": relationship.get("relationship"),
-                        "value": {
-                            "id": relationship.get("id"),
-                            "type": relationship.get("type"),
-                            "value": relationship.get("value"),
-                        },
-                        "timestamp": relationship.get("timestamp"),
-                    }
-                    for relationship in fields.get("labels", []) or []
-                ],
-            }
             try:
-                label = LabelSearchResult.model_validate(label_data)
+                label = _label_from_hit(hit)
             except ValidationError:
                 logger.warning("Label fields are invalid for hit id=%r", hit.get("id"))
                 continue
@@ -148,6 +154,35 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
         self.last_debug_info = debug_info
         total_size = _get_total_count(response)
         return ListResponse(results=labels, total_size=total_size, next_page_token=None)
+
+    def all_labels(self) -> list[LabelSearchResult]:
+        """Fetch every active label, for callers that need the whole taxonomy."""
+        yql = 'select * from sources labels where status contains "active"'
+
+        logger.info("🔎 Fetching all active labels (yql=%s)", yql)
+
+        response = execute_vespa_query(
+            endpoint=f"{self.settings.vespa_endpoint}/search",
+            token=self.settings.vespa_read_token,
+            request_body={
+                "yql": yql,
+                "hits": _ALL_LABELS_HITS,
+                "timeout": "10s",
+                "ranking.profile": "unranked",
+                "query_profile": "default",
+            },
+            request_context="labels.all",
+        )
+
+        labels: list[LabelSearchResult] = []
+        for hit in response.get("root", {}).get("children", []):
+            try:
+                labels.append(_label_from_hit(hit))
+            except ValidationError:
+                logger.warning("Label fields are invalid for hit id=%r", hit.get("id"))
+
+        logger.info("Fetched %s active labels", len(labels))
+        return labels
 
     def count(self, query: str) -> int:
         """Return hit count for DevVespaLabelSearchEngine."""
