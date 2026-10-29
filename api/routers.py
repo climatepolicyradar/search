@@ -2,7 +2,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -25,11 +25,12 @@ from search.data_in_models import Label as DataInLabel
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     _DEFAULT_MSM,
+    CountAggregation,
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
 )
-from search.label import LabelSearchResult
+from search.label import Label, LabelSearchResult
 from search.log import get_logger
 from search.passage import Passage
 
@@ -392,7 +393,7 @@ def read_labels_taxonomy():
         aggregations=None,
     )
 
-    
+
 GeographyType = Literal["region", "country", "subdivision"]
 
 
@@ -423,6 +424,70 @@ def read_geographies_taxonomy(
         results=results,
         aggregations=None,
     )
+
+
+@router.get(
+    "/geographies:aggregate",
+    response_model=ItemResponse[list[CountAggregation[Label]]],
+    responses=SEARCH_RESPONSES,
+)
+def aggregate_geographies(
+    filters: DocumentsFilterDep,
+    geography_type: list[GeographyType] | None = Query(
+        None,
+        alias="labels.value.type",
+        description=(
+            "Restrict the aggregation to these geography label types. "
+            "Omit to return every geography type."
+        ),
+    ),
+    query: str | None = Query(None, description="What are you looking for?"),
+):
+    """
+    Count documents per geography label, scoped by `filters`.
+
+    Answers "which geographies have data here?" - a caller passes the same
+    filters it sends to `/documents`, so the list it builds and the results
+    it shows describe the same document set (@see FUS-475).
+
+    Only geographies that match are returned: the counts come from a Vespa
+    grouping query, and a group cannot exist without a document in it.
+
+    Returns counts only. The region/country/subdivision hierarchy lives in
+    `/geographies-taxonomy`; callers join the two on label id.
+    """
+    logger.info(
+        "Aggregating geographies (query=%r, geography_type=%r, filters_present=%s)",
+        query,
+        geography_type,
+        filters is not None,
+    )
+
+    engine = DevVespaDocumentSearchEngine(settings=settings)
+    try:
+        aggregations = engine.aggregations(query=query, filters=filters)
+    except Exception:
+        logger.exception(
+            "Error: geography aggregation request failed (query=%r, geography_type=%r)",
+            query,
+            geography_type,
+        )
+        raise
+
+    # `aggregations()` groups every label and concept on the matching documents,
+    # not just geographies, so the fallback is a whitelist rather than a no-op.
+    wanted = set(geography_type) if geography_type else set(get_args(GeographyType))
+    results = [
+        aggregation for aggregation in aggregations if aggregation.value.type in wanted
+    ]
+
+    logger.info(
+        "Success: geography aggregation completed (query=%r, results=%s)",
+        query,
+        len(results),
+    )
+
+    return ItemResponse(data=results)
 
 
 @router.get(
