@@ -259,18 +259,34 @@
                 <item>
                     <fieldname>title_not_stemmed</fieldname>
                     <stem_max_extend>0</stem_max_extend>
+                    <length>67108864</length>
+                    <max_matches>1</max_matches>
+                    <min_length>8192</min_length>
+                    <surround_max>67108864</surround_max>
                 </item>
                 <item>
                     <fieldname>description_not_stemmed</fieldname>
                     <stem_max_extend>0</stem_max_extend>
+                    <length>67108864</length>
+                    <max_matches>1</max_matches>
+                    <min_length>8192</min_length>
+                    <surround_max>67108864</surround_max>
                 </item>
                 <item>
                     <fieldname>passages_text_not_stemmed</fieldname>
                     <stem_max_extend>0</stem_max_extend>
+                    <length>67108864</length>
+                    <max_matches>1</max_matches>
+                    <min_length>8192</min_length>
+                    <surround_max>67108864</surround_max>
                 </item>
                 <item>
                     <fieldname>content_not_stemmed</fieldname>
                     <stem_max_extend>0</stem_max_extend>
+                    <length>67108864</length>
+                    <max_matches>1</max_matches>
+                    <min_length>8192</min_length>
+                    <surround_max>67108864</surround_max>
                 </item>
             </override>
         </config>
