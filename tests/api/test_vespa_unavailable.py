@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
+from api.utils import passages_engine
 from search.engines import ListResponse, VespaError
 
 
@@ -37,11 +38,11 @@ def document_engine():
 
 @pytest.fixture
 def passage_engine():
-    with patch("api.routers.DevVespaPassageSearchEngine") as mock_engine_cls:
-        mock_engine = MagicMock()
-        mock_engine.last_debug_info = None
-        mock_engine_cls.return_value = mock_engine
-        yield mock_engine
+    mock_engine = MagicMock()
+    mock_engine.last_debug_info = None
+    app.dependency_overrides[passages_engine] = lambda: mock_engine
+    yield mock_engine
+    del app.dependency_overrides[passages_engine]
 
 
 @pytest.fixture
