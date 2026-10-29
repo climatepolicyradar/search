@@ -251,6 +251,19 @@ schema passages {
         summary-features: coverage() itemRawScore(filters) text_score() topic_score() proximity_boost bm25(content) bm25(content_not_stemmed) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(is_page_header_or_footer) attribute(looks_like_demoted_section)
     }
 
+    rank-profile bm25_topic_boost inherits bm25_multiplicative {
+        function topic_fraction() {
+            expression: if (sum(query(topic_q)) > 0, sum(map(attribute(concept_counts), f(x)(min(x, 1))) * query(topic_q)) / sum(query(topic_q)), 0)
+        }
+        function topic_boosted_score() {
+            expression: (1 + text_score() * proximity_boost) * (1 + query(topic_weight) * topic_fraction)
+        }
+        first-phase {
+            expression: if (msm_drop(), -10, topic_boosted_score * (1 - short_headings_penalty) * (1 - table_of_contents_penalty) * (1 - reference_list_penalty) * (1 - page_header_or_footer_penalty) * (1 - demoted_section_penalty))
+            rank-score-drop-limit: -5.0
+        }
+    }
+
     rank-profile unranked {
         inputs {
             query(msm) double: 0.0
