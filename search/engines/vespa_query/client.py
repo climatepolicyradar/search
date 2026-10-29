@@ -129,6 +129,8 @@ async def aexecute_vespa_query(
         json.dumps(request_body, indent=2),
     )
 
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+
     started = time.perf_counter()
     try:
         if client is None:
@@ -137,18 +139,14 @@ async def aexecute_vespa_query(
                     endpoint,
                     json=request_body,
                     timeout=API_TIMEOUT,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                    },
+                    headers=headers,
                 )
         else:
             response = await client.post(
                 endpoint,
                 json=request_body,
                 timeout=API_TIMEOUT,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                },
+                headers=headers,
             )
     except Exception as exc:
         logger.exception(
