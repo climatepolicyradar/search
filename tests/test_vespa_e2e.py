@@ -1253,6 +1253,45 @@ def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_ap
     assert "doc-reordered" not in ids, f"out-of-order phrase must not match, got: {ids}"
 
 
+def test_quoted_document_search_bolds_only_the_literal_word(vespa_app: Vespa):
+    """
+    A quoted word is bolded only where it occurs literally, not on longer words it prefixes.
+
+    Juniper, Vespa's highlighter, by default bolds any word up to `stem_max_extend`
+    (3) bytes longer than a query term over `stem_min_length` (5) bytes, so
+    `"forest"` bolded "forests" and "forestry" in documents that matched only on
+    "forest". services.xml turns that off for the `*_not_stemmed` fields.
+    """
+    doc = DocumentFactory.build(
+        id="doc-qprefix",
+        title="Forest and forestry strategy",
+        description="Protecting forests and the forest sector.",
+        labels=[],
+    )
+    _feed_document(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
+    quoted = engine.search(
+        query='"forest"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+
+    assert [d.id for d in quoted] == ["doc-qprefix"]
+    assert "<hi>Forest</hi>" in quoted[0].title
+    assert "<hi>forestry</hi>" not in quoted[0].title
+    assert "<hi>forest</hi> sector" in (quoted[0].description or "")
+    assert "<hi>forests</hi>" not in (quoted[0].description or "")
+
+    # Unquoted search is stemmed, so "forests" is a real match and stays bolded.
+    unquoted = engine.search(
+        query="forest",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    ).results
+    assert "<hi>forests</hi>" in (unquoted[0].description or "")
+
+
 def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):
     """`"$100"` matches a $100 title but not $1000 (exact_analysis currency charFilters)."""
     doc_100 = DocumentFactory.build(

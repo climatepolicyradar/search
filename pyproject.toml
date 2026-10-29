@@ -53,6 +53,7 @@ dev = [
   "boto3-stubs[s3,ssm]>=1.43.118",
   "pulumiverse-grafana>=2.44.0",
   "pydantic-evals>=2.62.0",
+  "wandb[eval-table]>=0.31.0",
 ]
 
 [tool.uv]
