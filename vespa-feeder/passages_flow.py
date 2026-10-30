@@ -19,6 +19,12 @@ from vespa_feeder import (
 
 from prefect import flow
 
+# A clean run takes ~4.5-5.5h. A wedged feed_batch worker leaves the run in
+# `Running` forever instead of failing - this bounds the worst case so
+# on_failure/on_crashed still fire instead of costing days. See
+# .claude/skills/prefect-vespa-feed-debug/SKILL.md.
+_FLOW_TIMEOUT_SECONDS = 8 * 60 * 60
+
 # `topic["value"]`` arrives as a classifier's repr, e.g. `BertBasedClassifier("procedural` justice")`
 # The classifier name varies, but the label text is always the sole quoted argument.
 # TODO: This is gnarly and should be fixed upstream
@@ -201,6 +207,7 @@ def derive_heading_text(record: dict) -> dict:
     description="Feed passages JSONL from the data-lake Snowflake export into Vespa, deriving document_ref per record",
     task_runner=task_runner(max_workers=8),
     log_prints=True,
+    timeout_seconds=_FLOW_TIMEOUT_SECONDS,
     on_completion=[SlackNotify.on_success],
     on_failure=[SlackNotify.on_failure],
     on_crashed=[SlackNotify.on_crashed],
