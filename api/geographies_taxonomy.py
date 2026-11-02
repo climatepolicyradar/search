@@ -253,7 +253,7 @@ country_CMR = Label(
 country_COD = Label(
     type="country",
     id="country::COD",
-    value="Congo",
+    value="Congo, Democratic Republic of the",
     labels=[LabelRelationship(type="subconcept_of", value=region_SSF)],
 )
 country_COG = Label(
