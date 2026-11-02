@@ -144,7 +144,7 @@ def metric_route(request: Request) -> str:
     :return: Route template, or `unmatched` when no route matched.
     :rtype: str
     """
-    return getattr(request.scope.get("route"), "path", None) or UNMATCHED_ROUTE_LABEL
+    return (route.path if (route := request.scope.get("route")) else UNMATCHED_ROUTE_LABEL)
 
 
 @app.middleware("http")
