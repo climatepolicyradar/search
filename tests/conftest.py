@@ -1,9 +1,11 @@
 """Pytest configuration and shared fixtures."""
 
 import os
+from typing import Generator
 
 import boto3
 import pytest
+from fastapi.testclient import TestClient
 from hypothesis import find
 from hypothesis import strategies as st
 from moto import mock_aws
@@ -40,6 +42,13 @@ def ssm_client(mock_aws_creds):
     """Fixture providing a mocked SSM client using moto."""
     with mock_aws():
         yield boto3.client("ssm", region_name="eu-west-1")
+
+
+@pytest.fixture(scope="function")
+def test_client() -> Generator[TestClient, None]:
+    from api.main import app
+    with TestClient(app=app, base_url="http://localhost") as client:
+        yield client
 
 
 _test_data_cache = {}

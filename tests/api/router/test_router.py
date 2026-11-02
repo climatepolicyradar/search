@@ -104,10 +104,8 @@ def test_an_unknown_field_is_rejected(document_client) -> None:
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_get_labels_taxonomy_returns_non_empty_list() -> None:
-    client = TestClient(app)
-
-    response = client.get("/search/labels-taxonomy")
+def test_get_labels_taxonomy_returns_non_empty_list(test_client: TestClient) -> None:
+    response = test_client.get("/search/labels-taxonomy")
 
     assert response.status_code == HTTPStatus.OK
     body = response.json()
@@ -115,7 +113,7 @@ def test_get_labels_taxonomy_returns_non_empty_list() -> None:
     assert len(body["results"]) > 0
 
 
-def test_get_labels_taxonomy_exposes_every_category() -> None:
+def test_get_labels_taxonomy_exposes_every_category(test_client: TestClient) -> None:
     """
     The categories are the roots of the frontend filter tree, pinned exhaustively.
 
@@ -127,9 +125,7 @@ def test_get_labels_taxonomy_exposes_every_category() -> None:
     Every category is a root -- it has no `subconcept_of` parent -- which is
     what makes it a category rather than a label nested under one.
     """
-    client = TestClient(app)
-
-    response = client.get("/search/labels-taxonomy")
+    response = test_client.get("/search/labels-taxonomy")
 
     assert response.status_code == HTTPStatus.OK
     categories = [
@@ -151,7 +147,7 @@ def test_get_labels_taxonomy_exposes_every_category() -> None:
         )
 
 
-def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
+def test_get_labels_taxonomy_nests_the_global_stocktake_branch(test_client: TestClient) -> None:
     """
     GST1, Party, and Non-Party must nest under Global Stocktake.
 
@@ -169,9 +165,8 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     this exception will no longer be true and we accept that BTR will show under
     Global Stocktake and not return results until we ingest GST2 docs.
     """
-    client = TestClient(app)
 
-    response = client.get("/search/labels-taxonomy")
+    response = test_client.get("/search/labels-taxonomy")
 
     body = response.json()
     results_by_id = {result["id"]: result for result in body["results"]}
@@ -216,10 +211,8 @@ def test_get_labels_taxonomy_nests_the_global_stocktake_branch() -> None:
     assert btr_parent_ids == {"un_convention::UNFCCC"}
 
 
-def test_get_geographies_taxonomy_returns_non_empty_list() -> None:
-    client = TestClient(app)
-
-    response = client.get("/search/geographies-taxonomy")
+def test_get_geographies_taxonomy_returns_non_empty_list(test_client: TestClient) -> None:
+    response = test_client.get("/search/geographies-taxonomy")
 
     assert response.status_code == HTTPStatus.OK
     body = response.json()
@@ -227,11 +220,9 @@ def test_get_geographies_taxonomy_returns_non_empty_list() -> None:
     assert len(body["results"]) > 0
 
 
-def test_get_geographies_taxonomy_regions_are_roots() -> None:
+def test_get_geographies_taxonomy_regions_are_roots(test_client: TestClient) -> None:
     """The 7 World Bank regions have no parent - everything else nests under one."""
-    client = TestClient(app)
-
-    response = client.get("/search/geographies-taxonomy")
+    response = test_client.get("/search/geographies-taxonomy")
 
     results_by_id = {
         result["id"]: result for result in response.json()["results"]
@@ -251,16 +242,14 @@ def test_get_geographies_taxonomy_regions_are_roots() -> None:
         assert region["labels"] == [], f"{region['id']} is nested under another label"
 
 
-def test_get_geographies_taxonomy_nests_subdivisions_under_their_country() -> None:
+def test_get_geographies_taxonomy_nests_subdivisions_under_their_country(test_client: TestClient) -> None:
     """
     A subdivision's parent chain must reach region::* via exactly one country.
 
     Quintana Roo (Mexico) is the concrete case that motivated this file: it's
     entirely missing its country/region nesting from the data-in-api source.
     """
-    client = TestClient(app)
-
-    response = client.get("/search/geographies-taxonomy")
+    response = test_client.get("/search/geographies-taxonomy")
     results_by_id = {
         result["id"]: result for result in response.json()["results"]
     }
@@ -275,11 +264,9 @@ def test_get_geographies_taxonomy_nests_subdivisions_under_their_country() -> No
     assert region_id == "region::LCN"
 
 
-def test_get_geographies_taxonomy_international_has_no_region() -> None:
+def test_get_geographies_taxonomy_international_has_no_region(test_client: TestClient) -> None:
     """country::XAB ("International") doesn't belong to a single region."""
-    client = TestClient(app)
-
-    response = client.get("/search/geographies-taxonomy")
+    response = test_client.get("/search/geographies-taxonomy")
     results_by_id = {
         result["id"]: result for result in response.json()["results"]
     }
@@ -287,10 +274,8 @@ def test_get_geographies_taxonomy_international_has_no_region() -> None:
     assert results_by_id["country::XAB"]["labels"] == []
 
 
-def test_get_geographies_taxonomy_filters_by_single_type() -> None:
-    client = TestClient(app)
-
-    response = client.get("/search/geographies-taxonomy", params={"type": "region"})
+def test_get_geographies_taxonomy_filters_by_single_type(test_client: TestClient) -> None:
+    response = test_client.get("/search/geographies-taxonomy", params={"type": "region"})
 
     assert response.status_code == HTTPStatus.OK
     body = response.json()
@@ -298,10 +283,9 @@ def test_get_geographies_taxonomy_filters_by_single_type() -> None:
     assert {r["type"] for r in body["results"]} == {"region"}
 
 
-def test_get_geographies_taxonomy_filters_by_multiple_types() -> None:
-    client = TestClient(app)
+def test_get_geographies_taxonomy_filters_by_multiple_types(test_client: TestClient) -> None:
 
-    response = client.get(
+    response = test_client.get(
         "/search/geographies-taxonomy",
         params=[("type", "region"), ("type", "country")],
     )
@@ -311,10 +295,8 @@ def test_get_geographies_taxonomy_filters_by_multiple_types() -> None:
     assert {r["type"] for r in body["results"]} == {"region", "country"}
 
 
-def test_get_geographies_taxonomy_rejects_unknown_type() -> None:
-    client = TestClient(app)
-
-    response = client.get("/search/geographies-taxonomy", params={"type": "planet"})
+def test_get_geographies_taxonomy_rejects_unknown_type(test_client: TestClient) -> None:
+    response = test_client.get("/search/geographies-taxonomy", params={"type": "planet"})
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
@@ -444,11 +426,9 @@ def test_aggregate_geographies_passes_query_and_filters_to_the_engine(
     assert mock_engine.aggregations.call_args.kwargs["query"] == "flooding"
 
 
-def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
+def test_root_advertises_the_docs_as_schema_org_json_ld(test_client: TestClient) -> None:
     """The root response is how an agent with no prior knowledge finds the docs."""
-    client = TestClient(app)
-
-    body = client.get("/").json()
+    body = test_client.get("/").json()
 
     assert body["@context"] == "https://schema.org"
     assert body["@type"] == "WebAPI"
@@ -457,25 +437,21 @@ def test_root_advertises_the_docs_as_schema_org_json_ld() -> None:
     assert documentation["OpenAPI schema"].endswith("/search/openapi.json")
 
 
-def test_root_keeps_the_keys_the_health_check_reads() -> None:
+def test_root_keeps_the_keys_the_health_check_reads(test_client: TestClient) -> None:
     """
     `/` doubles as the App Runner health check, so `name` and `version` stay.
 
     Adding JSON-LD around them is additive; dropping them would fail the
     deployment somewhere no test in this file would notice.
     """
-    client = TestClient(app)
-
-    body = client.get("/").json()
+    body = test_client.get("/").json()
 
     assert body["name"] == API_TITLE
     assert body["version"] == API_VERSION
 
 
-def test_get_llms_txt_serves_the_spec_as_plain_text() -> None:
-    client = TestClient(app)
-
-    response = client.get("/search/llms.txt")
+def test_get_llms_txt_serves_the_spec_as_plain_text(test_client: TestClient) -> None:
+    response = test_client.get("/search/llms.txt")
 
     assert response.status_code == HTTPStatus.OK
     assert response.headers["content-type"].startswith("text/plain")
