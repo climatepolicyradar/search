@@ -26,6 +26,10 @@ logger = get_logger(__name__)
 # the health check logging again.
 HEALTH_ROUTE_PATH = f"{router.prefix}{health_router.prefix}"
 
+# Single label value for requests that matched no route, so unrouted traffic
+# (mostly vulnerability scanners) cannot mint a series per probed path.
+UNMATCHED_ROUTE_LABEL = "unmatched"
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -125,11 +129,29 @@ async def handle_vespa_error(request: Request, exc: VespaError) -> JSONResponse:
     return JSONResponse(status_code=status_code, content={"detail": str(exc)})
 
 
+def metric_route(request: Request) -> str:
+    """
+    Return a bounded route label for metrics.
+
+    Starlette only populates `scope["route"]` once the router has matched the
+    request, so this must be read *after* `call_next`. Falling back to the raw
+    URL path would put one label value per document ID - and one per scanner
+    probe - into `http.route`, so anything unmatched collapses into a single
+    bucket instead.
+
+    :param request: Request whose matched route is being labelled.
+    :type request: Request
+    :return: Route template, or `unmatched` when no route matched.
+    :rtype: str
+    """
+    return (route.path if (route := request.scope.get("route")) else UNMATCHED_ROUTE_LABEL)
+
+
 @app.middleware("http")
 async def log_request_lifecycle(request: Request, call_next):
     """Log incoming API requests with outcome and latency."""
     start_time = perf_counter()
-    route_path = getattr(request.scope.get("route"), "path", request.url.path)
+    route_path = request.url.path
     logger.debug(
         "Incoming request: method=%s path=%s query=%s",
         request.method,
@@ -142,7 +164,7 @@ async def log_request_lifecycle(request: Request, call_next):
         duration_ms = search_metrics.elapsed_ms(start_time)
         search_metrics.record_error(
             method=request.method,
-            path=route_path,
+            path=metric_route(request),
             duration_ms=duration_ms,
         )
         logger.exception(
@@ -157,7 +179,7 @@ async def log_request_lifecycle(request: Request, call_next):
     duration_ms = search_metrics.elapsed_ms(start_time)
     search_metrics.record_success(
         method=request.method,
-        path=route_path,
+        path=metric_route(request),
         status_code=response.status_code,
         duration_ms=duration_ms,
     )
