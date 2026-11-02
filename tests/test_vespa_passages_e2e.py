@@ -109,7 +109,7 @@ def _vespa_ready() -> bool:
         return False
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 async def live_http_client() -> AsyncGenerator[httpx2.AsyncClient, None]:
     async with httpx2.AsyncClient() as client:
         yield client
