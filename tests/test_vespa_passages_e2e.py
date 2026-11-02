@@ -1650,3 +1650,32 @@ def test_labeled_msm_without_filters_is_plain_msm_on_the_text(vespa_app: Vespa) 
 
     found = sorted(p.text_block_id for p in response.results)
     assert found == ["tb-full"], engine.last_debug_info
+
+def test_non_matching_text_not_bolded(vespa_app: Vespa) -> None:
+    _feed_scoped_corpus(
+        vespa_app=vespa_app,
+        passages=[
+            ("topic-match", "m-a1", "Insurance is fairly relevant.", True),
+            ("query-match", "m-a2", "Parametric insurance is very relevant.", False),
+        ]
+    )
+
+    engine = DevVespaPassageSearchEngine(
+        settings=_TEST_SETTINGS,
+    )
+
+    response = engine.search_within(
+        document_ids=["p-a"],
+        filters=_TOPIC_FILTERS,
+        query="parametric insurance",
+        pagination=Pagination(page_token=1, page_size=10),
+        bolding=True,
+        order_by=[],
+        msm=0.7,
+    )
+
+    items = {item.id: item for item in response.results}
+    assert len(items["topic-match"].boldings) == 0, "Fails MSM: No bolding"
+
+    bolded = " ".join(item.labelled_text for item in items["query-match"].boldings)
+    assert bolded == "Parametric insurance", "Passes MSM: Whole search term bolded."

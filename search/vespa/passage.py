@@ -30,6 +30,11 @@ class VespaPageBoxes(BaseModel):
     bounding_boxes: list[VespaBoundingBox] = Field(default_factory=list)
 
 
+class VespaSummaryFeatures(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    above_msm: bool = True
+
+
 class VespaLabel(BaseModel):
     # These are the core Label fields i.e. the node.
     id: str = ""
@@ -124,6 +129,7 @@ class VespaPassage(BaseModel):
     content_not_stemmed: str | None = None
     # Raw debug-summary shape for `text_tokens`; use `.tokens` for the flattened form.
     text_tokens: Any = None
+    summaryfeatures: VespaSummaryFeatures | None = None
 
     @computed_field
     @property

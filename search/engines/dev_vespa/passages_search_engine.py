@@ -401,9 +401,12 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
             vespa_passage = VespaPassage.model_validate(fields)
+
             passages.append(
                 Passage.from_vespa_passage(
-                    vespa_passage, bolding=bolding, rule_expansions=rule_expansions
+                    vespa_passage=vespa_passage,
+                    rule_expansions=rule_expansions,
+                    bolding=bolding,
                 )
             )
             if self.debug:
