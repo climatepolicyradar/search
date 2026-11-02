@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from pydantic import ValidationError
@@ -11,7 +12,7 @@ from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
     Settings,
     _get_total_count,
-    execute_vespa_query,
+    aexecute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
     ArrayStructField,
@@ -44,6 +45,25 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
         self.settings = settings
 
     def search(
+        self,
+        query: str | None,
+        pagination: Pagination,
+        order_by: list[OrderBy],
+        filters: Filter | None = None,
+        label_type: str | None = None,
+    ) -> ListResponse[LabelSearchResult]:
+        """Fetch a list of relevant label search results."""
+        return asyncio.run(
+            self.asearch(
+                query=query,
+                pagination=pagination,
+                order_by=order_by,
+                filters=filters,
+                label_type=label_type,
+            )
+        )
+
+    async def asearch(
         self,
         query: str | None,
         pagination: Pagination,
@@ -89,7 +109,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
             "query_profile": "default",
         }
 
-        response = execute_vespa_query(
+        response = await aexecute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
             request_body=request_body,

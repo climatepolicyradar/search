@@ -1,3 +1,4 @@
+import asyncio
 from http import HTTPStatus
 from unittest.mock import patch
 
@@ -15,7 +16,7 @@ def build_probes(outcomes: dict) -> dict:
     """One probe per entry, raising where asked."""
 
     def build(failure):
-        def probe() -> None:
+        async def probe() -> None:
             if failure is not None:
                 raise failure
 
@@ -33,7 +34,7 @@ def run_health(outcomes: dict) -> tuple:
         patch.dict(health.PROBES, build_probes(outcomes), clear=True),
     ):
         response = Response()
-        return health.read_health(response), response
+        return asyncio.run(health.read_health(response)), response
 
 
 def run_one_probe(name: str, outcomes: dict) -> tuple:
@@ -43,7 +44,7 @@ def run_one_probe(name: str, outcomes: dict) -> tuple:
         patch.dict(health.PROBES, build_probes(outcomes), clear=True),
     ):
         response = Response()
-        return health.read_probe(name, response), response
+        return asyncio.run(health.read_probe(name, response)), response
 
 
 @pytest.mark.parametrize(

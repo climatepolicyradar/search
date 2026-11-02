@@ -4,7 +4,7 @@ import base64
 import zlib
 from collections.abc import Generator
 from http import HTTPStatus
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,6 +24,7 @@ def passages_client() -> Generator[PassagesClient]:
     """Provide a test client with the passage engine replaced by a fake."""
     mock_engine = MagicMock()
     mock_engine.last_debug_info = None
+    mock_engine.asearch = AsyncMock()
     app.dependency_overrides[passages_engine] = lambda: mock_engine
     yield TestClient(app), mock_engine
     del app.dependency_overrides[passages_engine]
@@ -36,7 +37,7 @@ def _passage(text_block_id: str = "block-1") -> Passage:
 def test_read_passages_with_query_only(passages_client: PassagesClient) -> None:
     """A plain query request returns results and passes no filters."""
     client, mock_engine = passages_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[_passage()], total_size=1, next_page_token=None
     )
 
@@ -44,7 +45,7 @@ def test_read_passages_with_query_only(passages_client: PassagesClient) -> None:
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["results"][0]["text_block_id"] == "block-1"
-    _, kwargs = mock_engine.search.call_args
+    _, kwargs = mock_engine.asearch.call_args
     assert kwargs["query"] == "toxic"
     assert kwargs["filters"] is None
 
@@ -52,7 +53,7 @@ def test_read_passages_with_query_only(passages_client: PassagesClient) -> None:
 def test_read_passages_with_document_id_filter(passages_client: PassagesClient) -> None:
     """A ``document_id`` filter is normalised and forwarded to the engine."""
     client, mock_engine = passages_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 
@@ -65,7 +66,7 @@ def test_read_passages_with_document_id_filter(passages_client: PassagesClient) 
     response = client.get("/search/passages", params={"filters": filters})
 
     assert response.status_code == HTTPStatus.OK
-    _, kwargs = mock_engine.search.call_args
+    _, kwargs = mock_engine.asearch.call_args
     assert kwargs["filters"] == Filter(
         op="or",
         filters=[
@@ -78,7 +79,7 @@ def test_read_passages_with_document_id_filter(passages_client: PassagesClient) 
 def test_read_passages_with_label_filter(passages_client: PassagesClient) -> None:
     """A ``labels.value.id`` filter is forwarded to the engine."""
     client, mock_engine = passages_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 
@@ -90,7 +91,7 @@ def test_read_passages_with_label_filter(passages_client: PassagesClient) -> Non
     response = client.get("/search/passages", params={"filters": filters})
 
     assert response.status_code == HTTPStatus.OK
-    _, kwargs = mock_engine.search.call_args
+    _, kwargs = mock_engine.asearch.call_args
     assert kwargs["filters"] == Filter(
         op="and",
         filters=[
@@ -110,7 +111,7 @@ def test_read_passages_with_malformed_filters_returns_400(
     response = client.get("/search/passages", params={"filters": "not-json"})
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    mock_engine.search.assert_not_called()
+    mock_engine.asearch.assert_not_called()
 
 
 def test_read_passages_with_empty_filters_returns_400(
@@ -122,7 +123,7 @@ def test_read_passages_with_empty_filters_returns_400(
     response = client.get("/search/passages", params={"filters": ""})
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    mock_engine.search.assert_not_called()
+    mock_engine.asearch.assert_not_called()
 
 
 _DOCUMENT_ID_FILTER = Filter(
@@ -145,7 +146,7 @@ def test_read_passages_with_deflated_filters(
 ) -> None:
     client, mock_engine = passages_client
 
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[],
         total_size=0,
         next_page_token=None
@@ -160,7 +161,7 @@ def test_read_passages_with_deflated_filters(
     )
 
     assert response.status_code == HTTPStatus.OK
-    _, kwargs = mock_engine.search.call_args
+    _, kwargs = mock_engine.asearch.call_args
     assert kwargs["filters"] == _DOCUMENT_ID_FILTER
 
 
@@ -187,7 +188,7 @@ def test_read_passages_with_bad_deflated_filters_returns_400(
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert response.json()["detail"] == _NOT_DEFLATED
-    mock_engine.search.assert_not_called()
+    mock_engine.asearch.assert_not_called()
 
 
 def test_read_passages_default_order_by_is_idx_asc(
@@ -195,7 +196,7 @@ def test_read_passages_default_order_by_is_idx_asc(
 ) -> None:
     client, mock_engine = passages_client
 
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         next_page_token=None,
         total_size=0,
         results=[],
@@ -207,7 +208,7 @@ def test_read_passages_default_order_by_is_idx_asc(
     )
 
     assert response.status_code == HTTPStatus.OK
-    _, kwargs = mock_engine.search.call_args
+    _, kwargs = mock_engine.asearch.call_args
 
     assert kwargs["order_by"] == [OrderBy(field="idx", direction="asc")]
 
@@ -215,7 +216,7 @@ def test_read_passages_default_order_by_is_idx_asc(
 def test_read_passages_order_by_relevance(passages_client: PassagesClient) -> None:
     """``order_by=relevance desc`` is parsed and forwarded to the engine."""
     client, mock_engine = passages_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 
@@ -224,7 +225,7 @@ def test_read_passages_order_by_relevance(passages_client: PassagesClient) -> No
     )
 
     assert response.status_code == HTTPStatus.OK
-    _, kwargs = mock_engine.search.call_args
+    _, kwargs = mock_engine.asearch.call_args
     assert kwargs["order_by"] == [OrderBy(field="relevance", direction="desc")]
 
 
@@ -238,7 +239,7 @@ def test_read_passages_order_by_unsupported_field_returns_400(
     )
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
-    mock_engine.search.assert_not_called()
+    mock_engine.asearch.assert_not_called()
 
 
 def test_read_passages_with_invalid_rank_returns_422() -> None:

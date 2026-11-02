@@ -1,7 +1,7 @@
 """Tests for `GET /search/documents:download`."""
 
 from http import HTTPStatus
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,8 +15,8 @@ from search.engines import ListResponse, VespaError
 def document_client_and_engine_cls():
     with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
-        mock_engine.search.return_value = ListResponse(
-            results=[], total_size=0, next_page_token=None
+        mock_engine.asearch = AsyncMock(
+            return_value=ListResponse(results=[], total_size=0, next_page_token=None)
         )
         mock_engine_cls.return_value = mock_engine
         yield TestClient(app), mock_engine_cls
@@ -30,7 +30,7 @@ def document_client(document_client_and_engine_cls):
 
 def test_download_returns_csv_with_content_disposition(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[
             Document(id="doc-1", title="A Climate Document", description=None)
         ],
@@ -58,7 +58,7 @@ def test_download_defaults_max_results_to_500(document_client) -> None:
     for any default at all.
     """
     client, mock_engine = document_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[Document(id=f"doc-{i}", title="t") for i in range(100)],
         total_size=500,
         next_page_token=None,
@@ -68,7 +68,7 @@ def test_download_defaults_max_results_to_500(document_client) -> None:
 
     assert response.status_code == HTTPStatus.OK
     page_sizes = [
-        call.kwargs["pagination"].page_size for call in mock_engine.search.call_args_list
+        call.kwargs["pagination"].page_size for call in mock_engine.asearch.call_args_list
     ]
     assert sum(page_sizes) == 500
     assert page_sizes == [100] * 5
@@ -76,7 +76,7 @@ def test_download_defaults_max_results_to_500(document_client) -> None:
 
 def test_download_respects_max_results_query_param(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[Document(id=f"doc-{i}", title="t", description=None) for i in range(5)],
         total_size=5,
         next_page_token=None,
@@ -87,7 +87,7 @@ def test_download_respects_max_results_query_param(document_client) -> None:
         params={"query": "toxic", "max_results": 5},
     )
 
-    _, kwargs = mock_engine.search.call_args
+    _, kwargs = mock_engine.asearch.call_args
     assert kwargs["pagination"].page_size == 5
     body_rows = response.text.strip().splitlines()[1:]
     assert len(body_rows) == 5
@@ -95,7 +95,7 @@ def test_download_respects_max_results_query_param(document_client) -> None:
 
 def test_download_returns_503_on_vespa_error(document_client) -> None:
     client, mock_engine = document_client
-    mock_engine.search.side_effect = VespaError("Vespa is down", status_code=None)
+    mock_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
     response = client.get(
         "/search/documents:download", params={"query": "toxic"}
@@ -152,7 +152,7 @@ def test_download_rejects_out_of_range_msm(document_client, msm) -> None:
 def test_download_emits_the_requested_columns_in_order(document_client) -> None:
     """The caller names the columns and their order; the API supplies them."""
     client, mock_engine = document_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[Document(id="doc-1", title="A Climate Document")],
         total_size=1,
         next_page_token=None,
@@ -170,7 +170,7 @@ def test_download_emits_the_requested_columns_in_order(document_client) -> None:
 def test_download_without_columns_still_returns_a_csv(document_client) -> None:
     """`columns` is optional, so an ad-hoc caller gets a usable CSV."""
     client, mock_engine = document_client
-    mock_engine.search.return_value = ListResponse(
+    mock_engine.asearch.return_value = ListResponse(
         results=[Document(id="doc-1", title="A Climate Document")],
         total_size=1,
         next_page_token=None,

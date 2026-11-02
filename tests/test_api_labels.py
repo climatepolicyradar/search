@@ -7,7 +7,7 @@ The label search engine returns :class:`~search.data_in_models.Label`
 parses successfully.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -34,7 +34,8 @@ def labels_client():
     with patch("api.routers.DevVespaLabelSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
         mock_engine_cls.return_value = mock_engine
-        mock_engine.search.return_value = ListResponse(
+        mock_engine.asearch = AsyncMock()
+        mock_engine.asearch.return_value = ListResponse(
             results=[data_in_label],
             total_size=1,
             next_page_token=None,
