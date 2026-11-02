@@ -3,6 +3,7 @@ from typing import Annotated, Literal
 from fastapi import Depends, HTTPException, Query, status
 
 from api.settings import settings
+from api.state import HttpxDep
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DOCUMENT_SORT_API_FIELDS,
@@ -151,10 +152,14 @@ def documents_order_by(
 
 RankProfileQueryDep = Annotated[RankProfile | None, Query()]
 
-def passages_engine(rank_profile: RankProfileQueryDep = None) -> DevVespaPassageSearchEngine:
+def passages_engine(
+        httpx: HttpxDep,
+        rank_profile: RankProfileQueryDep = None
+        ) -> DevVespaPassageSearchEngine:
     return DevVespaPassageSearchEngine(
         ranking_profile=rank_profile or _DEFAULT_PASSAGE_RANK_PROFILE,
         settings=settings,
+        httpx=httpx
     )
 
 PassagesEngineDep = Annotated[DevVespaPassageSearchEngine, Depends(passages_engine)]

@@ -8,7 +8,7 @@ import re
 from http import HTTPStatus
 from typing import Any
 
-import httpx
+import httpx2
 from pydantic import TypeAdapter
 from vespa.querybuilder import Grouping as G
 
@@ -492,7 +492,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         )
         logger.info("Vespa request started [documents.get]")
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx2.AsyncClient() as client:
                 response = await client.get(
                     endpoint,
                     params={

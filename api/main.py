@@ -3,7 +3,9 @@ from contextlib import asynccontextmanager
 from http import HTTPStatus
 from pathlib import Path
 from time import perf_counter
+from typing import cast
 
+import httpx2
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -17,6 +19,7 @@ from api.observability.src.api import (
 )
 from api.routers import router
 from api.search_metrics import SearchMetrics
+from api.state import State
 from search.engines import VespaError
 from search.log import get_logger
 
@@ -32,10 +35,12 @@ UNMATCHED_ROUTE_LABEL = "unmatched"
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
+async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
-    yield
-    # Shutdown: Cleanup (if needed)
+    async with httpx2.AsyncClient(http2=True) as client:
+        state = cast(State, app.state)
+        state["httpx"] = client
+        yield
 
 
 # Configure Open Telemetry.

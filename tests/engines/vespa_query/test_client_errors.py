@@ -11,7 +11,7 @@ import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 import requests
 from pydantic import AnyHttpUrl
@@ -221,7 +221,15 @@ def test_labels_type_facets_propagates_vespa_error(settings, failing_query) -> N
 
 
 def test_passage_search_propagates_vespa_error(settings, failing_query) -> None:
-    engine = DevVespaPassageSearchEngine(settings=settings)
+
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(status_code=500)
+
+    transport = httpx2.MockTransport(handler)
+    engine = DevVespaPassageSearchEngine(
+        httpx=httpx2.AsyncClient(transport=transport),
+        settings=settings,
+    )
 
     with pytest.raises(VespaError):
         engine.search(
@@ -244,7 +252,7 @@ def test_label_search_propagates_vespa_error(settings, failing_query) -> None:
 
 def _patch_http(response: MagicMock):
     """Intercept the real ``httpx.AsyncClient.post`` at the client layer."""
-    return patch.object(httpx.AsyncClient, "post", new=AsyncMock(return_value=response))
+    return patch.object(httpx2.AsyncClient, "post", new=AsyncMock(return_value=response))
 
 
 def test_document_search_surfaces_an_http_failure_end_to_end(settings) -> None:

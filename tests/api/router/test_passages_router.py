@@ -242,11 +242,6 @@ def test_read_passages_order_by_unsupported_field_returns_400(
     mock_engine.asearch.assert_not_called()
 
 
-def test_read_passages_with_invalid_rank_returns_422() -> None:
-    client = TestClient(app)
-
-    response = client.get(
-        "/search/passages", params={"query": "toxic", "rank_profile": "bogus"}
-    )
-
+def test_read_passages_with_invalid_rank_returns_422(test_client: TestClient) -> None:
+    response = test_client.get("/search/passages", params={"query": "toxic", "rank_profile": "bogus"})
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY

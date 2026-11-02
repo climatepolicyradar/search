@@ -1,0 +1,25 @@
+import json
+from typing import Any
+
+import httpx2
+
+
+class MockHandler:
+
+    def __init__(self) -> None:
+        self._requests: list[httpx2.Request] = []
+        self._responses: list[dict[str, Any]] = []
+
+    def add_response(self, json: dict[str, Any]) -> None:
+        self._responses.append(json)
+
+    def last_json(self) -> dict[str, Any]:
+        return json.loads(self._requests[-1].read())
+
+    def handle(self, request: httpx2.Request) -> httpx2.Response:
+        self._requests.append(request)
+        if (response := self._responses.pop()):
+            return httpx2.Response(200, json=response)
+        raise NotImplementedError()
+
+

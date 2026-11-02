@@ -6,6 +6,8 @@ import asyncio
 import json
 from typing import Any
 
+import httpx2
+
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
@@ -103,6 +105,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
     def __init__(
         self,
         settings: Settings,
+        httpx: httpx2.AsyncClient,
         debug: bool = False,
         ranking_profile: str = _DEFAULT_PASSAGE_RANK_PROFILE,
         topic_weight: float = _DEFAULT_TOPIC_WEIGHT,
@@ -117,6 +120,8 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         """
         if exact_weight is not None and exact_weight < 0:
             raise ValueError(f"exact_weight must be >= 0, got {exact_weight!r}")
+
+        self._httpx = httpx
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
@@ -391,6 +396,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             token=self.settings.vespa_read_token,
             request_body=request_body,
             request_context=request_context,
+            client=self._httpx
         )
         passages: list[Passage] = []
         debug_info: list[dict[str, Any]] = []

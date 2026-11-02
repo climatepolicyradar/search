@@ -6,7 +6,7 @@ from http import HTTPStatus
 from time import perf_counter
 from typing import Literal
 
-import httpx
+import httpx2
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
@@ -45,7 +45,7 @@ async def probe_vespa() -> None:
         if settings.vespa_read_token
         else {}
     )
-    async with httpx.AsyncClient() as client:
+    async with httpx2.AsyncClient() as client:
         response = await client.get(
             f"{settings.vespa_endpoint}/state/v1/health",
             timeout=API_TIMEOUT,
@@ -108,11 +108,12 @@ async def probe_labels_search() -> None:
 
 
 async def probe_passages_search() -> None:
-    await DevVespaPassageSearchEngine(settings=settings).asearch(
-        query=PROBE_QUERY,
-        pagination=PROBE_PAGINATION,
-        order_by=PROBE_ORDER_BY,
-    )
+    async with httpx2.AsyncClient() as client:
+        await DevVespaPassageSearchEngine(settings=settings, httpx=client).asearch(
+            query=PROBE_QUERY,
+            pagination=PROBE_PAGINATION,
+            order_by=PROBE_ORDER_BY,
+        )
 
 
 # A probe raises on failure and returns on success. Anything that is not a 2xx
