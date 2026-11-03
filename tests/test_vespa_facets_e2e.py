@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import httpx2
 import pytest
 import requests as req
 from cpr_contracts import (
@@ -63,8 +64,12 @@ def _feed_document(app: Vespa, document: Document) -> None:
 
 
 @pytest.mark.parametrize(("case_id", "query", "rewrite_text"), rule_cases("documents.sr"))
-def test_facets_rewrite_rule_does_not_bypass_filters(
-    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+async def test_facets_rewrite_rule_does_not_bypass_filters(
+    vespa_app: Vespa,
+    case_id: str,
+    query: str,
+    rewrite_text: str,
+    live_http_client: httpx2.AsyncClient,
 ):
     """A rewrite rule's production must never let a filtered facet query count a label outside the filter."""
     doc_inside = DocumentFactory.build(
@@ -78,8 +83,8 @@ def test_facets_rewrite_rule_does_not_bypass_filters(
     _feed_document(vespa_app, doc_inside)
     _feed_document(vespa_app, doc_outside)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_value_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_value_type_facets(
         query=query,
         filters=Filter(
             op="and",
@@ -100,7 +105,7 @@ def test_facets_rewrite_rule_does_not_bypass_filters(
     )
 
 
-def test_facets_no_filters_returns_counts_for_all_labels(vespa_app: Vespa):
+async def test_facets_no_filters_returns_counts_for_all_labels(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_law = DocumentFactory.build(
         labels=[_label("category::Law", "Law", "category")],
     )
@@ -114,14 +119,14 @@ def test_facets_no_filters_returns_counts_for_all_labels(vespa_app: Vespa):
     _feed_document(vespa_app, doc_policy_1)
     _feed_document(vespa_app, doc_policy_2)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_value_type_facets(query=None, filters=None)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_value_type_facets(query=None, filters=None)
 
     counts = {c.value.id: c.count for c in result["category"]}
     assert counts == {"category::Law": 1, "category::Policy": 2}
 
 
-def test_facets_active_filter_keeps_all_options_in_that_group_visible(vespa_app: Vespa):
+async def test_facets_active_filter_keeps_all_options_in_that_group_visible(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_law_1 = DocumentFactory.build(
         labels=[_label("category::Law", "Law", "category")],
     )
@@ -135,8 +140,8 @@ def test_facets_active_filter_keeps_all_options_in_that_group_visible(vespa_app:
     _feed_document(vespa_app, doc_law_2)
     _feed_document(vespa_app, doc_policy)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_value_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_value_type_facets(
         query=None,
         filters=Filter(
             op="and",
@@ -152,7 +157,7 @@ def test_facets_active_filter_keeps_all_options_in_that_group_visible(vespa_app:
     assert counts == {"category::Law": 2, "category::Policy": 1}
 
 
-def test_facets_active_filter_narrows_other_groups(vespa_app: Vespa):
+async def test_facets_active_filter_narrows_other_groups(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_law_usa = DocumentFactory.build(
         labels=[
             _label("category::Law", "Law", "category"),
@@ -175,8 +180,8 @@ def test_facets_active_filter_narrows_other_groups(vespa_app: Vespa):
     _feed_document(vespa_app, doc_law_gbr)
     _feed_document(vespa_app, doc_policy_aus)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_value_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_value_type_facets(
         query=None,
         filters=Filter(
             op="and",
@@ -193,7 +198,7 @@ def test_facets_active_filter_narrows_other_groups(vespa_app: Vespa):
     assert "geography::AUS" not in geography_counts
 
 
-def test_facets_two_active_groups_drops_each_filter_independently(vespa_app: Vespa):
+async def test_facets_two_active_groups_drops_each_filter_independently(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     # doc1: Law + USA, doc2: Policy + USA, doc3: Law + GBR
     doc_law_usa = DocumentFactory.build(
         labels=[
@@ -217,8 +222,8 @@ def test_facets_two_active_groups_drops_each_filter_independently(vespa_app: Ves
     _feed_document(vespa_app, doc_policy_usa)
     _feed_document(vespa_app, doc_law_gbr)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_value_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_value_type_facets(
         query=None,
         filters=Filter(
             op="and",
@@ -242,7 +247,7 @@ def test_facets_two_active_groups_drops_each_filter_independently(vespa_app: Ves
     assert geography_counts == {"geography::USA": 1, "geography::GBR": 1}
 
 
-def test_facets_not_contains_filter_is_dropped_from_active_group(vespa_app: Vespa):
+async def test_facets_not_contains_filter_is_dropped_from_active_group(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_law_1 = DocumentFactory.build(
         labels=[_label("category::Law", "Law", "category")],
     )
@@ -256,8 +261,8 @@ def test_facets_not_contains_filter_is_dropped_from_active_group(vespa_app: Vesp
     _feed_document(vespa_app, doc_law_2)
     _feed_document(vespa_app, doc_policy)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_value_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_value_type_facets(
         query=None,
         filters=Filter(
             op="and",
@@ -275,7 +280,7 @@ def test_facets_not_contains_filter_is_dropped_from_active_group(vespa_app: Vesp
     assert counts == {"category::Law": 2, "category::Policy": 1}
 
 
-def test_relationship_facets_no_filters_returns_counts_for_all_labels(vespa_app: Vespa):
+async def test_relationship_facets_no_filters_returns_counts_for_all_labels(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_law = DocumentFactory.build(
         labels=[_label_rel("category::Law", "Law", "category", "part_of")],
     )
@@ -289,14 +294,14 @@ def test_relationship_facets_no_filters_returns_counts_for_all_labels(vespa_app:
     _feed_document(vespa_app, doc_policy_1)
     _feed_document(vespa_app, doc_policy_2)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_type_facets(query=None, filters=None)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_type_facets(query=None, filters=None)
 
     counts = {c.value.id: c.count for c in result["part_of"]}
     assert counts == {"category::Law": 1, "category::Policy": 2}
 
 
-def test_relationship_facets_active_filter_narrows_the_group(vespa_app: Vespa):
+async def test_relationship_facets_active_filter_narrows_the_group(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_law_1 = DocumentFactory.build(
         labels=[_label_rel("category::Law", "Law", "category", "part_of")],
     )
@@ -310,8 +315,8 @@ def test_relationship_facets_active_filter_narrows_the_group(vespa_app: Vespa):
     _feed_document(vespa_app, doc_law_2)
     _feed_document(vespa_app, doc_policy)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_type_facets(
         query=None,
         filters=Filter(
             op="and",
@@ -329,7 +334,7 @@ def test_relationship_facets_active_filter_narrows_the_group(vespa_app: Vespa):
     assert counts == {"category::Law": 2}
 
 
-def test_relationship_facets_active_filter_narrows_other_groups(vespa_app: Vespa):
+async def test_relationship_facets_active_filter_narrows_other_groups(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_law_gbr = DocumentFactory.build(
         labels=[
             _label_rel("category::Law", "Law", "category", "part_of"),
@@ -352,8 +357,8 @@ def test_relationship_facets_active_filter_narrows_other_groups(vespa_app: Vespa
     _feed_document(vespa_app, doc_law_usa)
     _feed_document(vespa_app, doc_policy_aus)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_type_facets(
         query=None,
         filters=Filter(
             op="and",
@@ -370,7 +375,7 @@ def test_relationship_facets_active_filter_narrows_other_groups(vespa_app: Vespa
     assert "geography::AUS" not in submitted_to_counts
 
 
-def test_relationship_facets_two_active_filters_narrow_all_groups(vespa_app: Vespa):
+async def test_relationship_facets_two_active_filters_narrow_all_groups(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     # doc1: Law/part_of + GBR/submitted_to, doc2: Policy/part_of + GBR/submitted_to, doc3: Law/part_of + USA/submitted_to
     doc_law_gbr = DocumentFactory.build(
         labels=[
@@ -394,8 +399,8 @@ def test_relationship_facets_two_active_filters_narrow_all_groups(vespa_app: Ves
     _feed_document(vespa_app, doc_policy_gbr)
     _feed_document(vespa_app, doc_law_usa)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_type_facets(
         query=None,
         filters=Filter(
             op="and",
@@ -419,7 +424,7 @@ def test_relationship_facets_two_active_filters_narrow_all_groups(vespa_app: Ves
     assert submitted_to_counts == {"geography::GBR": 1}
 
 
-def test_relationship_facets_not_contains_filter_narrows_the_group(vespa_app: Vespa):
+async def test_relationship_facets_not_contains_filter_narrows_the_group(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_law_1 = DocumentFactory.build(
         labels=[_label_rel("category::Law", "Law", "category", "part_of")],
     )
@@ -433,8 +438,8 @@ def test_relationship_facets_not_contains_filter_narrows_the_group(vespa_app: Ve
     _feed_document(vespa_app, doc_law_2)
     _feed_document(vespa_app, doc_policy)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.labels_type_facets(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.alabels_type_facets(
         query=None,
         filters=Filter(
             op="and",
