@@ -7,8 +7,8 @@ import subprocess
 import pytest
 import vespa_feeder as feeder
 from helpers import (
-    _FakeVespaFeed,
-    _FakeVespaFeedProcess,
+    FakeVespaFeed,
+    FakeVespaFeedProcess,
     vespa_feed_stdout,
     write_jsonl,
 )
@@ -34,6 +34,7 @@ def displaced_sigterm_handler():
     feeder._main_thread_sigterm_handler = original_previous
     feeder._vespa_feed_processes.clear()
 
+
 def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
     monkeypatch, tmp_path
 ):
@@ -41,7 +42,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
         write_jsonl(tmp_path / f"{n}.jsonl", [{"id": n}, {"id": n + 100}])
         for n in range(3)
     ]
-    fake_feed = _FakeVespaFeed()
+    fake_feed = FakeVespaFeed()
     monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
     result = feeder.feed_derived_files(
@@ -144,7 +145,7 @@ def test_feed_derived_files_reports_what_the_cli_returned(
     monkeypatch, tmp_path, stdout, stderr, expected
 ):
     files = [write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
-    monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed(stdout, stderr))
+    monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed(stdout, stderr))
 
     result = feeder.feed_derived_files(
         materialised_derived_files=files, endpoint="http://vespa", application="app"
@@ -166,7 +167,7 @@ def test_feed_derived_files_raises_when_the_cli_exits_non_zero(monkeypatch, tmp_
     monkeypatch.setattr(
         feeder.subprocess,
         "Popen",
-        _FakeVespaFeed(
+        FakeVespaFeed(
             stderr="dial tcp 127.0.0.1:1: connect: connection refused\n", returncode=1
         ),
     )
@@ -178,11 +179,12 @@ def test_feed_derived_files_raises_when_the_cli_exits_non_zero(monkeypatch, tmp_
             application="app",
         )
 
-def _time_out(process: _FakeVespaFeedProcess) -> None:
+
+def _time_out(process: FakeVespaFeedProcess) -> None:
     raise subprocess.TimeoutExpired(process.args, timeout=300)
 
 
-def _sigterm(_: _FakeVespaFeedProcess) -> None:
+def _sigterm(_: FakeVespaFeedProcess) -> None:
     signal.raise_signal(signal.SIGTERM)
 
 
@@ -247,12 +249,12 @@ def test_feed_derived_files_manages_the_vespa_feed_process(
     files = [write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
     registered_while_in_flight: list[set] = []
 
-    def on_communicate(process: _FakeVespaFeedProcess) -> None:
+    def on_communicate(process: FakeVespaFeedProcess) -> None:
         registered_while_in_flight.append(set(feeder._vespa_feed_processes))
         if mid_feed is not None:
             mid_feed(process)
 
-    fake_feed = _FakeVespaFeed(returncode=returncode, on_communicate=on_communicate)
+    fake_feed = FakeVespaFeed(returncode=returncode, on_communicate=on_communicate)
     monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
     feeder._terminate_vespa_feed_processes_on_sigterm_handler()

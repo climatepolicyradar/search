@@ -1,5 +1,13 @@
 """Helpers shared by more than one of the feeder test modules."""
 
+# This module is test support code, but its name does not match the
+# `{tests/*,test_*.py}` glob the repo's ruff per-file-ignores use, so the
+# test-file exemptions are repeated here. D102/D105: stub methods stand in for
+# a real interface and are documented by the class docstring. ARG002: stub
+# classes implement a real interface's signature, so their methods take
+# arguments they have no use for in testing.
+# ruff: noqa: D102, D105, ARG002
+
 import json
 from collections.abc import Callable
 from itertools import takewhile
@@ -47,10 +55,10 @@ def put_s3_objects(s3_client, bucket: str, objects: dict[str, bytes]) -> None:
         s3_client.put_object(Bucket=bucket, Key=key, Body=body)
 
 
-class _FakeVespaFeedProcess:
-    """The `subprocess.Popen` a `_FakeVespaFeed` hands back."""
+class FakeVespaFeedProcess:
+    """The `subprocess.Popen` a `FakeVespaFeed` hands back."""
 
-    def __init__(self, feed: "_FakeVespaFeed", argv: list[str], stdout: str) -> None:
+    def __init__(self, feed: "FakeVespaFeed", argv: list[str], stdout: str) -> None:
         self.args = argv
         self.returncode = None
         self.terminated = False
@@ -71,14 +79,14 @@ class _FakeVespaFeedProcess:
     def kill(self) -> None:
         self.killed = True
 
-    def __enter__(self) -> "_FakeVespaFeedProcess":
+    def __enter__(self) -> "FakeVespaFeedProcess":
         return self
 
     def __exit__(self, *_) -> bool:
         return False
 
 
-class _FakeVespaFeed:
+class FakeVespaFeed:
     """
     Stands in for `subprocess.Popen`, recording what `vespa feed` was handed.
 
@@ -96,7 +104,7 @@ class _FakeVespaFeed:
         stdout: str | None = None,
         stderr: str = "",
         returncode: int = 0,
-        on_communicate: Callable[[_FakeVespaFeedProcess], None] | None = None,
+        on_communicate: Callable[[FakeVespaFeedProcess], None] | None = None,
     ) -> None:
         self.stdout = stdout
         self.stderr = stderr
@@ -105,9 +113,9 @@ class _FakeVespaFeed:
         self.calls: list[list[str]] = []
         self.timeouts: list[int | None] = []
         self.fed_records: list[dict] = []
-        self.processes: list[_FakeVespaFeedProcess] = []
+        self.processes: list[FakeVespaFeedProcess] = []
 
-    def __call__(self, argv: list[str], **kwargs) -> _FakeVespaFeedProcess:
+    def __call__(self, argv: list[str], **kwargs) -> FakeVespaFeedProcess:
         self.calls.append(argv)
 
         feed_paths = takewhile(lambda arg: not arg.startswith("--"), argv[2:])
@@ -117,6 +125,6 @@ class _FakeVespaFeed:
         stdout = self.stdout or vespa_feed_stdout(
             operation=len(records), ok=len(records)
         )
-        process = _FakeVespaFeedProcess(self, argv, stdout)
+        process = FakeVespaFeedProcess(self, argv, stdout)
         self.processes.append(process)
         return process

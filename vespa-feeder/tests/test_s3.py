@@ -93,6 +93,7 @@ def test_get_latest_s3_export_prefix_raises_when_there_is_no_timestamped_prefix(
     with pytest.raises(FileNotFoundError, match="No timestamped snapshots"):
         feeder.get_latest_s3_export_prefix(bucket=s3_bucket, prefix="a/prefix/")
 
+
 @pytest.mark.parametrize(
     ("keys", "prefix", "expected"),
     [
@@ -123,6 +124,7 @@ def test_list_s3_keys(s3_client, s3_bucket, keys, prefix, expected):
 def test_list_s3_keys_raises_when_the_prefix_is_empty(s3_client, s3_bucket):
     with pytest.raises(FileNotFoundError, match="No objects found"):
         feeder.list_s3_keys(bucket=s3_bucket, prefix="nothing/here")
+
 
 @pytest.mark.parametrize(
     ("s3_objects", "batched_s3_keys", "expected_files"),
@@ -162,6 +164,7 @@ def test_materialise_s3_files_writes_one_file_per_key(
 
     assert paths == [tmp_path / name for name in expected_files]
     assert {path.name: read_jsonl(path) for path in paths} == expected_files
+
 
 @pytest.mark.parametrize(
     ("sources", "derive_data_from_source", "expected_files"),
@@ -223,6 +226,7 @@ def test_materialise_derived_files_writes_a_new_file_per_source(
     assert derived == [tmp_path / name for name in expected_files]
     assert {path.name: read_jsonl(path) for path in derived} == expected_files
     assert {path.name: path.read_bytes() for path in source_paths} == sources
+
 
 @pytest.mark.parametrize(
     ("present", "absent"),

@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 import vespa_feeder as feeder
-from helpers import _FakeVespaFeed, put_s3_objects, vespa_feed_stdout
+from helpers import FakeVespaFeed, put_s3_objects, vespa_feed_stdout
 
 
 @pytest.mark.parametrize(
@@ -47,7 +47,7 @@ def test_feed_batch_feeds_the_records_then_leaves_nothing_on_disk(
     expected_records,
 ):
     put_s3_objects(s3_client, s3_bucket, s3_objects)
-    fake_feed = _FakeVespaFeed()
+    fake_feed = FakeVespaFeed()
     monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
     result = feeder.feed_batch.fn(
@@ -83,21 +83,21 @@ def _broken_deriver(record: dict) -> dict:
         pytest.param(
             True,
             None,
-            _FakeVespaFeed,
+            FakeVespaFeed,
             RuntimeError,
             id="a-download-fails",
         ),
         pytest.param(
             False,
             _broken_deriver,
-            _FakeVespaFeed,
+            FakeVespaFeed,
             RuntimeError,
             id="the-deriver-raises",
         ),
         pytest.param(
             False,
             None,
-            lambda: _FakeVespaFeed(returncode=1),
+            lambda: FakeVespaFeed(returncode=1),
             subprocess.CalledProcessError,
             id="vespa-feed-exits-non-zero",
         ),
@@ -161,7 +161,7 @@ def test_feed_batch_records_what_it_fed(
     self-heal, so they must not inflate the error metric.
     """
     put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
-    monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed())
+    monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed())
 
     feeder.feed_batch.fn(
         endpoint="http://vespa",
@@ -201,7 +201,7 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
 
     monkeypatch.setattr(s3_client, "download_file", download_file)
     monkeypatch.setattr(feeder.boto3, "client", lambda _: s3_client)  # noqa: ARG005
-    monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed())
+    monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed())
 
     with pytest.raises(RuntimeError, match="s3 download failed"):
         feeder.feed_batch.fn(
@@ -252,7 +252,7 @@ def test_feed_batch_counts_only_records_that_were_actually_lost(
     self-heal - counting those would report data loss that never happened.
     """
     put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
-    monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed(stdout))
+    monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed(stdout))
 
     feeder.feed_batch.fn(
         endpoint="http://vespa",
