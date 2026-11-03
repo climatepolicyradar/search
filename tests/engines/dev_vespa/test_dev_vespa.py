@@ -604,7 +604,7 @@ def test_passage_search_engine_sends_ranking_profile_without_debug(
     )
 
     request_body = handler.last_json()
-    assert request_body["ranking.profile"] == "bm25_multiplicative"
+    assert request_body["ranking.profile"] == passages_search_engine._DEFAULT_PASSAGE_RANK_PROFILE
 
 
 @pytest.mark.parametrize(
