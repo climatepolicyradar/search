@@ -1,7 +1,10 @@
 import os
+from unittest.mock import create_autospec
 
 import boto3
 import pytest
+import vespa_feeder as feeder
+from feeder_metrics import FeederMetrics
 from moto import mock_aws
 from prefect.testing.utilities import prefect_test_harness
 
@@ -44,3 +47,11 @@ def s3_bucket(s3_client):
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
     return "bucket"
+
+
+@pytest.fixture
+def recording_metrics(monkeypatch):
+    """A FeederMetrics stand-in that enforces the real method signatures."""
+    metrics = create_autospec(FeederMetrics, instance=True)
+    monkeypatch.setattr(feeder, "feeder_metrics", metrics)
+    return metrics
