@@ -349,7 +349,7 @@ def test_passage_imported_principal_id_resolves_to_parent(vespa_app: Vespa):
     )
 
 
-def test_passage_search_preserves_currency_symbols(
+async def test_passage_search_preserves_currency_symbols(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -368,7 +368,7 @@ def test_passage_search_preserves_currency_symbols(
     )
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query="$100",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -382,7 +382,7 @@ def test_passage_search_preserves_currency_symbols(
     assert "$100" in matched.text
 
 
-def test_passage_bolding_wraps_matched_terms_only_when_asked(
+async def test_passage_bolding_wraps_matched_terms_only_when_asked(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -407,10 +407,10 @@ def test_passage_bolding_wraps_matched_terms_only_when_asked(
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
     pagination = Pagination(page_token=1, page_size=10)
 
-    bolded = engine.search(
+    bolded = await engine.asearch(
         query="carbon", pagination=pagination, order_by=[], bolding=True
     )
-    plain = engine.search(query="carbon", pagination=pagination, order_by=[])
+    plain = await engine.asearch(query="carbon", pagination=pagination, order_by=[])
 
     assert bolded.results[0].text == "The carbon budget for crude emissions."
     assert [
@@ -442,7 +442,7 @@ _LONG_TEXT = (
         pytest.param("forest", ["forest", "forests", "forestry"], id="unquoted"),
     ],
 )
-def test_passage_bolding_keeps_long_text_whole(
+async def test_passage_bolding_keeps_long_text_whole(
     vespa_app: Vespa,
     query: str,
     bolded: list[str],
@@ -463,11 +463,13 @@ def test_passage_bolding_keeps_long_text_whole(
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
     pagination = Pagination(page_token=1, page_size=10)
-    with_bolding = engine.search(
-        query=query, pagination=pagination, order_by=[], bolding=True
+    with_bolding = (
+        await engine.asearch(
+            query=query, pagination=pagination, order_by=[], bolding=True
+        )
     ).results
-    without_bolding = engine.search(
-        query=query, pagination=pagination, order_by=[]
+    without_bolding = (
+        await engine.asearch(query=query, pagination=pagination, order_by=[])
     ).results
 
     assert [p.text for p in with_bolding] == [_LONG_TEXT]
@@ -475,7 +477,7 @@ def test_passage_bolding_keeps_long_text_whole(
     assert [b.labelled_text for b in with_bolding[0].boldings] == bolded
 
 
-def test_passage_bolding_covers_quoted_phrases(
+async def test_passage_bolding_covers_quoted_phrases(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -507,14 +509,14 @@ def test_passage_bolding_covers_quoted_phrases(
         ('brazil "carbon tax"', "tb-qbold", ["Brazil", "carbon", "tax"]),
         ('"loss and damage"', "tb-qbold-ld", ["loss", "and", "damage"]),
     ]:
-        results = engine.search(
+        results = await engine.asearch(
             query=query, pagination=pagination, order_by=[], bolding=True
         )
         assert [p.text_block_id for p in results.results] == [block_id], query
         assert [h.labelled_text for h in results.results[0].boldings] == expected, query
 
 
-def test_passage_bolding_of_a_quoted_word_skips_longer_words_it_prefixes(
+async def test_passage_bolding_of_a_quoted_word_skips_longer_words_it_prefixes(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -533,7 +535,7 @@ def test_passage_bolding_of_a_quoted_word_skips_longer_words_it_prefixes(
     )
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query='"forest"',
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -544,7 +546,7 @@ def test_passage_bolding_of_a_quoted_word_skips_longer_words_it_prefixes(
     assert [b.labelled_text for b in results.results[0].boldings] == ["Forest"]
 
 
-def test_passage_bolding_covers_acronym_expansions(
+async def test_passage_bolding_covers_acronym_expansions(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -563,7 +565,7 @@ def test_passage_bolding_covers_acronym_expansions(
     )
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query="ccs", pagination=Pagination(page_token=1, page_size=10), order_by=[], bolding=True
     )
 
@@ -626,7 +628,7 @@ def test_passage_principal_title_resolves_via_principal_document_ref(vespa_app: 
     )
 
 
-def test_passage_document_id_filter_is_exact_and_covers_the_corpus(
+async def test_passage_document_id_filter_is_exact_and_covers_the_corpus(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -663,7 +665,7 @@ def test_passage_document_id_filter_is_exact_and_covers_the_corpus(
         ],
     )
 
-    response = engine.search(
+    response = await engine.asearch(
         query="mangrove",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -718,7 +720,7 @@ def _rewrite_rule_cases() -> list[tuple[str, str, str]]:
 
 
 @pytest.mark.parametrize(("case_id", "query", "rewrite_text"), _rewrite_rule_cases())
-def test_rewrite_rule_does_not_bypass_filters(
+async def test_rewrite_rule_does_not_bypass_filters(
     vespa_app: Vespa,
     case_id: str,
     query: str,
@@ -757,7 +759,7 @@ def test_rewrite_rule_does_not_bypass_filters(
         ],
     )
 
-    response = engine.search(
+    response = await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -772,7 +774,7 @@ def test_rewrite_rule_does_not_bypass_filters(
 
 
 @pytest.mark.parametrize(("case_id", "query", "rewrite_text"), _rewrite_rule_cases())
-def test_rewrite_rule_highlights_what_it_matched(
+async def test_rewrite_rule_highlights_what_it_matched(
     vespa_app: Vespa,
     case_id: str,
     query: str,
@@ -791,7 +793,7 @@ def test_rewrite_rule_highlights_what_it_matched(
     )
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    response = engine.search(
+    response = await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -841,7 +843,7 @@ def test_rewrite_rule_highlights_what_it_matched(
         ),
     ],
 )
-def test_passage_search_applies_rulebase_rewrites(
+async def test_passage_search_applies_rulebase_rewrites(
     vespa_app: Vespa,
     case_id: str,
     query: str,
@@ -861,7 +863,7 @@ def test_passage_search_applies_rulebase_rewrites(
     )
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -916,9 +918,9 @@ def _feed_rewrite_passages(app: Vespa) -> None:
         )
 
 
-def _passage_ids(query: str, live_http_client: httpx2.AsyncClient) -> list[str]:
+async def _passage_ids(query: str, live_http_client: httpx2.AsyncClient) -> list[str]:
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    response = engine.search(
+    response = await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[],
@@ -968,41 +970,41 @@ def _is_rewritten(query: str) -> bool:
     )
 
 
-def test_nature_based_solutions_does_not_match_nota_bene(
+async def test_nature_based_solutions_does_not_match_nota_bene(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
     _feed_rewrite_passages(vespa_app)
 
-    ids = _passage_ids("nature-based solutions", live_http_client)
+    ids = await _passage_ids("nature-based solutions", live_http_client)
 
     assert "tb-phrase" in ids
     assert "tb-nb" not in ids
 
 
-def test_nature_based_solutions_is_searched_as_a_phrase(
+async def test_nature_based_solutions_is_searched_as_a_phrase(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
     _feed_rewrite_passages(vespa_app)
 
     for query in ("nature based solutions", "Nature-Based Solution's"):
-        ids = _passage_ids(query, live_http_client)
+        ids = await _passage_ids(query, live_http_client)
         assert "tb-phrase" in ids
         assert "tb-words-apart" not in ids
 
 
-def test_nature_based_solutions_is_not_expanded_to_nbs(
+async def test_nature_based_solutions_is_not_expanded_to_nbs(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
     _feed_rewrite_passages(vespa_app)
 
-    assert "tb-nbs-only" not in _passage_ids("nature-based solutions", live_http_client)
-    assert "tb-nbs-only" in _passage_ids("nbs", live_http_client)
+    assert "tb-nbs-only" not in await _passage_ids("nature-based solutions", live_http_client)
+    assert "tb-nbs-only" in await _passage_ids("nbs", live_http_client)
 
 
-def test_nature_based_solutions_highlights_the_phrase(
+async def test_nature_based_solutions_highlights_the_phrase(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1010,7 +1012,7 @@ def test_nature_based_solutions_highlights_the_phrase(
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
 
     for query in ("nature based solutions", "Nature-Based Solution's"):
-        response = engine.search(
+        response = await engine.asearch(
             query=query,
             pagination=Pagination(page_token=1, page_size=50),
             order_by=[],
@@ -1023,13 +1025,13 @@ def test_nature_based_solutions_highlights_the_phrase(
         assert bolded_by_block["tb-phrase"] == ["nature", "based", "solutions"], query
 
 
-def test_et_al_does_not_fire_the_ets_rule(
+async def test_et_al_does_not_fire_the_ets_rule(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
     _feed_rewrite_passages(vespa_app)
 
-    ids = _passage_ids("et al", live_http_client)
+    ids = await _passage_ids("et al", live_http_client)
 
     assert "tb-et-al" in ids
     assert "tb-ets-only" not in ids
@@ -1055,7 +1057,7 @@ def test_a_trigger_fires_in_any_case_or_inflection(vespa_app: Vespa, query: str)
 # endregion
 
 
-def test_passage_labels_are_returned_and_filterable(
+async def test_passage_labels_are_returned_and_filterable(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1090,7 +1092,7 @@ def test_passage_labels_are_returned_and_filterable(
     )
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -1184,7 +1186,7 @@ def _topic_filter(concept_ids: list[str]) -> Filter:
     )
 
 
-def _topic_search(
+async def _topic_search(
     query: str | None,
     concept_ids: list[str],
     topic_weight: float,
@@ -1195,7 +1197,7 @@ def _topic_search(
     engine = DevVespaPassageSearchEngine(
         settings=_TEST_SETTINGS, httpx=live_http_client, topic_weight=topic_weight, debug=debug
     )
-    results = engine.search(
+    results = await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -1204,17 +1206,17 @@ def _topic_search(
     return results.results, engine.last_debug_info
 
 
-def _topic_ranked_ids(
+async def _topic_ranked_ids(
     query: str | None,
     concept_ids: list[str],
     topic_weight: float,
     live_http_client: httpx2.AsyncClient,
 ) -> list[str]:
-    results, _ = _topic_search(query, concept_ids, topic_weight, live_http_client)
+    results, _ = await _topic_search(query, concept_ids, topic_weight, live_http_client)
     return [p.text_block_id for p in results]
 
 
-def test_topic_score_counts_the_filtered_topics_a_passage_carries(
+async def test_topic_score_counts_the_filtered_topics_a_passage_carries(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1226,7 +1228,7 @@ def test_topic_score_counts_the_filtered_topics_a_passage_carries(
     """
     _feed_topic_ranking_passages(vespa_app)
 
-    results, debug_info = _topic_search(
+    results, debug_info = await _topic_search(
         "climate finance",
         concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
         topic_weight=1.0,
@@ -1241,14 +1243,14 @@ def test_topic_score_counts_the_filtered_topics_a_passage_carries(
     assert scores == {"tb-topic-winner": 2.0, "tb-text-winner": 1.0}
 
 
-def test_topic_weight_zero_leaves_text_ranking_untouched(
+async def test_topic_weight_zero_leaves_text_ranking_untouched(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
     """`topic_weight=0.0` switches topic ranking off, restoring text-only order."""
     _feed_topic_ranking_passages(vespa_app)
 
-    assert _topic_ranked_ids(
+    assert await _topic_ranked_ids(
         "climate finance",
         concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
         topic_weight=0.0,
@@ -1257,7 +1259,7 @@ def test_topic_weight_zero_leaves_text_ranking_untouched(
 
 
 @pytest.mark.parametrize("query_text", ["climate finance", None])
-def test_topic_ranking_puts_the_passage_carrying_both_topics_first(
+async def test_topic_ranking_puts_the_passage_carrying_both_topics_first(
     vespa_app: Vespa,
     query_text: str | None,
     live_http_client: httpx2.AsyncClient,
@@ -1277,7 +1279,7 @@ def test_topic_ranking_puts_the_passage_carrying_both_topics_first(
     """
     _feed_topic_ranking_passages(vespa_app)
 
-    assert _topic_ranked_ids(
+    assert await _topic_ranked_ids(
         query=query_text,
         concept_ids=[_CLIMATE_FINANCE, _FOSSIL_FUEL],
         topic_weight=5.0,
@@ -1285,7 +1287,7 @@ def test_topic_ranking_puts_the_passage_carrying_both_topics_first(
     ) == ["tb-topic-winner", "tb-text-winner"]
 
 
-def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(
+async def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1310,7 +1312,7 @@ def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(
         concept_counts={_CLIMATE_FINANCE: 1},
     )
 
-    assert _topic_ranked_ids(
+    assert await _topic_ranked_ids(
         query=None,
         concept_ids=[_CLIMATE_FINANCE],
         topic_weight=1.0,
@@ -1318,7 +1320,7 @@ def test_junk_penalties_suppress_a_topic_carrying_table_of_contents(
     ) == ["tb-prose", "tb-toc"]
 
 
-def test_junk_penalties_suppress_a_page_header_or_footer(
+async def test_junk_penalties_suppress_a_page_header_or_footer(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1343,7 +1345,7 @@ def test_junk_penalties_suppress_a_page_header_or_footer(
         concept_counts={_CLIMATE_FINANCE: 1},
     )
 
-    assert _topic_ranked_ids(
+    assert await _topic_ranked_ids(
         query=None,
         concept_ids=[_CLIMATE_FINANCE],
         topic_weight=1.0,
@@ -1351,7 +1353,7 @@ def test_junk_penalties_suppress_a_page_header_or_footer(
     ) == ["tb-prose-2", "tb-header"]
 
 
-def test_quoted_passage_search_is_literal_phrase_match(
+async def test_quoted_passage_search_is_literal_phrase_match(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1369,7 +1371,7 @@ def test_quoted_passage_search_is_literal_phrase_match(
         _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-exact")
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query='"national strategy for climate change 2050"',
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -1382,7 +1384,7 @@ def test_quoted_passage_search_is_literal_phrase_match(
     )
 
 
-def test_quoted_passage_search_preserves_currency_symbols(
+async def test_quoted_passage_search_preserves_currency_symbols(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1413,7 +1415,7 @@ def test_quoted_passage_search_preserves_currency_symbols(
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
     for query in ('"$100"', '"grant of $100"'):
-        results = engine.search(
+        results = await engine.asearch(
             query=query,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
@@ -1424,7 +1426,7 @@ def test_quoted_passage_search_preserves_currency_symbols(
         )
 
 
-def test_quoted_passage_search_punctuation_limits(
+async def test_quoted_passage_search_punctuation_limits(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1452,8 +1454,8 @@ def test_quoted_passage_search_punctuation_limits(
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
 
-    def search(query: str) -> list[str]:
-        results = engine.search(
+    async def search(query: str) -> list[str]:
+        results = await engine.asearch(
             query=query,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
@@ -1461,15 +1463,15 @@ def test_quoted_passage_search_punctuation_limits(
         return sorted(p.text_block_id for p in results.results)
 
     # The hyphen is not a distinguishing feature: both spellings match either way.
-    assert search('"nature-based solutions"') == ["tb-hyphen", "tb-space"]
-    assert search('"nature based solutions"') == ["tb-hyphen", "tb-space"]
+    assert await search('"nature-based solutions"') == ["tb-hyphen", "tb-space"]
+    assert await search('"nature based solutions"') == ["tb-hyphen", "tb-space"]
     # ...but the plural still is, because nothing stems this field.
-    assert search('"nature-based solution"') == ["tb-singular"]
+    assert await search('"nature-based solution"') == ["tb-singular"]
     # `%` is discarded, so it cannot separate "40%" from "40 percent".
-    assert search('"fell 40%"') == ["tb-pct", "tb-pct-words"]
+    assert await search('"fell 40%"') == ["tb-pct", "tb-pct-words"]
 
 
-def test_quoted_passage_search_requires_adjacency_and_order(
+async def test_quoted_passage_search_requires_adjacency_and_order(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1485,7 +1487,7 @@ def test_quoted_passage_search_requires_adjacency_and_order(
         _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-order")
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query='"just transition"',
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -1497,7 +1499,7 @@ def test_quoted_passage_search_requires_adjacency_and_order(
     )
 
 
-def test_mixed_quoted_and_unquoted_passage_search(
+async def test_mixed_quoted_and_unquoted_passage_search(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1517,7 +1519,7 @@ def test_mixed_quoted_and_unquoted_passage_search(
         _feed_passage(vespa_app, _text_block(block_id, text), document_id="principal-mixed")
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query='peatlands "blue carbon"',
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -1529,7 +1531,7 @@ def test_mixed_quoted_and_unquoted_passage_search(
     )
 
 
-def test_unquoted_passage_search_is_unaffected_by_exact_field(
+async def test_unquoted_passage_search_is_unaffected_by_exact_field(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ):
@@ -1543,7 +1545,7 @@ def test_unquoted_passage_search_is_unaffected_by_exact_field(
     )
 
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
-    results = engine.search(
+    results = await engine.asearch(
         query="national strategies",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[],
@@ -1661,7 +1663,7 @@ _SCOPE_PASSAGES = [
         (["m-a1", "m-b1"], ["tb-other", "tb-text"]),
     ],
 )
-def test_passage_search_within_ors_query_and_filters(
+async def test_passage_search_within_ors_query_and_filters(
     vespa_app: Vespa,
     document_ids: list[str],
     expected: list[str],
@@ -1670,7 +1672,7 @@ def test_passage_search_within_ors_query_and_filters(
     _feed_scoped_corpus(vespa_app, _SCOPE_PASSAGES)
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
 
-    response = engine.search_within(
+    response = await engine.asearch_within(
         document_ids=document_ids,
         query="nature-based solutions",
         pagination=Pagination(page_token=1, page_size=10),
@@ -1718,7 +1720,7 @@ _MSM_PASSAGES = [
         ),
     ],
 )
-def test_labeled_msm_drops_low_coverage_text_but_keeps_filter_matches(
+async def test_labeled_msm_drops_low_coverage_text_but_keeps_filter_matches(
     vespa_app: Vespa,
     query: str,
     msm: float,
@@ -1729,7 +1731,7 @@ def test_labeled_msm_drops_low_coverage_text_but_keeps_filter_matches(
     _feed_scoped_corpus(vespa_app, _MSM_PASSAGES)
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client, debug=True)
 
-    response = engine.search_within(
+    response = await engine.asearch_within(
         document_ids=["p-a"],
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
@@ -1742,14 +1744,14 @@ def test_labeled_msm_drops_low_coverage_text_but_keeps_filter_matches(
     assert found == expected, engine.last_debug_info
 
 
-def test_labeled_msm_without_filters_is_plain_msm_on_the_text(
+async def test_labeled_msm_without_filters_is_plain_msm_on_the_text(
     vespa_app: Vespa,
     live_http_client: httpx2.AsyncClient,
 ) -> None:
     _feed_scoped_corpus(vespa_app, _MSM_PASSAGES)
     engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client, debug=True)
 
-    response = engine.search_within(
+    response = await engine.asearch_within(
         document_ids=["p-a"],
         query="coastal wetland restoration",
         pagination=Pagination(page_token=1, page_size=10),
