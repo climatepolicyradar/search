@@ -1,3 +1,4 @@
+import httpx2
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -908,7 +909,10 @@ def relevance_tests_passages():
 
     engines = [
         DevVespaPassageSearchEngine(
-            settings=settings, debug=True, ranking_profile="bm25_multiplicative"
+            settings=settings,
+            httpx=httpx2.AsyncClient(),
+            debug=True,
+            ranking_profile="bm25_multiplicative",
         ),
         ExactVespaPassageSearchEngine(),
     ]

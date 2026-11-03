@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Awaitable, TypedDict
 
-import httpx
+import httpx2
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ def _parse_entity(wikibase_id: str, entity: dict) -> WikibaseConcept | None:
 
 
 async def _fetch_concept(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     api_url: str,
     semaphore: asyncio.Semaphore,
     wikibase_id: str,
@@ -135,7 +135,7 @@ async def _fetch_concept(
 
 
 async def _login(
-    client: httpx.AsyncClient, api_url: str, username: str, password: str
+    client: httpx2.AsyncClient, api_url: str, username: str, password: str
 ) -> None:
     """Authenticate with Wikibase."""
     # Get login token
@@ -171,7 +171,7 @@ async def _login(
 
 
 async def _fetch_subconcept_ids(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     base_url: str,
     semaphore: asyncio.Semaphore,
     wikibase_id: str,
@@ -217,7 +217,7 @@ async def _fetch_subconcept_ids(
 
 
 async def _fetch_entities_batch(
-    client: httpx.AsyncClient,
+    client: httpx2.AsyncClient,
     api_url: str,
     semaphore: asyncio.Semaphore,
     wikibase_ids: list[str],
@@ -344,7 +344,7 @@ async def fetch_concepts_at_timestamps(
     base_url = base_url.rstrip("/")
     api_url = f"{base_url}/w/api.php"
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx2.AsyncClient(timeout=30) as client:
         await _login(client, api_url, username, password)
 
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)

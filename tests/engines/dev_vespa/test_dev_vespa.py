@@ -2,7 +2,7 @@ import json
 from http import HTTPStatus
 from unittest.mock import AsyncMock, Mock, patch
 
-import httpx
+import httpx2
 import pytest
 from pydantic import AnyHttpUrl
 
@@ -22,6 +22,7 @@ from search.engines.dev_vespa import (
 )
 from search.engines.vespa_query.filters import _topic_ids_from_filters
 from search.engines.vespa_query.sorting import _document_sort_ranking_string
+from tests.http import MockHandler
 
 
 @pytest.mark.parametrize(
@@ -140,15 +141,15 @@ def test_document_search_hits_carry_no_passages() -> None:
     assert result.results[0].passages == []
 
 
-def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> None:
-    """The top-level passages schema's pages struct field lands on Passage.pages."""
-    settings = Settings(
-        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
-        vespa_read_token="test-read-token",  # nosec B106
-    )
-    engine = DevVespaPassageSearchEngine(settings=settings)
 
-    fake_response = {
+
+
+def test_passage_search_engine_reads_pages_from_top_level_passages_schema(
+    passage_engine: DevVespaPassageSearchEngine,
+    handler: MockHandler,
+) -> None:
+    """The top-level passages schema's pages struct field lands on Passage.pages."""
+    handler.add_response({
         "root": {
             "children": [
                 {
@@ -168,85 +169,73 @@ def test_passage_search_engine_reads_pages_from_top_level_passages_schema() -> N
                 }
             ]
         }
-    }
+    })
 
-    with patch.object(passages_search_engine, "aexecute_vespa_query", return_value=fake_response):
-        result = engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-        )
+    result = passage_engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
 
     assert result.results[0].pages == [5, 6]
     assert result.results[0].type == "Text"
     assert result.results[0].text == "some text"
 
 
-def test_passage_search_engine_applies_order_by_to_request_body() -> None:
+def test_passage_search_engine_applies_order_by_to_request_body(
+    passage_engine: DevVespaPassageSearchEngine,
+    handler: MockHandler,
+) -> None:
     """A non-empty ``order_by`` produces ``ranking.sorting`` on the Vespa request."""
-    settings = Settings(
-        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
-        vespa_read_token="test-read-token",  # nosec B106
+    handler.add_response({"root": {"children": []}})
+
+    passage_engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="idx", direction="desc")],
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
 
-    fake_response = {"root": {"children": []}}
-
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value=fake_response
-    ) as mock_execute:
-        engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[OrderBy(field="idx", direction="desc")],
-        )
-
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert request_body["ranking.profile"] == "unranked"
     assert request_body["ranking.sorting"] == "-missing(idx,last)"
     assert request_body["sorting.degrading"] is False
 
 
-def test_passage_search_engine_order_by_wins_over_debug_mode_ranking_profile() -> None:
+def test_passage_search_engine_order_by_wins_over_debug_mode_ranking_profile(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """
     An explicit order_by sort overrides debug mode's rank-profile choice profile.
 
     Matches ``DevVespaDocumentSearchEngine.search``, where sort overrides are
     always applied after any default/debug ``ranking.profile`` is set.
     """
-    settings = Settings(
-        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
-        vespa_read_token="test-read-token",  # nosec B106
+    engine = DevVespaPassageSearchEngine(
+        settings=_KSTEM_SETTINGS,
+        httpx=http_client,
+        debug=True,
     )
-    engine = DevVespaPassageSearchEngine(settings=settings, debug=True)
 
-    fake_response = {"root": {"children": []}}
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value=fake_response
-    ) as mock_execute:
-        engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[OrderBy(field="idx", direction="asc")],
-        )
+    engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="idx", direction="asc")],
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert request_body["ranking.profile"] == "unranked"
     assert request_body["ranking.sorting"] == "+missing(idx,last)"
 
 
-def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages_schema() -> (
-    None
-):
+def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages_schema(
+    passage_engine: DevVespaPassageSearchEngine,
+    handler: MockHandler,
+) -> None:
     """The top-level passages schema's pages struct field lands on Passage.pages_with_bounding_boxes."""
-    settings = Settings(
-        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
-        vespa_read_token="test-read-token",  # nosec B106
-    )
-    engine = DevVespaPassageSearchEngine(settings=settings)
-
-    fake_response = {
+    handler.add_response({
         "root": {
             "children": [
                 {
@@ -274,14 +263,13 @@ def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages
                 }
             ]
         }
-    }
+    })
 
-    with patch.object(passages_search_engine, "aexecute_vespa_query", return_value=fake_response):
-        result = engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-        )
+    result = passage_engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
 
     passage = result.results[0]
     assert len(passage.pages_with_bounding_boxes) == 2
@@ -293,15 +281,12 @@ def test_passage_search_engine_reads_page_bounding_boxes_from_top_level_passages
     assert passage.pages_with_bounding_boxes[1].bounding_boxes == []
 
 
-def test_passage_search_engine_reads_labels_from_top_level_passages_schema() -> None:
+def test_passage_search_engine_reads_labels_from_top_level_passages_schema(
+    passage_engine: DevVespaPassageSearchEngine,
+    handler: MockHandler,
+) -> None:
     """The top-level passages schema's labels field lands on Passage.labels."""
-    settings = Settings(
-        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
-        vespa_read_token="test-read-token",  # nosec B106
-    )
-    engine = DevVespaPassageSearchEngine(settings=settings)
-
-    fake_response = {
+    handler.add_response({
         "root": {
             "children": [
                 {
@@ -343,14 +328,13 @@ def test_passage_search_engine_reads_labels_from_top_level_passages_schema() -> 
                 }
             ]
         }
-    }
+    })
 
-    with patch.object(passages_search_engine, "aexecute_vespa_query", return_value=fake_response):
-        result = engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-        )
+    result = passage_engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
 
     passage = result.results[0]
     assert len(passage.labels) == 2
@@ -596,7 +580,10 @@ def test_document_search_engine_omits_topic_inputs_under_a_sort_override() -> No
     assert "input.query(topic_weight)" not in request_body
 
 
-def test_passage_search_engine_sends_ranking_profile_without_debug() -> None:
+def test_passage_search_engine_sends_ranking_profile_without_debug(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """
     The rank profile is sent on every request, not just debug ones.
 
@@ -607,18 +594,16 @@ def test_passage_search_engine_sends_ranking_profile_without_debug() -> None:
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-        )
+    engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert request_body["ranking.profile"] == "bm25_multiplicative"
 
 
@@ -627,47 +612,49 @@ def test_passage_search_engine_sends_ranking_profile_without_debug() -> None:
     [(False, "search"), (True, "debug-summary")],
 )
 def test_passage_search_engine_requests_the_search_summary_unless_debugging(
-    debug: bool, expected_summary: str
+    debug: bool,
+    expected_summary: str,
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
 ) -> None:
     """Live requests use the in-memory `search` summary; `debug=True` uses `debug-summary`."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings, debug=debug)
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client, debug=debug)
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-        )
+    engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert request_body["presentation.summary"] == expected_summary
 
 
-def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor() -> None:
+def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """Topics being filtered for become the topic ranking tensor."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-            filters=_topic_filter("Q567", "Q1651"),
-        )
+    engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=_topic_filter("Q567", "Q1651"),
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert request_body["input.query(topic_q)"] == {
         "concept::Q567": 1.0,
         "concept::Q1651": 1.0,
@@ -675,7 +662,10 @@ def test_passage_search_engine_sends_filtered_topics_as_a_query_tensor() -> None
     assert request_body["input.query(topic_weight)"] == 1.0
 
 
-def test_passage_search_engine_sends_topic_inputs_without_a_text_query() -> None:
+def test_passage_search_engine_sends_topic_inputs_without_a_text_query(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """
     Topic-only searches are the case topic ranking matters most for.
 
@@ -686,42 +676,41 @@ def test_passage_search_engine_sends_topic_inputs_without_a_text_query() -> None
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query="",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-            filters=_topic_filter("Q567"),
-        )
+    engine.search(
+        query="",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=_topic_filter("Q567"),
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert "userQuery()" not in request_body["yql"]
     assert request_body["input.query(topic_q)"] == {"concept::Q567": 1.0}
 
 
-def test_passage_search_engine_forwards_topic_weight() -> None:
+def test_passage_search_engine_forwards_topic_weight(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """We can use `topic_weight=0.0` to switch off topic ranking."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings, topic_weight=0.0)
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client, topic_weight=0.0)
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-            filters=_topic_filter("Q567"),
-        )
+    engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=_topic_filter("Q567"),
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert request_body["input.query(topic_weight)"] == 0.0
     assert engine.parameters == {
         "ranking_profile": "bm25_multiplicative",
@@ -731,25 +720,26 @@ def test_passage_search_engine_forwards_topic_weight() -> None:
     assert engine.name == "DevVespaPassageSearchEngine"
 
 
-def test_passage_search_engine_omits_topic_inputs_under_a_sort_override() -> None:
+def test_passage_search_engine_omits_topic_inputs_under_a_sort_override(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """Topic ranking should be disabled when sorting by a field is specified."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query="some",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[OrderBy(field="idx", direction="asc")],
-            filters=_topic_filter("Q567"),
-        )
+    engine.search(
+        query="some",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="idx", direction="asc")],
+        filters=_topic_filter("Q567"),
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert request_body["ranking.profile"] == "unranked"
     assert "input.query(topic_q)" not in request_body
     assert "input.query(topic_weight)" not in request_body
@@ -798,7 +788,7 @@ def test_document_get_renders_labels_and_concepts() -> None:
         }
     }
 
-    with patch.object(httpx.AsyncClient, "get", new=AsyncMock(return_value=response)):
+    with patch.object(httpx2.AsyncClient, "get", new=AsyncMock(return_value=response)):
         document = engine.get("doc-0")
 
     assert document is not None
@@ -814,24 +804,25 @@ def test_document_get_renders_labels_and_concepts() -> None:
     assert source_label.document_id is None
 
 
-def test_passage_search_engine_quoted_query_builds_exact_phrase() -> None:
+def test_passage_search_engine_quoted_query_builds_exact_phrase(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """A fully-quoted passage query becomes an in-order phrase on the unstemmed field."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query='"net zero"',
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-        )
+    engine.search(
+        query='"net zero"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     yql = request_body["yql"]
     assert "content_not_stemmed contains" in yql
     assert "{grammar.composite:'phrase'}text(@exact_phrase_0)" in yql
@@ -840,24 +831,25 @@ def test_passage_search_engine_quoted_query_builds_exact_phrase() -> None:
     assert "query" not in request_body
 
 
-def test_passage_search_engine_mixes_free_term_and_phrase() -> None:
+def test_passage_search_engine_mixes_free_term_and_phrase(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """'brazil "net zero"' -> free term via userQuery() AND an exact phrase."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaPassageSearchEngine(settings=settings)
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_response({"root": {"children": []}})
 
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query='brazil "net zero"',
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[],
-        )
+    engine.search(
+        query='brazil "net zero"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+    )
 
-    request_body = mock_execute.call_args.kwargs["request_body"]
+    request_body = handler.last_json()
     assert '{grammar.profile: "passage_analysis_kstem"}userInput(@query)' in request_body["yql"]
     assert "content_not_stemmed contains" in request_body["yql"]
     assert request_body["query"] == "brazil"
@@ -1418,54 +1410,73 @@ _KSTEM_SETTINGS = Settings(
 )
 
 
-def _passage_request_body(engine: DevVespaPassageSearchEngine, order_by: list[OrderBy]) -> dict:
-    with patch.object(
-        passages_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
-    ) as mock_execute:
-        engine.search(
-            query="informal settlements",
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=order_by,
-        )
-    return mock_execute.call_args.kwargs["request_body"]
+def _passage_request_body(
+    engine: DevVespaPassageSearchEngine,
+    order_by: list[OrderBy],
+    handler: MockHandler,
+) -> dict:
+    handler.add_response({"root": {"children": []}})
+    engine.search(
+        query="informal settlements",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=order_by,
+    )
+    return handler.last_json()
 
 
-def test_passage_free_text_names_the_linguistics_profile() -> None:
+def test_passage_free_text_names_the_linguistics_profile(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """A fieldset query stems with Vespa's fallback stemmer unless the profile is named."""
-    body = _passage_request_body(DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS), [])
+    engine = DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS, httpx=http_client)
+    body = _passage_request_body(engine, [], handler)
     assert '{grammar.profile: "passage_analysis_kstem"}userInput(@query)' in body["yql"]
     assert "userQuery()" not in body["yql"]
 
 
-def test_passage_exact_boost_is_on_by_default() -> None:
+def test_passage_exact_boost_is_on_by_default(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """Unquoted terms also score against the unstemmed copy, for ranking only."""
-    body = _passage_request_body(DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS), [])
+    engine = DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS, httpx=http_client)
+    body = _passage_request_body(engine, [], handler)
     assert " and rank(" in body["yql"]
     assert '({defaultIndex: "exact", grammar: "any"}userInput(@query)))' in body["yql"]
     assert body["input.query(exact_weight)"] == 0.1
 
 
-def test_passage_exact_boost_can_be_switched_off() -> None:
-    body = _passage_request_body(
-        DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS, exact_weight=None), []
+def test_passage_exact_boost_can_be_switched_off(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    engine = DevVespaPassageSearchEngine(
+        settings=_KSTEM_SETTINGS, httpx=http_client, exact_weight=None
     )
+    body = _passage_request_body(engine, [], handler)
     assert "rank(" not in body["yql"]
     assert "input.query(exact_weight)" not in body
     assert ' and ({grammar.profile: "passage_analysis_kstem"}userInput(@query))' in body["yql"]
 
 
-def test_passage_exact_weight_is_not_sent_under_a_sort_override() -> None:
+def test_passage_exact_weight_is_not_sent_under_a_sort_override(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
     """The sort profiles don't declare the input, so it is only sent when ranking."""
+    engine = DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS, httpx=http_client)
     body = _passage_request_body(
-        DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS),
+        engine,
         [OrderBy(field="idx", direction="asc")],
+        handler,
     )
     assert "input.query(exact_weight)" not in body
 
 
-def test_negative_exact_weight_raises() -> None:
+def test_negative_exact_weight_raises(http_client: httpx2.AsyncClient) -> None:
     with pytest.raises(ValueError, match="exact_weight"):
-        DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS, exact_weight=-1.0)
+        DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS, httpx=http_client, exact_weight=-1.0)
     with pytest.raises(ValueError, match="exact_weight"):
         DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS, exact_weight=-1.0)
 
@@ -1606,16 +1617,20 @@ _QUERY_YQL = (
 _TOPIC_YQL = 'labels contains sameElement(id contains "concept::Q1")'
 
 
-def _passage_engine() -> DevVespaPassageSearchEngine:
+@pytest.fixture
+def passage_engine(http_client: httpx2.AsyncClient) -> DevVespaPassageSearchEngine:
     return DevVespaPassageSearchEngine(
         settings=Settings(
             vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
             vespa_read_token="test-read-token",  # nosec B106
         ),
+        httpx=http_client,
     )
 
 
-def test_passage_search_and_query_and_filters() -> None:
+def test_passage_search_and_query_and_filters(
+    passage_engine: DevVespaPassageSearchEngine,
+) -> None:
     filters = Filter(
         op="or",
         filters=[
@@ -1627,12 +1642,14 @@ def test_passage_search_and_query_and_filters() -> None:
         ],
     )
 
-    where = _passage_engine()._where_yql("flood", [], filters)
+    where = passage_engine._where_yql("flood", [], filters)
 
     assert where == f"true and {_TOPIC_YQL} and {_QUERY_YQL}"
 
 
-def test_passage_search_within_ors_query_and_filters() -> None:
+def test_passage_search_within_ors_query_and_filters(
+    passage_engine: DevVespaPassageSearchEngine,
+) -> None:
     filters = Filter(
         op="or",
         filters=[
@@ -1644,7 +1661,7 @@ def test_passage_search_within_ors_query_and_filters() -> None:
         ],
     )
 
-    where = _passage_engine()._scoped_where_yql("flood", [], filters)
+    where = passage_engine._scoped_where_yql("flood", [], filters)
 
     assert where == (
         "true"

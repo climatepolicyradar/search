@@ -1,9 +1,10 @@
 """Pytest configuration and shared fixtures."""
 
 import os
-from typing import Generator
+from collections.abc import AsyncGenerator, Generator
 
 import boto3
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from hypothesis import find
@@ -19,6 +20,31 @@ from tests.common_strategies import (
     label_strategy,
     passage_strategy,
 )
+from tests.http import MockHandler
+
+
+@pytest.fixture(scope="function")
+def handler() -> MockHandler:
+    return MockHandler()
+
+@pytest.fixture(scope="function")
+async def http_client(handler: MockHandler) -> AsyncGenerator[httpx2.AsyncClient, None]:
+    transport = httpx2.MockTransport(handler=handler.handle)
+    async with httpx2.AsyncClient(transport=transport) as client:
+        yield client
+
+@pytest.fixture(scope="function")
+def test_client(http_client: httpx2.AsyncClient) -> Generator[TestClient, None]:
+    from api.main import app
+    from api.state import httpx
+
+    try:
+        app.dependency_overrides[httpx] = lambda: http_client
+        with TestClient(app=app, base_url="http://localhost") as client:
+            yield client
+    finally:
+        del app.dependency_overrides[httpx]
+
 
 
 @pytest.fixture(scope="function")
@@ -42,13 +68,6 @@ def ssm_client(mock_aws_creds):
     """Fixture providing a mocked SSM client using moto."""
     with mock_aws():
         yield boto3.client("ssm", region_name="eu-west-1")
-
-
-@pytest.fixture(scope="function")
-def test_client() -> Generator[TestClient, None]:
-    from api.main import app
-    with TestClient(app=app, base_url="http://localhost") as client:
-        yield client
 
 
 _test_data_cache = {}

@@ -6,7 +6,7 @@ import json
 import time
 from typing import Any, Protocol
 
-import httpx
+import httpx2
 from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings
 
@@ -28,7 +28,7 @@ class AsyncPostClient(Protocol):
         json: dict[str, Any],
         timeout: float,
         headers: dict[str, str],
-    ) -> httpx.Response:
+    ) -> httpx2.Response:
         """Send a POST request."""
         ...
 
@@ -134,7 +134,7 @@ async def aexecute_vespa_query(
     started = time.perf_counter()
     try:
         if client is None:
-            async with httpx.AsyncClient() as owned_client:
+            async with httpx2.AsyncClient() as owned_client:
                 response = await owned_client.post(
                     endpoint,
                     json=request_body,

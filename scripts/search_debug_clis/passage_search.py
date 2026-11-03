@@ -1,6 +1,7 @@
 import json
 import re
 
+import httpx2
 import typer
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -113,11 +114,12 @@ def search(
     ),
 ):
     """Search for passages."""
+    httpx_client = httpx2.AsyncClient()
     engine = (
-        DevVespaPassageSearchEngine(settings=settings, debug=debug)
+        DevVespaPassageSearchEngine(settings=settings, httpx=httpx_client, debug=debug)
         if exact_weight is None
         else DevVespaPassageSearchEngine(
-            settings=settings, debug=debug, exact_weight=exact_weight
+            settings=settings, httpx=httpx_client, debug=debug, exact_weight=exact_weight
         )
     )
     results = engine.search(
