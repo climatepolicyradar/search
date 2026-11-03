@@ -14,7 +14,7 @@ from search.engines.dev_vespa.passages_search_engine import (
     _DEFAULT_PASSAGE_RANK_PROFILE,
 )
 
-RankProfile = Literal["nativerank", "bm25_multiplicative", "unranked"]
+RankProfile = Literal["nativerank", "bm25_multiplicative", "unranked", "bm25_topic_boost"]
 
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "

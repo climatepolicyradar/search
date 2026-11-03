@@ -46,7 +46,7 @@ passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
 
 
 _DEFAULT_TOPIC_WEIGHT = 1.0
-_DEFAULT_PASSAGE_RANK_PROFILE = "bm25_multiplicative"
+_DEFAULT_PASSAGE_RANK_PROFILE = "bm25_topic_boost"
 
 
 # `content`'s profile, named on the query. Vespa only applies a field's
