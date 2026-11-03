@@ -1762,7 +1762,10 @@ async def test_labeled_msm_without_filters_is_plain_msm_on_the_text(
     found = sorted(p.text_block_id for p in response.results)
     assert found == ["tb-full"], engine.last_debug_info
 
-def test_non_matching_text_not_bolded(vespa_app: Vespa) -> None:
+async def test_non_matching_text_not_bolded(
+    vespa_app: Vespa,
+    live_http_client: httpx2.AsyncClient,
+) -> None:
     _feed_scoped_corpus(
         vespa_app=vespa_app,
         passages=[
@@ -1771,11 +1774,9 @@ def test_non_matching_text_not_bolded(vespa_app: Vespa) -> None:
         ]
     )
 
-    engine = DevVespaPassageSearchEngine(
-        settings=_TEST_SETTINGS,
-    )
+    engine = DevVespaPassageSearchEngine(_TEST_SETTINGS, httpx=live_http_client)
 
-    response = engine.search_within(
+    response = await engine.asearch_within(
         document_ids=["p-a"],
         filters=_TOPIC_FILTERS,
         query="parametric insurance",

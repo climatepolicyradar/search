@@ -16,7 +16,7 @@ from prefect import get_run_logger, task
 from search.data_in_models import Document
 from search.engines import SearchEngine, VespaError
 from search.identifiers import Identifier, generate_id
-from search.label import Label
+from search.label import Label, LabelSearchResult
 from search.log import get_logger
 from search.passage import Passage
 from search.testcase import TestCase, TestCaseOutcome
@@ -24,7 +24,7 @@ from search.testcase import TestCase, TestCaseOutcome
 logger = get_logger(__name__)
 T = TypeVar("T", bound=BaseModel)
 # Constrained TypeVar matching SearchEngine's TModel
-TModel = TypeVar("TModel", Document, Label, Passage)
+TModel = TypeVar("TModel", Document, Label, LabelSearchResult, Passage)
 console = Console()
 
 

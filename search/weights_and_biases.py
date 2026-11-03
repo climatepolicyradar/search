@@ -138,9 +138,9 @@ class WandbSession:
         }
         run.summary.update(summary_metrics)
 
-        metrics_by_category_table = pd.DataFrame(
+        metrics_by_category_table: pd.DataFrame = pd.DataFrame(
             [{**metrics[cat], "category": cat} for cat in categories]
-        )[["category", "passed", "failed", "errored", "total", "pass_rate"]]
+        ).loc[:, ["category", "passed", "failed", "errored", "total", "pass_rate"]]
 
         test_results_table = pd.DataFrame(
             [
