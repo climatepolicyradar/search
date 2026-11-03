@@ -10,6 +10,7 @@ from relevance.api.models import (
     FieldFilter,
     Filter,
     FilteredSearchRequest,
+    PassagesWithinRequest,
     SearchResponse,
 )
 from relevance.evaluators.evaluator import HasResults
@@ -940,4 +941,55 @@ def run_pair(
                 page_size=50,
             )
         ),
+    )
+
+class PassagesWithinQuery(BaseModel):
+    query: str
+    topics: list[str] = []
+    document_ids: list[str]
+    msm: float = 0.0
+    page_size: int = 20
+    rank_profile: str | None = None
+
+
+within = Dataset[PassagesWithinQuery, SearchResponse[Passage], dict[str, str]](
+    name="passages_within",
+    cases=[],
+)
+
+# FUS-812: within a principal document, a passage tagged with the target topic
+# should outrank an untagged one that only matches the query. `search_within` ORs
+# the query and the topic filter, so both stay candidates and `topic_q` is set.
+
+within.add_case(
+    name="deforestation + target in CCLW.family.9737.0",
+    inputs=PassagesWithinQuery(
+        query="deforestation",
+        topics=["Q1651"],  # target
+        document_ids=["CCLW.family.9737.0"],
+    ),
+    metadata={"category": "topic_concept_conjunction"},
+    evaluators=[
+        RanksAbove(
+            higher="CCLW.executive.9737.rtl_56::89",  # tagged with target
+            lower="CCLW.executive.9737.rtl_56::24",  # untagged
+            k=20,
+        )
+    ],
+)
+
+
+def run_search_within(
+    client: SearchClient,
+    input: PassagesWithinQuery,
+) -> SearchResponse[Passage]:
+    return client.passages_within(
+        PassagesWithinRequest(
+            query=input.query,
+            filters=build_topic_filter(input.topics),
+            document_ids=input.document_ids,
+            msm=input.msm,
+            page_size=input.page_size,
+            rank_profile=input.rank_profile,
+        )
     )
