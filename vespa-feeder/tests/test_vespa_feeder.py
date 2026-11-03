@@ -9,10 +9,15 @@ import tempfile
 from collections.abc import Callable
 from itertools import takewhile
 from pathlib import Path
+from unittest.mock import create_autospec
 
 import orjson
 import pytest
 import vespa_feeder as feeder
+from feeder_metrics import FeederMetrics
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.util._once import Once
 
 
 def _write_jsonl(path: Path, records: list[dict]) -> Path:
@@ -789,6 +794,132 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
     assert list(temp_workspace.iterdir()) == []
 
 
+@pytest.fixture
+def recording_metrics(monkeypatch):
+    """A FeederMetrics stand-in that enforces the real method signatures."""
+    metrics = create_autospec(FeederMetrics, instance=True)
+    monkeypatch.setattr(feeder, "feeder_metrics", metrics)
+    return metrics
+
+
+def test_feed_batch_records_what_it_fed(
+    monkeypatch, temp_workspace, s3_client, s3_bucket, recording_metrics
+):
+    """
+    `records.error` is operation - ok, the only count that means records were lost.
+
+    feeder/throttled/other-HTTP errors are retry attempts that mostly
+    self-heal, so they must not inflate the error metric.
+    """
+    _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
+    monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed())
+
+    feeder.feed_batch.fn(
+        endpoint="http://vespa",
+        application="app",
+        connections=2,
+        feed_timeout_seconds_per_file=300,
+        s3_bucket=s3_bucket,
+        batched_s3_keys=tuple(_BATCH_S3_OBJECTS),
+    )
+
+    recording_metrics.record_feed_stats.assert_called_once_with(
+        input_count=2,
+        ok_count=2,
+        total_errors=0,
+        deployment_name="local",
+        run_name="unknown",
+    )
+
+    # The duration is whatever the clock said, so only its shape is assertable.
+    recording_metrics.record_task_duration.assert_called_once()
+    task_duration = recording_metrics.record_task_duration.call_args.kwargs
+    assert task_duration["task_name"] == "feed_batch"
+    assert task_duration["duration_s"] >= 0
+
+
+def test_feed_batch_records_its_duration_even_when_it_fails(
+    monkeypatch, temp_workspace, s3_client, s3_bucket, recording_metrics
+):
+    """A batch that raises still took time; the timing must not be lost with it."""
+    _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
+
+    # moto serves real objects but has no fault injection, so the download is
+    # failed by hand - the same inline pattern
+    # `test_feed_batch_leaves_nothing_on_disk_when_it_fails` uses.
+    def download_file(bucket: str, key: str, destination: str) -> None:
+        raise RuntimeError("s3 download failed")
+
+    monkeypatch.setattr(s3_client, "download_file", download_file)
+    monkeypatch.setattr(feeder.boto3, "client", lambda _: s3_client)  # noqa: ARG005
+    monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed())
+
+    with pytest.raises(RuntimeError, match="s3 download failed"):
+        feeder.feed_batch.fn(
+            endpoint="http://vespa",
+            application="app",
+            connections=2,
+            feed_timeout_seconds_per_file=300,
+            s3_bucket=s3_bucket,
+            batched_s3_keys=tuple(_BATCH_S3_OBJECTS),
+        )
+
+    recording_metrics.record_feed_stats.assert_not_called()
+    recording_metrics.record_task_duration.assert_called_once()
+    assert (
+        recording_metrics.record_task_duration.call_args.kwargs["task_name"]
+        == "feed_batch"
+    )
+
+
+@pytest.mark.parametrize(
+    ("stdout", "expected_errors"),
+    [
+        pytest.param(
+            _vespa_feed_stdout(operation=2, ok=2, feeder_error_count=3),
+            0,
+            id="retries-that-self-healed-do-not-count-as-lost",
+        ),
+        pytest.param(
+            _vespa_feed_stdout(operation=2, ok=1),
+            1,
+            id="a-record-that-never-landed-counts-as-lost",
+        ),
+    ],
+)
+def test_feed_batch_counts_only_records_that_were_actually_lost(
+    monkeypatch,
+    temp_workspace,
+    s3_client,
+    s3_bucket,
+    recording_metrics,
+    stdout,
+    expected_errors,
+):
+    """
+    `records.error` must track lost records, not retry attempts.
+
+    `feeder_error_count` counts transport-layer retries, which mostly
+    self-heal - counting those would report data loss that never happened.
+    """
+    _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
+    monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed(stdout))
+
+    feeder.feed_batch.fn(
+        endpoint="http://vespa",
+        application="app",
+        connections=2,
+        feed_timeout_seconds_per_file=300,
+        s3_bucket=s3_bucket,
+        batched_s3_keys=tuple(_BATCH_S3_OBJECTS),
+    )
+
+    assert (
+        recording_metrics.record_feed_stats.call_args.kwargs["total_errors"]
+        == expected_errors
+    )
+
+
 def _feed_result(
     name: str, ok: int = 10, errors: list | None = None
 ) -> feeder.FeedResult:
@@ -936,6 +1067,210 @@ def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
     markdown = summary_artifacts[0]["markdown"]
     assert "✅ **All files indexed successfully**" in markdown
     assert "| Batches that raised | 0 |" in markdown
+
+def test_vespa_feeder_records_a_completed_run(
+    monkeypatch, summary_artifacts, recording_metrics
+):
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(_feed_result("two.jsonl")),
+            ]
+        ),
+    )
+
+    feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+    )
+
+    # record_run_duration is called positionally, so read the args the same way.
+    recording_metrics.record_run_duration.assert_called_once()
+    duration_s, deployment_name = recording_metrics.record_run_duration.call_args.args
+    assert duration_s >= 0
+    assert deployment_name == "local"
+
+    recording_metrics.record_run_completed.assert_called_once_with("local", "unknown")
+    recording_metrics.record_run_failed.assert_not_called()
+
+
+def test_vespa_feeder_records_a_failed_run(
+    monkeypatch, summary_artifacts, recording_metrics
+):
+    """A run that loses records is a failed run, not a completed one."""
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [
+                _FakeFuture(
+                    _feed_result(
+                        "one.jsonl",
+                        errors=[
+                            feeder.VespaResponseError(
+                                ok_count=8,
+                                operation_count=10,
+                                throttled_count=0,
+                                other_http_error_count=0,
+                                failed_documents=[],
+                            )
+                        ],
+                    )
+                )
+            ]
+        ),
+    )
+
+    with pytest.raises(feeder.VespaFeederFailed):
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+        )
+
+    recording_metrics.record_run_failed.assert_called_once_with("local", "unknown")
+    recording_metrics.record_run_completed.assert_not_called()
+    recording_metrics.record_run_duration.assert_called_once()
+
+
+def test_vespa_feeder_sets_the_feed_stats_the_slack_hook_reads(
+    monkeypatch, summary_artifacts, recording_metrics
+):
+    """
+    Slack prints `—` unless `set_feed_stats` runs.
+
+    The totals must be the run's, not the last batch's, and must match the
+    numbers in the summary artifact.
+    """
+    captured: list[dict] = []
+    monkeypatch.setattr(
+        feeder,
+        "set_feed_stats",
+        lambda input_count, ok_count, total_errors: captured.append(
+            {
+                "input": input_count,
+                "ok": ok_count,
+                "errors": total_errors,
+            }
+        ),
+    )
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl", ok=10)),
+                _FakeFuture(_feed_result("two.jsonl", ok=5)),
+            ]
+        ),
+    )
+
+    feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+    )
+
+    assert captured == [{"input": 15, "ok": 15, "errors": 0}]
+
+    # The comment in vespa_feeder says these cannot disagree - prove it.
+    markdown = summary_artifacts[0]["markdown"]
+    assert f"| Input records | {captured[0]['input']} |" in markdown
+    assert f"| OK | {captured[0]['ok']} |" in markdown
+
+
+@pytest.fixture
+def telemetry_calls(monkeypatch):
+    """Records the order force_flush and shutdown are called in."""
+    calls: list[str] = []
+    monkeypatch.setattr(feeder, "force_flush", lambda: calls.append("force_flush"))
+    monkeypatch.setattr(feeder, "shutdown", lambda: calls.append("shutdown"))
+    return calls
+
+
+def test_vespa_feeder_flushes_then_shuts_down_telemetry(
+    monkeypatch, summary_artifacts, recording_metrics, telemetry_calls
+):
+    """
+    Order matters.
+
+    force_flush exports metrics and logs with a bounded timeout and a logged
+    warning, then shutdown exports the spans nothing else flushes.
+    """
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder, "feed_batch", _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl"))])
+    )
+
+    feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+    )
+
+    assert telemetry_calls == ["force_flush", "shutdown"]
+
+
+def test_vespa_feeder_closes_the_run_span_before_shutting_telemetry_down(
+    monkeypatch, summary_artifacts, recording_metrics
+):
+    """
+    shutdown() tears the tracer provider down.
+
+    Any span still open when it runs is dropped by the BatchSpanProcessor, so
+    the root vespa_feeder span has to end first. The decorator form held it
+    open across the whole finally, losing the root span on every run; only an
+    explicit `with` closes it before the flush.
+    """
+    # Under test the module tracer is a no-op ProxyTracer, whose spans never
+    # record - so it cannot tell an open span from a closed one. A ProxyTracer
+    # resolves the global provider when the span is started, so installing a
+    # real one makes the run span record whether it came from a decorator or a
+    # `with`.
+    monkeypatch.setattr(trace, "_TRACER_PROVIDER", TracerProvider())
+    monkeypatch.setattr(trace, "_TRACER_PROVIDER_SET_ONCE", Once())
+
+    # Sampled at the moment shutdown runs, not afterwards: the span ends either
+    # way once vespa_feeder returns, so a span object kept for later always
+    # looks closed.
+    recording_at_shutdown: list[bool] = []
+
+    def _record_span_state() -> None:
+        recording_at_shutdown.append(trace.get_current_span().is_recording())
+
+    monkeypatch.setattr(feeder, "force_flush", lambda: None)
+    monkeypatch.setattr(feeder, "shutdown", _record_span_state)
+
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder, "feed_batch", _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl"))])
+    )
+
+    feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+    )
+
+    # No span is still recording when shutdown runs, so the run span has
+    # already ended and cannot be dropped.
+    assert recording_at_shutdown == [False]
+
+
+def test_vespa_feeder_flushes_telemetry_when_the_run_fails(
+    monkeypatch, summary_artifacts, recording_metrics, telemetry_calls
+):
+    """A failed run is exactly when the metrics matter most."""
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch([_FakeFuture(RuntimeError("HeadObject: Not Found"))]),
+    )
+
+    with pytest.raises(feeder.VespaFeederFailed):
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+        )
+
+    assert telemetry_calls == ["force_flush", "shutdown"]
 
 
 @pytest.mark.parametrize(
