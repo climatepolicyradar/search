@@ -297,13 +297,6 @@ ngo_civil_society = Label(
     type="author_type",
     labels=[LabelRelationship(type="subconcept_of", value=report)],
 )
-other = Label(
-    id="author_type::Other",
-    value="Other",
-    type="author_type",
-    labels=[LabelRelationship(type="subconcept_of", value=report)],
-)
-
 
 # region global stocktake
 global_stocktake = Label(
@@ -508,7 +501,6 @@ labels_taxonomy = [
     corporate,
     industry_body,
     ngo_civil_society,
-    other,
     un_submission,
     unfccc,
     nationally_determined_contribution,
