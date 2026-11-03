@@ -11,7 +11,7 @@ from search.engines.dev_vespa import (
     DevVespaPassageSearchEngine,
 )
 from search.engines.dev_vespa.passages_search_engine import (
-    _DEFAULT_PASSAGE_RANK_PROFILE,
+    DEFAULT_PASSAGE_RANK_PROFILE,
 )
 
 RankProfile = Literal["nativerank", "bm25_multiplicative", "unranked", "bm25_topic_boost"]
@@ -157,7 +157,7 @@ def passages_engine(
         rank_profile: RankProfileQueryDep = None
         ) -> DevVespaPassageSearchEngine:
     return DevVespaPassageSearchEngine(
-        ranking_profile=rank_profile or _DEFAULT_PASSAGE_RANK_PROFILE,
+        ranking_profile=rank_profile or DEFAULT_PASSAGE_RANK_PROFILE,
         settings=settings,
         httpx=httpx
     )
