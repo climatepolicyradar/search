@@ -17,13 +17,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from api.utils import passages_engine
+from api.utils import labels_engine, passages_engine
 from search.engines import ListResponse, VespaError
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client():
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture
@@ -52,12 +53,12 @@ def passage_engine():
 
 @pytest.fixture
 def label_engine():
-    with patch("api.routers.DevVespaLabelSearchEngine") as mock_engine_cls:
-        mock_engine = MagicMock()
-        mock_engine.last_debug_info = None
-        mock_engine.asearch = AsyncMock()
-        mock_engine_cls.return_value = mock_engine
-        yield mock_engine
+    mock_engine = MagicMock()
+    mock_engine.last_debug_info = None
+    mock_engine.asearch = AsyncMock()
+    app.dependency_overrides[labels_engine] = lambda: mock_engine
+    yield mock_engine
+    del app.dependency_overrides[labels_engine]
 
 
 def _assert_unavailable(response) -> None:

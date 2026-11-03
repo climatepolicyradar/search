@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import httpx2
 from pydantic import ValidationError
 
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
@@ -39,7 +40,10 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
 
     model_class = LabelSearchResult
 
-    def __init__(self, settings: Settings, debug: bool = False) -> None:
+    def __init__(
+        self, settings: Settings, httpx: httpx2.AsyncClient, debug: bool = False
+    ) -> None:
+        self._httpx = httpx
         self.debug = debug
         self.last_debug_info: list[dict[str, Any]] = []
         self.settings = settings
@@ -114,6 +118,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
             token=self.settings.vespa_read_token,
             request_body=request_body,
             request_context="labels.search",
+            client=self._httpx,
         )
         labels: list[LabelSearchResult] = []
         debug_info: list[dict[str, Any]] = []

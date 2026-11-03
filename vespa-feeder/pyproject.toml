@@ -27,3 +27,12 @@ build-backend = "setuptools.build_meta"
 # them inline.
 [tool.setuptools]
 packages = []
+
+# `packages = []` above means nothing here is installed as a package, so the
+# modules under test are importable by path alone. `pythonpath` keeps this
+# directory on sys.path so `import vespa_feeder` still resolves from tests/.
+# Declaring any pytest config here also makes this directory pytest's rootdir,
+# rather than it falling through to the repo root's pyproject.toml.
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

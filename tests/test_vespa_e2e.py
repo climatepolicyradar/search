@@ -18,6 +18,7 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx2
 import pytest
 import requests as req
 from cpr_contracts import Document, DocumentLabelRelationship, Label
@@ -172,9 +173,11 @@ def _feed_document_with_id(app: Vespa, document: Document) -> None:
     r.raise_for_status()
 
 
-def _ids(filter_: Filter, query: str | None = None) -> set[str]:
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    docs = engine.search(
+async def _ids(
+    httpx_client: httpx2.AsyncClient, filter_: Filter, query: str | None = None
+) -> set[str]:
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=httpx_client)
+    docs = await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -194,7 +197,7 @@ def _principal_label() -> DocumentLabelRelationship:
 
 
 # region Attributes
-def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa):
+async def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     document_before_range = DocumentFactory.build(
         attributes={"published_date": "2019-12-31T23:59:59Z"},
         labels=[],
@@ -217,12 +220,12 @@ def test_attribute_published_date_gte_filters_from_datetime(vespa_app: Vespa):
             )
         ],
     )
-    ids = _ids(f)
+    ids = await _ids(live_http_client, f)
     assert document_before_range.id not in ids
     assert document_in_range.id in ids
 
 
-def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa):
+async def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     document_before_range = DocumentFactory.build(
         attributes={"published_date": "2017-06-01T00:00:00Z"},
         labels=[],
@@ -256,7 +259,7 @@ def test_attribute_published_date_range_filters_inclusive(vespa_app: Vespa):
             ),
         ],
     )
-    ids = _ids(f)
+    ids = await _ids(live_http_client, f)
     assert document_before_range.id not in ids
     assert document_in_range.id in ids
     assert document_after_range.id not in ids
@@ -299,8 +302,11 @@ def _feed_published_date_boundary_docs(vespa_app: Vespa) -> dict[str, Document]:
         ("gte", {"year_start", "year_end", "after_year"}),
     ],
 )
-def test_attribute_published_date_year_operator_boundaries(
-    vespa_app: Vespa, op: str, expected_keys: set[str]
+async def test_attribute_published_date_year_operator_boundaries(
+    vespa_app: Vespa,
+    op: str,
+    expected_keys: set[str],
+    live_http_client: httpx2.AsyncClient,
 ):
     docs = _feed_published_date_boundary_docs(vespa_app)
     op_values = {
@@ -320,13 +326,14 @@ def test_attribute_published_date_year_operator_boundaries(
             )
         ],
     )
-    ids = _ids(f)
+    ids = await _ids(live_http_client, f)
     expected_ids = {docs[key].id for key in expected_keys}
     assert ids == expected_ids
 
 
-def test_attribute_published_date_eq_datetime_matches_exact_timestamp(
+async def test_attribute_published_date_eq_datetime_matches_exact_timestamp(
     vespa_app: Vespa,
+    live_http_client: httpx2.AsyncClient,
 ):
     docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
@@ -340,11 +347,11 @@ def test_attribute_published_date_eq_datetime_matches_exact_timestamp(
             )
         ],
     )
-    ids = _ids(f)
+    ids = await _ids(live_http_client, f)
     assert ids == {docs["year_end"].id}
 
 
-def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vespa):
+async def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
         op="and",
@@ -357,11 +364,11 @@ def test_attribute_published_date_eq_iso_matches_exact_timestamp(vespa_app: Vesp
             )
         ],
     )
-    ids = _ids(f)
+    ids = await _ids(live_http_client, f)
     assert ids == {docs["year_start"].id}
 
 
-def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Vespa):
+async def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     docs = _feed_published_date_boundary_docs(vespa_app)
     f = Filter(
         op="and",
@@ -374,7 +381,7 @@ def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Ves
             )
         ],
     )
-    ids = _ids(f)
+    ids = await _ids(live_http_client, f)
     assert docs["year_start"].id not in ids
     assert docs["before_year"].id in ids
     assert docs["year_end"].id in ids
@@ -406,7 +413,7 @@ def test_attribute_published_date_not_eq_excludes_exact_timestamp(vespa_app: Ves
         ("not_contains", False, True),
     ],
 )
-def test_field_filter_attribute(
+async def test_field_filter_attribute(
     vespa_app: Vespa,
     filter_field: str,
     filter_value: str | float | bool,
@@ -415,6 +422,7 @@ def test_field_filter_attribute(
     op: Literal["contains", "not_contains"],
     match_in: bool,
     non_match_in: bool,
+    live_http_client: httpx2.AsyncClient,
 ):
     doc_matching = DocumentFactory.build(attributes=matching_attrs, labels=[])
     doc_non_matching = DocumentFactory.build(attributes=non_matching_attrs, labels=[])
@@ -425,12 +433,12 @@ def test_field_filter_attribute(
         op="and",
         filters=[FieldFilter(field=filter_field, op=op, value=filter_value)],
     )
-    ids = _ids(f)
+    ids = await _ids(live_http_client, f)
     assert (doc_matching.id in ids) == match_in
     assert (doc_non_matching.id in ids) == non_match_in
 
 
-def test_field_filter_id_selects_exact_documents(vespa_app: Vespa):
+async def test_field_filter_id_selects_exact_documents(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """An OR of `id` conditions fetches a known set of documents in one query."""
     expected_ids = [
         "UNFCCC.non-party.283.0",
@@ -460,7 +468,7 @@ def test_field_filter_id_selects_exact_documents(vespa_app: Vespa):
             )
         ],
     )
-    assert _ids(f) == set(expected_ids)
+    assert await _ids(live_http_client, f) == set(expected_ids)
 
 
 def _first_production_text(rhs: str) -> str:
@@ -511,8 +519,12 @@ def _document_rewrite_rule_cases() -> list[tuple[str, str, str]]:
 @pytest.mark.parametrize(
     ("case_id", "query", "rewrite_text"), _document_rewrite_rule_cases()
 )
-def test_document_rewrite_rule_does_not_bypass_filters(
-    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+async def test_document_rewrite_rule_does_not_bypass_filters(
+    vespa_app: Vespa,
+    case_id: str,
+    query: str,
+    rewrite_text: str,
+    live_http_client: httpx2.AsyncClient,
 ):
     """A rewrite rule's production must never let a filtered document search return a document outside the filter."""
 
@@ -535,7 +547,7 @@ def test_document_rewrite_rule_does_not_bypass_filters(
         op="and",
         filters=[FieldFilter(field="id", op="contains", value=doc_inside_id)],
     )
-    ids = _ids(f, query=query)
+    ids = await _ids(live_http_client, f, query=query)
 
     assert ids == set(), (
         f"query {query!r} with an id filter returned a document outside the "
@@ -546,8 +558,12 @@ def test_document_rewrite_rule_does_not_bypass_filters(
 @pytest.mark.parametrize(
     ("case_id", "query", "rewrite_text"), _document_rewrite_rule_cases()
 )
-def test_document_rewrite_rule_highlights_what_it_matched(
-    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+async def test_document_rewrite_rule_highlights_what_it_matched(
+    vespa_app: Vespa,
+    case_id: str,
+    query: str,
+    rewrite_text: str,
+    live_http_client: httpx2.AsyncClient,
 ):
     """A title and description matched through a rule's production highlight every word of it (FUS-847)."""
     doc_id = f"e2e-rewrite-highlight-{case_id}"
@@ -558,15 +574,15 @@ def test_document_rewrite_rule_highlights_what_it_matched(
         ),
     )
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, bolding=True)
+    results = (await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
         filters=Filter(
             op="and", filters=[FieldFilter(field="id", op="contains", value=doc_id)]
         ),
-    ).results
+    )).results
 
     highlighted = " ".join(f"<hi>{word}</hi>" for word in rewrite_text.split())
     assert [(d.title, d.description) for d in results] == [
@@ -574,8 +590,9 @@ def test_document_rewrite_rule_highlights_what_it_matched(
     ], f"{query!r} matched {rewrite_text!r} but did not highlight all of it"
 
 
-def test_principal_search_rewrite_rule_does_not_bypass_status_filter(
+async def test_principal_search_rewrite_rule_does_not_bypass_status_filter(
     vespa_app: Vespa,
+    live_http_client: httpx2.AsyncClient,
 ):
     """A rewrite rule must never let principal search return a non-principal document."""
 
@@ -592,12 +609,12 @@ def test_principal_search_rewrite_rule_does_not_bypass_status_filter(
     _feed_document_with_id(vespa_app, doc_principal)
     _feed_document_with_id(vespa_app, doc_non_principal)
 
-    engine = DevVespaPrincipalDocumentSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaPrincipalDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query="law",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     ids = {d.id for d in results}
 
     assert doc_non_principal.id not in ids, (
@@ -633,7 +650,7 @@ def _flatten_tokens(token_field: Any) -> list[str]:
     return flat
 
 
-def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
+async def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """Title uses passage_analysis_kstem profile: stop words removed + KStem stemming."""
     doc = DocumentFactory.build(
         title="Adapting informal settlements is beautiful",
@@ -642,12 +659,12 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, debug=True)
+    results = (await engine.asearch(
         query="adapting",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     assert len(results) >= 1, f"Expected results, got: {results}"
 
     debug = engine.last_debug_info[0]
@@ -659,7 +676,7 @@ def test_linguistics_title_tokens_are_stemmed(vespa_app: Vespa):
     assert "is" not in values, f"Stop word 'is' should be removed, got: {values}"
 
 
-def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
+async def test_linguistics_title_synonym_expansion(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     Test title acronym query rewrites from semantic rules (documents.sr).
 
@@ -680,12 +697,12 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     _feed_document(vespa_app, doc_with_full_forms)
     _feed_document(vespa_app, doc_without_match)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, debug=True)
+    results = (await engine.asearch(
         query="fca rules tcfd",
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     result_ids = {doc.id for doc in results}
 
     assert doc_with_full_forms.id in result_ids, (
@@ -697,7 +714,7 @@ def test_linguistics_title_synonym_expansion(vespa_app: Vespa):
     )
 
 
-def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa):
+async def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     "<acronym><ordinal>" title tokens are also indexed as the bare acronym.
 
@@ -719,22 +736,24 @@ def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa):
     _feed_document(vespa_app, doc)
     _feed_document(vespa_app, unrelated)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, debug=True)
 
-    def search_ids(query: str) -> set[str]:
+    async def search_ids(query: str) -> set[str]:
         return {
             d.id
-            for d in engine.search(
-                query=query,
-                pagination=Pagination(page_token=1, page_size=50),
-                order_by=[OrderBy(field="relevance", direction="desc")],
+            for d in (
+                await engine.asearch(
+                    query=query,
+                    pagination=Pagination(page_token=1, page_size=50),
+                    order_by=[OrderBy(field="relevance", direction="desc")],
+                )
             ).results
         }
 
-    assert doc.id in search_ids("BTR"), "Searching 'BTR' should match a 'BTR1' title"
-    assert doc.id in search_ids("BTR1"), "Searching 'BTR1' should still match"
+    assert doc.id in await search_ids("BTR"), "Searching 'BTR' should match a 'BTR1' title"
+    assert doc.id in await search_ids("BTR1"), "Searching 'BTR1' should still match"
 
-    assert unrelated.id not in search_ids("BTR")
+    assert unrelated.id not in await search_ids("BTR")
 
     values = _flatten_tokens(engine.last_debug_info[0].get("title_tokens"))
     assert "btr" in values, f"Expected split token 'btr' in title tokens, got: {values}"
@@ -745,7 +764,7 @@ def test_linguistics_acronym_ordinal_splits(vespa_app: Vespa):
     assert "1" not in values, f"Ordinal '1' should not be indexed alone, got: {values}"
 
 
-def test_linguistics_acronym_split_keeps_formula_queries_exact(vespa_app: Vespa):
+async def test_linguistics_acronym_split_keeps_formula_queries_exact(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     Splitting "CO2" into `co` + `co2` must not make the two interchangeable.
 
@@ -763,33 +782,35 @@ def test_linguistics_acronym_split_keeps_formula_queries_exact(vespa_app: Vespa)
     _feed_document(vespa_app, co2_doc)
     _feed_document(vespa_app, co_doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
 
-    def search_ids(query: str) -> set[str]:
+    async def search_ids(query: str) -> set[str]:
         return {
             d.id
-            for d in engine.search(
-                query=query,
-                pagination=Pagination(page_token=1, page_size=50),
-                order_by=[OrderBy(field="relevance", direction="desc")],
+            for d in (
+                await engine.asearch(
+                    query=query,
+                    pagination=Pagination(page_token=1, page_size=50),
+                    order_by=[OrderBy(field="relevance", direction="desc")],
+                )
             ).results
         }
 
-    co2_hits = search_ids("CO2")
+    co2_hits = await search_ids("CO2")
     assert co2_doc.id in co2_hits
     assert co_doc.id not in co2_hits, (
         "Searching 'CO2' must not match a bare 'CO' title - the split is one-way"
     )
 
     # Documented, accepted side effect: the reverse direction does over-match.
-    assert {co2_doc.id, co_doc.id} <= search_ids("CO")
+    assert {co2_doc.id, co_doc.id} <= await search_ids("CO")
 
 
 # endregion Linguistics
 
 
 # region Document sorting (API JSON paths via Vespa ranking.sorting)
-def test_document_sort_title_sort_asc(vespa_app: Vespa):
+async def test_document_sort_title_sort_asc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_z = DocumentFactory.build(title="Zebra memo", labels=[])
     doc_a = DocumentFactory.build(title="Apple brief", labels=[])
     doc_m = DocumentFactory.build(title="Magpie brief", labels=[])
@@ -805,12 +826,12 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
     _feed_document(vespa_app, doc_f)
     _feed_document_without_title(vespa_app, doc_missing)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="title", direction="asc")],
-    ).results
+    )).results
 
     assert [d.title for d in results[:4]] == [
         "Apple brief",
@@ -821,7 +842,7 @@ def test_document_sort_title_sort_asc(vespa_app: Vespa):
     assert results[-1].id == "e2e-title-missing-asc"
 
 
-def test_document_sort_title_sort_desc(vespa_app: Vespa):
+async def test_document_sort_title_sort_desc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_z = DocumentFactory.build(title="Zebra memo", labels=[])
     doc_a = DocumentFactory.build(title="Apple brief", labels=[])
     doc_m = DocumentFactory.build(title="Magpie brief", labels=[])
@@ -837,12 +858,12 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
     _feed_document(vespa_app, doc_f)
     _feed_document_without_title(vespa_app, doc_missing)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="title", direction="desc")],
-    ).results
+    )).results
 
     assert [d.title for d in results[:4]] == [
         "Zebra memo",
@@ -853,7 +874,7 @@ def test_document_sort_title_sort_desc(vespa_app: Vespa):
     assert results[-1].id == "e2e-title-missing-desc"
 
 
-def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
+async def test_document_sort_published_timestamp_desc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_old = DocumentFactory.build(
         title="Old",
         labels=[],
@@ -885,12 +906,12 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
     _feed_document(vespa_app, doc_newest)
     _feed_document(vespa_app, doc_undated)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="attributes.published_date", direction="desc")],
-    ).results
+    )).results
 
     assert [d.title for d in results] == [
         "Newest",
@@ -901,7 +922,7 @@ def test_document_sort_published_timestamp_desc(vespa_app: Vespa):
     ]
 
 
-def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
+async def test_document_sort_published_timestamp_asc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_old = DocumentFactory.build(
         title="Old",
         labels=[],
@@ -933,12 +954,12 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
     _feed_document(vespa_app, doc_newest)
     _feed_document(vespa_app, doc_undated)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="attributes.published_date", direction="asc")],
-    ).results
+    )).results
 
     assert [d.title for d in results] == [
         "Oldest",
@@ -949,7 +970,7 @@ def test_document_sort_published_timestamp_asc(vespa_app: Vespa):
     ]
 
 
-def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
+async def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     First A-Z title and first Z-A title should not always be the same first row.
 
@@ -1001,17 +1022,17 @@ def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
     for doc in (doc_m, doc_z, doc_a, doc_y, doc_b):
         _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    asc = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    asc = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="title", direction="asc")],
-    ).results
-    desc = engine.search(
+    )).results
+    desc = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="title", direction="desc")],
-    ).results
+    )).results
     assert [d.title for d in asc[:5]] == expected_asc_titles
     assert [d.title for d in desc[:5]] == expected_desc_titles
     assert asc[0].id == doc_a.id, asc
@@ -1019,8 +1040,9 @@ def test_document_sort_title_asc_and_desc_first_hit_differ(vespa_app: Vespa):
     assert asc[0].id != desc[0].id
 
 
-def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
+async def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
     vespa_app: Vespa,
+    live_http_client: httpx2.AsyncClient,
 ):
     """
     Newest-by-date and first A-Z title should not always be the same first row.
@@ -1078,17 +1100,17 @@ def test_document_sort_date_desc_leader_differs_from_title_asc_leader(
     for doc in (doc_newer_z, doc_ancient, doc_older_a, doc_newest_banana, doc_mid):
         _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    by_date = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    by_date = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="attributes.published_date", direction="desc")],
-    ).results
-    by_title = engine.search(
+    )).results
+    by_title = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="title", direction="asc")],
-    ).results
+    )).results
     assert [d.title for d in by_date[:5]] == expected_date_desc
     assert [d.title for d in by_title[:5]] == expected_title_asc
     assert by_date[0].id == doc_newest_banana.id, by_date
@@ -1135,20 +1157,22 @@ def _feed_concept_counts(
     r.raise_for_status()
 
 
-def _topic_ranked_titles(topic_weight: float) -> list[str]:
+async def _topic_ranked_titles(
+    httpx_client: httpx2.AsyncClient, topic_weight: float
+) -> list[str]:
     engine = DevVespaDocumentSearchEngine(
-        settings=_TEST_SETTINGS, topic_weight=topic_weight
+        settings=_TEST_SETTINGS, httpx=httpx_client, topic_weight=topic_weight
     )
-    results = engine.search(
+    results = (await engine.asearch(
         query="climate finance",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
         filters=_TOPIC_FILTER,
-    ).results
+    )).results
     return [d.title for d in results]
 
 
-def test_topic_filter_reorders_documents_by_mention_count(vespa_app: Vespa):
+async def test_topic_filter_reorders_documents_by_mention_count(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     A filtered-for topic promotes the document that discusses it most.
 
@@ -1168,13 +1192,13 @@ def test_topic_filter_reorders_documents_by_mention_count(vespa_app: Vespa):
     _feed_concept_counts(vespa_app, doc_light, {_TOPIC_ID: 1})
     _feed_concept_counts(vespa_app, doc_heavy, {_TOPIC_ID: 200})
 
-    assert _topic_ranked_titles(topic_weight=1.0) == [
+    assert await _topic_ranked_titles(live_http_client, topic_weight=1.0) == [
         "Heavy mention",
         "Climate finance passing mention",
     ]
 
 
-def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
+async def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """``topic_weight=0.0`` switches topic ranking off, restoring text-only order."""
     doc_light = DocumentFactory.build(
         title="Climate finance passing mention",
@@ -1189,7 +1213,7 @@ def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
     _feed_concept_counts(vespa_app, doc_light, {_TOPIC_ID: 1})
     _feed_concept_counts(vespa_app, doc_heavy, {_TOPIC_ID: 200})
 
-    assert _topic_ranked_titles(topic_weight=0.0) == [
+    assert await _topic_ranked_titles(live_http_client, topic_weight=0.0) == [
         "Climate finance passing mention",
         "Heavy mention",
     ]
@@ -1199,18 +1223,18 @@ def test_topic_weight_zero_leaves_text_ranking_untouched(vespa_app: Vespa):
 
 
 # region single Document retrieval
-def test_get_returns_document_by_id(vespa_app: Vespa):
+async def test_get_returns_document_by_id(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc = DocumentFactory.build(title="Climate Policy", labels=[])
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.get(doc.id)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.aget(doc.id)
 
     assert result is not None
     assert result.id == doc.id
 
 
-def test_get_renders_concepts_as_labels(vespa_app: Vespa):
+async def test_get_renders_concepts_as_labels(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     ``get`` renders a document like a search hit, concepts included.
 
@@ -1221,8 +1245,8 @@ def test_get_renders_concepts_as_labels(vespa_app: Vespa):
     _feed_document(vespa_app, doc)
     _feed_concept_counts(vespa_app, doc, {_TOPIC_ID: 7})
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.get(doc.id)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.aget(doc.id)
 
     assert result is not None
     concepts = [label for label in result.labels if label.type == "concept"]
@@ -1231,23 +1255,23 @@ def test_get_renders_concepts_as_labels(vespa_app: Vespa):
     ]
 
 
-def test_get_returns_none_for_missing_id():
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    result = engine.get("does-not-exist")
+async def test_get_returns_none_for_missing_id(live_http_client: httpx2.AsyncClient):
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    result = await engine.aget("does-not-exist")
     assert result is None
 
 
-def test_get_raises_vespa_error_when_unreachable():
+async def test_get_raises_vespa_error_when_unreachable(live_http_client: httpx2.AsyncClient):
     bad_settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:19999"),
         vespa_read_token="",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=bad_settings)
+    engine = DevVespaDocumentSearchEngine(settings=bad_settings, httpx=live_http_client)
     with pytest.raises(VespaError):
-        engine.get("any-id")
+        await engine.aget("any-id")
 
 
-def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_app: Vespa):
+async def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """A fully-quoted document query phrase-matches title and description; order matters."""
     doc_title = DocumentFactory.build(
         id="doc-just-title",
@@ -1270,14 +1294,14 @@ def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_ap
     for d in (doc_title, doc_desc, doc_reordered):
         _feed_document(vespa_app, d)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
     ids = {
         d.id
-        for d in engine.search(
+        for d in (await engine.asearch(
             query='"just transition"',
             pagination=Pagination(page_token=1, page_size=50),
             order_by=[OrderBy(field="relevance", direction="desc")],
-        ).results
+        )).results
     }
 
     assert "doc-just-title" in ids, f"phrase in title must match, got: {ids}"
@@ -1285,7 +1309,7 @@ def test_quoted_document_search_matches_phrase_in_title_and_description(vespa_ap
     assert "doc-reordered" not in ids, f"out-of-order phrase must not match, got: {ids}"
 
 
-def test_quoted_document_search_bolds_only_the_literal_word(vespa_app: Vespa):
+async def test_quoted_document_search_bolds_only_the_literal_word(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     A quoted word is bolded only where it occurs literally, not on longer words it prefixes.
 
@@ -1302,12 +1326,12 @@ def test_quoted_document_search_bolds_only_the_literal_word(vespa_app: Vespa):
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
-    quoted = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, bolding=True)
+    quoted = (await engine.asearch(
         query='"forest"',
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
 
     assert [d.id for d in quoted] == ["doc-qprefix"]
     assert "<hi>Forest</hi>" in quoted[0].title
@@ -1316,11 +1340,11 @@ def test_quoted_document_search_bolds_only_the_literal_word(vespa_app: Vespa):
     assert "<hi>forests</hi>" not in (quoted[0].description or "")
 
     # Unquoted search is stemmed, so "forests" is a real match and stays bolded.
-    unquoted = engine.search(
+    unquoted = (await engine.asearch(
         query="forest",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     assert "<hi>forests</hi>" in (unquoted[0].description or "")
 
 
@@ -1344,8 +1368,11 @@ _LONG_TEXT = (
         pytest.param("forest", ["forest", "forests", "forestry"], id="unquoted"),
     ],
 )
-def test_document_bolding_keeps_long_text_whole(
-    vespa_app: Vespa, query: str, bolded: list[str]
+async def test_document_bolding_keeps_long_text_whole(
+    vespa_app: Vespa,
+    query: str,
+    bolded: list[str],
+    live_http_client: httpx2.AsyncClient,
 ):
     """
     Bolding only marks the matched words; it never changes or shortens the text.
@@ -1359,29 +1386,31 @@ def test_document_bolding_keeps_long_text_whole(
     )
     _feed_document_with_id(vespa_app, doc)
 
-    def description(bolding: bool) -> str:
-        results = DevVespaDocumentSearchEngine(
-            settings=_TEST_SETTINGS, bolding=bolding
-        ).search(
-            query=query,
-            pagination=Pagination(page_token=1, page_size=10),
-            order_by=[OrderBy(field="relevance", direction="desc")],
-            filters=Filter(
-                op="and",
-                filters=[FieldFilter(field="id", op="contains", value=doc.id)],
-            ),
+    async def description(bolding: bool) -> str:
+        results = (
+            await DevVespaDocumentSearchEngine(
+                settings=_TEST_SETTINGS, httpx=live_http_client, bolding=bolding
+            ).asearch(
+                query=query,
+                pagination=Pagination(page_token=1, page_size=10),
+                order_by=[OrderBy(field="relevance", direction="desc")],
+                filters=Filter(
+                    op="and",
+                    filters=[FieldFilter(field="id", op="contains", value=doc.id)],
+                ),
+            )
         ).results
         assert [d.id for d in results] == [doc.id]
         return results[0].description or ""
 
-    with_bolding = bolding_to_labels(description(bolding=True))
+    with_bolding = bolding_to_labels(await description(bolding=True))
 
     assert with_bolding.text == _LONG_TEXT
-    assert description(bolding=False) == _LONG_TEXT
+    assert await description(bolding=False) == _LONG_TEXT
     assert [b.labelled_text for b in with_bolding.boldings] == bolded
 
 
-def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):
+async def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """`"$100"` matches a $100 title but not $1000 (exact_analysis currency charFilters)."""
     doc_100 = DocumentFactory.build(
         id="doc-100", title="Grant of $100 approved", description="d", labels=[]
@@ -1392,21 +1421,21 @@ def test_quoted_document_search_preserves_currency_symbols(vespa_app: Vespa):
     _feed_document(vespa_app, doc_100)
     _feed_document(vespa_app, doc_1000)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
     ids = {
         d.id
-        for d in engine.search(
+        for d in (await engine.asearch(
             query='"$100"',
             pagination=Pagination(page_token=1, page_size=50),
             order_by=[OrderBy(field="relevance", direction="desc")],
-        ).results
+        )).results
     }
 
     assert "doc-100" in ids, f"quoted $100 must match the $100 title, got: {ids}"
     assert "doc-1000" not in ids, f"quoted $100 must not match $1000, got: {ids}"
 
 
-def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa):
+async def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """An unquoted query still stems and goes through userQuery()."""
     doc = DocumentFactory.build(
         id="doc-plain",
@@ -1416,14 +1445,14 @@ def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa)
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
     ids = {
         d.id
-        for d in engine.search(
+        for d in (await engine.asearch(
             query="national strategies",  # plural, unquoted -> must still stem
             pagination=Pagination(page_token=1, page_size=50),
             order_by=[OrderBy(field="relevance", direction="desc")],
-        ).results
+        )).results
     }
 
     assert "doc-plain" in ids, f"unquoted queries must still stem, got: {ids}"
@@ -1431,7 +1460,7 @@ def test_unquoted_document_search_is_unaffected_by_exact_field(vespa_app: Vespa)
 
 
 
-def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
+async def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """Partial quoted spans can be combined with unquoted ones"""
     docs = [
         DocumentFactory.build(
@@ -1462,14 +1491,14 @@ def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
     for d in docs:
         _feed_document(vespa_app, d)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
     ids = {
         d.id
-        for d in engine.search(
+        for d in (await engine.asearch(
             query='peatlands "blue carbon"',
             pagination=Pagination(page_token=1, page_size=50),
             order_by=[OrderBy(field="relevance", direction="desc")],
-        ).results
+        )).results
     }
 
     assert "doc-mix-both" in ids, f"free term + phrase must match, got: {ids}"
@@ -1478,7 +1507,7 @@ def test_mixed_quoted_and_unquoted_document_search(vespa_app: Vespa):
     assert "doc-mix-inflected" not in ids, f"quoted part must stay literal, got: {ids}"
 
 
-def test_quoted_document_search_bolds_phrase_in_title_and_description(vespa_app: Vespa):
+async def test_quoted_document_search_bolds_phrase_in_title_and_description(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     A quoted phrase is bolded in title and description, alongside the free text.
 
@@ -1494,22 +1523,22 @@ def test_quoted_document_search_bolds_phrase_in_title_and_description(vespa_app:
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, bolding=True)
+    results = (await engine.asearch(
         query='"just transition"',
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
 
     assert [d.id for d in results] == ["doc-qbold"]
     assert "<hi>just</hi> <hi>transition</hi>" in results[0].title
     assert "<hi>just</hi> <hi>transition</hi>" in (results[0].description or "")
 
-    mixed = engine.search(
+    mixed = (await engine.asearch(
         query='framework "just transition"',
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     assert mixed[0].title == "A <hi>just</hi> <hi>transition</hi> <hi>framework</hi>"
 
 
@@ -1573,7 +1602,9 @@ def _feed_document_with_passages(app: Vespa) -> Document:
 
 
 @pytest.mark.parametrize("bolding", [False, True])
-def test_search_hits_carry_no_passages(vespa_app: Vespa, bolding: bool):
+async def test_search_hits_carry_no_passages(
+    vespa_app: Vespa, bolding: bool, live_http_client: httpx2.AsyncClient
+):
     """
     Document hits never carry passages, with or without bolding.
 
@@ -1583,8 +1614,8 @@ def test_search_hits_carry_no_passages(vespa_app: Vespa, bolding: bool):
     """
     _feed_document_with_passages(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=bolding)
-    result = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, bolding=bolding)
+    result = await engine.asearch(
         query="flood", pagination=Pagination(page_token=1, page_size=10), order_by=[]
     )
 
@@ -1679,29 +1710,31 @@ def _msm_corpus(app: Vespa) -> dict[str, str]:
     }
 
 
-def _msm_search(msm: float):
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=msm)
-    return engine.search(
+async def _msm_search(httpx_client: httpx2.AsyncClient, msm: float):
+    engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS, httpx=httpx_client, msm=msm
+    )
+    return await engine.asearch(
         query="parametric insurance",
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
     )
 
 
-def _msm_hit_ids(msm: float) -> set[str]:
-    return {d.id for d in _msm_search(msm).results}
+async def _msm_hit_ids(httpx_client: httpx2.AsyncClient, msm: float) -> set[str]:
+    return {d.id for d in (await _msm_search(httpx_client, msm)).results}
 
 
-def test_msm_off_returns_every_partial_match(vespa_app: Vespa):
+async def test_msm_off_returns_every_partial_match(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """`msm=0` is today's behaviour: one term out of two is enough."""
     ids = _msm_corpus(vespa_app)
 
-    hits = _msm_hit_ids(0.0)
+    hits = await _msm_hit_ids(live_http_client, 0.0)
 
     assert set(ids.values()) <= hits
 
 
-def test_msm_drops_documents_whose_terms_never_co_occur(vespa_app: Vespa):
+async def test_msm_drops_documents_whose_terms_never_co_occur(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     The point of the feature.
 
@@ -1711,7 +1744,7 @@ def test_msm_drops_documents_whose_terms_never_co_occur(vespa_app: Vespa):
     """
     ids = _msm_corpus(vespa_app)
 
-    hits = _msm_hit_ids(0.6)
+    hits = await _msm_hit_ids(live_http_client, 0.6)
 
     assert ids["title"] in hits, "both terms in the title must survive"
     assert ids["passage"] in hits, "both terms in one passage must survive"
@@ -1720,7 +1753,7 @@ def test_msm_drops_documents_whose_terms_never_co_occur(vespa_app: Vespa):
     )
 
 
-def test_msm_reduces_the_reported_total(vespa_app: Vespa):
+async def test_msm_reduces_the_reported_total(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     Dropped documents must leave `total_size`, not just the current page.
 
@@ -1729,8 +1762,8 @@ def test_msm_reduces_the_reported_total(vespa_app: Vespa):
     """
     _msm_corpus(vespa_app)
 
-    total_off = _msm_search(0.0).total_size
-    total_on = _msm_search(0.6).total_size
+    total_off = (await _msm_search(live_http_client, 0.0)).total_size
+    total_on = (await _msm_search(live_http_client, 0.6)).total_size
 
     assert total_off is not None and total_on is not None
     assert total_on < total_off, (
@@ -1738,18 +1771,18 @@ def test_msm_reduces_the_reported_total(vespa_app: Vespa):
     )
 
 
-def test_msm_full_requires_every_term(vespa_app: Vespa):
+async def test_msm_full_requires_every_term(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """`msm=1.0` keeps only documents covering the whole query in one place."""
     ids = _msm_corpus(vespa_app)
 
-    hits = _msm_hit_ids(1.0)
+    hits = await _msm_hit_ids(live_http_client, 1.0)
 
     assert ids["title"] in hits
     assert ids["passage"] in hits
     assert ids["split"] not in hits
 
 
-def test_msm_counts_the_description(vespa_app: Vespa):
+async def test_msm_counts_the_description(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     A document matching only in its description must survive.
 
@@ -1759,14 +1792,14 @@ def test_msm_counts_the_description(vespa_app: Vespa):
     """
     ids = _msm_corpus(vespa_app)
 
-    hits = _msm_hit_ids(1.0)
+    hits = await _msm_hit_ids(live_http_client, 1.0)
 
     assert ids["description"] in hits, (
         "a document whose description contains the whole query must survive msm=1.0"
     )
 
 
-def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa):
+async def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     With no query text there is nothing for MSM to be a fraction of.
 
@@ -1776,8 +1809,8 @@ def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa):
     """
     ids = _msm_corpus(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=1.0)
-    response = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, msm=1.0)
+    response = await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -1786,7 +1819,7 @@ def test_msm_leaves_a_filters_only_browse_alone(vespa_app: Vespa):
     assert {d.id for d in response.results} >= set(ids.values())
 
 
-def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
+async def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     A date sort switches to `unranked`, which would otherwise skip the guard.
 
@@ -1794,8 +1827,8 @@ def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
     """
     ids = _msm_corpus(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.6)
-    response = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, msm=0.6)
+    response = await engine.asearch(
         query="parametric insurance",
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="attributes.published_date", direction="desc")],
@@ -1807,12 +1840,12 @@ def test_msm_applies_to_sorted_listings_too(vespa_app: Vespa):
     )
 
 
-def test_msm_keeps_a_phrase_only_match(vespa_app: Vespa):
+async def test_msm_keeps_a_phrase_only_match(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """A quoted-only query has no free text for MSM to measure, so it must not drop anything."""
     ids = _msm_corpus(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, msm=0.7)
+    results = await engine.asearch(
         query='"parametric insurance"',
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -1820,12 +1853,12 @@ def test_msm_keeps_a_phrase_only_match(vespa_app: Vespa):
 
     assert ids["passage"] in {document.id for document in results.results}
 
-def test_msm_ignores_a_phrase_when_measuring_coverage(vespa_app: Vespa):
+async def test_msm_ignores_a_phrase_when_measuring_coverage(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """A quoted phrase is a must-have, not a term MSM counts."""
     ids = _msm_corpus(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, msm=0.7)
+    results = await engine.asearch(
         query='parametric "insurance"',
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -1834,12 +1867,12 @@ def test_msm_ignores_a_phrase_when_measuring_coverage(vespa_app: Vespa):
     assert ids["split"] in {document.id for document in results.results}
 
 
-def test_msm_still_applies_to_free_text_beside_a_phrase(vespa_app: Vespa):
+async def test_msm_still_applies_to_free_text_beside_a_phrase(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """Quoting one term must not switch MSM off for the rest of the query."""
     ids = _msm_corpus(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, msm=0.7)
+    results = await engine.asearch(
         query='parametric rainfall "insurance"',
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -1873,7 +1906,9 @@ def _feed_acronym_pair(app: Vespa) -> tuple[str, str]:
 
 
 @pytest.mark.parametrize("msm", [0.0, 0.7])
-def test_an_acronym_search_finds_both_spellings(vespa_app: Vespa, msm: float):
+async def test_an_acronym_search_finds_both_spellings(
+    vespa_app: Vespa, msm: float, live_http_client: httpx2.AsyncClient
+):
     """
     Searching `tcfd` must return documents written either way, MSM or not.
 
@@ -1883,8 +1918,8 @@ def test_an_acronym_search_finds_both_spellings(vespa_app: Vespa, msm: float):
     """
     short_id, spelled_out_id = _feed_acronym_pair(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=msm)
-    response = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, msm=msm)
+    response = await engine.asearch(
         query="tcfd",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -1895,7 +1930,7 @@ def test_an_acronym_search_finds_both_spellings(vespa_app: Vespa, msm: float):
     assert spelled_out_id in found, "the document spelling it out was dropped"
 
 
-def test_the_acronym_spelling_is_not_ranked_below_the_long_form(vespa_app: Vespa):
+async def test_the_acronym_spelling_is_not_ranked_below_the_long_form(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     Someone typing `tcfd` should not be shown the long form first.
 
@@ -1904,8 +1939,8 @@ def test_the_acronym_spelling_is_not_ranked_below_the_long_form(vespa_app: Vespa
     """
     short_id, _ = _feed_acronym_pair(vespa_app)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
-    response = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    response = await engine.asearch(
         query="tcfd",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -1914,7 +1949,7 @@ def test_the_acronym_spelling_is_not_ranked_below_the_long_form(vespa_app: Vespa
     assert response.results[0].id == short_id
 
 
-def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa):
+async def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     `climate nz` must still find New Zealand documents, not just net zero ones.
 
@@ -1933,8 +1968,8 @@ def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa):
     _feed_document(vespa_app, kiwi)
     _feed_document(vespa_app, net_zero)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
-    response = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, msm=0.7)
+    response = await engine.asearch(
         query="climate nz",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -1945,7 +1980,7 @@ def test_a_rewritten_term_alongside_another_word(vespa_app: Vespa):
     assert net_zero.id in found
 
 
-def test_nature_based_solutions_survives_msm(vespa_app: Vespa):
+async def test_nature_based_solutions_survives_msm(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """A phrase-only document is kept at msm 0.7; an NbS-only one isn't matched."""
     phrase = DocumentFactory.build(
         title="Regional adaptation plan", description="A plan", labels=[]
@@ -1969,17 +2004,17 @@ def test_nature_based_solutions_survives_msm(vespa_app: Vespa):
         acronym.id,
         ["4. Methods to Create an Open Standard Framework for NbS Data"],
     )
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, msm=0.7)
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, msm=0.7)
 
-    def search(query: str):
-        return engine.search(
+    async def search(query: str):
+        return await engine.asearch(
             query=query,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[OrderBy(field="relevance", direction="desc")],
         )
 
-    unquoted = search("nature based solutions")
-    quoted = search('"nature based solutions"')
+    unquoted = await search("nature based solutions")
+    quoted = await search('"nature based solutions"')
     found = {d.id for d in unquoted.results}
 
     assert phrase.id in found
@@ -1988,8 +2023,9 @@ def test_nature_based_solutions_survives_msm(vespa_app: Vespa):
     assert quoted.total_size <= unquoted.total_size
 
 
-def test_nature_based_solutions_highlights_the_phrase_in_title_and_description(
+async def test_nature_based_solutions_highlights_the_phrase_in_title_and_description(
     vespa_app: Vespa,
+    live_http_client: httpx2.AsyncClient,
 ):
     doc = DocumentFactory.build(
         title="Federal Action Plan on Nature-Based Solutions for Climate and Biodiversity",
@@ -1998,15 +2034,15 @@ def test_nature_based_solutions_highlights_the_phrase_in_title_and_description(
     )
     _feed_document_with_id(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, bolding=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, bolding=True)
+    results = (await engine.asearch(
         query="nature based solutions",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
         filters=Filter(
             op="and", filters=[FieldFilter(field="id", op="contains", value=doc.id)]
         ),
-    ).results
+    )).results
 
     assert [d.id for d in results] == [doc.id]
     assert "<hi>Nature</hi>-<hi>Based</hi> <hi>Solutions</hi>" in results[0].title
