@@ -16,6 +16,7 @@ def init(dataset_name: str) -> Generator[Meter]:
     resource = Resource.create(
         {
             "service.name": "relevance",
+            "service.instance.id": "relevance",
             "dataset.name": dataset_name,
             "branch": common.branch(),
         }
@@ -35,7 +36,7 @@ def report[I, O](
     dataset_name: str,
     report: EvaluationReport[I, O, dict[str, str]],
 ) -> None:
-    score_histogram = meter.create_histogram(
+    score_gauge = meter.create_gauge(
         description="Per-suite average evaluator scores",
         name="relevance_score",
         unit="1",
@@ -43,13 +44,13 @@ def report[I, O](
 
     if averages := report.averages():
         for name, value in averages.scores.items():
-            score_histogram.record(
+            score_gauge.set(
                 attributes={"suite": dataset_name, "metric": name},
                 amount=value,
             )
 
-        if averages.assertions:
-            score_histogram.record(
+        if averages.assertions is not None:
+            score_gauge.set(
                 attributes={"suite": dataset_name, "metric": "pass_rate"},
                 amount=averages.assertions,
             )
@@ -62,5 +63,5 @@ def report[I, O](
 
     error_counter.add(
         attributes={"suite": dataset_name},
-        amount=len(report.failures), 
+        amount=len(report.failures),
     )
