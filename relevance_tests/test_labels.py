@@ -6,7 +6,7 @@ from relevance_tests import run_relevance_tests_parallel
 from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
 )
-from search.label import Label
+from search.label import LabelSearchResult
 from search.testcase import (
     FieldCharacteristicsTestCase,
     PrecisionTestCase,
@@ -15,13 +15,13 @@ from search.testcase import (
 )
 
 test_cases = [
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="place name",
         search_terms="brazil",
         expected_result_ids=["geography::BRA"],  # BRAZIL
         description="search for brazil should return correct label first",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="place name",
         search_terms="new south wales",
         expected_result_ids=[
@@ -31,7 +31,7 @@ test_cases = [
         description="search for new south wales should return new south wales and australia",
     ),
     *[
-        RecallTestCase[Label](
+        RecallTestCase[LabelSearchResult](
             category="place name",
             search_terms=query,
             expected_result_ids=["geography::USA"],
@@ -44,7 +44,7 @@ test_cases = [
         ]
     ],
     *[
-        PrecisionTestCase[Label](
+        PrecisionTestCase[LabelSearchResult](
             category="place name",
             search_terms=query,
             expected_result_ids=["geography::USA"],
@@ -55,7 +55,7 @@ test_cases = [
             "united states of america",
         ]
     ],
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="place name + other terms",
         search_terms="Philippines policies in climate changes",
         expected_result_ids=[
@@ -69,7 +69,7 @@ test_cases = [
         ],
         description="search for philippines policies in climate changes should return relevant labels first",
     ),
-    RecallTestCase[Label](
+    RecallTestCase[LabelSearchResult](
         category="place name + other terms",
         search_terms="brazil nature based solutions",
         expected_result_ids=["geography::BRA"],  # BRAZIL
@@ -79,7 +79,7 @@ test_cases = [
     # NOTE: this test has been left as a FieldCharacteristicsTestCase rather than using
     # IDs, because we have lots of energy-related concepts but one specifically for
     # 'energy'. I.e. we want to test for concepts that have 'energy' in them.
-    FieldCharacteristicsTestCase[Label](
+    FieldCharacteristicsTestCase[LabelSearchResult](
         category="document name",
         search_terms="energy policy act us",
         characteristics_test=lambda label: (
@@ -94,7 +94,7 @@ test_cases = [
         description="search for energy policy act us should return relevant labels",
         k=10,
     ),
-    RecallTestCase[Label](
+    RecallTestCase[LabelSearchResult](
         category="document name",
         search_terms="Law No. 018/2022 ratifying Ordinance No. 019/PR/2021 relating to climate change",
         expected_result_ids=[
@@ -104,7 +104,7 @@ test_cases = [
         k=3,
         description="search for law relating to climate change should return laws or climate labels",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="document name",
         search_terms="national climate plan",
         # Not so sure about this one. There might be a few labels that are relevant
@@ -121,7 +121,7 @@ test_cases = [
         ],
         description="search for national climate plan should return relevant document types first",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="entity name",
         search_terms="nz",
         expected_result_ids=[
@@ -130,19 +130,19 @@ test_cases = [
         ],
         description="search for nz should return 'new zealand' and 'net zero target' first",
     ),
-    # PrecisionTestCase[Label](
+    # PrecisionTestCase[LabelSearchResult](
     #     category="entity name",
     #     search_terms="totalenergies",
     #     expected_result_ids=["dummy933"],  # TOTAL ENERGIES
     #     description="search for totalenergies should return total energies label first",
     # ),
-    # PrecisionTestCase[Label](
+    # PrecisionTestCase[LabelSearchResult](
     #     category="entity name",
     #     search_terms="european court of human rights",
     #     expected_result_ids=["dummy932"],  # ECHR
     #     description="search for european court of human rights should return matching label first",
     # ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="question",
         search_terms="How many targets does Canada currently have relating to climate change?",
         expected_result_ids=[
@@ -156,7 +156,7 @@ test_cases = [
         ],
         description="search about canada targets should return relevant labels first",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="question",
         search_terms="what is the croatias climate strategy",
         expected_result_ids=[
@@ -171,7 +171,7 @@ test_cases = [
     # TODO: 'hurricanes' is a label of storm, which is a child of 'extreme weather'.
     # So this requires the labels of the subconcepts to be indexed. They should probably
     # be indexed in a different field to the main concept's labels.
-    RecallTestCase[Label](
+    RecallTestCase[LabelSearchResult](
         category="topic",
         search_terms="hurricanes",
         expected_result_ids=[
@@ -181,7 +181,7 @@ test_cases = [
         k=5,
         description="search for hurricanes should return 'extreme weather' and 'storm' labels in the top 5 results",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="topic",
         search_terms="fossil fuel subsidy removal",
         expected_result_ids=[
@@ -191,7 +191,7 @@ test_cases = [
         ],
         description="search for fossil fuel subsidy removal should return 'fossil fuel' and 'subsidy removal' labels first",
     ),
-    RecallTestCase[Label](
+    RecallTestCase[LabelSearchResult](
         category="topic",
         search_terms="fossil fuel subsidy removal",
         expected_result_ids=[
@@ -203,7 +203,7 @@ test_cases = [
         k=10,
         description="search for fossil fuel subsidy removal should return 'subsidy removal' label, and NOT 'subsidy' label",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="topic",
         search_terms="Just transition",
         expected_result_ids=[
@@ -211,7 +211,7 @@ test_cases = [
         ],
         description="search for just transition should return just transition label first",
     ),
-    FieldCharacteristicsTestCase[Label](
+    FieldCharacteristicsTestCase[LabelSearchResult](
         category="topic not in kg",
         search_terms="resilient infrastructure",
         characteristics_test=lambda label: (
@@ -225,7 +225,7 @@ test_cases = [
         all_or_any="any",
         description="search for resilient infrastructure should return relevant labels",
     ),
-    FieldCharacteristicsTestCase[Label](
+    FieldCharacteristicsTestCase[LabelSearchResult](
         category="topic not in kg",
         search_terms="offshore wind roadmap",
         characteristics_test=lambda label: (
@@ -238,7 +238,7 @@ test_cases = [
         all_or_any="any",
         description="search for offshore wind roadmap should return wind energy or Roadmap labels",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="topic",
         search_terms="phase out",
         expected_result_ids=[
@@ -246,7 +246,7 @@ test_cases = [
         ],
         description="search for 'phase out' should return 'ban' label first",
     ),
-    RecallTestCase[Label](
+    RecallTestCase[LabelSearchResult](
         category="topic",
         search_terms="phase out",
         expected_result_ids=[],
@@ -256,7 +256,7 @@ test_cases = [
         k=5,
         description="search for 'phase out' should not return 'subsidy removal' in top 5",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="logic",
         search_terms="Adaptation (OR) resilience investment",
         expected_result_ids=[
@@ -264,7 +264,7 @@ test_cases = [
         ],
         description="search for adaptation or resilience investment should return adaptation finance label first",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="logic",
         search_terms="japan + united states + sweden + china",
         expected_result_ids=[
@@ -281,7 +281,7 @@ test_cases = [
         ],
         description="search for multiple countries should return labels for those countries first",
     ),
-    PrecisionTestCase[Label](
+    PrecisionTestCase[LabelSearchResult](
         category="logic",
         search_terms="indigenous people + colombia + laws",
         expected_result_ids=[
@@ -293,7 +293,7 @@ test_cases = [
         ],
         description="search for indigenous people colombia laws should return relevant labels first",
     ),
-    RecallTestCase[Label](
+    RecallTestCase[LabelSearchResult](
         category="topic",
         search_terms="air",
         expected_result_ids=["concept::Q412"],
@@ -301,7 +301,7 @@ test_cases = [
         description="air query should surface concept::Q412 in the top 10",
     ),
     *[
-        RecallTestCase[Label](
+        RecallTestCase[LabelSearchResult](
             category="topic",
             search_terms=query,
             expected_result_ids=["concept::Q412"],
@@ -333,7 +333,7 @@ def relevance_tests_labels():
     run_relevance_tests_parallel(
         engines=engines,
         test_cases=test_cases,
-        primitive_type=Label,
+        primitive_type=LabelSearchResult,
         output_subdir="labels",
     )
 
