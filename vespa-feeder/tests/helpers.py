@@ -6,6 +6,7 @@
 # a real interface and are documented by the class docstring. ARG002: stub
 # classes implement a real interface's signature, so their methods take
 # arguments they have no use for in testing.
+
 # ruff: noqa: D102, D105, ARG002
 
 import json
