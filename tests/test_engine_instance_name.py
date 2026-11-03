@@ -12,6 +12,7 @@ from search.engines.dev_vespa import (
     DevVespaPassageSearchEngine,
     Settings,
 )
+from search.engines.dev_vespa.passages_search_engine import DEFAULT_PASSAGE_RANK_PROFILE
 from search.identifiers import generate_id
 from search.label import Label
 from search.passage import Passage
@@ -47,7 +48,7 @@ def test_engine_with_no_instance_matches_pre_feature_behaviour(http_client: http
     assert full.id == generate_id(
         "DevVespaPassageSearchEngine (Passage)",
         ("exact_weight", 0.1),
-        ("ranking_profile", "bm25_multiplicative"),
+        ("ranking_profile", DEFAULT_PASSAGE_RANK_PROFILE),
         ("topic_weight", 1.0),
     )
     assert repr(full) == "DevVespaPassageSearchEngine (Passage)"
