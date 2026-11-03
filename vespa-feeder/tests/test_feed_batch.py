@@ -1,19 +1,11 @@
 """Table-driven tests for the `feed_batch` task and the metrics it records."""
 
 import subprocess
-import tempfile
-from pathlib import Path
 
 import pytest
 import vespa_feeder as feeder
-from helpers import _FakeVespaFeed, _put_s3_objects, _vespa_feed_stdout
+from helpers import _FakeVespaFeed, put_s3_objects, vespa_feed_stdout
 
-
-@pytest.fixture
-def temp_workspace(monkeypatch, tmp_path: Path) -> Path:
-    """Point the feeder's `tempfile.gettempdir()` at a per-test directory."""
-    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
-    return tmp_path
 
 @pytest.mark.parametrize(
     ("s3_objects", "batched_s3_keys", "derive_data_from_source", "expected_records"),
@@ -54,7 +46,7 @@ def test_feed_batch_feeds_the_records_then_leaves_nothing_on_disk(
     derive_data_from_source,
     expected_records,
 ):
-    _put_s3_objects(s3_client, s3_bucket, s3_objects)
+    put_s3_objects(s3_client, s3_bucket, s3_objects)
     fake_feed = _FakeVespaFeed()
     monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
@@ -128,7 +120,7 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
     accumulates across every batch of the run, and swallowing the error would
     report a batch as fed that never was.
     """
-    _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
+    put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
     if break_the_last_download:
         # moto serves real objects but has no fault injection, so the last
         # download is failed by hand. The earlier ones still run for real,
@@ -168,7 +160,7 @@ def test_feed_batch_records_what_it_fed(
     feeder/throttled/other-HTTP errors are retry attempts that mostly
     self-heal, so they must not inflate the error metric.
     """
-    _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
+    put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
     monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed())
 
     feeder.feed_batch.fn(
@@ -199,7 +191,7 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
     monkeypatch, temp_workspace, s3_client, s3_bucket, recording_metrics
 ):
     """A batch that raises still took time; the timing must not be lost with it."""
-    _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
+    put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
 
     # moto serves real objects but has no fault injection, so the download is
     # failed by hand - the same inline pattern
@@ -233,12 +225,12 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
     ("stdout", "expected_errors"),
     [
         pytest.param(
-            _vespa_feed_stdout(operation=2, ok=2, feeder_error_count=3),
+            vespa_feed_stdout(operation=2, ok=2, feeder_error_count=3),
             0,
             id="retries-that-self-healed-do-not-count-as-lost",
         ),
         pytest.param(
-            _vespa_feed_stdout(operation=2, ok=1),
+            vespa_feed_stdout(operation=2, ok=1),
             1,
             id="a-record-that-never-landed-counts-as-lost",
         ),
@@ -259,7 +251,7 @@ def test_feed_batch_counts_only_records_that_were_actually_lost(
     `feeder_error_count` counts transport-layer retries, which mostly
     self-heal - counting those would report data loss that never happened.
     """
-    _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
+    put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
     monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed(stdout))
 
     feeder.feed_batch.fn(

@@ -1,4 +1,6 @@
 import os
+import tempfile
+from pathlib import Path
 from unittest.mock import create_autospec
 
 import boto3
@@ -55,3 +57,10 @@ def recording_metrics(monkeypatch):
     metrics = create_autospec(FeederMetrics, instance=True)
     monkeypatch.setattr(feeder, "feeder_metrics", metrics)
     return metrics
+
+
+@pytest.fixture
+def temp_workspace(monkeypatch, tmp_path: Path) -> Path:
+    """Point the feeder's `tempfile.gettempdir()` at a per-test directory."""
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    return tmp_path

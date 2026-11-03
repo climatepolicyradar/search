@@ -8,18 +8,18 @@ from pathlib import Path
 import orjson
 
 
-def _write_jsonl(path: Path, records: list[dict]) -> Path:
+def write_jsonl(path: Path, records: list[dict]) -> Path:
     path.write_bytes(b"".join(orjson.dumps(record) + b"\n" for record in records))
     return path
 
 
-def _read_jsonl(path: Path) -> list[dict]:
+def read_jsonl(path: Path) -> list[dict]:
     return [
         orjson.loads(line) for line in path.read_bytes().splitlines() if line.strip()
     ]
 
 
-def _vespa_feed_stdout(
+def vespa_feed_stdout(
     operation: int,
     ok: int,
     code_counts: dict[str, int] | None = None,
@@ -41,7 +41,7 @@ def _vespa_feed_stdout(
     )
 
 
-def _put_s3_objects(s3_client, bucket: str, objects: dict[str, bytes]) -> None:
+def put_s3_objects(s3_client, bucket: str, objects: dict[str, bytes]) -> None:
     """Populate a moto bucket, so the feeder's own `boto3.client` finds the keys."""
     for key, body in objects.items():
         s3_client.put_object(Bucket=bucket, Key=key, Body=body)
@@ -111,10 +111,10 @@ class _FakeVespaFeed:
         self.calls.append(argv)
 
         feed_paths = takewhile(lambda arg: not arg.startswith("--"), argv[2:])
-        records = [record for path in feed_paths for record in _read_jsonl(Path(path))]
+        records = [record for path in feed_paths for record in read_jsonl(Path(path))]
         self.fed_records.extend(records)
 
-        stdout = self.stdout or _vespa_feed_stdout(
+        stdout = self.stdout or vespa_feed_stdout(
             operation=len(records), ok=len(records)
         )
         process = _FakeVespaFeedProcess(self, argv, stdout)

@@ -9,8 +9,8 @@ import vespa_feeder as feeder
 from helpers import (
     _FakeVespaFeed,
     _FakeVespaFeedProcess,
-    _vespa_feed_stdout,
-    _write_jsonl,
+    vespa_feed_stdout,
+    write_jsonl,
 )
 
 
@@ -38,7 +38,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
     monkeypatch, tmp_path
 ):
     files = [
-        _write_jsonl(tmp_path / f"{n}.jsonl", [{"id": n}, {"id": n + 100}])
+        write_jsonl(tmp_path / f"{n}.jsonl", [{"id": n}, {"id": n + 100}])
         for n in range(3)
     ]
     fake_feed = _FakeVespaFeed()
@@ -62,7 +62,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
     ("stdout", "stderr", "expected"),
     [
         pytest.param(
-            _vespa_feed_stdout(operation=10, ok=10),
+            vespa_feed_stdout(operation=10, ok=10),
             "",
             {
                 "operation_count": 10,
@@ -75,7 +75,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
             id="everything-indexed",
         ),
         pytest.param(
-            _vespa_feed_stdout(operation=10, ok=10, code_counts={"200": 10, "429": 4}),
+            vespa_feed_stdout(operation=10, ok=10, code_counts={"200": 10, "429": 4}),
             "",
             {
                 "operation_count": 10,
@@ -88,7 +88,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
             id="throttling-the-retries-recovered-is-not-a-failure",
         ),
         pytest.param(
-            _vespa_feed_stdout(
+            vespa_feed_stdout(
                 operation=10, ok=8, code_counts={"200": 8, "429": 5, "503": 2}
             ),
             "feed: 503 Service Unavailable for put id:doc:doc::9: giving up\n",
@@ -115,7 +115,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
             id="records-lost-after-retries",
         ),
         pytest.param(
-            _vespa_feed_stdout(
+            vespa_feed_stdout(
                 operation=10, ok=7, code_counts={"200": 7}, feeder_error_count=3
             ),
             "",
@@ -143,7 +143,7 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
 def test_feed_derived_files_reports_what_the_cli_returned(
     monkeypatch, tmp_path, stdout, stderr, expected
 ):
-    files = [_write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
+    files = [write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
     monkeypatch.setattr(feeder.subprocess, "Popen", _FakeVespaFeed(stdout, stderr))
 
     result = feeder.feed_derived_files(
@@ -162,7 +162,7 @@ def test_feed_derived_files_reports_what_the_cli_returned(
 
 def test_feed_derived_files_raises_when_the_cli_exits_non_zero(monkeypatch, tmp_path):
     """A non-zero exit must surface, not be read as a feed that indexed nothing."""
-    files = [_write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
+    files = [write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
     monkeypatch.setattr(
         feeder.subprocess,
         "Popen",
@@ -244,7 +244,7 @@ def test_feed_derived_files_manages_the_vespa_feed_process(
     TerminationSignal and drives the run to Cancelled; swallowing it leaves
     the flow submitting batches after a graceful stop was asked for.
     """
-    files = [_write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
+    files = [write_jsonl(tmp_path / "one.jsonl", [{"id": 1}])]
     registered_while_in_flight: list[set] = []
 
     def on_communicate(process: _FakeVespaFeedProcess) -> None:

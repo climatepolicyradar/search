@@ -2,7 +2,7 @@
 
 import pytest
 import vespa_feeder as feeder
-from helpers import _put_s3_objects, _read_jsonl, _write_jsonl
+from helpers import put_s3_objects, read_jsonl, write_jsonl
 
 
 def _put_export_prefixes(s3_client, bucket: str, prefix: str, names: list[str]) -> None:
@@ -154,14 +154,14 @@ def test_list_s3_keys_raises_when_the_prefix_is_empty(s3_client, s3_bucket):
 def test_materialise_s3_files_writes_one_file_per_key(
     s3_client, s3_bucket, tmp_path, s3_objects, batched_s3_keys, expected_files
 ):
-    _put_s3_objects(s3_client, s3_bucket, s3_objects)
+    put_s3_objects(s3_client, s3_bucket, s3_objects)
 
     paths = feeder.materialise_s3_files(
         bucket=s3_bucket, batched_s3_keys=batched_s3_keys, materialise_dir=tmp_path
     )
 
     assert paths == [tmp_path / name for name in expected_files]
-    assert {path.name: _read_jsonl(path) for path in paths} == expected_files
+    assert {path.name: read_jsonl(path) for path in paths} == expected_files
 
 @pytest.mark.parametrize(
     ("sources", "derive_data_from_source", "expected_files"),
@@ -221,7 +221,7 @@ def test_materialise_derived_files_writes_a_new_file_per_source(
     )
 
     assert derived == [tmp_path / name for name in expected_files]
-    assert {path.name: _read_jsonl(path) for path in derived} == expected_files
+    assert {path.name: read_jsonl(path) for path in derived} == expected_files
     assert {path.name: path.read_bytes() for path in source_paths} == sources
 
 @pytest.mark.parametrize(
@@ -236,7 +236,7 @@ def test_materialise_derived_files_writes_a_new_file_per_source(
 def test_delete_materialised_s3_files_removes_every_file_it_is_given(
     tmp_path, present, absent
 ):
-    paths = [_write_jsonl(tmp_path / name, [{"id": 1}]) for name in present]
+    paths = [write_jsonl(tmp_path / name, [{"id": 1}]) for name in present]
     paths += [tmp_path / name for name in absent]
 
     feeder.delete_materialised_s3_files(paths)
