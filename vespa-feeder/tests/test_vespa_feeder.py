@@ -711,29 +711,6 @@ _BATCH_S3_OBJECTS = {
 }
 
 
-class _FailingDownloadS3:
-    """
-    A real moto client that raises on the last key, leaving a partial batch.
-
-    moto serves real objects but has no fault injection, and contorting it into
-    having some would obscure what this test is for. Delegating everything bar
-    one `download_file` to a genuine client is the smallest change that keeps
-    the earlier downloads real - which is what makes the batch partial.
-    """
-
-    def __init__(self, s3_client, failing_key: str) -> None:
-        self._s3_client = s3_client
-        self._failing_key = failing_key
-
-    def __getattr__(self, name: str):
-        return getattr(self._s3_client, name)
-
-    def download_file(self, bucket: str, key: str, destination: str) -> None:
-        if key == self._failing_key:
-            raise RuntimeError("s3 download failed")
-        self._s3_client.download_file(bucket, key, destination)
-
-
 def _broken_deriver(record: dict) -> dict:
     raise RuntimeError("deriver failed")
 
@@ -783,8 +760,19 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
     """
     _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
     if break_the_last_download:
-        failing = _FailingDownloadS3(s3_client, list(_BATCH_S3_OBJECTS)[-1])
-        monkeypatch.setattr(feeder.boto3, "client", lambda _: failing)
+        # moto serves real objects but has no fault injection, so the last
+        # download is failed by hand. The earlier ones still run for real,
+        # which is what leaves the batch partway through on disk.
+        last_key = list(_BATCH_S3_OBJECTS)[-1]
+        real_download_file = s3_client.download_file
+
+        def download_file(bucket: str, key: str, destination: str) -> None:
+            if key == last_key:
+                raise RuntimeError("s3 download failed")
+            real_download_file(bucket, key, destination)
+
+        monkeypatch.setattr(s3_client, "download_file", download_file)
+        monkeypatch.setattr(feeder.boto3, "client", lambda _: s3_client)
     monkeypatch.setattr(feeder.subprocess, "Popen", vespa_feed())
 
     with pytest.raises(expected_exception):
