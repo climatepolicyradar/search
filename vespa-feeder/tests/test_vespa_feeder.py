@@ -48,12 +48,10 @@ def _vespa_feed_stdout(
     )
 
 
-class _FakeS3:
-    def __init__(self, objects: dict[str, bytes]) -> None:
-        self.objects = objects
-
-    def download_file(self, bucket: str, key: str, destination: str) -> None:
-        Path(destination).write_bytes(self.objects[key])
+def _put_s3_objects(s3_client, bucket: str, objects: dict[str, bytes]) -> None:
+    """Populate a moto bucket, so the feeder's own `boto3.client` finds the keys."""
+    for key, body in objects.items():
+        s3_client.put_object(Bucket=bucket, Key=key, Body=body)
 
 
 class _FakeVespaFeedProcess:
@@ -159,112 +157,93 @@ def displaced_sigterm_handler():
     feeder._vespa_feed_processes.clear()
 
 
-class _FakeS3CommonPrefixes:
-    """An S3 client whose `list_objects_v2` paginator yields `CommonPrefixes`."""
+def _put_export_prefixes(s3_client, bucket: str, prefix: str, names: list[str]) -> None:
+    """
+    Create a real object under each export name, so S3 derives the prefixes.
 
-    def __init__(self, pages: list[list[str]]) -> None:
-        self.pages = pages
-        self.paginate_kwargs: dict = {}
-
-    def get_paginator(self, operation_name: str) -> "_FakeS3CommonPrefixes":
-        assert operation_name == "list_objects_v2"
-        return self
-
-    def paginate(self, **kwargs) -> list[dict]:
-        self.paginate_kwargs = kwargs
-        return [
-            {
-                "CommonPrefixes": [
-                    {"Prefix": f"{kwargs['Prefix']}{name}"} for name in page
-                ]
-            }
-            for page in self.pages
-        ]
+    `get_latest_s3_export_prefix` paginates with `Delimiter="/"`, which is what
+    rolls these keys up into `CommonPrefixes` entries holding only the export
+    names. Writing real objects rather than handing back canned prefixes is the
+    point: the delimiter semantics are exercised rather than assumed.
+    """
+    for name in names:
+        s3_client.put_object(Bucket=bucket, Key=f"{prefix}{name}part-0.jsonl", Body=b"")
 
 
 @pytest.mark.parametrize(
-    ("pages", "expected"),
+    ("export_names", "expected"),
     [
         pytest.param(
-            [["20260922T190625Z/", "20260923T190625Z/"]],
+            ["20260922T190625Z/", "20260923T190625Z/"],
             "20260923T190625Z",
             id="newest-of-two",
         ),
         pytest.param(
-            [["20260923T190625Z/", "20260922T190625Z/"]],
+            ["20260923T190625Z/", "20260922T190625Z/"],
             "20260923T190625Z",
             id="listing-order-does-not-matter",
         ),
         pytest.param(
-            [["20260924T003000Z/", "20260924T010000Z/"]],
+            ["20260924T003000Z/", "20260924T010000Z/"],
             "20260924T010000Z",
             id="same-day-later-time",
         ),
         pytest.param(
-            [["20260923T190625Z/", "latest/"]],
+            ["20260923T190625Z/", "latest/"],
             "20260923T190625Z",
             id="ignores-latest",
-        ),
-        pytest.param(
-            [["20260923T190625Z/"], ["20260924T010000Z/"]],
-            "20260924T010000Z",
-            id="across-pages",
         ),
     ],
 )
 def test_get_latest_s3_export_prefix_returns_the_newest_timestamped_prefix(
-    monkeypatch, pages, expected
+    s3_client, s3_bucket, export_names, expected
 ):
-    s3 = _FakeS3CommonPrefixes(pages)
-    monkeypatch.setattr(feeder.boto3, "client", lambda _: s3)
+    _put_export_prefixes(s3_client, s3_bucket, "a/prefix/", export_names)
 
     assert (
-        feeder.get_latest_s3_export_prefix(bucket="bucket", prefix="a/prefix/")
+        feeder.get_latest_s3_export_prefix(bucket=s3_bucket, prefix="a/prefix/")
         == expected
     )
-    # Delimiter is what keeps this to the prefix names rather than every
-    # object beneath them.
-    assert s3.paginate_kwargs == {
-        "Bucket": "bucket",
-        "Prefix": "a/prefix/",
-        "Delimiter": "/",
-    }
+
+
+def test_get_latest_s3_export_prefix_reads_every_page(s3_client, s3_bucket):
+    """
+    `CommonPrefixes` caps at 1000 per page, so the newest can land on page two.
+
+    Listing is lexicographic, so the newest timestamp is also the last one S3
+    returns - stopping at the first page would miss it entirely.
+    """
+    export_names = [f"202609{day:02d}T010000Z/" for day in range(1, 31)]
+    export_names += [
+        f"20260930T{minute // 60:02d}{minute % 60:02d}00Z/" for minute in range(1000)
+    ]
+    _put_export_prefixes(s3_client, s3_bucket, "a/prefix/", export_names)
+
+    assert (
+        feeder.get_latest_s3_export_prefix(bucket=s3_bucket, prefix="a/prefix/")
+        == "20260930T163900Z"
+    )
 
 
 @pytest.mark.parametrize(
-    "pages",
+    ("export_names", "unrelated_keys"),
     [
-        pytest.param([], id="no-pages"),
-        pytest.param([[]], id="empty-page"),
-        pytest.param([["latest/"]], id="only-latest"),
-        pytest.param([["not-a-timestamp/"]], id="unrecognised-prefix"),
-        pytest.param([["20260923T190625/"]], id="timestamp-missing-the-z"),
+        pytest.param([], [], id="no-pages"),
+        pytest.param([], ["another/prefix/20260923T190625Z/part-0.jsonl"], id="empty-page"),
+        pytest.param(["latest/"], [], id="only-latest"),
+        pytest.param(["not-a-timestamp/"], [], id="unrecognised-prefix"),
+        pytest.param(["20260923T190625/"], [], id="timestamp-missing-the-z"),
     ],
 )
 def test_get_latest_s3_export_prefix_raises_when_there_is_no_timestamped_prefix(
-    monkeypatch, pages
+    s3_client, s3_bucket, export_names, unrelated_keys
 ):
-    monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3CommonPrefixes(pages))
+    _put_export_prefixes(s3_client, s3_bucket, "a/prefix/", export_names)
+    for key in unrelated_keys:
+        s3_client.put_object(Bucket=s3_bucket, Key=key, Body=b"")
 
     with pytest.raises(FileNotFoundError, match="No timestamped snapshots"):
-        feeder.get_latest_s3_export_prefix(bucket="bucket", prefix="a/prefix/")
-
-
-class _FakeS3Contents:
-    """An S3 client whose `list_objects_v2` paginator yields `Contents`."""
-
-    def __init__(self, keys: list[str]) -> None:
-        self.keys = keys
-        self.paginate_kwargs: dict = {}
-
-    def get_paginator(self, operation_name: str) -> "_FakeS3Contents":
-        assert operation_name == "list_objects_v2"
-        return self
-
-    def paginate(self, **kwargs) -> list[dict]:
-        self.paginate_kwargs = kwargs
-        prefix = kwargs["Prefix"]
-        return [{"Contents": [{"Key": k} for k in self.keys if k.startswith(prefix)]}]
+        feeder.get_latest_s3_export_prefix(bucket=s3_bucket, prefix="a/prefix/")
 
 
 @pytest.mark.parametrize(
@@ -287,17 +266,16 @@ class _FakeS3Contents:
         ),
     ],
 )
-def test_list_s3_keys(monkeypatch, keys, prefix, expected):
-    monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3Contents(keys))
+def test_list_s3_keys(s3_client, s3_bucket, keys, prefix, expected):
+    for key in keys:
+        s3_client.put_object(Bucket=s3_bucket, Key=key, Body=b"")
 
-    assert feeder.list_s3_keys(bucket="bucket", prefix=prefix) == expected
+    assert feeder.list_s3_keys(bucket=s3_bucket, prefix=prefix) == expected
 
 
-def test_list_s3_keys_raises_when_the_prefix_is_empty(monkeypatch):
-    monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3Contents([]))
-
+def test_list_s3_keys_raises_when_the_prefix_is_empty(s3_client, s3_bucket):
     with pytest.raises(FileNotFoundError, match="No objects found"):
-        feeder.list_s3_keys(bucket="bucket", prefix="nothing/here")
+        feeder.list_s3_keys(bucket=s3_bucket, prefix="nothing/here")
 
 
 @pytest.mark.parametrize(
@@ -328,12 +306,12 @@ def test_list_s3_keys_raises_when_the_prefix_is_empty(monkeypatch):
     ],
 )
 def test_materialise_s3_files_writes_one_file_per_key(
-    monkeypatch, tmp_path, s3_objects, batched_s3_keys, expected_files
+    s3_client, s3_bucket, tmp_path, s3_objects, batched_s3_keys, expected_files
 ):
-    monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3(s3_objects))
+    _put_s3_objects(s3_client, s3_bucket, s3_objects)
 
     paths = feeder.materialise_s3_files(
-        bucket="bucket", batched_s3_keys=batched_s3_keys, materialise_dir=tmp_path
+        bucket=s3_bucket, batched_s3_keys=batched_s3_keys, materialise_dir=tmp_path
     )
 
     assert paths == [tmp_path / name for name in expected_files]
@@ -699,12 +677,14 @@ def test_delete_materialised_s3_files_removes_every_file_it_is_given(
 def test_feed_batch_feeds_the_records_then_leaves_nothing_on_disk(
     monkeypatch,
     temp_workspace,
+    s3_client,
+    s3_bucket,
     s3_objects,
     batched_s3_keys,
     derive_data_from_source,
     expected_records,
 ):
-    monkeypatch.setattr(feeder.boto3, "client", lambda _: _FakeS3(s3_objects))
+    _put_s3_objects(s3_client, s3_bucket, s3_objects)
     fake_feed = _FakeVespaFeed()
     monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
@@ -713,7 +693,7 @@ def test_feed_batch_feeds_the_records_then_leaves_nothing_on_disk(
         application="app",
         connections=2,
         feed_timeout_seconds_per_file=300,
-        s3_bucket="bucket",
+        s3_bucket=s3_bucket,
         batched_s3_keys=batched_s3_keys,
         derive_data_from_source=derive_data_from_source,
     )
@@ -731,13 +711,27 @@ _BATCH_S3_OBJECTS = {
 }
 
 
-class _BrokenS3(_FakeS3):
-    """Downloads every key but the last, leaving a partial batch on disk."""
+class _FailingDownloadS3:
+    """
+    A real moto client that raises on the last key, leaving a partial batch.
+
+    moto serves real objects but has no fault injection, and contorting it into
+    having some would obscure what this test is for. Delegating everything bar
+    one `download_file` to a genuine client is the smallest change that keeps
+    the earlier downloads real - which is what makes the batch partial.
+    """
+
+    def __init__(self, s3_client, failing_key: str) -> None:
+        self._s3_client = s3_client
+        self._failing_key = failing_key
+
+    def __getattr__(self, name: str):
+        return getattr(self._s3_client, name)
 
     def download_file(self, bucket: str, key: str, destination: str) -> None:
-        if key == list(self.objects)[-1]:
+        if key == self._failing_key:
             raise RuntimeError("s3 download failed")
-        super().download_file(bucket, key, destination)
+        self._s3_client.download_file(bucket, key, destination)
 
 
 def _broken_deriver(record: dict) -> dict:
@@ -745,24 +739,24 @@ def _broken_deriver(record: dict) -> dict:
 
 
 @pytest.mark.parametrize(
-    ("s3_client", "derive_data_from_source", "vespa_feed", "expected_exception"),
+    ("break_the_last_download", "derive_data_from_source", "vespa_feed", "expected_exception"),
     [
         pytest.param(
-            lambda: _BrokenS3(_BATCH_S3_OBJECTS),
+            True,
             None,
             _FakeVespaFeed,
             RuntimeError,
             id="a-download-fails",
         ),
         pytest.param(
-            lambda: _FakeS3(_BATCH_S3_OBJECTS),
+            False,
             _broken_deriver,
             _FakeVespaFeed,
             RuntimeError,
             id="the-deriver-raises",
         ),
         pytest.param(
-            lambda: _FakeS3(_BATCH_S3_OBJECTS),
+            False,
             None,
             lambda: _FakeVespaFeed(returncode=1),
             subprocess.CalledProcessError,
@@ -774,6 +768,8 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
     monkeypatch,
     temp_workspace,
     s3_client,
+    s3_bucket,
+    break_the_last_download,
     derive_data_from_source,
     vespa_feed,
     expected_exception,
@@ -785,7 +781,10 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
     accumulates across every batch of the run, and swallowing the error would
     report a batch as fed that never was.
     """
-    monkeypatch.setattr(feeder.boto3, "client", lambda _: s3_client())
+    _put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
+    if break_the_last_download:
+        failing = _FailingDownloadS3(s3_client, list(_BATCH_S3_OBJECTS)[-1])
+        monkeypatch.setattr(feeder.boto3, "client", lambda _: failing)
     monkeypatch.setattr(feeder.subprocess, "Popen", vespa_feed())
 
     with pytest.raises(expected_exception):
@@ -794,7 +793,7 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
             application="app",
             connections=2,
             feed_timeout_seconds_per_file=300,
-            s3_bucket="bucket",
+            s3_bucket=s3_bucket,
             batched_s3_keys=tuple(_BATCH_S3_OBJECTS),
             derive_data_from_source=derive_data_from_source,
         )
