@@ -98,6 +98,7 @@ class Passage(BaseModel):
         :param rule_expansions: Phrases the rewrite rules expanded the query to, bolded too -
             see search/query_rewrites.py.
         """
+        rule_expansions = rule_expansions or []
         data = vespa_passage.model_dump()
         if not bolding:
             bolded = BoldedText(text=data["content"], boldings=[])
@@ -107,11 +108,18 @@ class Passage(BaseModel):
             bolded = bolding_to_labels(data["content"])
         if bolding and rule_expansions:
             bolded = add_boldings(bolded, rule_expansions)
+
+        above_msm = (
+            vespa_passage.summaryfeatures.above_msm
+            if vespa_passage.summaryfeatures
+            else True
+        )
+
         return cls(
             text_block_id=data["id"],
             idx=data["idx"],
             text=bolded.text,
-            boldings=bolded.boldings,
+            boldings=bolded.boldings if above_msm else [],
             language=data["language"],
             type=data["content_type"],
             type_confidence=data["type_confidence"],

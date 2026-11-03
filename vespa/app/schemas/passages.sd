@@ -190,8 +190,11 @@ schema passages {
         function coverage() {
             expression: textSimilarity(content).queryCoverage
         }
+        function above_msm() {
+            expression: coverage() >= query(msm)
+        }
         function msm_drop() {
-            expression: coverage() < query(msm) && itemRawScore(filters) == 0
+            expression: above_msm() == 0 && itemRawScore(filters) == 0
         }
         function short_headings_penalty() {
             expression: query(short_heading_weight) * attribute(looks_like_short_heading)
@@ -220,7 +223,21 @@ schema passages {
             expression: if (msm_drop(), -10, text_score() - short_headings_penalty - table_of_contents_penalty - reference_list_penalty - page_header_or_footer_penalty - demoted_section_penalty + topic_score())
             rank-score-drop-limit: -5.0
         }
-        summary-features: coverage() itemRawScore(filters) text_score() topic_score() nativeRank(content) nativeProximity(content) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(is_page_header_or_footer) attribute(looks_like_demoted_section)
+        summary-features {
+            coverage()
+            itemRawScore(filters)
+            text_score()
+            topic_score()
+            nativeRank(content)
+            nativeProximity(content)
+            attribute(looks_like_short_heading)
+            attribute(looks_like_table_of_contents)
+            attribute(looks_like_reference_list)
+            attribute(is_page_header_or_footer)
+            attribute(looks_like_demoted_section)
+            msm_drop()
+            above_msm()
+        }
     }
 
     rank-profile bm25_multiplicative inherits nativerank {
@@ -248,7 +265,25 @@ schema passages {
             rank-score-drop-limit: -5.0
         }
 
-        summary-features: coverage() itemRawScore(filters) text_score() topic_score() proximity_boost bm25(content) bm25(content_not_stemmed) fieldLength(content) nativeProximity(content) attribute(content_type) attribute(looks_like_short_heading) attribute(looks_like_table_of_contents) attribute(looks_like_reference_list) attribute(is_page_header_or_footer) attribute(looks_like_demoted_section)
+        summary-features {
+            coverage()
+            itemRawScore(filters)
+            text_score()
+            topic_score()
+            proximity_boost
+            bm25(content)
+            bm25(content_not_stemmed)
+            fieldLength(content)
+            nativeProximity(content)
+            attribute(content_type)
+            attribute(looks_like_short_heading)
+            attribute(looks_like_table_of_contents)
+            attribute(looks_like_reference_list)
+            attribute(is_page_header_or_footer)
+            attribute(looks_like_demoted_section)
+            msm_drop()
+            above_msm()
+        }
     }
 
     rank-profile unranked {
@@ -258,12 +293,19 @@ schema passages {
         function coverage() {
             expression: textSimilarity(content).queryCoverage
         }
+        function above_msm() {
+            expression: coverage() >= query(msm)
+        }
         function msm_drop() {
-            expression: coverage() < query(msm) && itemRawScore(filters) == 0
+            expression: above_msm() == 0 && itemRawScore(filters) == 0
         }
         first-phase {
             expression: if (msm_drop(), -10, 1)
             rank-score-drop-limit: -5.0
+        }
+        summary-features {
+            msm_drop()
+            above_msm()
         }
     }
 
