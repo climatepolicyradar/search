@@ -8,6 +8,7 @@ from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DOCUMENT_SORT_API_FIELDS,
     PASSAGE_SORT_API_FIELDS,
+    DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
 )
 from search.engines.dev_vespa.passages_search_engine import (
@@ -163,6 +164,13 @@ def passages_engine(
     )
 
 PassagesEngineDep = Annotated[DevVespaPassageSearchEngine, Depends(passages_engine)]
+
+
+def labels_engine(httpx: HttpxDep) -> DevVespaLabelSearchEngine:
+    return DevVespaLabelSearchEngine(settings=settings, httpx=httpx)
+
+
+LabelsEngineDep = Annotated[DevVespaLabelSearchEngine, Depends(labels_engine)]
 
 
 def passages_order_by(

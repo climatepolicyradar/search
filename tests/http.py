@@ -18,8 +18,8 @@ class MockHandler:
 
     def handle(self, request: httpx2.Request) -> httpx2.Response:
         self._requests.append(request)
-        if (response := self._responses.pop()):
-            return httpx2.Response(200, json=response)
-        raise NotImplementedError()
+        if not self._responses:
+            raise NotImplementedError()
+        return httpx2.Response(200, json=self._responses.pop(0))
 
 

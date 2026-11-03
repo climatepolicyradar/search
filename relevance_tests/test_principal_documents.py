@@ -1,5 +1,6 @@
 import re
 
+import httpx2
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -516,7 +517,9 @@ def relevance_tests_principal_documents():
     """Run relevance tests for documents"""
 
     engines = [
-        DevVespaPrincipalDocumentSearchEngine(settings=settings, debug=True),
+        DevVespaPrincipalDocumentSearchEngine(
+            settings=settings, httpx=httpx2.AsyncClient(), debug=True
+        ),
         BM25TitleVespaDocumentSearchEngine(),
     ]
 
