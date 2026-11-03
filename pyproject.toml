@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "boto3>=1.43.122",
-  "duckdb>=1.5.6",
+  "duckdb>=2.0.0",
   "fastapi[standard]>=0.143.3",
   "httpx2>=2.16.0",
   "posthog>=7.81.1",
