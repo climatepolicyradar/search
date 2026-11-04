@@ -93,7 +93,7 @@ async def aexecute_vespa_query(
     token: str,
     request_body: dict[str, Any],
     request_context: str,
-    client: AsyncPostClient | None = None,
+    client: AsyncPostClient,
 ) -> dict[str, Any]:
     """
     Execute a Vespa query and emit contextual logs.
@@ -106,9 +106,8 @@ async def aexecute_vespa_query(
     :type request_body: dict[str, Any]
     :param request_context: Context label for logs.
     :type request_context: str
-    :param client: HTTP client for dependency injection in tests. A fresh,
-        ad hoc client is opened and closed around the call when omitted.
-    :type client: AsyncPostClient | None
+    :param client: HTTP client to send the request with.
+    :type client: AsyncPostClient
     :return: Decoded JSON response.
     :rtype: dict[str, Any]
     :raises VespaError: if the request never reached Vespa, Vespa returned a
@@ -133,21 +132,12 @@ async def aexecute_vespa_query(
 
     started = time.perf_counter()
     try:
-        if client is None:
-            async with httpx2.AsyncClient() as owned_client:
-                response = await owned_client.post(
-                    endpoint,
-                    json=request_body,
-                    timeout=API_TIMEOUT,
-                    headers=headers,
-                )
-        else:
-            response = await client.post(
-                endpoint,
-                json=request_body,
-                timeout=API_TIMEOUT,
-                headers=headers,
-            )
+        response = await client.post(
+            endpoint,
+            json=request_body,
+            timeout=API_TIMEOUT,
+            headers=headers,
+        )
     except Exception as exc:
         logger.exception(
             "Error: Vespa request failed before a response was received [%s] "

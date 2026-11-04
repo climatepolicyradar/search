@@ -1,6 +1,13 @@
 import os
+import tempfile
+from pathlib import Path
+from unittest.mock import create_autospec
 
+import boto3
 import pytest
+import vespa_feeder as feeder
+from feeder_metrics import FeederMetrics
+from moto import mock_aws
 from prefect.testing.utilities import prefect_test_harness
 
 
@@ -12,6 +19,72 @@ def pytest_configure() -> None:
 
 @pytest.fixture(scope="session")
 def prefect_db():
-    """A throwaway Prefect database, for tests that actually run a flow."""
+    """
+    A throwaway Prefect database, for tests that actually run a flow.
+
+    Session-scoped deliberately: the harness starts a SQLite database and an
+    ephemeral server, which costs seconds. Per-test it would cost that per
+    test; once per session it is paid a single time.
+    """
     with prefect_test_harness():
         yield
+
+
+@pytest.fixture
+def mock_aws_creds(monkeypatch):
+    """Mocked AWS Credentials, so moto never reaches for real ones."""
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "test")  # nosec B105
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "test")  # nosec B105
+    monkeypatch.setenv("AWS_SECURITY_TOKEN", "test")  # nosec B105
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "test")  # nosec B105
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
+
+
+@pytest.fixture
+def s3_client(mock_aws_creds):  # noqa: ARG001 - requested for its side effect
+    """A moto-backed S3 client, which the feeder's own `boto3.client` also gets."""
+    with mock_aws():
+        yield boto3.client("s3", region_name="eu-west-1")
+
+
+@pytest.fixture
+def s3_bucket(s3_client):
+    """An empty bucket for a test to populate; returns its name."""
+    s3_client.create_bucket(
+        Bucket="bucket",
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    return "bucket"
+
+
+@pytest.fixture
+def recording_metrics(monkeypatch):
+    """A FeederMetrics stand-in that enforces the real method signatures."""
+    metrics = create_autospec(FeederMetrics, instance=True)
+    monkeypatch.setattr(feeder, "feeder_metrics", metrics)
+    return metrics
+
+
+@pytest.fixture
+def temp_workspace(monkeypatch, tmp_path: Path) -> Path:
+    """Point the feeder's `tempfile.gettempdir()` at a per-test directory."""
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+    return tmp_path
+
+
+@pytest.fixture
+def prefect_run_identity(monkeypatch):
+    """
+    Give the feeder the deployment and run names a real Prefect run would.
+
+    Outside a run context `prefect.runtime` returns `None` for both, and
+    `vespa_feeder` falls back to "local"/"unknown". Asserting those fallbacks
+    pins values that never occur in production - a run always has a generated
+    name like `tuscan-elephant`, and the dashboard groups by it. Patching them
+    here lets the tests assert the production shape instead.
+    """
+    import vespa_feeder as feeder
+
+    monkeypatch.setattr(feeder.deployment, "name", "search-vespa-feeder-passages")
+    monkeypatch.setattr(feeder.flow_run, "name", "tuscan-elephant")
+    return "search-vespa-feeder-passages", "tuscan-elephant"
