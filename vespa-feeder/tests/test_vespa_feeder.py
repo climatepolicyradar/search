@@ -1,6 +1,6 @@
 """Table-driven tests for the `vespa_feeder` flow itself."""
 
-import logging
+import inspect
 from pathlib import Path
 
 import pytest
@@ -8,6 +8,8 @@ import vespa_feeder as feeder
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.util._once import Once
+from prefect.futures import PrefectFuture
+from prefect.logging import disable_run_logger
 
 
 def _feed_result(
@@ -44,6 +46,27 @@ class _ExplodingFuture:
         raise KeyboardInterrupt("cancelled mid-drain")
 
 
+@pytest.mark.parametrize("fake", [_FakeFuture, _ExplodingFuture])
+def test_the_future_fakes_match_the_real_prefect_future(fake):
+    """
+    The fakes must keep the `.result` signature they stand in for.
+
+    `vespa_feeder` calls `.result(raise_on_failure=False)`; if Prefect renamed
+    that parameter the fakes would happily keep accepting it and the drain-loop
+    tests would still pass against an API that no longer exists.
+    """
+
+    def _contract(func):
+        # Names and defaults, not annotations: the fakes are deliberately
+        # unannotated, but the parameters the drain loop passes must match.
+        return [
+            (name, parameter.kind, parameter.default)
+            for name, parameter in inspect.signature(func).parameters.items()
+        ]
+
+    assert _contract(fake.result) == _contract(PrefectFuture.result)
+
+
 class _FakeFeedBatch:
     def __init__(self, futures) -> None:
         self.futures = list(futures)
@@ -63,14 +86,17 @@ def summary_artifacts(monkeypatch):
     artifacts = []
     monkeypatch.setenv("VESPA_CLI_DATA_PLANE_TOKEN", "")
     monkeypatch.setattr(feeder, "get_ssm_parameter", lambda name: "stub")  # noqa: ARG005
-    monkeypatch.setattr(feeder, "get_run_logger", lambda: logging.getLogger("test"))
     monkeypatch.setattr(
         feeder, "_terminate_vespa_feed_processes_on_sigterm_handler", lambda: None
     )
     monkeypatch.setattr(
         feeder, "create_markdown_artifact", lambda **kwargs: artifacts.append(kwargs)
     )
-    return artifacts
+    # Prefect's own stand-in for a run context, so `get_run_logger()` inside
+    # `vespa_feeder` returns a plain logger instead of raising
+    # MissingContextError - no patching of the production module needed.
+    with disable_run_logger():
+        yield artifacts
 
 
 def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
