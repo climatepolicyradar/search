@@ -49,14 +49,42 @@ def test_feed_derived_files_invokes_the_cli_once_for_the_whole_batch(
         materialised_derived_files=files,
         endpoint="http://vespa",
         application="app",
-        feed_timeout_seconds_per_file=300,
+        feed_timeout_seconds=2700,
     )
 
     assert len(fake_feed.calls) == 1
     assert fake_feed.calls[0][:2] == ["vespa", "feed"]
     assert fake_feed.calls[0][2:5] == [str(path) for path in files]
-    assert fake_feed.timeouts == [900]
+    assert fake_feed.timeouts == [2700]
     assert result.input_count == 6
+
+
+@pytest.mark.parametrize("file_count", [1, 3, 10])
+def test_feed_derived_files_bounds_the_batch_not_each_file(
+    monkeypatch, tmp_path, file_count
+):
+    """
+    The bound is flat per batch, not `per_file * len(files)`.
+
+    Measured over 24h of production runs, file count did not predict duration:
+    the worst passages batch (38.7 min) held 10 files, exactly like the 39
+    batches in the same run that finished in under 18 minutes. Scaling by it
+    also under-bounded the small batches -- a 1-file labels run got 5 minutes
+    against work observed to take up to 38.7.
+    """
+    files = [
+        write_jsonl(tmp_path / f"{n}.jsonl", [{"id": n}]) for n in range(file_count)
+    ]
+    fake_feed = FakeVespaFeed()
+    monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
+
+    feeder.feed_derived_files(
+        materialised_derived_files=files,
+        endpoint="http://vespa",
+        application="app",
+    )
+
+    assert fake_feed.timeouts == [feeder._VESPA_FEED_TIMEOUT_SECONDS]
 
 
 @pytest.mark.parametrize(

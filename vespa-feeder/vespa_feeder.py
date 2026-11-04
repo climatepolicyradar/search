@@ -63,8 +63,23 @@ DEFAULT_BATCH_SIZE = 10
 # should leave it alone.
 DEFAULT_SAMPLE_RATE = 1.0
 
-# How long
-_DEFAULT_VESPA_FEED_TIMEOUT_SECONDS_PER_FILE = 300
+# How long one batch's `vespa feed` subprocess may run before we give up on it.
+#
+# Flat per batch, not per file. Measured over 24h of production runs (Tempo
+# spans, 2026-11-03/04): passages p50 72s, p90 227s, p99 654s, max 2324s
+# (38.7 min); documents max 275s; labels 17s. File count predicted nothing --
+# the 38.7 min outlier held 10 files, exactly like the 39 batches in the same
+# run that finished under 18 min -- so scaling by it added no information.
+#
+# Scaling by file count was also wrong in both directions: a 10-file batch got
+# 50 min, but the passages final batch (4 files) got 20 min and every labels
+# run (1 file) got 5 min, both under the 38.7 min we have actually observed.
+#
+# 45 min clears the worst batch we have actually observed, with ~16% headroom,
+# while still bounding a wedged feed. Deliberately not tighter: until FUS-892
+# adds bounded retries, a timed-out batch loses its records, so failing a batch
+# that would have completed is a real cost.
+_VESPA_FEED_TIMEOUT_SECONDS = 45 * 60
 
 
 # we store all `vespa feed` processes in this set to be able to
@@ -406,7 +421,7 @@ def feed_derived_files(
     endpoint: str,
     application: str,
     connections: int = _DEFAULT_CONNECTIONS,
-    feed_timeout_seconds_per_file: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS_PER_FILE,
+    feed_timeout_seconds: int = _VESPA_FEED_TIMEOUT_SECONDS,
 ) -> FeedResult:
     input_count = sum(
         1
@@ -446,9 +461,7 @@ def feed_derived_files(
         with _vespa_feed_processes_lock:
             _vespa_feed_processes.add(process)
         try:
-            stdout, stderr = process.communicate(
-                timeout=feed_timeout_seconds_per_file * len(materialised_derived_files)
-            )
+            stdout, stderr = process.communicate(timeout=feed_timeout_seconds)
         except BaseException:
             # What subprocess.run does too: never leave the child running when
             # the call that owns it is unwinding. Popen.__exit__ then closes
@@ -518,7 +531,7 @@ def feed_batch(
     endpoint: str,
     application: str,
     connections: int,
-    feed_timeout_seconds_per_file: int,
+    feed_timeout_seconds: int,
     s3_bucket: str,
     batched_s3_keys: tuple[str, ...],
     derive_data_from_source: Callable[[dict], dict] | None = None,
@@ -551,7 +564,7 @@ def feed_batch(
                 endpoint=endpoint,
                 application=application,
                 connections=connections,
-                feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
+                feed_timeout_seconds=feed_timeout_seconds,
             )
 
         # operation - ok is the only count that means records were actually
@@ -581,7 +594,7 @@ def vespa_feeder(
     derive_data_from_source: Callable[[dict], dict] | None = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     connections: int = _DEFAULT_CONNECTIONS,
-    feed_timeout_seconds_per_file: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS_PER_FILE,
+    feed_timeout_seconds: int = _VESPA_FEED_TIMEOUT_SECONDS,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
 ) -> None:
     try:
@@ -657,7 +670,7 @@ def vespa_feeder(
                         endpoint=endpoint,
                         application=application,
                         connections=connections,
-                        feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
+                        feed_timeout_seconds=feed_timeout_seconds,
                         s3_bucket=s3_bucket,
                         batched_s3_keys=batched_s3_keys,
                         derive_data_from_source=derive_data_from_source,
