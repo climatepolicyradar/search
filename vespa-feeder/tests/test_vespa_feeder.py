@@ -1,6 +1,6 @@
 """Table-driven tests for the `vespa_feeder` flow itself."""
 
-from contextlib import contextmanager
+import inspect
 from pathlib import Path
 
 import pytest
@@ -8,10 +8,8 @@ import vespa_feeder as feeder
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.util._once import Once
-from prefect.cache_policies import NO_CACHE
-from task_runner import task_runner
-
-from prefect import flow, task
+from prefect.futures import PrefectFuture
+from prefect.logging import disable_run_logger
 
 
 def _feed_result(
@@ -29,55 +27,57 @@ def _feed_result(
     )
 
 
-def _feed_batch_returning(*outcomes, record_calls_in: list | None = None):
+class _FakeFuture:
+    """What `feed_batch.submit` hands back, wrapping one batch's outcome."""
+
+    def __init__(self, outcome: feeder.FeedResult | BaseException) -> None:
+        self.outcome = outcome
+
+    def result(self, timeout=None, raise_on_failure=True):
+        if raise_on_failure and isinstance(self.outcome, BaseException):
+            raise self.outcome
+        return self.outcome
+
+
+class _ExplodingFuture:
+    """A future that fails the drain loop itself, the way a mid-run cancel does."""
+
+    def result(self, timeout=None, raise_on_failure=True):
+        raise KeyboardInterrupt("cancelled mid-drain")
+
+
+@pytest.mark.parametrize("fake", [_FakeFuture, _ExplodingFuture])
+def test_the_future_fakes_match_the_real_prefect_future(fake):
     """
-    A real Prefect task standing in for `feed_batch`, one outcome per batch.
+    The fakes must keep the `.result` signature they stand in for.
 
-    `vespa_feeder` calls `.submit()` on whatever `feed_batch` is, so this has
-    to be a genuine task: it gives the flow real `PrefectFuture`s off the real
-    `ThreadPoolTaskRunner`. Only the body is swapped - the real `feed_batch`
-    shells out to the `vespa feed` binary, which is not available under test.
-
-    Outcomes are handed out per call rather than per batch index because the
-    task runner may run batches concurrently; a `BaseException` outcome is
-    raised, so the engine marks that run failed exactly as a real failure does.
-
-    `record_calls_in`, when given, collects the kwargs each batch was
-    submitted with. It is a parameter rather than an attribute on the returned
-    task because that task is a typed Prefect `Task`, which has no such field.
-    """
-    remaining = list(outcomes)
-
-    @task(cache_policy=NO_CACHE)
-    def fake_feed_batch(**kwargs) -> feeder.FeedResult:
-        if record_calls_in is not None:
-            record_calls_in.append(kwargs)
-        outcome = remaining.pop(0)
-        if isinstance(outcome, BaseException):
-            raise outcome
-        return outcome
-
-    return fake_feed_batch
-
-
-def _run_vespa_feeder(max_workers: int = 4, **kwargs) -> None:
-    """
-    Run `vespa_feeder` inside a real flow, the way the feeder flows do.
-
-    `vespa_feeder` is a plain function, not a flow: it is called from the
-    `@flow` wrappers in `labels_flow`/`documents_flow`/`passages_flow`. It
-    submits tasks, so it needs a real flow run and task runner around it -
-    the same bounded `task_runner` those flows pass.
-
-    `max_workers=1` makes the batches run in submission order, for the tests
-    that care which batch finishes first.
+    `vespa_feeder` calls `.result(raise_on_failure=False)`; if Prefect renamed
+    that parameter the fakes would happily keep accepting it and the drain-loop
+    tests would still pass against an API that no longer exists.
     """
 
-    @flow(task_runner=task_runner(max_workers=max_workers))
-    def feeder_flow() -> None:
-        feeder.vespa_feeder(**kwargs)
+    def _contract(func):
+        # Names and defaults, not annotations: the fakes are deliberately
+        # unannotated, but the parameters the drain loop passes must match.
+        return [
+            (name, parameter.kind, parameter.default)
+            for name, parameter in inspect.signature(func).parameters.items()
+        ]
 
-    feeder_flow()
+    assert _contract(fake.result) == _contract(PrefectFuture.result)
+
+
+class _FakeFeedBatch:
+    def __init__(self, futures) -> None:
+        self.futures = list(futures)
+        self.submitted = 0
+        self.calls: list[dict] = []
+
+    def submit(self, **kwargs):
+        self.calls.append(kwargs)
+        future = self.futures[self.submitted]
+        self.submitted += 1
+        return future
 
 
 @pytest.fixture
@@ -92,13 +92,15 @@ def summary_artifacts(monkeypatch):
     monkeypatch.setattr(
         feeder, "create_markdown_artifact", lambda **kwargs: artifacts.append(kwargs)
     )
-    # No `get_run_logger` stub: these tests run inside a real flow run, so the
-    # real run context supplies the logger.
-    return artifacts
+    # Prefect's own stand-in for a run context, so `get_run_logger()` inside
+    # `vespa_feeder` returns a plain logger instead of raising
+    # MissingContextError - no patching of the production module needed.
+    with disable_run_logger():
+        yield artifacts
 
 
 def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
-    monkeypatch, prefect_db, summary_artifacts
+    monkeypatch, summary_artifacts
 ):
     """
     A batch that raises must not take the rest of the run down with it.
@@ -111,15 +113,17 @@ def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
     monkeypatch.setattr(
         feeder,
         "feed_batch",
-        _feed_batch_returning(
-            _feed_result("one.jsonl"),
-            RuntimeError("HeadObject: Not Found"),
-            _feed_result("three.jsonl"),
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(RuntimeError("HeadObject: Not Found")),
+                _FakeFuture(_feed_result("three.jsonl")),
+            ]
         ),
     )
 
     with pytest.raises(feeder.VespaFeederFailed) as exc_info:
-        _run_vespa_feeder(
+        feeder.vespa_feeder(
             s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
         )
 
@@ -133,7 +137,7 @@ def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
 
 
 def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
-    monkeypatch, prefect_db, summary_artifacts
+    monkeypatch, summary_artifacts
 ):
     """
     A cancel lands in the drain loop, not in a batch.
@@ -143,44 +147,36 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
     it fed.
     """
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
-    # The second batch raises KeyboardInterrupt, which `raise_on_failure=False`
-    # does NOT swallow - BaseException propagates out of `.result()` and into
-    # the drain loop, which is the code path under test. max_workers=1 so the
-    # first batch is finished and collected before the second one interrupts.
     monkeypatch.setattr(
         feeder,
         "feed_batch",
-        _feed_batch_returning(
-            _feed_result("one.jsonl"), KeyboardInterrupt("cancelled mid-drain")
-        ),
+        _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl")), _ExplodingFuture()]),
     )
 
     with pytest.raises(KeyboardInterrupt):
-        _run_vespa_feeder(
-            s3_bucket="bucket",
-            s3_prefix="prefix/",
-            s3_export_prefix="x",
-            batch_size=1,
-            max_workers=1,
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
         )
 
     assert "| Files processed | 1 |" in summary_artifacts[0]["markdown"]
 
 
 def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
-    monkeypatch, prefect_db, summary_artifacts
+    monkeypatch, summary_artifacts
 ):
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
-        _feed_batch_returning(
-            _feed_result("one.jsonl"),
-            _feed_result("two.jsonl"),
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(_feed_result("two.jsonl")),
+            ]
         ),
     )
 
-    _run_vespa_feeder(
+    feeder.vespa_feeder(
         s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
     )
 
@@ -189,19 +185,21 @@ def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
     assert "| Batches that raised | 0 |" in markdown
 
 def test_vespa_feeder_records_a_completed_run(
-    monkeypatch, prefect_db, summary_artifacts, recording_metrics
+    monkeypatch, summary_artifacts, recording_metrics
 ):
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
-        _feed_batch_returning(
-            _feed_result("one.jsonl"),
-            _feed_result("two.jsonl"),
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(_feed_result("two.jsonl")),
+            ]
         ),
     )
 
-    _run_vespa_feeder(
+    feeder.vespa_feeder(
         s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
     )
 
@@ -211,58 +209,50 @@ def test_vespa_feeder_records_a_completed_run(
     assert duration_s >= 0
     assert deployment_name == "local"
 
-    # Under a real flow run the run name is Prefect's own generated one, not
-    # the "unknown" fallback vespa_feeder uses outside a run context.
-    recording_metrics.record_run_completed.assert_called_once()
-    completed_deployment, completed_run_name = (
-        recording_metrics.record_run_completed.call_args.args
-    )
-    assert completed_deployment == "local"
-    assert completed_run_name
+    recording_metrics.record_run_completed.assert_called_once_with("local", "unknown")
     recording_metrics.record_run_failed.assert_not_called()
 
 
 def test_vespa_feeder_records_a_failed_run(
-    monkeypatch, prefect_db, summary_artifacts, recording_metrics
+    monkeypatch, summary_artifacts, recording_metrics
 ):
     """A run that loses records is a failed run, not a completed one."""
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
-        _feed_batch_returning(
-            _feed_result(
-                "one.jsonl",
-                errors=[
-                    feeder.VespaResponseError(
-                        ok_count=8,
-                        operation_count=10,
-                        throttled_count=0,
-                        other_http_error_count=0,
-                        failed_documents=[],
+        _FakeFeedBatch(
+            [
+                _FakeFuture(
+                    _feed_result(
+                        "one.jsonl",
+                        errors=[
+                            feeder.VespaResponseError(
+                                ok_count=8,
+                                operation_count=10,
+                                throttled_count=0,
+                                other_http_error_count=0,
+                                failed_documents=[],
+                            )
+                        ],
                     )
-                ],
-            )
+                )
+            ]
         ),
     )
 
     with pytest.raises(feeder.VespaFeederFailed):
-        _run_vespa_feeder(
+        feeder.vespa_feeder(
             s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
         )
 
-    recording_metrics.record_run_failed.assert_called_once()
-    failed_deployment, failed_run_name = (
-        recording_metrics.record_run_failed.call_args.args
-    )
-    assert failed_deployment == "local"
-    assert failed_run_name
+    recording_metrics.record_run_failed.assert_called_once_with("local", "unknown")
     recording_metrics.record_run_completed.assert_not_called()
     recording_metrics.record_run_duration.assert_called_once()
 
 
 def test_vespa_feeder_sets_the_feed_stats_the_slack_hook_reads(
-    monkeypatch, prefect_db, summary_artifacts, recording_metrics
+    monkeypatch, summary_artifacts, recording_metrics
 ):
     """
     Slack prints `—` unless `set_feed_stats` runs.
@@ -286,13 +276,15 @@ def test_vespa_feeder_sets_the_feed_stats_the_slack_hook_reads(
     monkeypatch.setattr(
         feeder,
         "feed_batch",
-        _feed_batch_returning(
-            _feed_result("one.jsonl", ok=10),
-            _feed_result("two.jsonl", ok=5),
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl", ok=10)),
+                _FakeFuture(_feed_result("two.jsonl", ok=5)),
+            ]
         ),
     )
 
-    _run_vespa_feeder(
+    feeder.vespa_feeder(
         s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
     )
 
@@ -314,7 +306,7 @@ def telemetry_calls(monkeypatch):
 
 
 def test_vespa_feeder_flushes_then_shuts_down_telemetry(
-    monkeypatch, prefect_db, summary_artifacts, recording_metrics, telemetry_calls
+    monkeypatch, summary_artifacts, recording_metrics, telemetry_calls
 ):
     """
     Order matters.
@@ -324,12 +316,10 @@ def test_vespa_feeder_flushes_then_shuts_down_telemetry(
     """
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
     monkeypatch.setattr(
-        feeder,
-        "feed_batch",
-        _feed_batch_returning(_feed_result("one.jsonl")),
+        feeder, "feed_batch", _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl"))])
     )
 
-    _run_vespa_feeder(
+    feeder.vespa_feeder(
         s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
     )
 
@@ -337,7 +327,7 @@ def test_vespa_feeder_flushes_then_shuts_down_telemetry(
 
 
 def test_vespa_feeder_closes_the_run_span_before_shutting_telemetry_down(
-    monkeypatch, prefect_db, summary_artifacts, recording_metrics
+    monkeypatch, summary_artifacts, recording_metrics
 ):
     """
     shutdown() tears the tracer provider down.
@@ -355,62 +345,44 @@ def test_vespa_feeder_closes_the_run_span_before_shutting_telemetry_down(
     monkeypatch.setattr(trace, "_TRACER_PROVIDER", TracerProvider())
     monkeypatch.setattr(trace, "_TRACER_PROVIDER_SET_ONCE", Once())
 
-    # The feeder's OWN span, not `get_current_span()`: this runs inside a real
-    # flow run, whose Prefect-opened span is still current (and still
-    # recording) at shutdown. That outer span is Prefect's to close, so
-    # sampling the current span would assert on the wrong one.
-    feeder_spans = []
-    start_span = feeder.tracer.start_as_current_span
-
-    @contextmanager
-    def _capture_feeder_span(name, *args, **kwargs):
-        with start_span(name, *args, **kwargs) as span:
-            if name == "vespa_feeder":
-                feeder_spans.append(span)
-            yield span
-
-    monkeypatch.setattr(feeder.tracer, "start_as_current_span", _capture_feeder_span)
-
     # Sampled at the moment shutdown runs, not afterwards: the span ends either
     # way once vespa_feeder returns, so a span object kept for later always
     # looks closed.
     recording_at_shutdown: list[bool] = []
 
     def _record_span_state() -> None:
-        recording_at_shutdown.extend(span.is_recording() for span in feeder_spans)
+        recording_at_shutdown.append(trace.get_current_span().is_recording())
 
     monkeypatch.setattr(feeder, "force_flush", lambda: None)
     monkeypatch.setattr(feeder, "shutdown", _record_span_state)
 
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
     monkeypatch.setattr(
-        feeder,
-        "feed_batch",
-        _feed_batch_returning(_feed_result("one.jsonl")),
+        feeder, "feed_batch", _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl"))])
     )
 
-    _run_vespa_feeder(
+    feeder.vespa_feeder(
         s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
     )
 
-    # The run span is no longer recording when shutdown runs, so it has
+    # No span is still recording when shutdown runs, so the run span has
     # already ended and cannot be dropped.
     assert recording_at_shutdown == [False]
 
 
 def test_vespa_feeder_flushes_telemetry_when_the_run_fails(
-    monkeypatch, prefect_db, summary_artifacts, recording_metrics, telemetry_calls
+    monkeypatch, summary_artifacts, recording_metrics, telemetry_calls
 ):
     """A failed run is exactly when the metrics matter most."""
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
         "feed_batch",
-        _feed_batch_returning(RuntimeError("HeadObject: Not Found")),
+        _FakeFeedBatch([_FakeFuture(RuntimeError("HeadObject: Not Found"))]),
     )
 
     with pytest.raises(feeder.VespaFeederFailed):
-        _run_vespa_feeder(
+        feeder.vespa_feeder(
             s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
         )
 
@@ -448,7 +420,6 @@ def test_vespa_feeder_flushes_telemetry_when_the_run_fails(
 )
 def test_vespa_feeder_resolves_the_export_prefix_only_when_there_is_one(
     monkeypatch,
-    prefect_db,
     summary_artifacts,
     s3_prefix,
     s3_export_prefix,
@@ -467,16 +438,10 @@ def test_vespa_feeder_resolves_the_export_prefix_only_when_there_is_one(
         "list_s3_keys",
         lambda bucket, prefix: [f"{prefix}/part.jsonl"],  # noqa: ARG005
     )
-    feed_batch_calls: list[dict] = []
-    monkeypatch.setattr(
-        feeder,
-        "feed_batch",
-        _feed_batch_returning(
-            _feed_result("one.jsonl"), record_calls_in=feed_batch_calls
-        ),
-    )
+    feed_batch = _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl"))])
+    monkeypatch.setattr(feeder, "feed_batch", feed_batch)
 
-    _run_vespa_feeder(
+    feeder.vespa_feeder(
         s3_bucket="bucket",
         s3_prefix=s3_prefix,
         s3_export_prefix=s3_export_prefix,
@@ -484,4 +449,4 @@ def test_vespa_feeder_resolves_the_export_prefix_only_when_there_is_one(
     )
 
     assert bool(resolved) is expected_resolved
-    assert [call["batched_s3_keys"] for call in feed_batch_calls] == [(expected_fed,)]
+    assert [call["batched_s3_keys"] for call in feed_batch.calls] == [(expected_fed,)]
