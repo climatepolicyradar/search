@@ -311,6 +311,9 @@ def test_feed_derived_files_hands_the_cli_the_whole_invocation(monkeypatch, tmp_
     or a dropped `text=True`, read as success here while breaking the real
     CLI. `text=True` in particular decides whether `communicate` hands back
     `str` or `bytes`, which changes how the JSON and the stderr regex parse.
+
+    `--verbose` is deliberately absent: it logs every successful operation as
+    well as every failed one, which cost ~1GB of stderr on a passages run.
     """
     files = [write_jsonl(tmp_path / "a.jsonl", [{"id": 1}])]
     fake_feed = FakeVespaFeed()
@@ -335,7 +338,6 @@ def test_feed_derived_files_hands_the_cli_the_whole_invocation(monkeypatch, tmp_
         "4",
         "--inflight",
         "0",
-        "--verbose",
     ]
     # Dropping either pipe loses the output the feeder parses: stdout carries
     # the JSON summary, stderr the per-document failures.
