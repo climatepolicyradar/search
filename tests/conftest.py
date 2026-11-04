@@ -1,7 +1,7 @@
 """Pytest configuration and shared fixtures."""
 
 import os
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager
 from typing import cast
 
@@ -16,6 +16,7 @@ from moto import mock_aws
 
 from api.main import create_app
 from api.state import State
+from api.utils import documents_engine
 from relevance_tests import TestResult
 from search import Primitive
 from search.identifiers import generate_id
@@ -25,7 +26,22 @@ from tests.common_strategies import (
     label_strategy,
     passage_strategy,
 )
+from tests.engines.dev_vespa.stub_documents_search_engine import (
+    StubDocumentSearchEngine,
+)
 from tests.http import MockHandler
+
+
+def override_dependency[T](
+    app: FastAPI,
+    key: Callable[..., object],
+    value: T,
+) -> Generator[T]:
+    app.dependency_overrides[key] = lambda: value
+    try:
+        yield value
+    finally:
+        del app.dependency_overrides[key]
 
 
 @pytest.fixture(scope="function")
@@ -73,6 +89,15 @@ def test_client(app: FastAPI) -> Generator[TestClient, None]:
     """
     with TestClient(app=app, base_url="http://localhost") as client:
         yield client
+
+
+@pytest.fixture(scope="function")
+def stub_engine(app: FastAPI) -> Generator[StubDocumentSearchEngine]:
+    yield from override_dependency(
+        app=app,
+        key=documents_engine,
+        value=StubDocumentSearchEngine(),
+    )
 
 
 @pytest.fixture(scope="function")
