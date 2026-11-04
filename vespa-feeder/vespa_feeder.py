@@ -718,6 +718,18 @@ def vespa_feeder(
 
                     feed_results.append(feed_result)
             finally:
+                # A flow-level timeout raises on this thread via Prefect's
+                # AlarmCancelScope, but worker threads blocked in `communicate()`
+                # never see it. Without this, the run fails while orphaned
+                # `vespa feed` children keep writing to Vespa until the container
+                # dies. We hook the `finally` rather than installing a SIGALRM
+                # handler, because Prefect owns that signal and competing for it
+                # would break its cancel scope.
+                with _vespa_feed_processes_lock:
+                    in_flight = list(_vespa_feed_processes)
+                for in_flight_process in in_flight:
+                    in_flight_process.terminate()
+
                 # we then get the known failures from the vespa FeedResult
                 feed_results_errors = [result for result in feed_results if result.errors]
 

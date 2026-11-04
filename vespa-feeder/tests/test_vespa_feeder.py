@@ -199,6 +199,52 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
     assert "| Files processed | 1 |" in summary_artifacts[0]["markdown"]
 
 
+def test_vespa_feeder_terminates_in_flight_feeds_when_the_drain_is_interrupted(
+    monkeypatch, summary_artifacts
+):
+    """
+    An interrupted run must not leave orphaned `vespa feed` children running.
+
+    A flow-level timeout raises on the main thread via Prefect's
+    AlarmCancelScope, but worker threads blocked in `communicate()` never see
+    it. Without this the run fails while orphaned children keep writing to
+    Vespa until the container dies.
+
+    Prefect owns SIGALRM, so we hook the drain `finally` rather than
+    installing a competing signal handler.
+    """
+    process = FakeVespaFeedProcess(None, ["vespa", "feed"], "")
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [
+                _FakeFuture(
+                    KeyboardInterrupt("cancelled mid-drain"),
+                    ignores_raise_on_failure=True,
+                )
+            ]
+        ),
+    )
+
+    with feeder._vespa_feed_processes_lock:
+        feeder._vespa_feed_processes.add(process)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            feeder.vespa_feeder(
+                s3_bucket="bucket",
+                s3_prefix="prefix/",
+                s3_export_prefix="x",
+                batch_size=1,
+            )
+    finally:
+        with feeder._vespa_feed_processes_lock:
+            feeder._vespa_feed_processes.discard(process)
+
+    assert process.terminated
+
+
 def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
     monkeypatch, summary_artifacts
 ):
