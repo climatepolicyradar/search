@@ -152,7 +152,12 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
 
 
 def test_feed_batch_records_what_it_fed(
-    monkeypatch, temp_workspace, s3_client, s3_bucket, recording_metrics
+    monkeypatch,
+    temp_workspace,
+    s3_client,
+    s3_bucket,
+    recording_metrics,
+    prefect_run_identity,
 ):
     """
     `records.error` is operation - ok, the only count that means records were lost.
@@ -160,6 +165,7 @@ def test_feed_batch_records_what_it_fed(
     feeder/throttled/other-HTTP errors are retry attempts that mostly
     self-heal, so they must not inflate the error metric.
     """
+    expected_deployment, expected_run_name = prefect_run_identity
     put_s3_objects(s3_client, s3_bucket, _BATCH_S3_OBJECTS)
     monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed())
 
@@ -176,8 +182,8 @@ def test_feed_batch_records_what_it_fed(
         input_count=2,
         ok_count=2,
         total_errors=0,
-        deployment_name="local",
-        run_name="unknown",
+        deployment_name=expected_deployment,
+        run_name=expected_run_name,
     )
 
     # The duration is whatever the clock said, so only its shape is assertable.

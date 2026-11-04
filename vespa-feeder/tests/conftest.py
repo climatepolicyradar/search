@@ -70,3 +70,21 @@ def temp_workspace(monkeypatch, tmp_path: Path) -> Path:
     """Point the feeder's `tempfile.gettempdir()` at a per-test directory."""
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
     return tmp_path
+
+
+@pytest.fixture
+def prefect_run_identity(monkeypatch):
+    """
+    Give the feeder the deployment and run names a real Prefect run would.
+
+    Outside a run context `prefect.runtime` returns `None` for both, and
+    `vespa_feeder` falls back to "local"/"unknown". Asserting those fallbacks
+    pins values that never occur in production - a run always has a generated
+    name like `tuscan-elephant`, and the dashboard groups by it. Patching them
+    here lets the tests assert the production shape instead.
+    """
+    import vespa_feeder as feeder
+
+    monkeypatch.setattr(feeder.deployment, "name", "search-vespa-feeder-passages")
+    monkeypatch.setattr(feeder.flow_run, "name", "tuscan-elephant")
+    return "search-vespa-feeder-passages", "tuscan-elephant"

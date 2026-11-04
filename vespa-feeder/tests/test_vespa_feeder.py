@@ -185,8 +185,9 @@ def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
     assert "| Batches that raised | 0 |" in markdown
 
 def test_vespa_feeder_records_a_completed_run(
-    monkeypatch, summary_artifacts, recording_metrics
+    monkeypatch, summary_artifacts, recording_metrics, prefect_run_identity
 ):
+    expected_deployment, expected_run_name = prefect_run_identity
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
@@ -207,16 +208,19 @@ def test_vespa_feeder_records_a_completed_run(
     recording_metrics.record_run_duration.assert_called_once()
     duration_s, deployment_name = recording_metrics.record_run_duration.call_args.args
     assert duration_s >= 0
-    assert deployment_name == "local"
+    assert deployment_name == expected_deployment
 
-    recording_metrics.record_run_completed.assert_called_once_with("local", "unknown")
+    recording_metrics.record_run_completed.assert_called_once_with(
+        expected_deployment, expected_run_name
+    )
     recording_metrics.record_run_failed.assert_not_called()
 
 
 def test_vespa_feeder_records_a_failed_run(
-    monkeypatch, summary_artifacts, recording_metrics
+    monkeypatch, summary_artifacts, recording_metrics, prefect_run_identity
 ):
     """A run that loses records is a failed run, not a completed one."""
+    expected_deployment, expected_run_name = prefect_run_identity
     monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
     monkeypatch.setattr(
         feeder,
@@ -246,7 +250,9 @@ def test_vespa_feeder_records_a_failed_run(
             s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
         )
 
-    recording_metrics.record_run_failed.assert_called_once_with("local", "unknown")
+    recording_metrics.record_run_failed.assert_called_once_with(
+        expected_deployment, expected_run_name
+    )
     recording_metrics.record_run_completed.assert_not_called()
     recording_metrics.record_run_duration.assert_called_once()
 
