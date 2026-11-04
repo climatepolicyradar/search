@@ -246,3 +246,41 @@ def test_delete_materialised_s3_files_removes_every_file_it_is_given(
     feeder.delete_materialised_s3_files(paths)
 
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("build_client", "expected_service"),
+    [
+        pytest.param(
+            lambda: feeder.boto3.client("s3", config=feeder._BOTO_CONFIG),
+            "s3",
+            id="s3",
+        ),
+        pytest.param(
+            lambda: feeder.boto3.client("ssm", config=feeder._BOTO_CONFIG),
+            "ssm",
+            id="ssm",
+        ),
+    ],
+)
+def test_boto_clients_are_built_with_explicit_socket_timeouts(
+    monkeypatch, build_client, expected_service
+):
+    """
+    A wedged S3 or SSM socket must fail, not hang.
+
+    boto3's own 60s defaults sit under a retry layer that can extend a stalled
+    call indefinitely. The task runs on a ThreadPoolTaskRunner worker, where
+    Prefect cannot interrupt blocking I/O, so the bound has to be on the socket
+    itself rather than wrapped around the call.
+    """
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-west-1")
+
+    client = build_client()
+
+    assert client.meta.service_model.service_name == expected_service
+    assert client.meta.config.connect_timeout == feeder._S3_CONNECT_TIMEOUT_SECONDS
+    assert client.meta.config.read_timeout == feeder._S3_READ_TIMEOUT_SECONDS
+    # botocore normalises `max_attempts=3` to `total_max_attempts=4`:
+    # three retries after the initial call.
+    assert client.meta.config.retries["total_max_attempts"] == 4
