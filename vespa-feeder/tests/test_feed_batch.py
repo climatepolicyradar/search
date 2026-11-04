@@ -78,7 +78,12 @@ def _broken_deriver(record: dict) -> dict:
 
 
 @pytest.mark.parametrize(
-    ("break_the_last_download", "derive_data_from_source", "vespa_feed", "expected_exception"),
+    (
+        "break_the_last_download",
+        "derive_data_from_source",
+        "vespa_feed",
+        "expected_exception",
+    ),
     [
         pytest.param(
             True,
@@ -134,7 +139,7 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
             real_download_file(bucket, key, destination)
 
         monkeypatch.setattr(s3_client, "download_file", download_file)
-        monkeypatch.setattr(feeder.boto3, "client", lambda _: s3_client)
+        monkeypatch.setattr(feeder.boto3, "client", lambda *args, **kwargs: s3_client)  # noqa: ARG005
     monkeypatch.setattr(feeder.subprocess, "Popen", vespa_feed())
 
     with pytest.raises(expected_exception):
@@ -206,7 +211,7 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
         raise RuntimeError("s3 download failed")
 
     monkeypatch.setattr(s3_client, "download_file", download_file)
-    monkeypatch.setattr(feeder.boto3, "client", lambda _: s3_client)  # noqa: ARG005
+    monkeypatch.setattr(feeder.boto3, "client", lambda *args, **kwargs: s3_client)  # noqa: ARG005
     monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed())
 
     with pytest.raises(RuntimeError, match="s3 download failed"):

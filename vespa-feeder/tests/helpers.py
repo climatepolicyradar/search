@@ -127,12 +127,18 @@ class FakeVespaFeed:
         # that do not care keep behaving as they did.
         self.seconds_to_feed = seconds_to_feed
         self.calls: list[list[str]] = []
+        # Everything `Popen` was handed besides the argv. Recorded rather than
+        # swallowed: `text=True` decides whether `communicate` returns `str` or
+        # `bytes`, and the two pipes carry the output the feeder parses, so a
+        # fake that drops them lets all three go untested.
+        self.call_kwargs: list[dict] = []
         self.timeouts: list[float | None] = []
         self.fed_records: list[dict] = []
         self.processes: list[FakeVespaFeedProcess] = []
 
     def __call__(self, argv: list[str], **kwargs) -> FakeVespaFeedProcess:
         self.calls.append(argv)
+        self.call_kwargs.append(kwargs)
 
         feed_paths = takewhile(lambda arg: not arg.startswith("--"), argv[2:])
         records = [record for path in feed_paths for record in read_jsonl(Path(path))]

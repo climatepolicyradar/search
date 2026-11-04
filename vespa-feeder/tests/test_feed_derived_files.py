@@ -301,3 +301,44 @@ def test_feed_derived_files_raises_when_the_feed_outlasts_its_timeout(
         )
 
     assert fake_feed.processes[0].killed is True
+
+
+def test_feed_derived_files_hands_the_cli_the_whole_invocation(monkeypatch, tmp_path):
+    """
+    Pin the flags and the `Popen` keywords, not just the files.
+
+    Everything after the file list went unasserted, so a typo in a flag name,
+    or a dropped `text=True`, read as success here while breaking the real
+    CLI. `text=True` in particular decides whether `communicate` hands back
+    `str` or `bytes`, which changes how the JSON and the stderr regex parse.
+    """
+    files = [write_jsonl(tmp_path / "a.jsonl", [{"id": 1}])]
+    fake_feed = FakeVespaFeed()
+    monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
+
+    feeder.feed_derived_files(
+        materialised_derived_files=files,
+        endpoint="http://vespa",
+        application="app",
+        connections=4,
+    )
+
+    assert fake_feed.calls[0] == [
+        "vespa",
+        "feed",
+        str(files[0]),
+        "--target",
+        "http://vespa",
+        "--application",
+        "app",
+        "--connections",
+        "4",
+        "--inflight",
+        "0",
+        "--verbose",
+    ]
+    # Dropping either pipe loses the output the feeder parses: stdout carries
+    # the JSON summary, stderr the per-document failures.
+    assert fake_feed.call_kwargs[0]["stdout"] is subprocess.PIPE
+    assert fake_feed.call_kwargs[0]["stderr"] is subprocess.PIPE
+    assert fake_feed.call_kwargs[0]["text"] is True

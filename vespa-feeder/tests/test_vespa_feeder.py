@@ -29,6 +29,11 @@ def _feed_result(
     )
 
 
+# Captured at import, before any test monkeypatches `feeder.feed_batch` with a
+# fake: `.fn` is the real function the Prefect task wraps.
+_REAL_FEED_BATCH_PARAMETERS = set(inspect.signature(feeder.feed_batch.fn).parameters)
+
+
 class _FakeFuture:
     """
     What `feed_batch.submit` hands back, wrapping one batch's outcome.
@@ -490,3 +495,12 @@ def test_vespa_feeder_resolves_the_export_prefix_only_when_there_is_one(
 
     assert bool(resolved) is expected_resolved
     assert [call["batched_s3_keys"] for call in feed_batch.calls] == [(expected_fed,)]
+
+    # The fake stands in for a Prefect `Task`, so every keyword the drain loop
+    # passes has to be a real parameter of the task's own function. Matching
+    # `Task.submit` itself would be noise - it takes `*args`, `return_state`
+    # and `wait_for` that the loop never passes - but a rename on `feed_batch`
+    # would otherwise leave the fake accepting an argument that no longer
+    # exists, with every drain-loop test still green.
+    for call in feed_batch.calls:
+        assert set(call) <= _REAL_FEED_BATCH_PARAMETERS
