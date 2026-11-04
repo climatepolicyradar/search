@@ -1,3 +1,4 @@
+import httpx2
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -326,7 +327,9 @@ def relevance_tests_labels():
     """Run relevance tests for labels"""
 
     engines = [
-        DevVespaLabelSearchEngine(settings=settings, debug=True),
+        DevVespaLabelSearchEngine(
+            settings=settings, httpx=httpx2.AsyncClient(), debug=True
+        ),
         # VespaLabelSearchEngine(),
     ]
 

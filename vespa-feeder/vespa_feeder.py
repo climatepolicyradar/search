@@ -1,10 +1,10 @@
 """
 Shared engine behind every vespa-feeder.
 
-flow:
-- download a file from S3
-- optionally derive data from its records
-- feed it to Vespa via the `vespa feed` CLI.
+flow, per batch of S3 keys:
+- download the files from S3
+- optionally derive data from their records
+- feed them to Vespa via the `vespa feed` CLI.
 
 Domain-specific flows (labels_flow.py, documents_flow.py, passages_flow.py)
 import `vespa_feeder` and compose it with their own S3 source and (if any)
@@ -18,6 +18,7 @@ import signal
 import subprocess
 import tempfile
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import batched
@@ -30,19 +31,27 @@ from mypy_boto3_s3 import S3Client
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
 from prefect.futures import PrefectFuture
+from prefect.runtime import deployment, flow_run
 from pydantic import BaseModel, ConfigDict, Field
-from telemetry import trace, tracer
+from telemetry import (
+    feeder_metrics,
+    force_flush,
+    set_feed_stats,
+    shutdown,
+    trace,
+    tracer,
+)
 
 from prefect import get_run_logger, task
 
 logger = logging.getLogger(__name__)
 
-# Per-subprocess connection pool size (see the `--connections` comment in
-# vespa_feed). Paired with the flow's own ThreadPoolTaskRunner(max_workers=N)
-# - see the submit loop in vespa_feeder: total concurrent connections to Vespa
-# is that max_workers * _DEFAULT_CONNECTIONS. Benchmarking (8x2 vs 4x4, same
-# total connection budget) found 8x2 ~15% faster, so tune both together rather
-# than either in isolation.
+# Per-subprocess connection pool size, passed to `vespa feed --connections` in
+# feed_derived_files. Paired with the flow's own ThreadPoolTaskRunner(
+# max_workers=N) - see the submit loop in vespa_feeder: total concurrent
+# connections to Vespa is that max_workers * _DEFAULT_CONNECTIONS. Benchmarking
+# (8x2 vs 4x4, same total connection budget) found 8x2 ~15% faster, so tune
+# both together rather than either in isolation.
 _DEFAULT_CONNECTIONS = 2
 
 
@@ -514,33 +523,57 @@ def feed_batch(
     batched_s3_keys: tuple[str, ...],
     derive_data_from_source: Callable[[dict], dict] | None = None,
 ) -> FeedResult:
-    # All files from s3 and derived are stored in the `TemporaryDirectory`
-    # and deleted when `with` block exists via `TemporaryDirectory.__exit__`.
-    with tempfile.TemporaryDirectory(prefix="vespa-feeder-") as materialise_dir:
-        materialised_s3_files = materialise_s3_files(
-            bucket=s3_bucket,
-            batched_s3_keys=list(batched_s3_keys),
-            materialise_dir=Path(materialise_dir),
+    start_time = time.perf_counter()
+    deployment_name = deployment.name or "local"
+    run_name = flow_run.name or "unknown"
+    try:
+        # All files from s3 and derived are stored in the `TemporaryDirectory`
+        # and deleted when the `with` block exits via `TemporaryDirectory.__exit__`.
+        with tempfile.TemporaryDirectory(prefix="vespa-feeder-") as materialise_dir:
+            materialised_s3_files = materialise_s3_files(
+                bucket=s3_bucket,
+                batched_s3_keys=list(batched_s3_keys),
+                materialise_dir=Path(materialise_dir),
+            )
+
+            materialised_derived_files = materialise_derived_files(
+                materialised_s3_files=materialised_s3_files,
+                derive_data_from_source=derive_data_from_source,
+            )
+
+            # Delete the downloaded sources now that the derived copies exist.
+            # Without this a batch holds both copies of every record at once,
+            # roughly doubling its peak disk use.
+            delete_materialised_s3_files(materialised_s3_files=materialised_s3_files)
+
+            feed_result = feed_derived_files(
+                materialised_derived_files=materialised_derived_files,
+                endpoint=endpoint,
+                application=application,
+                connections=connections,
+                feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
+            )
+
+        # operation - ok is the only count that means records were actually
+        # lost. feeder/throttled/other-HTTP errors are retry attempts that
+        # mostly self-heal, so they must not inflate this.
+        feeder_metrics.record_feed_stats(
+            input_count=feed_result.input_count,
+            ok_count=feed_result.ok_count,
+            total_errors=feed_result.operation_count - feed_result.ok_count,
+            deployment_name=deployment_name,
+            run_name=run_name,
         )
 
-        materialised_derived_files = materialise_derived_files(
-            materialised_s3_files=materialised_s3_files,
-            derive_data_from_source=derive_data_from_source,
-        )
-
-        # Halves peak disk - a batch otherwise holds both sets at once.
-        delete_materialised_s3_files(materialised_s3_files=materialised_s3_files)
-
-        return feed_derived_files(
-            materialised_derived_files=materialised_derived_files,
-            endpoint=endpoint,
-            application=application,
-            connections=connections,
-            feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
+        return feed_result
+    finally:
+        feeder_metrics.record_task_duration(
+            task_name="feed_batch",
+            duration_s=time.perf_counter() - start_time,
+            deployment_name=deployment_name,
         )
 
 
-@tracer.start_as_current_span("vespa_feeder")
 def vespa_feeder(
     s3_bucket: str,
     s3_prefix: str,
@@ -551,118 +584,154 @@ def vespa_feeder(
     feed_timeout_seconds_per_file: int = _DEFAULT_VESPA_FEED_TIMEOUT_SECONDS_PER_FILE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
 ) -> None:
-    run_logger = get_run_logger()
-    # this ensures we terminate any `vespa feed` processes
-    # spawned from `feed_derived_files`
-    _terminate_vespa_feed_processes_on_sigterm_handler()
-
-    if not 0 < sample_rate <= 1:
-        raise ValueError(f"sample_rate must be in (0, 1], got {sample_rate}")
-
-    endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
-    application = get_ssm_parameter(name="/search/vespa/application")
-    # This is read by Vespa CLI
-    # @see: https://docs.vespa.ai/en/security/guide.html#use-endpoints
-    os.environ["VESPA_CLI_DATA_PLANE_TOKEN"] = get_ssm_parameter(
-        name="/search/vespa/write_token"
-    )
-
-    s3_export_prefix_pinned = s3_export_prefix is not None
-
-    if s3_prefix.endswith(".jsonl"):
-        # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
-        s3_keys = [s3_prefix]
-        s3_prefix_full = s3_prefix
-    else:
-        if s3_export_prefix is None:
-            s3_export_prefix = get_latest_s3_export_prefix(
-                bucket=s3_bucket, prefix=s3_prefix
-            )
-        s3_prefix_full = f"{s3_prefix}{s3_export_prefix}"
-        s3_keys = list_s3_keys(bucket=s3_bucket, prefix=s3_prefix_full)
-
-    if sample_rate < 1:
-        # Every nth key from the sorted listing, rather than the first n. Both
-        # are deterministic - so every A/B variant feeds the identical subset -
-        # but a stride is positionally unbiased, which matters if whatever
-        # produced the files varies along the ordering.
-        s3_keys = s3_keys[:: round(1 / sample_rate)]
-
-    # Log and trace before we get going
-    run_logger.info(
-        f"Feeding {len(s3_keys)} files from s3://{s3_bucket}/{s3_prefix_full} "
-        f"in batches of {batch_size} (sample_rate={sample_rate})"
-    )
-    trace.get_current_span().set_attributes(
-        {
-            "s3_bucket": s3_bucket,
-            "s3_prefix": s3_prefix,
-            "s3_export_prefix": s3_export_prefix or "",
-            "s3_export_prefix_pinned": s3_export_prefix_pinned,
-            "batch_size": batch_size,
-            "sample_rate": sample_rate,
-            "connections": connections,
-            "s3_keys_len": len(s3_keys),
-        }
-    )
-
-    s3_key_batches = list(batched(s3_keys, batch_size))
-
-    feed_results_futures: list[PrefectFuture[FeedResult]] = []
-    for batch_number, batched_s3_keys in enumerate(s3_key_batches, start=1):
-        run_logger.info(
-            f"Feeding batch {batch_number}/{len(s3_key_batches)} "
-            f"({len(batched_s3_keys)} files)"
-        )
-        feed_results_futures.append(
-            feed_batch.submit(
-                endpoint=endpoint,
-                application=application,
-                connections=connections,
-                feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
-                s3_bucket=s3_bucket,
-                batched_s3_keys=batched_s3_keys,
-                derive_data_from_source=derive_data_from_source,
-            )
-        )
-
-    # resolve feed_results_futures and raise on any exceptions
-    feed_results: list[FeedResult] = []
-    feed_results_exceptions: list[BaseException] = []
-
-    # the finally is for a cancel mid-drain: `raise_on_failure=False` means no
-    # batch raises here, so it is SIGTERM that would otherwise lose the summary.
     try:
-        for feed_result_future in feed_results_futures:
-            # we do not raise to be able to aggregate and report on this in the markdown artifact.
-            feed_result = feed_result_future.result(raise_on_failure=False)
-            if isinstance(feed_result, BaseException):
-                run_logger.error(
-                    f"Batch raised {type(feed_result).__name__}: {feed_result}"
+        with tracer.start_as_current_span("vespa_feeder"):
+            run_logger = get_run_logger()
+            start_time = time.perf_counter()
+            deployment_name = deployment.name or "local"
+            run_name = flow_run.name or "unknown"
+            # this ensures we terminate any `vespa feed` processes
+            # spawned from `feed_derived_files`
+            _terminate_vespa_feed_processes_on_sigterm_handler()
+
+            if not 0 < sample_rate <= 1:
+                raise ValueError(f"sample_rate must be in (0, 1], got {sample_rate}")
+
+            endpoint = get_ssm_parameter(name="/search/vespa/endpoint")
+            application = get_ssm_parameter(name="/search/vespa/application")
+            # This is read by Vespa CLI
+            # @see: https://docs.vespa.ai/en/security/guide.html#use-endpoints
+            os.environ["VESPA_CLI_DATA_PLANE_TOKEN"] = get_ssm_parameter(
+                name="/search/vespa/write_token"
+            )
+
+            s3_export_prefix_pinned = s3_export_prefix is not None
+
+            if s3_prefix.endswith(".jsonl"):
+                # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
+                s3_keys = [s3_prefix]
+                s3_prefix_full = s3_prefix
+            else:
+                if s3_export_prefix is None:
+                    s3_export_prefix = get_latest_s3_export_prefix(
+                        bucket=s3_bucket, prefix=s3_prefix
+                    )
+                s3_prefix_full = f"{s3_prefix}{s3_export_prefix}"
+                s3_keys = list_s3_keys(bucket=s3_bucket, prefix=s3_prefix_full)
+
+            if sample_rate < 1:
+                # Every nth key from the sorted listing, rather than the first n. Both
+                # are deterministic - so every A/B variant feeds the identical subset -
+                # but a stride is positionally unbiased, which matters if whatever
+                # produced the files varies along the ordering.
+                s3_keys = s3_keys[:: round(1 / sample_rate)]
+
+            # Log and trace before we get going
+            run_logger.info(
+                f"Feeding {len(s3_keys)} files from s3://{s3_bucket}/{s3_prefix_full} "
+                f"in batches of {batch_size} (sample_rate={sample_rate})"
+            )
+            trace.get_current_span().set_attributes(
+                {
+                    "s3_bucket": s3_bucket,
+                    "s3_prefix": s3_prefix,
+                    "s3_export_prefix": s3_export_prefix or "",
+                    "s3_export_prefix_pinned": s3_export_prefix_pinned,
+                    "batch_size": batch_size,
+                    "sample_rate": sample_rate,
+                    "connections": connections,
+                    "s3_keys_len": len(s3_keys),
+                }
+            )
+
+            s3_key_batches = list(batched(s3_keys, batch_size))
+
+            feed_results_futures: list[PrefectFuture[FeedResult]] = []
+            for batch_number, batched_s3_keys in enumerate(s3_key_batches, start=1):
+                run_logger.info(
+                    f"Feeding batch {batch_number}/{len(s3_key_batches)} "
+                    f"({len(batched_s3_keys)} files)"
                 )
-                feed_results_exceptions.append(feed_result)
-                continue
+                feed_results_futures.append(
+                    feed_batch.submit(
+                        endpoint=endpoint,
+                        application=application,
+                        connections=connections,
+                        feed_timeout_seconds_per_file=feed_timeout_seconds_per_file,
+                        s3_bucket=s3_bucket,
+                        batched_s3_keys=batched_s3_keys,
+                        derive_data_from_source=derive_data_from_source,
+                    )
+                )
 
-            feed_results.append(feed_result)
+            # resolve feed_results_futures and raise on any exceptions
+            feed_results: list[FeedResult] = []
+            feed_results_exceptions: list[BaseException] = []
+
+            # the finally is for a cancel mid-drain: `raise_on_failure=False` means no
+            # batch raises here, so it is SIGTERM that would otherwise lose the summary.
+            try:
+                for feed_result_future in feed_results_futures:
+                    # we do not raise to be able to aggregate and report on this in the markdown artifact.
+                    feed_result = feed_result_future.result(raise_on_failure=False)
+                    if isinstance(feed_result, BaseException):
+                        run_logger.error(
+                            f"Batch raised {type(feed_result).__name__}: {feed_result}"
+                        )
+                        feed_results_exceptions.append(feed_result)
+                        continue
+
+                    feed_results.append(feed_result)
+            finally:
+                # we then get the known failures from the vespa FeedResult
+                feed_results_errors = [result for result in feed_results if result.errors]
+
+                # The same totals the artifact reports, so the Slack notification and
+                # the artifact cannot disagree.
+                total_input = sum(result.input_count for result in feed_results)
+                total_operation = sum(result.operation_count for result in feed_results)
+                total_ok = sum(result.ok_count for result in feed_results)
+                run_failed = bool(feed_results_errors or feed_results_exceptions)
+
+                # publish the artifact in Prefect
+                create_markdown_artifact(
+                    key="vespa-feeder-run-summary",
+                    markdown=_build_run_summary_markdown(
+                        feed_results, feed_results_errors, feed_results_exceptions
+                    ),
+                    description="Aggregate summary of the vespa-feeder run across all files",
+                )
+
+                set_feed_stats(
+                    input_count=total_input,
+                    ok_count=total_ok,
+                    total_errors=total_operation - total_ok,
+                )
+
+                feeder_metrics.record_run_duration(
+                    time.perf_counter() - start_time, deployment_name
+                )
+                if run_failed:
+                    feeder_metrics.record_run_failed(deployment_name, run_name)
+                else:
+                    feeder_metrics.record_run_completed(deployment_name, run_name)
+
+            if feed_results_errors or feed_results_exceptions:
+                raise VespaFeederFailed(
+                    f"vespa_feed: of {len(feed_results) + len(feed_results_exceptions)} "
+                    f"batch(es), {len(feed_results_errors)} lost records and "
+                    f"{len(feed_results_exceptions)} raised. See the "
+                    "vespa-feeder-run-summary artifact and per-batch error logs above.",
+                    feed_results_errors,
+                    feed_results_exceptions,
+                )
     finally:
-        # we then get the known failures from the vespa FeedResult
-        feed_results_errors = [result for result in feed_results if result.errors]
-
-        # publish the artifact in Prefect
-        create_markdown_artifact(
-            key="vespa-feeder-run-summary",
-            markdown=_build_run_summary_markdown(
-                feed_results, feed_results_errors, feed_results_exceptions
-            ),
-            description="Aggregate summary of the vespa-feeder run across all files",
-        )
-
-    if feed_results_errors or feed_results_exceptions:
-        raise VespaFeederFailed(
-            f"vespa_feed: of {len(feed_results) + len(feed_results_exceptions)} "
-            f"batch(es), {len(feed_results_errors)} lost records and "
-            f"{len(feed_results_exceptions)} raised. See the "
-            "vespa-feeder-run-summary artifact and per-batch error logs above.",
-            feed_results_errors,
-            feed_results_exceptions,
-        )
+        # Outside the span, and outside the inner finally: shutdown() tears
+        # down the tracer provider, and any span still open when it runs is
+        # dropped - so the span has to close first or the root vespa_feeder
+        # span is lost on every run. v1 got this ordering from an explicit
+        # `with`; the decorator form hid it. force_flush() first for its
+        # bounded timeout and logged warning, which shutdown() swallows; it
+        # flushes metrics and logs but never traces, so both are needed.
+        force_flush()
+        shutdown()

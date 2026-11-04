@@ -12,6 +12,7 @@ from search.engines.dev_vespa import (
     DevVespaPassageSearchEngine,
     Settings,
 )
+from search.engines.dev_vespa.passages_search_engine import DEFAULT_PASSAGE_RANK_PROFILE
 from search.identifiers import generate_id
 from search.label import Label
 from search.passage import Passage
@@ -47,7 +48,7 @@ def test_engine_with_no_instance_matches_pre_feature_behaviour(http_client: http
     assert full.id == generate_id(
         "DevVespaPassageSearchEngine (Passage)",
         ("exact_weight", 0.1),
-        ("ranking_profile", "bm25_multiplicative"),
+        ("ranking_profile", DEFAULT_PASSAGE_RANK_PROFILE),
         ("topic_weight", 1.0),
     )
     assert repr(full) == "DevVespaPassageSearchEngine (Passage)"
@@ -84,14 +85,16 @@ def test_passage_engine_id_factors_in_topic_weight(http_client: httpx2.AsyncClie
     assert on.id != off.id
 
 
-def test_document_engine_id_factors_in_topic_weight():
+def test_document_engine_id_factors_in_topic_weight(http_client: httpx2.AsyncClient):
     """Same for the document engine's topic weight"""
     settings = Settings(
         vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
         vespa_read_token="token",  # nosec B106
     )
-    on = DevVespaDocumentSearchEngine(settings=settings)
-    off = DevVespaDocumentSearchEngine(settings=settings, topic_weight=0.0)
+    on = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    off = DevVespaDocumentSearchEngine(
+        settings=settings, httpx=http_client, topic_weight=0.0
+    )
 
     assert on.name == off.name == "DevVespaDocumentSearchEngine"
     assert on.id != off.id
@@ -127,7 +130,7 @@ def test_log_test_results_logs_instance_in_wandb_config(
 
 
 def test_log_test_results_logs_engine_parameters_in_wandb_config(
-    monkeypatch, simple_test_result
+    monkeypatch, simple_test_result, http_client: httpx2.AsyncClient
 ):
     """Engine tuning parameters land in the W&B config, not in the engine name."""
     monkeypatch.setattr(
@@ -148,6 +151,7 @@ def test_log_test_results_logs_engine_parameters_in_wandb_config(
             vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
             vespa_read_token="token",  # nosec B106
         ),
+        httpx=http_client,
         topic_weight=0.0,
     )
     weights_and_biases.WandbSession().log_test_results(
@@ -160,7 +164,9 @@ def test_log_test_results_logs_engine_parameters_in_wandb_config(
     assert captured["config"]["search_engine_name"] == "DevVespaDocumentSearchEngine"
 
 
-def test_engines_without_parameters_are_unchanged(monkeypatch, simple_test_result):
+def test_engines_without_parameters_are_unchanged(
+    monkeypatch, simple_test_result, http_client: httpx2.AsyncClient
+):
     """An engine with no tuning parameters keeps its old id and W&B config."""
     monkeypatch.setattr(weights_and_biases.config, "DISABLE_WANDB", True)
     monkeypatch.setattr(weights_and_biases.wandb, "Table", MagicMock())
@@ -177,7 +183,8 @@ def test_engines_without_parameters_are_unchanged(monkeypatch, simple_test_resul
         settings=Settings(
             vespa_endpoint="http://localhost:8080",  # type: ignore[arg-type]
             vespa_read_token="token",  # nosec B106
-        )
+        ),
+        httpx=http_client,
     )
     assert engine.parameters == {}
     assert engine.id == generate_id(str(engine))

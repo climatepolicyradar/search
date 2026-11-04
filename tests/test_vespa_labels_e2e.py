@@ -11,6 +11,7 @@ Run against a real Vespa instance via the shared ``vespa_e2e`` fixtures
 from typing import Any
 from urllib.parse import quote
 
+import httpx2
 import pytest
 import requests as req
 from cpr_contracts import (
@@ -180,7 +181,7 @@ def clean_labels(vespa_app: Vespa):
 # region Document label filters
 
 
-def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
+async def test_labels_contains_returns_matching_doc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_with_label = DocumentFactory.build(labels=[_make_label("Romania")])
     doc_without_label = DocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_label)
@@ -192,12 +193,12 @@ def test_labels_contains_returns_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
-    ids = get_search_ids(f)
+    ids = await get_search_ids(live_http_client, f)
     assert doc_with_label.id in ids
     assert doc_without_label.id not in ids
 
 
-def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
+async def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_with_different_label = DocumentFactory.build(
         labels=[_make_label("France")]
     )
@@ -211,12 +212,12 @@ def test_labels_contains_excludes_non_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
-    ids = get_search_ids(f)
+    ids = await get_search_ids(live_http_client, f)
     assert doc_with_different_label.id not in ids
     assert doc_without_label.id not in ids
 
 
-def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
+async def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_with_label = DocumentFactory.build(labels=[_make_label("Romania")])
     doc_without_label = DocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_label)
@@ -228,12 +229,12 @@ def test_labels_not_contains_excludes_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
-    ids = get_search_ids(f)
+    ids = await get_search_ids(live_http_client, f)
     assert doc_with_label.id not in ids
     assert doc_without_label.id in ids
 
 
-def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
+async def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_with_different_label = DocumentFactory.build(
         labels=[_make_label("France")]
     )
@@ -249,7 +250,7 @@ def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
-    ids = get_search_ids(f)
+    ids = await get_search_ids(live_http_client, f)
     assert doc_with_different_label.id in ids
     assert doc_with_matching_label.id not in ids
 
@@ -259,7 +260,7 @@ def test_labels_not_contains_returns_non_matching_doc(vespa_app: Vespa):
 # region Concepts via label filter
 
 
-def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
+async def test_concepts_contains_returns_matching_doc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_with_concept = DocumentFactory.build(labels=[])
     doc_without_concept = DocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_concept)
@@ -272,12 +273,12 @@ def test_concepts_contains_returns_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
-    ids = get_search_ids(f)
+    ids = await get_search_ids(live_http_client, f)
     assert doc_with_concept.id in ids
     assert doc_without_concept.id not in ids
 
 
-def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
+async def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_with_different_concept = DocumentFactory.build(labels=[])
     doc_without_concept = DocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_different_concept)
@@ -290,12 +291,12 @@ def test_concepts_contains_excludes_non_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="contains", value="Romania")
         ],
     )
-    ids = get_search_ids(f)
+    ids = await get_search_ids(live_http_client, f)
     assert doc_with_different_concept.id not in ids
     assert doc_without_concept.id not in ids
 
 
-def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
+async def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_with_concept = DocumentFactory.build(labels=[])
     doc_without_concept = DocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_concept)
@@ -308,12 +309,12 @@ def test_concepts_not_contains_excludes_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
-    ids = get_search_ids(f)
+    ids = await get_search_ids(live_http_client, f)
     assert doc_with_concept.id not in ids
     assert doc_without_concept.id in ids
 
 
-def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
+async def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     doc_with_different_concept = DocumentFactory.build(labels=[])
     doc_with_matching_concept = DocumentFactory.build(labels=[])
     _feed_document(vespa_app, doc_with_different_concept)
@@ -327,7 +328,7 @@ def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
             FieldFilter(field="labels.value.value", op="not_contains", value="Romania")
         ],
     )
-    ids = get_search_ids(f)
+    ids = await get_search_ids(live_http_client, f)
     assert doc_with_different_concept.id in ids
     assert doc_with_matching_concept.id not in ids
 
@@ -337,7 +338,7 @@ def test_concepts_not_contains_returns_non_matching_doc(vespa_app: Vespa):
 # region Label linguistics
 
 
-def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
+async def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     Labels use label_analysis profile: lowercase only, no stemming.
 
@@ -357,12 +358,12 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
     )
     _feed_document(vespa_app, doc)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, debug=True)
+    results = (await engine.asearch(
         query="running",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     assert len(results) >= 1, f"Expected results, got: {results}"
 
     debug = engine.last_debug_info[0]
@@ -376,7 +377,7 @@ def test_linguistics_label_tokens_are_not_stemmed(vespa_app: Vespa):
     )
 
 
-def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
+async def test_linguistics_geography_synonym_expansion(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     Test geography query rewrites from semantic rules.
 
@@ -407,12 +408,12 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
     _feed_document(vespa_app, doc_uk)
     _feed_document(vespa_app, doc_us)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, debug=True)
+    results = (await engine.asearch(
         query="UK",
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     result_ids = {doc.id for doc in results}
 
     assert doc_uk.id in result_ids, (
@@ -426,7 +427,9 @@ def test_linguistics_geography_synonym_expansion(vespa_app: Vespa):
 
 
 @pytest.mark.parametrize("query", ["turkiye", "Türkiye"], ids=["unaccented", "accented"])
-def test_linguistics_geography_accent_folding(vespa_app: Vespa, query: str):
+async def test_linguistics_geography_accent_folding(
+    vespa_app: Vespa, query: str, live_http_client: httpx2.AsyncClient
+):
     """Accented geography names must be findable by both spellings of a query."""
     doc_turkiye = DocumentFactory.build(
         title="xyzzygeoaccenttest turkiye document",
@@ -453,12 +456,12 @@ def test_linguistics_geography_accent_folding(vespa_app: Vespa, query: str):
     _feed_document(vespa_app, doc_turkiye)
     _feed_document(vespa_app, doc_other)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, debug=True)
+    results = (await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     result_ids = {doc.id for doc in results}
 
     assert doc_turkiye.id in result_ids, (
@@ -489,8 +492,8 @@ def test_linguistics_geography_accent_folding(vespa_app: Vespa, query: str):
         ("cape verde", "Cabo Verde"),
     ],
 )
-def test_linguistics_geography_multi_word_alias(
-    vespa_app: Vespa, query: str, geography: str
+async def test_linguistics_geography_multi_word_alias(
+    vespa_app: Vespa, query: str, geography: str, live_http_client: httpx2.AsyncClient
 ):
     """
     Multi-word geography aliases must resolve to the canonical name (FUS-423).
@@ -526,12 +529,12 @@ def test_linguistics_geography_multi_word_alias(
     _feed_document(vespa_app, doc_geography)
     _feed_document(vespa_app, doc_other)
 
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, debug=True)
-    results = engine.search(
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client, debug=True)
+    results = (await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=50),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     result_ids = {doc.id for doc in results}
 
     assert doc_geography.id in result_ids, (
@@ -548,24 +551,24 @@ def test_linguistics_geography_multi_word_alias(
 # region Labels schema
 
 
-def test_label_search_returns_exact_match_first(vespa_app: Vespa):
+async def test_label_search_returns_exact_match_first(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     _feed_label(vespa_app, _taxonomy_vespa_label("category::Law", "category", "Law"))
     _feed_label(
         vespa_app, _taxonomy_vespa_label("category::Policy", "category", "Policy")
     )
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query="Law",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
 
     assert results, "Expected at least one result"
     assert results[0].value == "Law"
 
 
-def test_label_search_excludes_inactive_labels(vespa_app: Vespa):
+async def test_label_search_excludes_inactive_labels(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     _feed_label(
         vespa_app,
         _taxonomy_vespa_label("concept::Active Flood", "concept", "Flood"),
@@ -577,19 +580,19 @@ def test_label_search_excludes_inactive_labels(vespa_app: Vespa):
         ),
     )
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query="Flood",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
 
     result_ids = {label.id for label in results}
     assert "concept::Active Flood" in result_ids
     assert "concept::Inactive Flood" not in result_ids
 
 
-def test_label_search_excludes_inactive_labels_when_filtered(vespa_app: Vespa):
+async def test_label_search_excludes_inactive_labels_when_filtered(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """The status clause must still apply once filters are appended to it."""
     _feed_label(
         vespa_app,
@@ -602,8 +605,8 @@ def test_label_search_excludes_inactive_labels_when_filtered(vespa_app: Vespa):
         ),
     )
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -611,23 +614,24 @@ def test_label_search_excludes_inactive_labels_when_filtered(vespa_app: Vespa):
             op="and",
             filters=[FieldFilter(field="type", op="contains", value="concept")],
         ),
-    ).results
+    )).results
 
     result_ids = {label.id for label in results}
     assert "concept::Active Drought" in result_ids
     assert "concept::Inactive Drought" not in result_ids
 
 
-def test_label_field_filter_type_not_contains_returns_matching_type_only(
+async def test_label_field_filter_type_not_contains_returns_matching_type_only(
     vespa_app: Vespa,
+    live_http_client: httpx2.AsyncClient,
 ):
     _feed_label(vespa_app, _taxonomy_vespa_label("category::Law", "category", "Law"))
     _feed_label(
         vespa_app, _taxonomy_vespa_label("geography::Romania", "geography", "Romania")
     )
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -635,7 +639,7 @@ def test_label_field_filter_type_not_contains_returns_matching_type_only(
             op="and",
             filters=[FieldFilter(field="type", op="not_contains", value="category")],
         ),
-    ).results
+    )).results
 
     result_ids = {label.id for label in results}
     assert "category::Law" not in result_ids
@@ -645,8 +649,12 @@ def test_label_field_filter_type_not_contains_returns_matching_type_only(
 @pytest.mark.parametrize(
     ("case_id", "query", "rewrite_text"), rule_cases("labels.sr", "documents.sr")
 )
-def test_label_rewrite_rule_does_not_bypass_filters(
-    vespa_app: Vespa, case_id: str, query: str, rewrite_text: str
+async def test_label_rewrite_rule_does_not_bypass_filters(
+    vespa_app: Vespa,
+    case_id: str,
+    query: str,
+    rewrite_text: str,
+    live_http_client: httpx2.AsyncClient,
 ):
     """A rewrite rule's production must never let a filtered label search return a label outside the filter."""
     inside_type = f"inside-{case_id}"
@@ -664,8 +672,8 @@ def test_label_rewrite_rule_does_not_bypass_filters(
         _taxonomy_vespa_label(f"e2e-outside-{case_id}", outside_type, rewrite_text),
     )
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=query,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -673,7 +681,7 @@ def test_label_rewrite_rule_does_not_bypass_filters(
             op="and",
             filters=[FieldFilter(field="type", op="contains", value=inside_type)],
         ),
-    ).results
+    )).results
 
     ids = {label.id for label in results}
     assert ids == set(), (
@@ -682,7 +690,7 @@ def test_label_rewrite_rule_does_not_bypass_filters(
     )
 
 
-def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa):
+async def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """``labels.type=subconcept_of AND labels.value.id=category::UN Submission``."""
     subconcept = _taxonomy_vespa_label(
         "category::Annex I",
@@ -707,8 +715,8 @@ def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa):
     for label in (subconcept, wrong_relationship, wrong_parent):
         _feed_label(vespa_app, label)
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -723,7 +731,7 @@ def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa):
                 ),
             ],
         ),
-    ).results
+    )).results
 
     result_ids = {label.id for label in results}
     assert "category::Annex I" in result_ids
@@ -731,7 +739,7 @@ def test_label_filter_by_nested_relationship_and_parent_id(vespa_app: Vespa):
     assert "category::Other Sub" not in result_ids
 
 
-def test_label_filter_same_element_excludes_split_relationships(vespa_app: Vespa):
+async def test_label_filter_same_element_excludes_split_relationships(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     """
     ``sameElement`` requires one related label to satisfy both conditions.
 
@@ -750,8 +758,8 @@ def test_label_filter_same_element_excludes_split_relationships(vespa_app: Vespa
     )
     _feed_label(vespa_app, split)
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
@@ -766,20 +774,20 @@ def test_label_filter_same_element_excludes_split_relationships(vespa_app: Vespa
                 ),
             ],
         ),
-    ).results
+    )).results
 
     assert "category::Split" not in {label.id for label in results}
 
 
-def test_label_search_returns_non_empty_label_source(vespa_app: Vespa):
+async def test_label_search_returns_non_empty_label_source(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     label = _taxonomy_vespa_label("geography::Romania", "geography", "Romania")
     _feed_label(vespa_app, label)
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
-    results = engine.search(
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
         query="Romania",
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],
-    ).results
+    )).results
     assert isinstance(results[0], DataInLabel)
     assert results[0] is not None
     assert results[0] != ""
@@ -792,12 +800,12 @@ def test_label_search_returns_non_empty_label_source(vespa_app: Vespa):
     strict=True,
     raises=AssertionError,
 )
-def test_label_search_order_by_value_ascending_sorts_real_results(vespa_app: Vespa):
+async def test_label_search_order_by_value_ascending_sorts_real_results(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     _feed_label(vespa_app, _taxonomy_vespa_label("category::Zebra", "category", "Zebra"))
     _feed_label(vespa_app, _taxonomy_vespa_label("category::Apple", "category", "Apple"))
     _feed_label(vespa_app, _taxonomy_vespa_label("category::Mango", "category", "Mango"))
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
 
     # With query=None every label ties on relevance=0, so Vespa's tie-break
     # order is unspecified and could coincidentally already be ascending by
@@ -806,19 +814,19 @@ def test_label_search_order_by_value_ascending_sorts_real_results(vespa_app: Ves
     # is only possible via a real order_by implementation.
     unordered_values = [
         label.value
-        for label in engine.search(
+        for label in (await engine.asearch(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
-        ).results
+        )).results
     ]
     assert unordered_values != ["Apple", "Mango", "Zebra"]
 
-    results = engine.search(
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="value", direction="asc")],
-    ).results
+    )).results
 
     assert [label.value for label in results] == ["Apple", "Mango", "Zebra"]
 
@@ -830,31 +838,31 @@ def test_label_search_order_by_value_ascending_sorts_real_results(vespa_app: Ves
     strict=True,
     raises=AssertionError,
 )
-def test_label_search_order_by_value_descending_sorts_real_results(vespa_app: Vespa):
+async def test_label_search_order_by_value_descending_sorts_real_results(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
     _feed_label(vespa_app, _taxonomy_vespa_label("category::Zebra", "category", "Zebra"))
     _feed_label(vespa_app, _taxonomy_vespa_label("category::Apple", "category", "Apple"))
     _feed_label(vespa_app, _taxonomy_vespa_label("category::Mango", "category", "Mango"))
 
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS)
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
 
     # See test_label_search_order_by_value_ascending_sorts_real_results: with
     # query=None every label ties on relevance=0, so the unordered baseline
     # must be checked first to rule out a coincidental descending tie-break.
     unordered_values = [
         label.value
-        for label in engine.search(
+        for label in (await engine.asearch(
             query=None,
             pagination=Pagination(page_token=1, page_size=10),
             order_by=[],
-        ).results
+        )).results
     ]
     assert unordered_values != ["Zebra", "Mango", "Apple"]
 
-    results = engine.search(
+    results = (await engine.asearch(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="value", direction="desc")],
-    ).results
+    )).results
 
     assert [label.value for label in results] == ["Zebra", "Mango", "Apple"]
 
