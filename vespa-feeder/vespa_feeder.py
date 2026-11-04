@@ -251,23 +251,58 @@ def _parse_failed_documents(stderr: str) -> list[FailedDocument]:
     ]
 
 
+def _unique_failed_documents(result: "FeedResult") -> list[FailedDocument]:
+    """
+    Every failed document in a result, each listed once.
+
+    A batch that loses records to a transport failure produces both a
+    `VespaFeedError` and a `VespaResponseError`, and both are built from the
+    same parsed stderr - so concatenating their `failed_documents` lists the
+    same doc id twice and inflates the "+N more" count.
+    """
+    unique_failed_documents: dict[str, FailedDocument] = {}
+    for error in result.errors:
+        for failed_document in error.failed_documents:
+            unique_failed_documents.setdefault(failed_document.doc_id, failed_document)
+    return list(unique_failed_documents.values())
+
+
 def _build_run_summary_markdown(
-    successes: list["FeedResult"],
-    failures: list["FeedResult"],
+    results: list["FeedResult"],
     exceptions: list[BaseException],
 ) -> str:
-    total_input = sum(r.input_count for r in successes)
-    total_operation = sum(r.operation_count for r in successes)
-    total_ok = sum(r.ok_count for r in successes)
+    """
+    Summarise a run: what was fed, what was lost, and what is unaccounted for.
+
+    `results` is every batch that reported back, whether or not it lost
+    records. Failures are derived from it rather than passed separately,
+    because passing a subset alongside the whole meant a failing batch was
+    counted in both the processed and the failed rows.
+
+    A batch that raised never produced a `FeedResult`, so its records cannot
+    be counted. They are reported as unaccounted for rather than silently
+    omitted: a run could previously lose ten files' worth of records and
+    still show `Missing: 0`.
+    """
+    failures = [result for result in results if result.errors]
+
+    total_files = sum(len(result.feed_paths) for result in results)
+    total_input = sum(result.input_count for result in results)
+    total_operation = sum(result.operation_count for result in results)
+    total_ok = sum(result.ok_count for result in results)
     total_missing = total_operation - total_ok
-    total_feeder_errors = sum(r.feeder_error_count for r in successes)
-    total_throttled = sum(r.throttled_count for r in successes)
-    total_other_http_errors = sum(r.other_http_error_count for r in successes)
+    total_feeder_errors = sum(result.feeder_error_count for result in results)
+    total_throttled = sum(result.throttled_count for result in results)
+    total_other_http_errors = sum(result.other_http_error_count for result in results)
+
+    # Denominator is every operation reported by any batch, failing ones
+    # included. Excluding failures measured the throttle rate only over the
+    # batches that went well.
     throttle_rate = total_throttled / total_operation if total_operation else 0.0
 
     icon = "🚨" if failures or exceptions else "✅"
     status = (
-        f"**{len(failures) + len(exceptions)}/{len(successes) + len(exceptions)} "
+        f"**{len(failures) + len(exceptions)}/{len(results) + len(exceptions)} "
         "batch(es) failed**"
         if failures or exceptions
         else "**All files indexed successfully**"
@@ -276,13 +311,23 @@ def _build_run_summary_markdown(
     markdown = (
         f"### Vespa Feeder Run Summary\n\n{icon} {status}\n\n"
         "| Metric | Value |\n|---|---|\n"
-        f"| Files processed | {len(successes)} |\n"
-        f"| Failed files | {len(failures)} |\n"
+        f"| Files processed | {total_files} |\n"
+        f"| Batches | {len(results) + len(exceptions)} |\n"
+        f"| Batches with lost records | {len(failures)} |\n"
         f"| Batches that raised | {len(exceptions)} |\n"
         f"| Input records | {total_input} |\n"
         f"| Operations | {total_operation} |\n"
         f"| OK | {total_ok} |\n"
         f"| **Missing (not recovered after retries)** | **{total_missing}** |\n"
+    )
+
+    if exceptions:
+        markdown += (
+            f"| **Unaccounted for ({len(exceptions)} batch(es) raised)** | "
+            "**unknown** |\n"
+        )
+
+    markdown += (
         f"| — | — |\n"
         f"| _Transient, self-resolved (no data lost):_ | |\n"
         f"| Transport retries (feeder errors) | {total_feeder_errors} |\n"
@@ -291,23 +336,31 @@ def _build_run_summary_markdown(
         f"| Throttle rate | {throttle_rate:.2%} |\n"
     )
 
+    if exceptions:
+        markdown += (
+            "\nA batch that raised never reported a result, so its records are "
+            "not in the totals above: they were neither fed nor counted as "
+            "missing. Treat the totals as a lower bound on what was attempted.\n"
+        )
+
     if failures:
         markdown += (
-            "\n#### Failed files\n\n"
-            "| File | OK / Operation | Missing | Sample failed documents |\n"
+            "\n#### Batches with lost records\n\n"
+            "| Files | OK / Operation | Missing | Sample failed documents |\n"
             "|---|---|---|---|\n"
         )
-        for r in failures:
-            failed_docs = [doc for error in r.errors for doc in error.failed_documents]
+        for result in failures:
+            failed_documents = _unique_failed_documents(result)
             sample = "; ".join(
-                f"`{doc.doc_id}`: {doc.error}" for doc in failed_docs[:3]
+                f"`{failed_document.doc_id}`: {failed_document.error}"
+                for failed_document in failed_documents[:3]
             )
-            if len(failed_docs) > 3:
-                sample += f" (+{len(failed_docs) - 3} more)"
+            if len(failed_documents) > 3:
+                sample += f" (+{len(failed_documents) - 3} more)"
             markdown += (
-                f"| `{', '.join(p.name for p in r.feed_paths)}` | "
-                f"{r.ok_count}/{r.operation_count} | "
-                f"{r.operation_count - r.ok_count} | {sample or '—'} |\n"
+                f"| `{', '.join(path.name for path in result.feed_paths)}` | "
+                f"{result.ok_count}/{result.operation_count} | "
+                f"{result.operation_count - result.ok_count} | {sample or '—'} |\n"
             )
 
     if exceptions:
@@ -777,7 +830,7 @@ def vespa_feeder(
                 create_markdown_artifact(
                     key="vespa-feeder-run-summary",
                     markdown=_build_run_summary_markdown(
-                        feed_results, feed_results_errors, feed_results_exceptions
+                        feed_results, feed_results_exceptions
                     ),
                     description="Aggregate summary of the vespa-feeder run across all files",
                 )
