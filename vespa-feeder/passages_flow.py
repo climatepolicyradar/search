@@ -199,6 +199,9 @@ def derive_heading_text(record: dict) -> dict:
 @flow(
     name="search-vespa-feeder-passages",
     description="Feed passages JSONL from the data-lake Snowflake export into Vespa, deriving document_ref per record",
+    # Bounds a hung run inside the 24h gap to the next schedule, so it
+    # fails rather than hanging and queueing tomorrow's run behind it.
+    timeout_seconds=20 * 60 * 60,
     task_runner=task_runner(max_workers=8),
     log_prints=True,
     on_completion=[SlackNotify.on_success],
