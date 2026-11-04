@@ -127,7 +127,7 @@ class FakeVespaFeed:
         # that do not care keep behaving as they did.
         self.seconds_to_feed = seconds_to_feed
         self.calls: list[list[str]] = []
-        self.timeouts: list[int | None] = []
+        self.timeouts: list[float | None] = []
         self.fed_records: list[dict] = []
         self.processes: list[FakeVespaFeedProcess] = []
 
