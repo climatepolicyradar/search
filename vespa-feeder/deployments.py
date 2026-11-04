@@ -12,6 +12,10 @@ from labels_flow import labels_feeder_flow
 from passages_flow import (
     passages_feeder_flow,
 )
+from prefect.client.schemas.objects import (
+    ConcurrencyLimitConfig,
+    ConcurrencyLimitStrategy,
+)
 from prefect.docker import DockerImage
 from prefect.schedules import Cron
 from prefect.variables import Variable
@@ -19,6 +23,17 @@ from prefect.variables import Variable
 from prefect import Flow
 
 _WORK_POOL = "mvp-prod-ecs"
+
+# A document or passages feed takes hours, so a run that degrades or
+# hangs is still going when the next day's schedule fires. Two concurrent feeds
+# double the connection load on Vespa and, because both feed the same
+# documents from different export snapshots, and it's ambiguous which write wins.
+# We ENQUEUE rather than CANCEL_NEW so we don't silently skip any day. A late run
+# waits and starts when the one in flight finishes.
+_CONCURRENCY_LIMIT = ConcurrencyLimitConfig(
+    limit=1,
+    collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
+)
 
 
 @dataclass
@@ -122,6 +137,7 @@ if __name__ == "__main__":
             ),
             job_variables=job_variables,
             parameters=feed.parameters,
+            concurrency_limit=_CONCURRENCY_LIMIT,
             schedule=Cron(feed.cron, slug=deployment_name) if feed.cron else None,
             build=False,
             push=False,
