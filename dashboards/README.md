@@ -7,6 +7,17 @@ imported via **Dashboards → Import** in Grafana Cloud.
 NOTE: that this isn't set to sync with Grafana yet. That will be done in a
 separate PR.
 
+## `vespa-feeder.json` is not the source of truth
+
+`dashboards/vespa-feeder.json` is a one-off export, not a provisioned dashboard:
+nothing in this repo applies it, and the live dashboard (`vespa-feeder-flows`,
+in Services/Intelligence & Access) has been edited in Grafana since. The two
+have diverged -- several panels that look broken in the file are already fixed
+in Grafana.
+
+Edit that dashboard in Grafana, not here. Treat the file as a historical
+snapshot.
+
 ## About
 
 Metrics are sourced from the `vespa` CloudWatch namespace via the
