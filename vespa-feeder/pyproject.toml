@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest"]
+dev = ["pytest", "moto>=5.2.5"]
 
 [build-system]
 requires = ["setuptools>=61"]
