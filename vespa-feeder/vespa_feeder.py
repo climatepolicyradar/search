@@ -31,6 +31,7 @@ from botocore.config import Config
 from mypy_boto3_s3 import S3Client
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
+from prefect.exceptions import MissingContextError
 from prefect.futures import PrefectFuture
 from prefect.runtime import deployment, flow_run
 from pydantic import BaseModel, ConfigDict, Field
@@ -46,6 +47,9 @@ from telemetry import (
 from prefect import get_run_logger, task
 
 logger = logging.getLogger(__name__)
+
+# What `get_run_logger()` hands back inside a run context.
+LoggerAdapter = logging.LoggerAdapter[logging.Logger]
 
 # Per-subprocess connection pool size, passed to `vespa feed --connections` in
 # feed_derived_files. Paired with the flow's own ThreadPoolTaskRunner(
@@ -550,6 +554,8 @@ def delete_materialised_s3_files(materialised_s3_files: list[Path]) -> None:
 @task(cache_policy=NO_CACHE)
 @tracer.start_as_current_span("feed_batch")
 def feed_batch(
+    batch_number: int,
+    batch_count: int,
     endpoint: str,
     application: str,
     connections: int,
@@ -561,6 +567,21 @@ def feed_batch(
     start_time = time.perf_counter()
     deployment_name = deployment.name or "local"
     run_name = flow_run.name or "unknown"
+
+    # Logged here rather than at the submit site so the line marks work
+    # actually starting: a worker has picked this batch up. The submit loop
+    # enqueues every batch in seconds, so a line there tracked nothing.
+    #
+    # The module logger fallback keeps `feed_batch.fn()` callable outside a
+    # run context, which is how the disk and feed behaviour is tested.
+    try:
+        batch_logger: logging.Logger | LoggerAdapter = get_run_logger()
+    except MissingContextError:
+        batch_logger = logger
+    batch_logger.info(
+        f"Feeding batch {batch_number}/{batch_count} ({len(batched_s3_keys)} files)"
+    )
+
     try:
         # All files from s3 and derived are stored in the `TemporaryDirectory`
         # and deleted when the `with` block exits via `TemporaryDirectory.__exit__`.
@@ -683,12 +704,10 @@ def vespa_feeder(
 
             feed_results_futures: list[PrefectFuture[FeedResult]] = []
             for batch_number, batched_s3_keys in enumerate(s3_key_batches, start=1):
-                run_logger.info(
-                    f"Feeding batch {batch_number}/{len(s3_key_batches)} "
-                    f"({len(batched_s3_keys)} files)"
-                )
                 feed_results_futures.append(
                     feed_batch.submit(
+                        batch_number=batch_number,
+                        batch_count=len(s3_key_batches),
                         endpoint=endpoint,
                         application=application,
                         connections=connections,
@@ -698,6 +717,16 @@ def vespa_feeder(
                         derive_data_from_source=derive_data_from_source,
                     )
                 )
+
+            # Deliberately one line for the whole loop, not one per batch.
+            # `submit()` only enqueues - the loop runs to completion in seconds,
+            # long before the first batch is fed - so a per-batch line here
+            # reads as progress while reporting none. The per-batch line is
+            # logged by `feed_batch` itself, once a worker has picked it up.
+            run_logger.info(
+                f"Queued {len(s3_key_batches)} batch(es) onto the task runner; "
+                f"{len(s3_keys)} file(s) total"
+            )
 
             # resolve feed_results_futures and raise on any exceptions
             feed_results: list[FeedResult] = []
@@ -731,7 +760,9 @@ def vespa_feeder(
                     in_flight_process.terminate()
 
                 # we then get the known failures from the vespa FeedResult
-                feed_results_errors = [result for result in feed_results if result.errors]
+                feed_results_errors = [
+                    result for result in feed_results if result.errors
+                ]
 
                 # The same totals the artifact reports, so the Slack notification and
                 # the artifact cannot disagree.

@@ -1,6 +1,7 @@
 """Table-driven tests for the `vespa_feeder` flow itself."""
 
 import inspect
+import logging
 import subprocess
 from pathlib import Path
 
@@ -550,3 +551,44 @@ def test_vespa_feeder_resolves_the_export_prefix_only_when_there_is_one(
     # exists, with every drain-loop test still green.
     for call in feed_batch.calls:
         assert set(call) <= _REAL_FEED_BATCH_PARAMETERS
+
+
+class _RecordingLogger:
+    """Captures the lines `vespa_feeder` writes via `get_run_logger()`."""
+
+    def __init__(self, messages: list[str]) -> None:
+        self.messages = messages
+
+    def info(self, message: str) -> None:
+        self.messages.append(message)
+
+    def error(self, message: str) -> None:
+        self.messages.append(message)
+
+
+def test_vespa_feeder_does_not_log_per_batch_progress_while_only_enqueueing(
+    monkeypatch, summary_artifacts
+):
+    """
+    The submit loop must not claim per-batch progress it has not made.
+
+    `feed_batch.submit()` only enqueues, so the loop runs to completion in
+    seconds. A "Feeding batch N/M" line here reads as progress while
+    reporting none: run 06aea240 printed all 589 of them in 3 seconds, then
+    fed 32 batches before wedging, and the log tail read like a finished run.
+    """
+    # `disable_run_logger()` (via summary_artifacts) routes `get_run_logger()`
+    # to a disabled logger caplog cannot see, so capture the lines directly.
+    logged: list[str] = []
+    monkeypatch.setattr(feeder, "get_run_logger", lambda: _RecordingLogger(logged))
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder, "feed_batch", _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl"))])
+    )
+
+    feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=2
+    )
+
+    assert not [message for message in logged if message.startswith("Feeding batch ")]
+    assert "Queued 1 batch(es) onto the task runner; 2 file(s) total" in logged

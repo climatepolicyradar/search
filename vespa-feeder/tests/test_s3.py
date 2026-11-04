@@ -77,7 +77,9 @@ def test_get_latest_s3_export_prefix_reads_every_page(s3_client, s3_bucket):
     ("export_names", "unrelated_keys"),
     [
         pytest.param([], [], id="no-pages"),
-        pytest.param([], ["another/prefix/20260923T190625Z/part-0.jsonl"], id="empty-page"),
+        pytest.param(
+            [], ["another/prefix/20260923T190625Z/part-0.jsonl"], id="empty-page"
+        ),
         pytest.param(["latest/"], [], id="only-latest"),
         pytest.param(["not-a-timestamp/"], [], id="unrecognised-prefix"),
         pytest.param(["20260923T190625/"], [], id="timestamp-missing-the-z"),

@@ -1,5 +1,6 @@
 """Table-driven tests for the `feed_batch` task and the metrics it records."""
 
+import logging
 import subprocess
 
 import pytest
@@ -51,6 +52,8 @@ def test_feed_batch_feeds_the_records_then_leaves_nothing_on_disk(
     monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
 
     result = feeder.feed_batch.fn(
+        batch_number=1,
+        batch_count=1,
         endpoint="http://vespa",
         application="app",
         connections=2,
@@ -144,6 +147,8 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
 
     with pytest.raises(expected_exception):
         feeder.feed_batch.fn(
+            batch_number=1,
+            batch_count=1,
             endpoint="http://vespa",
             application="app",
             connections=2,
@@ -175,6 +180,8 @@ def test_feed_batch_records_what_it_fed(
     monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed())
 
     feeder.feed_batch.fn(
+        batch_number=1,
+        batch_count=1,
         endpoint="http://vespa",
         application="app",
         connections=2,
@@ -216,6 +223,8 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
 
     with pytest.raises(RuntimeError, match="s3 download failed"):
         feeder.feed_batch.fn(
+            batch_number=1,
+            batch_count=1,
             endpoint="http://vespa",
             application="app",
             connections=2,
@@ -266,6 +275,8 @@ def test_feed_batch_counts_only_records_that_were_actually_lost(
     monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed(stdout))
 
     feeder.feed_batch.fn(
+        batch_number=1,
+        batch_count=1,
         endpoint="http://vespa",
         application="app",
         connections=2,
@@ -278,3 +289,31 @@ def test_feed_batch_counts_only_records_that_were_actually_lost(
         recording_metrics.record_feed_stats.call_args.kwargs["total_errors"]
         == expected_errors
     )
+
+
+def test_feed_batch_logs_its_progress_when_the_worker_picks_it_up(
+    monkeypatch, caplog, s3_client, s3_bucket
+):
+    """
+    The per-batch line is written by the worker, so it marks real progress.
+
+    It used to be written by the submit loop, which only enqueues: run
+    06aea240 printed all 589 of its "Feeding batch N/589" lines within 3
+    seconds, then fed 32 batches before wedging.
+    """
+    put_s3_objects(s3_client, s3_bucket, {"prefix/one.jsonl": b'{"id": 1}\n'})
+    monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed())
+
+    with caplog.at_level(logging.INFO, logger="vespa_feeder"):
+        feeder.feed_batch.fn(
+            batch_number=7,
+            batch_count=589,
+            endpoint="http://vespa",
+            application="app",
+            connections=2,
+            feed_timeout_seconds=2700,
+            s3_bucket=s3_bucket,
+            batched_s3_keys=("prefix/one.jsonl",),
+        )
+
+    assert "Feeding batch 7/589 (1 files)" in caplog.messages
