@@ -6,13 +6,12 @@ from pathlib import Path
 
 import pytest
 import vespa_feeder as feeder
+from helpers import FakeVespaFeedProcess
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.util._once import Once
 from prefect.futures import PrefectFuture
 from prefect.logging import disable_run_logger
-
-from helpers import FakeVespaFeedProcess
 
 
 def _feed_result(
