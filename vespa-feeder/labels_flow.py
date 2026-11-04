@@ -12,6 +12,9 @@ from prefect import flow
 @flow(
     name="search-vespa-feeder-labels",
     description="Feed labels JSONL from S3 into Vespa",
+    # Bounds a hung run inside the 24h gap to the next schedule, so it
+    # fails rather than hanging and queueing tomorrow's run behind it.
+    timeout_seconds=20 * 60 * 60,
     task_runner=task_runner(max_workers=4),
     log_prints=True,
     on_completion=[SlackNotify.on_success],
