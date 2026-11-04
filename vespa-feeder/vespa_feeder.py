@@ -199,6 +199,9 @@ class FeedResult:
     errors: list[VespaError]
 
 
+# The CLI's `logResult` drops a line only when it is a retry or a success, so
+# these survive without `--verbose` - which would log every successful op too,
+# meaning ~1GB of stderr on a passages run for nothing we read or used in Grafana.
 _GIVING_UP_RE = re.compile(r"^feed: (.+) for put (\S+): giving up", re.MULTILINE)
 
 
@@ -415,6 +418,9 @@ def feed_derived_files(
     # Popen rather than subprocess.run so _terminate_vespa_feed_processes has
     # something to terminate: run() owns its child privately, and this call is
     # on a task runner worker thread, where a signal handler never runs.
+    #
+    # Do not pass --verbose, which logs every successful operation as well as every
+    # failed operation to stderr resulting in ~1GB of unused logs.
     with subprocess.Popen(
         [
             "vespa",
@@ -431,7 +437,6 @@ def feed_derived_files(
             str(connections),
             "--inflight",
             "0",
-            "--verbose",
         ],
         env=os.environ,
         stdout=subprocess.PIPE,
