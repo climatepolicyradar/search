@@ -1,7 +1,5 @@
-import asyncio
 import json
 
-import httpx2
 import typer
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -10,32 +8,11 @@ from rich.table import Table
 from rich.text import Text
 
 from api.routers import settings
-from search.engines import ListResponse, OrderBy, Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaLabelSearchEngine
-from search.label import LabelSearchResult
 
 app = typer.Typer()
 console = Console()
-
-
-async def _run_search(
-    query: str,
-    page: int,
-    page_size: int,
-    debug: bool,
-    label_type: str | None,
-) -> tuple[ListResponse[LabelSearchResult], list[dict]]:
-    async with httpx2.AsyncClient() as httpx_client:
-        engine = DevVespaLabelSearchEngine(
-            settings=settings, httpx=httpx_client, debug=debug
-        )
-        results = await engine.asearch(
-            query=query,
-            pagination=Pagination(page_token=page, page_size=page_size),
-            order_by=[OrderBy(field="relevance", direction="desc")],
-            label_type=label_type,
-        )
-        return results, engine.last_debug_info
 
 
 @app.command()
@@ -47,8 +24,12 @@ def search(
     label_type: str | None = None,
 ):
     """Search for labels."""
-    results, last_debug_info = asyncio.run(
-        _run_search(query, page, page_size, debug, label_type)
+    engine = DevVespaLabelSearchEngine(settings=settings, debug=debug)
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=page, page_size=page_size),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+        label_type=label_type,
     )
 
     words = query.split()
@@ -65,8 +46,8 @@ def search(
         value = ""
         alternative_labels: list[str] = []
         description = ""
-        if debug and i < len(last_debug_info):
-            info = last_debug_info[i]
+        if debug and i < len(engine.last_debug_info):
+            info = engine.last_debug_info[i]
             relevance = info.get("relevance")
             summaryfeatures = info.get("summaryfeatures")
             value = info.get("value", "")

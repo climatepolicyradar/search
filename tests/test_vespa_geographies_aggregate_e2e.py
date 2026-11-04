@@ -59,11 +59,10 @@ def _feed_document(vespa_app: Vespa, document: Document) -> None:
 
 
 @pytest.fixture
-def api_client(vespa_app: Vespa, monkeypatch: pytest.MonkeyPatch):
+def api_client(vespa_app: Vespa, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """A TestClient whose routes talk to the e2e Vespa rather than a mock."""
     monkeypatch.setattr("api.routers.settings", _TEST_SETTINGS)
-    with TestClient(app) as client:
-        yield client
+    return TestClient(app)
 
 
 def test_aggregate_geographies_returns_real_counts_for_fed_documents(

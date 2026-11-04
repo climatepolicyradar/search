@@ -1,7 +1,5 @@
-import asyncio
 import json
 
-import httpx2
 import typer
 from pydantic_settings import SettingsConfigDict
 from rich.console import Console, Group
@@ -10,8 +8,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from search.data_in_models import Document
-from search.engines import ListResponse, OrderBy, Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import DevVespaPrincipalDocumentSearchEngine, Settings
 
 app = typer.Typer()
@@ -26,25 +23,6 @@ class EnvSettings(Settings):
 settings = EnvSettings()  # pyright: ignore[reportCallIssue]
 
 
-async def _run_search(
-    query: str,
-    page_token: int,
-    page_size: int,
-    debug: bool,
-    bolding: bool,
-) -> tuple[ListResponse[Document], list[dict]]:
-    async with httpx2.AsyncClient() as httpx_client:
-        engine = DevVespaPrincipalDocumentSearchEngine(
-            settings=settings, httpx=httpx_client, debug=debug, bolding=bolding
-        )
-        results = await engine.asearch(
-            query=query,
-            pagination=Pagination(page_token=page_token, page_size=page_size),
-            order_by=[OrderBy(field="relevance", direction="desc")],
-        )
-        return results, engine.last_debug_info
-
-
 @app.command()
 def search(
     query: str,
@@ -54,8 +32,13 @@ def search(
     bolding: bool = False,
 ):
     """Search for principal documents."""
-    results, last_debug_info = asyncio.run(
-        _run_search(query, page_token, page_size, debug, bolding)
+    engine = DevVespaPrincipalDocumentSearchEngine(
+        settings=settings, debug=debug, bolding=bolding
+    )
+    results = engine.search(
+        query=query,
+        pagination=Pagination(page_token=page_token, page_size=page_size),
+        order_by=[OrderBy(field="relevance", direction="desc")],
     )
 
     words = query.split()
@@ -70,8 +53,8 @@ def search(
         relevance = None
         summaryfeatures = None
         geographies = None
-        if debug and i < len(last_debug_info):
-            info = last_debug_info[i]
+        if debug and i < len(engine.last_debug_info):
+            info = engine.last_debug_info[i]
             relevance = info.get("relevance")
             summaryfeatures = info.get("summaryfeatures")
             geographies = info.get("geographies")

@@ -14,9 +14,7 @@ from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.settings import settings
-from api.state import HttpxDep
 from api.utils import (
-    LabelsEngineDep,
     PassagesEngineDep,
     documents_order_by,
     order_by,
@@ -30,6 +28,7 @@ from search.engines.dev_vespa import (
     _DEFAULT_MSM,
     CountAggregation,
     DevVespaDocumentSearchEngine,
+    DevVespaLabelSearchEngine,
 )
 from search.label import Label, LabelSearchResult
 from search.log import get_logger
@@ -103,7 +102,6 @@ def read_llms_txt() -> str:
 )
 async def download_documents(
     filters: DocumentsFilterDep,
-    httpx: HttpxDep,
     query: str | None = Query(None, description="What are you looking for?"),
     order_by: list[OrderBy] = Depends(documents_order_by),
     max_results: int = Query(
@@ -140,7 +138,7 @@ async def download_documents(
         columns,
     )
 
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx, msm=msm)
+    engine = DevVespaDocumentSearchEngine(settings=settings, msm=msm)
     try:
         documents = await fetch_documents_for_download(
             engine,
@@ -175,8 +173,8 @@ async def download_documents(
     response_model=ItemResponse[Document],
     responses=ITEM_RESPONSES,
 )
-async def read_document(document_id: str, httpx: HttpxDep):
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
+async def read_document(document_id: str):
+    engine = DevVespaDocumentSearchEngine(settings=settings)
     # `VespaError` deliberately propagates: `api.main.handle_vespa_error` turns
     # backend failure into a 503 for every route.
     result = await engine.aget(document_id)
@@ -194,7 +192,6 @@ async def read_document(document_id: str, httpx: HttpxDep):
 )
 async def read_documents(
     filters: DocumentsFilterDep,
-    httpx: HttpxDep,
     query: str | None = Query(None, description="What are you looking for?"),
     # @see: https://google.aip.dev/157#read-masks-as-a-request-field
     fields: list[Fields] | None = Query(None),
@@ -221,7 +218,7 @@ async def read_documents(
     requested_fields = set(fields or [])
 
     engine = DevVespaDocumentSearchEngine(
-        settings=settings, httpx=httpx, debug=debug, bolding=bolding, msm=msm
+        settings=settings, debug=debug, bolding=bolding, msm=msm
     )
     aggregation_engines = {
         "aggregations.labels": engine.aaggregations,
@@ -310,7 +307,6 @@ async def read_documents(
 )
 async def read_labels(
     filters: LabelsFilterDep,
-    engine: LabelsEngineDep,
     query: str | None = Query(None, description="What are you looking for?"),
     type: str | None = None,
     pagination: Pagination = Depends(pagination),
@@ -327,6 +323,7 @@ async def read_labels(
         filters is not None,
     )
 
+    engine = DevVespaLabelSearchEngine(settings=settings)
     try:
         results = await engine.asearch(
             query=query,
@@ -427,7 +424,6 @@ def read_geographies_taxonomy(
 )
 async def aggregate_geographies(
     filters: DocumentsFilterDep,
-    httpx: HttpxDep,
     geography_type: list[GeographyType] | None = Query(
         None,
         alias="labels.value.type",
@@ -458,7 +454,7 @@ async def aggregate_geographies(
         filters is not None,
     )
 
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
     try:
         aggregations = await engine.aaggregations(query=query, filters=filters)
     except Exception:

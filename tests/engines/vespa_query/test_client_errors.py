@@ -185,10 +185,8 @@ def failing_query():
         yield mock_execute
 
 
-def test_document_search_propagates_vespa_error(
-    settings, failing_query, http_client: httpx2.AsyncClient
-) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+def test_document_search_propagates_vespa_error(settings, failing_query) -> None:
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with pytest.raises(VespaError):
         engine.search(
@@ -198,29 +196,25 @@ def test_document_search_propagates_vespa_error(
         )
 
 
-def test_document_aggregations_propagates_vespa_error(
-    settings, failing_query, http_client: httpx2.AsyncClient
-) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+def test_document_aggregations_propagates_vespa_error(settings, failing_query) -> None:
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with pytest.raises(VespaError):
         engine.aggregations(query="needle")
 
 
 def test_labels_value_type_facets_propagates_vespa_error(
-    settings, failing_query, http_client: httpx2.AsyncClient
+    settings, failing_query
 ) -> None:
     """Facet queries fan out across threads; the failure must still surface."""
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with pytest.raises(VespaError):
         engine.labels_value_type_facets(query="needle")
 
 
-def test_labels_type_facets_propagates_vespa_error(
-    settings, failing_query, http_client: httpx2.AsyncClient
-) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+def test_labels_type_facets_propagates_vespa_error(settings, failing_query) -> None:
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with pytest.raises(VespaError):
         engine.labels_type_facets(query="needle")
@@ -245,10 +239,8 @@ def test_passage_search_propagates_vespa_error(settings, failing_query) -> None:
         )
 
 
-def test_label_search_propagates_vespa_error(
-    settings, failing_query, http_client: httpx2.AsyncClient
-) -> None:
-    engine = DevVespaLabelSearchEngine(settings=settings, httpx=http_client)
+def test_label_search_propagates_vespa_error(settings, failing_query) -> None:
+    engine = DevVespaLabelSearchEngine(settings=settings)
 
     with pytest.raises(VespaError):
         engine.search(
@@ -263,11 +255,9 @@ def _patch_http(response: MagicMock):
     return patch.object(httpx2.AsyncClient, "post", new=AsyncMock(return_value=response))
 
 
-def test_document_search_surfaces_an_http_failure_end_to_end(
-    settings, http_client: httpx2.AsyncClient
-) -> None:
+def test_document_search_surfaces_an_http_failure_end_to_end(settings) -> None:
     """The whole path, from a 503 off the wire to the engine's caller."""
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with _patch_http(_response(503, text="service unavailable")):
         with pytest.raises(VespaError):
@@ -278,11 +268,9 @@ def test_document_search_surfaces_an_http_failure_end_to_end(
             )
 
 
-def test_document_search_still_returns_an_empty_list_for_no_matches(
-    settings, http_client: httpx2.AsyncClient
-) -> None:
+def test_document_search_still_returns_an_empty_list_for_no_matches(settings) -> None:
     """The counterpart: a genuinely empty result set is not an error."""
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
     body = {"root": {"children": [], "fields": {"totalCount": 0}}}
 
     with _patch_http(_response(200, json_value=body)):

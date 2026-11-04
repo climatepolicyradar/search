@@ -34,12 +34,6 @@ async def http_client(handler: MockHandler) -> AsyncGenerator[httpx2.AsyncClient
         yield client
 
 @pytest.fixture(scope="function")
-async def live_http_client() -> AsyncGenerator[httpx2.AsyncClient, None]:
-    """A real (unmocked) client, for tests that hit a live Vespa instance."""
-    async with httpx2.AsyncClient() as client:
-        yield client
-
-@pytest.fixture(scope="function")
 def test_client(http_client: httpx2.AsyncClient) -> Generator[TestClient, None]:
     from api.main import app
     from api.state import httpx

@@ -65,22 +65,22 @@ async def probe_vespa(client: httpx2.AsyncClient) -> None:
         )
 
 
-async def probe_documents_search(client: httpx2.AsyncClient) -> None:
-    await DevVespaDocumentSearchEngine(settings=settings, httpx=client).asearch(
+async def probe_documents_search() -> None:
+    await DevVespaDocumentSearchEngine(settings=settings).asearch(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
     )
 
 
-async def probe_documents_get(client: httpx2.AsyncClient) -> None:
+async def probe_documents_get() -> None:
     """
     Fetch a document by id, via the top hit rather than a pinned id.
 
     The id comes from a search so the probe cannot go red because one hard-coded
     document was unpublished - that is a corpus change, not a service failure.
     """
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
     results = await engine.asearch(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
@@ -100,8 +100,8 @@ async def probe_documents_get(client: httpx2.AsyncClient) -> None:
         )
 
 
-async def probe_labels_search(client: httpx2.AsyncClient) -> None:
-    await DevVespaLabelSearchEngine(settings=settings, httpx=client).asearch(
+async def probe_labels_search() -> None:
+    await DevVespaLabelSearchEngine(settings=settings).asearch(
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
@@ -124,9 +124,9 @@ Probe = Callable[[], Awaitable[None]]
 def probes(http: HttpxDep) -> dict[str, Probe]:
     return {
         "vespa": partial(probe_vespa, http),
-        "documents.search": partial(probe_documents_search, http),
-        "documents.get": partial(probe_documents_get, http),
-        "labels.search": partial(probe_labels_search, http),
+        "documents.search": probe_documents_search,
+        "documents.get": probe_documents_get,
+        "labels.search": probe_labels_search,
         "passages.search": partial(probe_passages_search, http),
     }
 

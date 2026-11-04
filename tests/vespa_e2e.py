@@ -6,7 +6,6 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 
-import httpx2
 import pytest
 import requests as req
 from vespa.application import Vespa
@@ -103,9 +102,9 @@ def clean_docs(vespa_app: Vespa):
 
 
 
-async def get_search_ids(httpx_client: httpx2.AsyncClient, filter_: Filter) -> set[str]:
-    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=httpx_client)
-    docs = await engine.asearch(
+def get_search_ids(filter_: Filter) -> set[str]:
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS)
+    docs = engine.search(
         query=None,
         pagination=Pagination(page_token=1, page_size=10),
         order_by=[OrderBy(field="relevance", direction="desc")],

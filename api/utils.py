@@ -8,14 +8,13 @@ from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DOCUMENT_SORT_API_FIELDS,
     PASSAGE_SORT_API_FIELDS,
-    DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
 )
 from search.engines.dev_vespa.passages_search_engine import (
-    DEFAULT_PASSAGE_RANK_PROFILE,
+    _DEFAULT_PASSAGE_RANK_PROFILE,
 )
 
-RankProfile = Literal["nativerank", "bm25_multiplicative", "unranked", "bm25_topic_boost"]
+RankProfile = Literal["nativerank", "bm25_multiplicative", "unranked"]
 
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
@@ -158,19 +157,12 @@ def passages_engine(
         rank_profile: RankProfileQueryDep = None
         ) -> DevVespaPassageSearchEngine:
     return DevVespaPassageSearchEngine(
-        ranking_profile=rank_profile or DEFAULT_PASSAGE_RANK_PROFILE,
+        ranking_profile=rank_profile or _DEFAULT_PASSAGE_RANK_PROFILE,
         settings=settings,
         httpx=httpx
     )
 
 PassagesEngineDep = Annotated[DevVespaPassageSearchEngine, Depends(passages_engine)]
-
-
-def labels_engine(httpx: HttpxDep) -> DevVespaLabelSearchEngine:
-    return DevVespaLabelSearchEngine(settings=settings, httpx=httpx)
-
-
-LabelsEngineDep = Annotated[DevVespaLabelSearchEngine, Depends(labels_engine)]
 
 
 def passages_order_by(

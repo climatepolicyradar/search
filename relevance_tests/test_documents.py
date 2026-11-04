@@ -1,6 +1,5 @@
 import os
 
-import httpx2
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from api.routers import settings
@@ -562,16 +561,10 @@ def relevance_tests_documents():
 
     engines = [
         # BM25TitleVespaDocumentSearchEngine(),
-        DevVespaDocumentSearchEngine(
-            settings=settings, httpx=httpx2.AsyncClient(), debug=True, msm=msm
-        ),
+        DevVespaDocumentSearchEngine(settings=settings, debug=True, msm=msm),
         # Topic ranking off, to A/B the topic-filtered cases against text-only ranking.
         DevVespaDocumentSearchEngine(
-            settings=settings,
-            httpx=httpx2.AsyncClient(),
-            debug=True,
-            topic_weight=0.0,
-            msm=msm,
+            settings=settings, debug=True, topic_weight=0.0, msm=msm
         ),
     ]
 

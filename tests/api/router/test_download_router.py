@@ -19,8 +19,7 @@ def document_client_and_engine_cls():
             return_value=ListResponse(results=[], total_size=0, next_page_token=None)
         )
         mock_engine_cls.return_value = mock_engine
-        with TestClient(app) as client:
-            yield client, mock_engine_cls
+        yield TestClient(app), mock_engine_cls
 
 
 @pytest.fixture

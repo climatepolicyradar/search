@@ -7,13 +7,12 @@ The label search engine returns :class:`~search.data_in_models.Label`
 parses successfully.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from api.utils import labels_engine
 from search.engines import ListResponse
 from search.label import LabelSearchResult
 
@@ -32,18 +31,16 @@ def labels_client():
         value="indigenous people",
         alternative_labels=["first nations", "aboriginal peoples"],
     )
-    mock_engine = MagicMock()
-    mock_engine.asearch = AsyncMock()
-    mock_engine.asearch.return_value = ListResponse(
-        results=[data_in_label],
-        total_size=1,
-        next_page_token=None,
-    )
-    app.dependency_overrides[labels_engine] = lambda: mock_engine
-    try:
+    with patch("api.routers.DevVespaLabelSearchEngine") as mock_engine_cls:
+        mock_engine = MagicMock()
+        mock_engine_cls.return_value = mock_engine
+        mock_engine.asearch = AsyncMock()
+        mock_engine.asearch.return_value = ListResponse(
+            results=[data_in_label],
+            total_size=1,
+            next_page_token=None,
+        )
         yield TestClient(app)
-    finally:
-        del app.dependency_overrides[labels_engine]
 
 
 def test_labels_endpoint_serialises_data_in_label_results(

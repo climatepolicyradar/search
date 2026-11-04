@@ -15,7 +15,7 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Any
 
@@ -107,6 +107,12 @@ def _vespa_ready() -> bool:
         )
     except Exception:
         return False
+
+
+@pytest.fixture(scope="function")
+async def live_http_client() -> AsyncGenerator[httpx2.AsyncClient, None]:
+    async with httpx2.AsyncClient() as client:
+        yield client
 
 
 @pytest.fixture(scope="module")

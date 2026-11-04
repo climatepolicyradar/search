@@ -175,7 +175,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     def __init__(
         self,
         settings: Settings,
-        httpx: httpx2.AsyncClient,
         debug: bool = False,
         bolding: bool = False,
         ranking_profile: str = _DEFAULT_DOCUMENT_RANK_PROFILE,
@@ -226,7 +225,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         if exact_weight is not None and exact_weight < 0:
             raise ValueError(f"exact_weight must be >= 0, got {exact_weight!r}")
 
-        self._httpx = httpx
         self.debug = debug
         self.bolding = bolding
         self.last_debug_info: list[dict[str, Any]] = []
@@ -396,7 +394,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             token=self.settings.vespa_read_token,
             request_body=request_body,
             request_context="documents.search",
-            client=self._httpx,
         )
         documents = []
         debug_info: list[dict[str, Any]] = []
@@ -495,14 +492,15 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         )
         logger.info("Vespa request started [documents.get]")
         try:
-            response = await self._httpx.get(
-                endpoint,
-                params={
-                    "fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"
-                },
-                timeout=API_TIMEOUT,
-                headers=headers,
-            )
+            async with httpx2.AsyncClient() as client:
+                response = await client.get(
+                    endpoint,
+                    params={
+                        "fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"
+                    },
+                    timeout=API_TIMEOUT,
+                    headers=headers,
+                )
         except Exception as exc:
             raise VespaError("Vespa request failed", status_code=None) from exc
         if response.status_code == HTTPStatus.NOT_FOUND:
@@ -616,7 +614,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             token=self.settings.vespa_read_token,
             request_body=request_body,
             request_context="documents.aggregations",
-            client=self._httpx,
         )
 
         root = response.get("root", {})
@@ -697,7 +694,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             token=self.settings.vespa_read_token,
             request_body=request_body,
             request_context="documents.facets",
-            client=self._httpx,
         )
 
         root_children: list[dict] = response.get("root", {}).get("children") or []
@@ -858,11 +854,11 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
     """
     Search engine for principal documents.
 
-    Overrides calls to .asearch with a filter for principal documents, so the engine
+    Overrides calls to .search with a filter for principal documents, so the engine
     can be used against relevance tests.
     """
 
-    async def asearch(
+    def search(
         self,
         query: str | None,
         pagination: Pagination,
@@ -887,4 +883,4 @@ class DevVespaPrincipalDocumentSearchEngine(DevVespaDocumentSearchEngine):
         else:
             merged_filter = principal_filter
 
-        return await super().asearch(query, pagination, order_by, merged_filter)
+        return super().search(query, pagination, order_by, merged_filter)

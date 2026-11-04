@@ -65,14 +65,12 @@ def test_document_sort_ranking_string_puts_missing_values_last(
     assert _document_sort_ranking_string(field, direction) == expected
 
 
-def _document_engine(
-    http_client: httpx2.AsyncClient, **kwargs
-) -> DevVespaDocumentSearchEngine:
+def _document_engine(**kwargs) -> DevVespaDocumentSearchEngine:
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    return DevVespaDocumentSearchEngine(settings=settings, httpx=http_client, **kwargs)
+    return DevVespaDocumentSearchEngine(settings=settings, **kwargs)
 
 
 @pytest.mark.parametrize(
@@ -85,10 +83,10 @@ def _document_engine(
     ],
 )
 def test_document_search_never_requests_the_default_summary(
-    engine_kwargs: dict, expected_summary: str, http_client: httpx2.AsyncClient
+    engine_kwargs: dict, expected_summary: str
 ) -> None:
     """Every search hit summary must be one of the summaries with trimmed fields."""
-    engine = _document_engine(http_client, **engine_kwargs)
+    engine = _document_engine(**engine_kwargs)
 
     with patch.object(
         documents_search_engine,
@@ -105,9 +103,7 @@ def test_document_search_never_requests_the_default_summary(
     assert request_body["presentation.summary"] == expected_summary
 
 
-def test_document_search_hits_carry_no_passages(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_hits_carry_no_passages() -> None:
     """
     Search hits never carry passages, whatever Vespa returns.
 
@@ -115,7 +111,7 @@ def test_document_search_hits_carry_no_passages(
     numeric queries is thousands per document (~10MB a page). `/search/passages`
     is the route for passages; document hits stay lean (FUS-479).
     """
-    engine = _document_engine(http_client, bolding=True)
+    engine = _document_engine(bolding=True)
 
     fake_response = {
         "root": {
@@ -478,15 +474,13 @@ def test_topic_ids_from_filters(filters: Filter | None, expected: list[str]) -> 
     assert _topic_ids_from_filters(filters) == expected
 
 
-def test_document_search_engine_sends_filtered_topics_as_a_query_tensor(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_engine_sends_filtered_topics_as_a_query_tensor() -> None:
     """Topics being filtered for become the topic ranking tensor."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
         documents_search_engine,
@@ -509,15 +503,13 @@ def test_document_search_engine_sends_filtered_topics_as_a_query_tensor(
     assert request_body["input.query(topic_weight)"] == 1.0
 
 
-def test_document_search_engine_omits_topic_inputs_without_topics_filter(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_engine_omits_topic_inputs_without_topics_filter() -> None:
     """No topic filter means no topic inputs, leaving ranking exactly as it was."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
         documents_search_engine,
@@ -535,17 +527,13 @@ def test_document_search_engine_omits_topic_inputs_without_topics_filter(
     assert "input.query(topic_weight)" not in request_body
 
 
-def test_document_search_engine_forwards_topic_weight(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_engine_forwards_topic_weight() -> None:
     """`topic_weight=0.0` is the off switch for topic ranking."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(
-        settings=settings, httpx=http_client, topic_weight=0.0
-    )
+    engine = DevVespaDocumentSearchEngine(settings=settings, topic_weight=0.0)
 
     with patch.object(
         documents_search_engine,
@@ -566,15 +554,13 @@ def test_document_search_engine_forwards_topic_weight(
     assert engine.name == "DevVespaDocumentSearchEngine"
 
 
-def test_document_search_engine_omits_topic_inputs_under_a_sort_override(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_engine_omits_topic_inputs_under_a_sort_override() -> None:
     """Topics ranking should be disabled when sorting by a field is specified."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
         documents_search_engine,
@@ -618,7 +604,7 @@ def test_passage_search_engine_sends_ranking_profile_without_debug(
     )
 
     request_body = handler.last_json()
-    assert request_body["ranking.profile"] == passages_search_engine.DEFAULT_PASSAGE_RANK_PROFILE
+    assert request_body["ranking.profile"] == "bm25_multiplicative"
 
 
 @pytest.mark.parametrize(
@@ -727,7 +713,7 @@ def test_passage_search_engine_forwards_topic_weight(
     request_body = handler.last_json()
     assert request_body["input.query(topic_weight)"] == 0.0
     assert engine.parameters == {
-        "ranking_profile": passages_search_engine.DEFAULT_PASSAGE_RANK_PROFILE,
+        "ranking_profile": "bm25_multiplicative",
         "topic_weight": 0.0,
         "exact_weight": 0.1,
     }
@@ -759,15 +745,13 @@ def test_passage_search_engine_omits_topic_inputs_under_a_sort_override(
     assert "input.query(topic_weight)" not in request_body
 
 
-def test_document_get_renders_labels_and_concepts(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_get_renders_labels_and_concepts() -> None:
     """`get` renders a document like a search hit with labels with concepts."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     document_source = json.dumps(
         {
@@ -872,15 +856,13 @@ def test_passage_search_engine_mixes_free_term_and_phrase(
     assert request_body["exact_phrase_0"] == "net zero"
 
 
-def test_document_search_engine_quoted_query_builds_exact_phrase(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_engine_quoted_query_builds_exact_phrase() -> None:
     """A fully-quoted document query phrase-matches title, description AND passages_text."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     with patch.object(
         documents_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
@@ -917,9 +899,7 @@ def _document_search_yql(engine: DevVespaDocumentSearchEngine) -> str:
     return mock_execute.call_args.kwargs["request_body"]["yql"]
 
 
-def test_document_search_engine_sends_default_target_hits(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_engine_sends_default_target_hits() -> None:
     """
     Retrieval depth is stated in the YQL rather than left to Vespa's default.
 
@@ -931,7 +911,7 @@ def test_document_search_engine_sends_default_target_hits(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=settings)
 
     yql = _document_search_yql(engine)
 
@@ -940,17 +920,13 @@ def test_document_search_engine_sends_default_target_hits(
     assert engine.parameters["total_target_hits"] == 2000
 
 
-def test_document_search_engine_forwards_target_hits(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_engine_forwards_target_hits() -> None:
     """`total_target_hits` overrides how many candidates weakAnd keeps."""
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    engine = DevVespaDocumentSearchEngine(
-        settings=settings, httpx=http_client, total_target_hits=200
-    )
+    engine = DevVespaDocumentSearchEngine(settings=settings, total_target_hits=200)
 
     yql = _document_search_yql(engine)
 
@@ -984,16 +960,14 @@ def _document_search_request_body(
     return mock_execute.call_args.kwargs["request_body"]
 
 
-def test_msm_defaults_to_off_and_changes_nothing(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_msm_defaults_to_off_and_changes_nothing() -> None:
     """
     MSM off must be byte-identical to the behaviour that predates it.
 
     The default rank profile carries no `rank-score-drop-limit`, so sending
     `query(msm)` to it would be a silent no-op rather than a filter.
     """
-    engine = _document_engine(http_client)
+    engine = _document_engine()
 
     body = _document_search_request_body(engine)
 
@@ -1002,11 +976,9 @@ def test_msm_defaults_to_off_and_changes_nothing(
     assert "input.query(msm)" not in body
 
 
-def test_msm_forwards_the_value_on_the_default_profile(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_msm_forwards_the_value_on_the_default_profile() -> None:
     """`bm25-title-geo` declares query(msm), so no profile switch is needed."""
-    engine = _document_engine(http_client, msm=0.6)
+    engine = _document_engine(msm=0.6)
 
     body = _document_search_request_body(engine)
 
@@ -1015,14 +987,14 @@ def test_msm_forwards_the_value_on_the_default_profile(
     assert engine.parameters["msm"] == 0.6
 
 
-def test_msm_survives_a_sort(http_client: httpx2.AsyncClient) -> None:
+def test_msm_survives_a_sort() -> None:
     """
     A sorted listing must not return documents a relevance search would drop.
 
     `unranked` declares query(msm) and carries the same guard, so a sort filters
     without needing a profile of its own.
     """
-    engine = _document_engine(http_client, msm=0.6)
+    engine = _document_engine(msm=0.6)
 
     body = _document_search_request_body(
         engine, order_by=[OrderBy(field="attributes.published_date", direction="desc")]
@@ -1033,16 +1005,14 @@ def test_msm_survives_a_sort(http_client: httpx2.AsyncClient) -> None:
     assert body["ranking.sorting"]
 
 
-def test_msm_reaches_aggregations_and_facets(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_msm_reaches_aggregations_and_facets() -> None:
     """
     Facet counts and results have to describe the same document set.
 
     These run as separate Vespa queries; a facet counted over a wider set than
     the results is the inconsistency FUS-475 was about.
     """
-    engine = _document_engine(http_client, msm=0.6)
+    engine = _document_engine(msm=0.6)
 
     with patch.object(
         documents_search_engine,
@@ -1058,16 +1028,14 @@ def test_msm_reaches_aggregations_and_facets(
         assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
 
 
-def test_msm_is_off_for_a_phrase_only_query(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_msm_is_off_for_a_phrase_only_query() -> None:
     """
     A quoted-only query has no free text, so `coverage()` is 0 for every document.
 
     Sending `query(msm)` would drop the whole corpus - every quoted search on the
     site returned nothing once the frontend started sending msm.
     """
-    engine = _document_engine(http_client, msm=0.6)
+    engine = _document_engine(msm=0.6)
 
     body = _document_search_request_body(engine, query='"net zero"')
 
@@ -1085,11 +1053,9 @@ def test_msm_is_off_for_a_phrase_only_query(
         assert "input.query(msm)" not in call.kwargs["request_body"]
 
 
-def test_msm_still_applies_to_free_text_beside_a_phrase(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_msm_still_applies_to_free_text_beside_a_phrase() -> None:
     """Free text next to a phrase still has terms for `coverage()` to measure."""
-    engine = _document_engine(http_client, msm=0.6)
+    engine = _document_engine(msm=0.6)
 
     body = _document_search_request_body(engine, query='UK "net zero"')
 
@@ -1097,19 +1063,15 @@ def test_msm_still_applies_to_free_text_beside_a_phrase(
 
 
 @pytest.mark.parametrize("msm", [-0.1, 1.1, 2.0])
-def test_msm_out_of_range_raises(
-    msm: float, http_client: httpx2.AsyncClient
-) -> None:
+def test_msm_out_of_range_raises(msm: float) -> None:
     """An out-of-range msm is a caller error, not something to clamp silently."""
     with pytest.raises(ValueError, match="between 0.0 and 1.0"):
-        _document_engine(http_client, msm=msm)
+        _document_engine(msm=msm)
 
 
-def test_an_explicit_rank_profile_is_respected(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_an_explicit_rank_profile_is_respected() -> None:
     """Relevance sweeps pin a profile; nothing may override that."""
-    engine = _document_engine(http_client, ranking_profile="bm25")
+    engine = _document_engine(ranking_profile="bm25")
 
     assert engine.ranking_profile == "bm25"
 
@@ -1117,14 +1079,12 @@ def test_an_explicit_rank_profile_is_respected(
 # endregion Minimum Should Match
 
 
-def _label_engine(
-    http_client: httpx2.AsyncClient, **kwargs
-) -> DevVespaLabelSearchEngine:
+def _label_engine(**kwargs) -> DevVespaLabelSearchEngine:
     settings = Settings(
         vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
         vespa_read_token="test-read-token",  # nosec B106
     )
-    return DevVespaLabelSearchEngine(settings=settings, httpx=http_client, **kwargs)
+    return DevVespaLabelSearchEngine(settings=settings, **kwargs)
 
 
 @pytest.mark.parametrize(
@@ -1137,10 +1097,10 @@ def _label_engine(
     ],
 )
 def test_label_search_engine_computes_offset_from_page_token(
-    page_token: int, page_size: int, expected_offset: int, http_client: httpx2.AsyncClient
+    page_token: int, page_size: int, expected_offset: int
 ) -> None:
     """`offset` is derived from `page_token`, not passed straight through."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
 
     with patch.object(
         labels_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
@@ -1164,11 +1124,9 @@ def test_label_search_engine_computes_offset_from_page_token(
     strict=True,
     raises=AssertionError,
 )
-def test_label_search_engine_applies_order_by_to_request_body(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_applies_order_by_to_request_body() -> None:
     """order_by should override ranking/sorting the way it does for passages."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
 
     with patch.object(
         labels_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
@@ -1183,11 +1141,9 @@ def test_label_search_engine_applies_order_by_to_request_body(
     assert "ranking.sorting" in request_body
 
 
-def test_label_search_engine_filters_by_label_type(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_filters_by_label_type() -> None:
     """A `label_type` argument adds a `type contains` clause to the YQL."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
 
     with patch.object(
         labels_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
@@ -1203,11 +1159,9 @@ def test_label_search_engine_filters_by_label_type(
     assert 'type contains "country"' in request_body["yql"]
 
 
-def test_label_search_engine_omits_type_clause_without_label_type(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_omits_type_clause_without_label_type() -> None:
     """No `label_type` means no `type contains` clause in the YQL."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
 
     with patch.object(
         labels_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
@@ -1222,11 +1176,9 @@ def test_label_search_engine_omits_type_clause_without_label_type(
     assert "type contains" not in request_body["yql"]
 
 
-def test_label_search_engine_applies_filters_to_yql(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_applies_filters_to_yql() -> None:
     """`filters` are folded into the YQL `where` clause."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
     filters = Filter(
         op="and",
         filters=[FieldFilter(field="type", op="not_contains", value="keyword")],
@@ -1246,11 +1198,9 @@ def test_label_search_engine_applies_filters_to_yql(
     assert '!(type contains "keyword")' in request_body["yql"]
 
 
-def test_label_search_engine_strips_quotes_from_query(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_strips_quotes_from_query() -> None:
     """Query text is quote-stripped before being sent to Vespa (matches doc/passage engines)."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
 
     with patch.object(
         labels_search_engine, "aexecute_vespa_query", return_value={"root": {"children": []}}
@@ -1265,11 +1215,9 @@ def test_label_search_engine_strips_quotes_from_query(
     assert request_body["query"] == "Romania"
 
 
-def test_label_search_engine_parses_valid_flat_fields(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_parses_valid_flat_fields() -> None:
     """A hit with valid `id`/`type`/`value` fields becomes a result label."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
     fake_response = {
         "root": {
             "children": [
@@ -1296,11 +1244,9 @@ def test_label_search_engine_parses_valid_flat_fields(
     assert result.results[0].labels == []
 
 
-def test_label_search_engine_parses_label_relationships(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_parses_label_relationships() -> None:
     """The `labels` struct array becomes nested `LabelRelationship` entries."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
     fake_response = {
         "root": {
             "children": [
@@ -1338,11 +1284,9 @@ def test_label_search_engine_parses_label_relationships(
     assert relationship.timestamp is not None
 
 
-def test_label_search_engine_skips_hits_with_missing_fields(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_skips_hits_with_missing_fields() -> None:
     """A hit missing a required flat field is dropped, not raised."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
     fake_response = {
         "root": {
             "children": [
@@ -1361,11 +1305,9 @@ def test_label_search_engine_skips_hits_with_missing_fields(
     assert result.results == []
 
 
-def test_label_search_engine_skips_hits_with_empty_fields(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_skips_hits_with_empty_fields() -> None:
     """A hit with no fields at all is dropped, not raised."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
     fake_response = {
         "root": {
             "children": [
@@ -1384,11 +1326,9 @@ def test_label_search_engine_skips_hits_with_empty_fields(
     assert result.results == []
 
 
-def test_label_search_engine_populates_debug_info_when_debugging(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_populates_debug_info_when_debugging() -> None:
     """`debug=True` records per-hit relevance/summary info on `last_debug_info`."""
-    engine = _label_engine(http_client, debug=True)
+    engine = _label_engine(debug=True)
     fake_response = {
         "root": {
             "children": [
@@ -1416,11 +1356,9 @@ def test_label_search_engine_populates_debug_info_when_debugging(
     assert engine.last_debug_info[0]["value"] == "Romania"
 
 
-def test_label_search_engine_omits_debug_info_by_default(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_omits_debug_info_by_default() -> None:
     """Without `debug=True`, no per-hit debug info is collected."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
     fake_response = {
         "root": {
             "children": [
@@ -1445,11 +1383,9 @@ def test_label_search_engine_omits_debug_info_by_default(
     assert engine.last_debug_info == []
 
 
-def test_label_search_engine_reads_total_size_from_response(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_label_search_engine_reads_total_size_from_response() -> None:
     """`total_size` is read from the Vespa response's `totalCount` field."""
-    engine = _label_engine(http_client)
+    engine = _label_engine()
     fake_response = {
         "root": {
             "fields": {"totalCount": 42},
@@ -1542,9 +1478,7 @@ def test_negative_exact_weight_raises(http_client: httpx2.AsyncClient) -> None:
     with pytest.raises(ValueError, match="exact_weight"):
         DevVespaPassageSearchEngine(settings=_KSTEM_SETTINGS, httpx=http_client, exact_weight=-1.0)
     with pytest.raises(ValueError, match="exact_weight"):
-        DevVespaDocumentSearchEngine(
-            settings=_KSTEM_SETTINGS, httpx=http_client, exact_weight=-1.0
-        )
+        DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS, exact_weight=-1.0)
 
 
 def _document_request_body(engine: DevVespaDocumentSearchEngine) -> dict:
@@ -1559,9 +1493,7 @@ def _document_request_body(engine: DevVespaDocumentSearchEngine) -> dict:
     return mock_execute.call_args.kwargs["request_body"]
 
 
-def test_document_exact_boost_is_off_by_default(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_exact_boost_is_off_by_default() -> None:
     """
     Documents leave the unstemmed copies out of unquoted queries.
 
@@ -1569,7 +1501,7 @@ def test_document_exact_boost_is_off_by_default(
     that mention the query words often outrank the one whose title it is. `None`
     (not 0.0) also leaves quoted phrases on the schema's default weight.
     """
-    engine = DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS, httpx=http_client)
+    engine = DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS)
     body = _document_request_body(engine)
     assert "rank(" not in body["yql"]
     assert "input.query(exact_weight)" not in body
@@ -1577,22 +1509,16 @@ def test_document_exact_boost_is_off_by_default(
     assert engine.parameters["exact_weight"] is None
 
 
-def test_document_exact_boost_can_be_switched_on(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_exact_boost_can_be_switched_on() -> None:
     body = _document_request_body(
-        DevVespaDocumentSearchEngine(
-            settings=_KSTEM_SETTINGS, httpx=http_client, exact_weight=0.5
-        )
+        DevVespaDocumentSearchEngine(settings=_KSTEM_SETTINGS, exact_weight=0.5)
     )
     assert body["yql"].count(" and rank(((") == 1
     assert '({defaultIndex: "exact", grammar: "any"}userInput(@query)))' in body["yql"]
     assert body["input.query(exact_weight)"] == 0.5
 
 
-def test_document_search_leaves_an_absent_description_empty(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_leaves_an_absent_description_empty() -> None:
     """
     A document with no description comes back as `None`, not `"MISSING"`.
 
@@ -1601,7 +1527,7 @@ def test_document_search_leaves_an_absent_description_empty(
     so an absent one must stay empty and let the card render nothing, rather
     than printing the placeholder to users (FUS-649).
     """
-    engine = _document_engine(http_client, bolding=True)
+    engine = _document_engine(bolding=True)
 
     fake_response = {
         "root": {
@@ -1632,9 +1558,7 @@ def test_document_search_leaves_an_absent_description_empty(
     assert result.results[0].description is None
 
 
-def test_document_search_absent_description_survives_exact_bolding(
-    http_client: httpx2.AsyncClient,
-) -> None:
+def test_document_search_absent_description_survives_exact_bolding() -> None:
     """
     A document with no description survives a quoted search.
 
@@ -1653,7 +1577,7 @@ def test_document_search_absent_description_survives_exact_bolding(
     the same way, so the request failed rather than rendering "MISSING".
     Only quoted queries reach this path.
     """
-    engine = _document_engine(http_client, bolding=True)
+    engine = _document_engine(bolding=True)
 
     fake_response = {
         "root": {
