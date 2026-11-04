@@ -278,3 +278,26 @@ def test_feed_derived_files_manages_the_vespa_feed_process(
     assert process.killed is (expected_cleanup == "killed")
     assert process.terminated is (expected_cleanup == "terminated")
     assert displaced_sigterm_handler == expected_forwarded
+
+
+def test_feed_derived_files_raises_when_the_feed_outlasts_its_timeout(
+    monkeypatch, tmp_path
+):
+    """
+    The bound the feeder passes is enforced, not merely recorded.
+
+    `FakeVespaFeed` honours `communicate`'s timeout the way `Popen` does, so
+    this fails if the feeder ever stops passing one.
+    """
+    files = [write_jsonl(tmp_path / "a.jsonl", [{"id": 1}])]
+    fake_feed = FakeVespaFeed(seconds_to_feed=10_000)
+    monkeypatch.setattr(feeder.subprocess, "Popen", fake_feed)
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        feeder.feed_derived_files(
+            materialised_derived_files=files,
+            endpoint="http://vespa",
+            application="app",
+        )
+
+    assert fake_feed.processes[0].killed is True

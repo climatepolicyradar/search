@@ -10,6 +10,7 @@
 # ruff: noqa: D102, D105, ARG002
 
 import json
+import subprocess
 from collections.abc import Callable
 from itertools import takewhile
 from pathlib import Path
@@ -67,10 +68,19 @@ class FakeVespaFeedProcess:
         self._feed = feed
         self._stdout = stdout
 
-    def communicate(self, timeout: int | None = None) -> tuple[str, str]:
+    def communicate(
+        self, input: bytes | str | None = None, timeout: float | None = None
+    ) -> tuple[str, str]:
         self._feed.timeouts.append(timeout)
         if self._feed.on_communicate is not None:
             self._feed.on_communicate(self)
+
+        # Honour the bound rather than just recording it. A fake that accepts
+        # `timeout` and ignores it would let `timeout=0.001` pass as a success,
+        # so the bound the feeder passes would be untested by construction.
+        if timeout is not None and self._feed.seconds_to_feed > timeout:
+            raise subprocess.TimeoutExpired(self.args, timeout)
+
         self.returncode = self._feed.returncode
         return self._stdout, self._feed.stderr
 
@@ -83,7 +93,7 @@ class FakeVespaFeedProcess:
     def __enter__(self) -> "FakeVespaFeedProcess":
         return self
 
-    def __exit__(self, *_) -> bool:
+    def __exit__(self, exc_type, value, traceback) -> bool:
         return False
 
 
@@ -106,11 +116,16 @@ class FakeVespaFeed:
         stderr: str = "",
         returncode: int = 0,
         on_communicate: Callable[[FakeVespaFeedProcess], None] | None = None,
+        seconds_to_feed: float = 0.0,
     ) -> None:
         self.stdout = stdout
         self.stderr = stderr
         self.returncode = returncode
         self.on_communicate = on_communicate
+        # How long the feed "takes", against which `communicate`'s own timeout
+        # is judged. The default never exceeds a bound, so existing callers
+        # that do not care keep behaving as they did.
+        self.seconds_to_feed = seconds_to_feed
         self.calls: list[list[str]] = []
         self.timeouts: list[int | None] = []
         self.fed_records: list[dict] = []

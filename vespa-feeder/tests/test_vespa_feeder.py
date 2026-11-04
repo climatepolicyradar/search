@@ -1,6 +1,7 @@
 """Table-driven tests for the `vespa_feeder` flow itself."""
 
 import inspect
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.util._once import Once
 from prefect.futures import PrefectFuture
 from prefect.logging import disable_run_logger
+
+from helpers import FakeVespaFeedProcess
 
 
 def _feed_result(
@@ -28,43 +31,66 @@ def _feed_result(
 
 
 class _FakeFuture:
-    """What `feed_batch.submit` hands back, wrapping one batch's outcome."""
+    """
+    What `feed_batch.submit` hands back, wrapping one batch's outcome.
 
-    def __init__(self, outcome: feeder.FeedResult | BaseException) -> None:
+    `raise_on_failure=False` is what the drain loop passes, and a real future
+    honours it by returning the exception rather than raising it. Set
+    `ignores_raise_on_failure` for the other case: an interruption that fails
+    the drain loop itself -- a cancel, or a flow-level timeout -- which arrives
+    regardless of what the caller asked for.
+    """
+
+    def __init__(
+        self,
+        outcome: feeder.FeedResult | BaseException,
+        ignores_raise_on_failure: bool = False,
+    ) -> None:
         self.outcome = outcome
+        self.ignores_raise_on_failure = ignores_raise_on_failure
 
     def result(self, timeout=None, raise_on_failure=True):
-        if raise_on_failure and isinstance(self.outcome, BaseException):
+        if isinstance(self.outcome, BaseException) and (
+            raise_on_failure or self.ignores_raise_on_failure
+        ):
             raise self.outcome
         return self.outcome
 
 
-class _ExplodingFuture:
-    """A future that fails the drain loop itself, the way a mid-run cancel does."""
+def _contract(func):
+    # Names and defaults, not annotations: the fakes are deliberately
+    # unannotated, but the parameters the production code passes must match.
+    return [
+        (name, parameter.kind, parameter.default)
+        for name, parameter in inspect.signature(func).parameters.items()
+    ]
 
-    def result(self, timeout=None, raise_on_failure=True):
-        raise KeyboardInterrupt("cancelled mid-drain")
 
-
-@pytest.mark.parametrize("fake", [_FakeFuture, _ExplodingFuture])
-def test_the_future_fakes_match_the_real_prefect_future(fake):
+def test_the_future_fake_matches_the_real_prefect_future():
     """
-    The fakes must keep the `.result` signature they stand in for.
+    The fake must keep the `.result` signature it stands in for.
 
     `vespa_feeder` calls `.result(raise_on_failure=False)`; if Prefect renamed
-    that parameter the fakes would happily keep accepting it and the drain-loop
+    that parameter the fake would happily keep accepting it and the drain-loop
     tests would still pass against an API that no longer exists.
     """
+    assert _contract(_FakeFuture.result) == _contract(PrefectFuture.result)
 
-    def _contract(func):
-        # Names and defaults, not annotations: the fakes are deliberately
-        # unannotated, but the parameters the drain loop passes must match.
-        return [
-            (name, parameter.kind, parameter.default)
-            for name, parameter in inspect.signature(func).parameters.items()
-        ]
 
-    assert _contract(fake.result) == _contract(PrefectFuture.result)
+@pytest.mark.parametrize(
+    "method", ["communicate", "terminate", "kill", "__enter__", "__exit__"]
+)
+def test_the_vespa_feed_process_fake_matches_the_real_popen(method):
+    """
+    The `Popen` stand-in must keep the signatures it stands in for.
+
+    `feed_derived_files` drives a real `subprocess.Popen` in production. If the
+    stdlib changed one of these signatures -- or the fake drifted from it --
+    every feed test would still pass against an API that no longer matches.
+    """
+    assert _contract(getattr(FakeVespaFeedProcess, method)) == _contract(
+        getattr(subprocess.Popen, method)
+    )
 
 
 class _FakeFeedBatch:
@@ -150,7 +176,15 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
     monkeypatch.setattr(
         feeder,
         "feed_batch",
-        _FakeFeedBatch([_FakeFuture(_feed_result("one.jsonl")), _ExplodingFuture()]),
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(
+                    KeyboardInterrupt("cancelled mid-drain"),
+                    ignores_raise_on_failure=True,
+                ),
+            ]
+        ),
     )
 
     with pytest.raises(KeyboardInterrupt):
@@ -183,6 +217,7 @@ def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
     markdown = summary_artifacts[0]["markdown"]
     assert "✅ **All files indexed successfully**" in markdown
     assert "| Batches that raised | 0 |" in markdown
+
 
 def test_vespa_feeder_records_a_completed_run(
     monkeypatch, summary_artifacts, recording_metrics, prefect_run_identity
