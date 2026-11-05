@@ -734,6 +734,7 @@ def vespa_feeder(
 
             # the finally is for a cancel mid-drain: `raise_on_failure=False` means no
             # batch raises here, so it is SIGTERM that would otherwise lose the summary.
+            drained = False
             try:
                 for feed_result_future in feed_results_futures:
                     # we do not raise to be able to aggregate and report on this in the markdown artifact.
@@ -746,6 +747,7 @@ def vespa_feeder(
                         continue
 
                     feed_results.append(feed_result)
+                drained = True
             finally:
                 # A flow-level timeout raises on this thread via Prefect's
                 # AlarmCancelScope, but worker threads blocked in `communicate()`
@@ -786,10 +788,26 @@ def vespa_feeder(
                     total_errors=total_operation - total_ok,
                 )
 
+                # Recorded unconditionally: a run that was cancelled still
+                # consumed that time, and `feed_batch` sets the same precedent
+                # by timing a batch that raised.
                 feeder_metrics.record_run_duration(
-                    time.perf_counter() - start_time, deployment_name
+                    time.perf_counter() - start_time, deployment_name, run_name
                 )
-                if run_failed:
+
+                # A cancel mid-drain is neither outcome. Counting it completed
+                # makes a run stopped after 1 of 2 batches look identical to a
+                # full success - which is rubbish, because it makes it harder
+                # to calculate a success rate using runs.completed and
+                # runs.failed. Counting it failed would also be wrong and
+                # would alert despite it being a deliberate own decision, so 
+                # it is recorded as neither.
+                if not drained:
+                    run_logger.warning(
+                        "Run did not finish draining its batches, so it is "
+                        "recorded as neither completed nor failed."
+                    )
+                elif run_failed:
                     feeder_metrics.record_run_failed(deployment_name, run_name)
                 else:
                     feeder_metrics.record_run_completed(deployment_name, run_name)

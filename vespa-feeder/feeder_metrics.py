@@ -92,11 +92,13 @@ class FeederMetrics:
         if self._records_error is not None:
             self._records_error.add(total_errors, attrs)
 
-    def record_run_duration(self, duration_s: float, deployment_name: str) -> None:
+    def record_run_duration(
+        self, duration_s: float, deployment_name: str, run_name: str = ""
+    ) -> None:
         """Record the total duration of a flow run in seconds."""
         if self._disabled:
             return
-        attrs = {"deployment_name": deployment_name}
+        attrs = {"deployment_name": deployment_name, "run_name": run_name}
         if self._run_duration is not None:
             self._run_duration.record(duration_s, attrs)
         if self._last_run_duration is not None:
