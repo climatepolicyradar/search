@@ -119,12 +119,18 @@ _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 _DEFAULT_EXACT_WEIGHT: float | None = None
 
 
+class VespaHit[A: BaseModel](BaseModel):
+    fields: A
+
+class VespaRoot[A: BaseModel](BaseModel):
+    children: list[VespaHit[A]] | None
+
 class VespaResponse[A: BaseModel](BaseModel):
-    children: list[A] | None
+    root: VespaRoot[A]
 
 class CollectionReference(BaseModel):
-    description: str | None
-    title: str | None
+    description: str | None = None
+    title: str | None = None
     id: str
 
 def _document_phrase_yql(count: int) -> str:
@@ -335,19 +341,19 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         there isn't really a reason to call this outside the CSV downloads.
         """
         return {
-            child.id: child
-            for child in VespaResponse[CollectionReference].model_validate(
+            hit.fields.id: hit.fields
+            for hit in VespaResponse[CollectionReference].model_validate(
                 await aexecute_vespa_query(
                     endpoint=f"{self.settings.vespa_endpoint}/search",
                     token=self.settings.vespa_read_token,
                     request_context="descriptions",
                     client=self._httpx,
                     request_body={
-                        "yql": "select id, title, description from documents where id in @ids",
+                        "yql": "select id, title, description from documents where id in (@ids)",
                         "ids": document_ids,
                     },
                 )
-            ).children or []
+            ).root.children or []
         }
 
     async def asearch(

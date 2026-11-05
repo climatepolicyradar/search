@@ -27,11 +27,15 @@ from datetime import datetime
 from enum import StrEnum
 from typing import AsyncGenerator, Protocol
 
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+
 from search.data_in_models import Document, DocumentWithoutRelationships
 from search.engines import ListResponse, OrderBy, Pagination
 from search.engines.dev_vespa import Filter
 from search.engines.dev_vespa.documents_search_engine import CollectionReference
 
+tracer = trace.get_tracer(__name__)
 
 class DocumentSearchEngine(Protocol):
     async def asearch(
@@ -222,7 +226,9 @@ async def stream_csv(
 
     needs_collections = (
         Column.COLLECTION_DESCRIPTION in deduped_columns or
-        Column.COLLECTION_TITLE in deduped_columns
+        Column.COLLECTION_TITLE in deduped_columns or
+        Column.BUNDLE_TITLE in deduped_columns or
+        Column.BUNDLE_ID in deduped_columns
     )
 
     header = [str(column) for column in deduped_columns]
@@ -230,48 +236,55 @@ async def stream_csv(
     yield writer.writeheader()
 
     page_count = math.ceil(max_results / internal_page_size)
-    fetched_so_far = 0
+    emitted = 0
 
     for page in range(1, page_count + 1):
+        with tracer.start_as_current_span("download.page", attributes={"page": page}) as span:
+            try:
+                response = await engine.asearch(
+                    pagination=Pagination(
+                        page_size=internal_page_size,
+                        page_token=page,
+                    ),
+                    order_by=order_by,
+                    filters=filters,
+                    query=query,
+                )
 
-        response = await engine.asearch(
-            pagination=Pagination(
-                page_size=min(max_results - fetched_so_far, internal_page_size),
-                page_token=page,
-            ),
-            order_by=order_by,
-            filters=filters,
-            query=query,
-        )
+                results = response.results[:max_results - emitted]
+                collection_references: dict[str, CollectionReference] = {}
+                linked_collections: dict[str, DocumentWithoutRelationships] = {}
+                emitted += len(results)
 
-        fetched_so_far += len(response.results)
-        collection_references: dict[str, CollectionReference] = {}
-        linked_collections: dict[str, DocumentWithoutRelationships] = {}
+                if needs_collections:
 
-        if needs_collections:
+                    linked_collections = {
+                        item.id: related.value
+                        for item in results
+                        for related in item.documents
+                        if related.type == "member_of"
+                    }
 
-            linked_collections = {
-                item.id: related.value
-                for item in response.results
-                for related in item.documents
-                if related.type == "member_of"
-            }
+                    if (collection_ids := [stub.id for stub in linked_collections.values()]):
+                        collection_references = await engine.collection_references(collection_ids)
 
-            if (collection_ids := [stub.id for stub in linked_collections.values()]):
-                collection_references = await engine.collection_references(collection_ids)
+                for document in results:
 
-        for document in response.results:
+                    collection = (
+                        collection_references.get(collection_stub.id)
+                        if (collection_stub := linked_collections.get(document.id))
+                        else None
+                    )
 
-            collection = (
-                collection_references.get(collection_stub.id)
-                if (collection_stub := linked_collections.get(document.id))
-                else None
-            )
+                    yield writer.writerow({
+                        str(column): read_column(document, collection, column)
+                        for column in deduped_columns
+                    })
 
-            yield writer.writerow({
-                str(column): read_column(document, collection, column)
-                for column in deduped_columns
-            })
+                if len(response.results) < internal_page_size or emitted >= max_results:
+                    break
 
-        if len(response.results) < internal_page_size or fetched_so_far >= max_results:
-            break
+            except Exception as e:
+                span.record_exception(e)
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                break

@@ -104,9 +104,40 @@ def test_download_respects_max_results_query_param(
 
     response = _download(test_client, max_results=5)
 
-    assert stub_engine.asearch_requests[0].pagination.page_size == 5
+    assert stub_engine.asearch_requests[0].pagination.page_size == 100
     body_rows = response.text.strip().splitlines()[1:]
     assert len(body_rows) == 5
+
+
+def test_download_pages_without_overlap_when_max_results_is_not_a_whole_page(
+        stub_engine: StubDocumentSearchEngine,
+        test_client: TestClient,
+    ) -> None:
+    """
+    A `max_results` that is not a multiple of the page size still pages cleanly.
+
+    The engine derives its offset as `(page_token - 1) * page_size`, so a page
+    size shrunk to fit the remainder would rewind the offset: at 150 a second
+    page of 50 would start at 50, re-emitting rows already written and never
+    reaching 100-149. The page size stays fixed and the last page is truncated.
+    """
+    for page in range(2):
+        stub_engine.add_asearch_response(
+            ListResponse(
+                results=[_document(f"doc-{i}") for i in range(page * 100, page * 100 + 100)],
+                next_page_token=None,
+                total_size=200,
+            )
+        )
+
+    response = _download(test_client, max_results=150)
+
+    page_sizes = [request.pagination.page_size for request in stub_engine.asearch_requests]
+    assert page_sizes == [100, 100]
+    body_rows = response.text.strip().splitlines()[1:]
+    assert len(body_rows) == 150
+    assert len(set(body_rows)) == 150
+    assert body_rows[-1].startswith("doc-149,")
 
 
 def test_download_rejects_non_positive_max_results(test_client: TestClient) -> None:
