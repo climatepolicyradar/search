@@ -120,7 +120,14 @@ def test_feed_derived_files_bounds_the_batch_not_each_file(
             vespa_feed_stdout(
                 operation=10, ok=8, code_counts={"200": 8, "429": 5, "503": 2}
             ),
-            "feed: 503 Service Unavailable for put id:doc:doc::9: giving up\n",
+            # The real shape CLI 8.675.23 emits from dispatcher.go logResult:
+            # `feed: got status <n> (<body>) for put <id>: giving up after N
+            # attempts`. The looser fixture this replaces would have passed
+            # against a regex that could not match production output.
+            (
+                "feed: got status 503 (service unavailable) for put "
+                "id:doc:doc::9: giving up after 10 attempts\n"
+            ),
             {
                 "operation_count": 10,
                 "ok_count": 8,
@@ -135,7 +142,8 @@ def test_feed_derived_files_bounds_the_batch_not_each_file(
                         other_http_error_count=2,
                         failed_documents=[
                             feeder.FailedDocument(
-                                doc_id="id:doc:doc::9", error="503 Service Unavailable"
+                                doc_id="id:doc:doc::9",
+                                error="got status 503 (service unavailable)",
                             )
                         ],
                     )
