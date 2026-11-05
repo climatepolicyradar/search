@@ -200,6 +200,52 @@ def test_vespa_feeder_writes_the_summary_when_the_drain_is_cancelled(
     assert "| Files processed | 1 |" in summary_artifacts[0]["markdown"]
 
 
+def test_vespa_feeder_records_a_cancelled_run_as_neither_outcome(
+    monkeypatch, summary_artifacts, recording_metrics, prefect_run_identity
+):
+    """
+    A cancel mid-drain is neither a completed run nor a failed one.
+
+    Counting it completed is the failure mode hardest to notice: a run
+    stopped after 1 of 2 batches would read as a clean success, while
+    runs.completed and runs.failed are the natural numerator and
+    denominator for a success-rate panel. Counting it failed would page
+    someone for an operator's own decision. The duration is still recorded,
+    because the run did consume that time.
+    """
+    expected_deployment, expected_run_name = prefect_run_identity
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(
+                    KeyboardInterrupt("cancelled mid-drain"),
+                    ignores_raise_on_failure=True,
+                ),
+            ]
+        ),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        feeder.vespa_feeder(
+            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+        )
+
+    recording_metrics.record_run_completed.assert_not_called()
+    recording_metrics.record_run_failed.assert_not_called()
+
+    recording_metrics.record_run_duration.assert_called_once()
+    duration_s, deployment_name, run_name = (
+        recording_metrics.record_run_duration.call_args.args
+    )
+    assert duration_s >= 0
+    assert deployment_name == expected_deployment
+    assert run_name == expected_run_name
+
+
 def test_vespa_feeder_terminates_in_flight_feeds_when_the_drain_is_interrupted(
     monkeypatch, summary_artifacts
 ):
@@ -291,10 +337,15 @@ def test_vespa_feeder_records_a_completed_run(
     )
 
     # record_run_duration is called positionally, so read the args the same way.
+    # run_name rides along so a duration can be attributed to a specific run,
+    # which is what answers "is the feeder getting slower?".
     recording_metrics.record_run_duration.assert_called_once()
-    duration_s, deployment_name = recording_metrics.record_run_duration.call_args.args
+    duration_s, deployment_name, run_name = (
+        recording_metrics.record_run_duration.call_args.args
+    )
     assert duration_s >= 0
     assert deployment_name == expected_deployment
+    assert run_name == expected_run_name
 
     recording_metrics.record_run_completed.assert_called_once_with(
         expected_deployment, expected_run_name
