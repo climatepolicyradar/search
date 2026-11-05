@@ -21,18 +21,45 @@ particular app's column set sends that set; the mapping from app to
 columns lives with the caller, not here.
 """
 
-import asyncio
 import csv
-import io
 import math
-from collections.abc import Iterator
 from datetime import datetime
 from enum import StrEnum
+from typing import AsyncGenerator, Protocol
+
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
 
 from search.data_in_models import Document, DocumentWithoutRelationships
-from search.engines import OrderBy, Pagination
-from search.engines.dev_vespa import DevVespaDocumentSearchEngine, Filter
+from search.engines import ListResponse, OrderBy, Pagination
+from search.engines.dev_vespa import Filter
+from search.engines.dev_vespa.documents_search_engine import CollectionReference
 
+tracer = trace.get_tracer(__name__)
+
+class DocumentSearchEngine(Protocol):
+    async def asearch(
+            self,
+            query: str | None,
+            pagination: Pagination,
+            order_by: list[OrderBy],
+            filters: Filter | None = None,
+        ) -> ListResponse[Document]:
+        """Search documents."""
+        ...
+
+    async def collection_references(
+            self,
+            document_ids: list[str],
+        ) -> dict[str, CollectionReference]:
+        """Resolve collection references for the given document ids."""
+        ...
+
+
+class Echo:
+    def write(self, value: str) -> str:
+        """No-op file-like write to stream CSVs with"""
+        return value
 
 def _published_date(document: Document) -> str:
     """
@@ -54,42 +81,14 @@ def _published_date(document: Document) -> str:
         return ""
 
 
-def _labels(document: Document, label_type: str) -> str:
-    """
-    Join the label values of one type.
-
-    A document often carries more than one label of the same type, and the
-    CSV gives each type a single cell, so every value goes in it:
-
-    - _labels(document, "geography")  # "Europe & Central Asia; Germany"
-    - _labels(document, "category")   # "Policy"
-
-    A document with no label of this type gives ``""``, an empty cell.
-    """
-    _LABEL_VALUE_SEPARATOR = "; "
-
-    return _LABEL_VALUE_SEPARATOR.join(
-        label.value.value for label in document.labels if label.type == label_type
-    )
+def _labels(document: Document, relation_type: str) -> str:
+    """Read semicolon separated labels of the given *relationship* type off the document"""
+    return "; ".join(label.value.value for label in document.labels if label.type == relation_type)
 
 
 def _label_type(document: Document, value_type: str) -> str:
-    """
-    Join the values of labels of one *label* type.
-
-    Not the same as `_labels`, which reads a label's relationship to the
-    document. Principal laws, case categories and jurisdictions all reach
-    a document under the single `legal_concept` relationship and are told
-    apart only by the type of the label itself, so reading them by
-    relationship would put all three in all three columns.
-
-    A document with no such label gives ``""``, an empty cell.
-    """
-    _LABEL_VALUE_SEPARATOR = "; "
-
-    return _LABEL_VALUE_SEPARATOR.join(
-        label.value.value for label in document.labels if label.value.type == value_type
-    )
+    """Read semicolon separated labels of the given *label* type off the document"""
+    return "; ".join(label.value.value for label in document.labels if label.value.type == value_type)
 
 
 def _attribute(document: Document, key: str) -> str:
@@ -106,34 +105,7 @@ def _attribute(document: Document, key: str) -> str:
     return "" if value is None else str(value)
 
 
-def _collection(document: Document) -> DocumentWithoutRelationships | None:
-    """
-    The collection a document belongs to, or ``None``.
-
-    A document that belongs to no collection gives ``None``, so a column
-    reading off it is empty rather than failing the download.
-    """
-    # The relationship from a principal to the collection it belongs to. The
-    # reverse (`has_member`) points at the principal's own documents, not a
-    # collection, so we can't get a collection that way.
-    _COLLECTION_RELATIONSHIP = "member_of"
-
-    for relationship in document.documents:
-        if relationship.type == _COLLECTION_RELATIONSHIP:
-            return relationship.value
-    return None
-
-
 class Column(StrEnum):
-    """
-    A column a caller may ask for.
-
-    The closed vocabulary of column names. A caller names columns from
-    this enum, so an unknown name is rejected by FastAPI before any
-    Vespa query runs, and the set of valid names is published in the
-    OpenAPI schema rather than having to be known out of band.
-    """
-
     ID = "ID"
     TITLE = "TITLE"
     DESCRIPTION = "DESCRIPTION"
@@ -143,6 +115,7 @@ class Column(StrEnum):
     CATEGORY = "CATEGORY"
     PROVIDER = "PROVIDER"
     COLLECTION_TITLE = "COLLECTION_TITLE"
+    COLLECTION_DESCRIPTION = "COLLECTION_DESCRIPTION"
     BUNDLE_ID = "BUNDLE_ID"
     BUNDLE_TITLE = "BUNDLE_TITLE"
     CASE_STATUS = "CASE_STATUS"
@@ -154,7 +127,11 @@ class Column(StrEnum):
     JURISDICTIONS = "JURISDICTIONS"
 
 
-def read_column(document: Document, column: Column) -> str:
+def read_column(
+        document: Document,
+        collection: CollectionReference | None,
+        column: Column
+    ) -> str:
     """
     One cell's text: the field ``column`` names, off ``document``.
 
@@ -169,17 +146,14 @@ def read_column(document: Document, column: Column) -> str:
     `KeyError` part-way through a download.
 
     TODO: FUS-819 - URL
-    TODO: FUS-820 - COLLECTION_DESCRIPTION
-    The above columns also belong here but are absent until the data behind
-    them exists. They are left out for now rather than offered empty.
+    The above column also belongs here but is absent until the data behind
+    it exists. It is left out for now rather than offered empty.
     """
     match column:
         case Column.ID:
             return document.id
         case Column.TITLE:
             return document.title
-        # `description` is optional on a document, so a missing value gives
-        # an empty cell rather than the string `"None"`.
         case Column.DESCRIPTION:
             return document.description or ""
         case Column.GEOGRAPHIES:
@@ -193,16 +167,13 @@ def read_column(document: Document, column: Column) -> str:
         case Column.PROVIDER:
             return _labels(document, "provider")
         case Column.COLLECTION_TITLE:
-            collection = _collection(document)
-            return collection.title if collection else ""
-        # `BUNDLE_*` names the collection a document belongs to, so it
-        # reads the same source as `COLLECTION_TITLE` above.
+            return collection and collection.title or ""
+        case Column.COLLECTION_DESCRIPTION:
+            return collection and collection.description or ""
         case Column.BUNDLE_ID:
-            collection = _collection(document)
-            return collection.id if collection else ""
+            return collection and collection.id or ""
         case Column.BUNDLE_TITLE:
-            collection = _collection(document)
-            return collection.title if collection else ""
+            return collection and collection.title or ""
         case Column.CASE_STATUS:
             return _attribute(document, "case_status")
         case Column.CASE_NUMBER:
@@ -222,7 +193,7 @@ def read_column(document: Document, column: Column) -> str:
 # Sent when a caller names no columns. Keeping a default means an ad-hoc
 # caller - a person with curl, or an agent reading `llms.txt` - gets a
 # usable CSV without first having to discover the column vocabulary.
-DEFAULT_COLUMNS: tuple[Column, ...] = (
+DEFAULT_COLUMNS: list[Column] = [
     Column.ID,
     Column.TITLE,
     Column.DESCRIPTION,
@@ -232,117 +203,88 @@ DEFAULT_COLUMNS: tuple[Column, ...] = (
     Column.CATEGORY,
     Column.PROVIDER,
     Column.COLLECTION_TITLE,
-)
+]
 
 
-def resolve_columns(columns: list[Column] | None) -> tuple[Column, ...]:
-    """
-    The columns to emit, in the order they were asked for.
-
-    Duplicates are dropped, keeping each column's first position, so a
-    repeated name cannot produce two identically-named CSV columns (which
-    `csv.DictWriter` would write twice from one key) or shift the rest of
-    the header out of the order the caller asked for.
-
-    :param columns: The caller's columns, or ``None`` when it named none.
-    :return: The resolved columns; `DEFAULT_COLUMNS` when none were named.
-    """
-    if not columns:
-        return DEFAULT_COLUMNS
-    return tuple(dict.fromkeys(columns))
-
-
-async def fetch_documents_for_download(
-    engine: DevVespaDocumentSearchEngine,
+async def stream_csv(
+    engine: DocumentSearchEngine,
+    columns: list[Column] | None,
     query: str | None,
     order_by: list[OrderBy],
     filters: Filter | None,
     max_results: int,
     internal_page_size: int = 100,
-) -> list[Document]:
+) -> AsyncGenerator[str]:
     """
-    Fetch up to ``max_results`` documents, paging the engine internally.
+    Stream a CSV of the given search line by line
 
-    Pages are independent offset-based requests (``page_token`` maps directly
-    to a Vespa ``offset``), so they're fetched concurrently rather than one
-    round trip at a time. Results are then reassembled in page order and
-    truncated at the first short/empty page - Vespa has no more matches past
-    that point, mirroring the previous sequential early-stop behaviour.
-
-    :param internal_page_size int: Default value is 100 as this is under
-        Vespa's own default `hits`/`offset` ceiling (~400), so a single
-        `max_results` request never trips `VespaError` by asking one page
-        for too much.
-        @see `_DEFAULT_DOCUMENT_TOTAL_TARGET_HITS` comment for the related
-        weakAnd retrieval-depth issue this mirrors.
+    This is done serially to keep memory use constant, even with large max_results,
+    but it streams so the time-to-first-row is still reasonable.
     """
-    page_count = math.ceil(max_results / internal_page_size)
-    page_sizes = [
-        min(internal_page_size, max_results - (page_token - 1) * internal_page_size)
-        for page_token in range(1, page_count + 1)
-    ]
 
-    async def fetch_page(page_token: int, page_size: int) -> list[Document]:
-        response = await engine.asearch(
-            query=query,
-            pagination=Pagination(page_token=page_token, page_size=page_size),
-            order_by=order_by,
-            filters=filters,
-        )
-        return response.results
+    deduped_columns = tuple(dict.fromkeys(columns or DEFAULT_COLUMNS))
 
-    pages = await asyncio.gather(
-        *(
-            fetch_page(page_token, page_size)
-            for page_token, page_size in zip(range(1, page_count + 1), page_sizes)
-        )
+    needs_collections = (
+        Column.COLLECTION_DESCRIPTION in deduped_columns or
+        Column.COLLECTION_TITLE in deduped_columns or
+        Column.BUNDLE_TITLE in deduped_columns or
+        Column.BUNDLE_ID in deduped_columns
     )
 
-    results: list[Document] = []
-    for page, page_size in zip(pages, page_sizes):
-        results.extend(page)
-        if len(page) < page_size:
-            break
-    return results[:max_results]
+    header = [str(column) for column in deduped_columns]
+    writer = csv.DictWriter(Echo(), fieldnames=header)
+    yield writer.writeheader()
 
+    page_count = math.ceil(max_results / internal_page_size)
+    emitted = 0
 
-def build_csv_rows(
-    documents: list[Document], columns: list[Column] | None = None
-) -> tuple[list[str], list[dict[str, str]]]:
-    """
-    Build the CSV header and rows for ``documents``.
+    for page in range(1, page_count + 1):
+        with tracer.start_as_current_span("download.page", attributes={"page": page}) as span:
+            try:
+                response = await engine.asearch(
+                    pagination=Pagination(
+                        page_size=internal_page_size,
+                        page_token=page,
+                    ),
+                    order_by=order_by,
+                    filters=filters,
+                    query=query,
+                )
 
-    :param documents: Document search results, already capped to the
-        request's ``max_results``.
-    :param columns: The columns to emit, in order. ``None`` or empty gives
-        `DEFAULT_COLUMNS`.
-    :return: ``(header, rows)`` - ``rows`` is one ``dict`` per document,
-        keyed by every column in ``header``.
-    """
-    resolved = resolve_columns(columns)
-    rows = [
-        {str(column): read_column(document, column) for column in resolved}
-        for document in documents
-    ]
-    return [str(column) for column in resolved], rows
+                results = response.results[:max_results - emitted]
+                collection_references: dict[str, CollectionReference] = {}
+                linked_collections: dict[str, DocumentWithoutRelationships] = {}
+                emitted += len(results)
 
+                if needs_collections:
 
-def generate_csv(
-    documents: list[Document], columns: list[Column] | None = None
-) -> Iterator[str]:
-    """
-    Yield CSV text chunks for ``documents``: a header line, then one per row.
+                    linked_collections = {
+                        item.id: related.value
+                        for item in results
+                        for related in item.documents
+                        if related.type == "member_of"
+                    }
 
-    Reuses one ``StringIO`` buffer across rows (``seek(0)`` + ``truncate(0)``
-    between writes) rather than allocating a fresh one per row.
-    """
-    header, rows = build_csv_rows(documents, columns=columns)
-    buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=header)
-    writer.writeheader()
-    yield buffer.getvalue()
-    for row in rows:
-        buffer.seek(0)
-        buffer.truncate(0)
-        writer.writerow(row)
-        yield buffer.getvalue()
+                    if (collection_ids := [stub.id for stub in linked_collections.values()]):
+                        collection_references = await engine.collection_references(collection_ids)
+
+                for document in results:
+
+                    collection = (
+                        collection_references.get(collection_stub.id)
+                        if (collection_stub := linked_collections.get(document.id))
+                        else None
+                    )
+
+                    yield writer.writerow({
+                        str(column): read_column(document, collection, column)
+                        for column in deduped_columns
+                    })
+
+                if len(response.results) < internal_page_size or emitted >= max_results:
+                    break
+
+            except Exception as e:
+                span.record_exception(e)
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                break

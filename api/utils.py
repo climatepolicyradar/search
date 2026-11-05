@@ -2,12 +2,15 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, HTTPException, Query, status
 
+from api.download import DocumentSearchEngine
 from api.settings import settings
 from api.state import HttpxDep
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
+    _DEFAULT_MSM,
     DOCUMENT_SORT_API_FIELDS,
     PASSAGE_SORT_API_FIELDS,
+    DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
 )
@@ -16,6 +19,20 @@ from search.engines.dev_vespa.passages_search_engine import (
 )
 
 RankProfile = Literal["nativerank", "bm25_multiplicative", "unranked", "bm25_topic_boost"]
+
+MsmQuery = Annotated[
+    float,
+    Query(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum Should Match: the fraction of the query's terms a document "
+            "must contain, measured against its title and geographies, its "
+            "description, or its best-matching passage. 0 (default) leaves "
+            "every term optional; 1 requires all."
+        ),
+    ),
+]
 
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
@@ -171,6 +188,19 @@ def labels_engine(httpx: HttpxDep) -> DevVespaLabelSearchEngine:
 
 
 LabelsEngineDep = Annotated[DevVespaLabelSearchEngine, Depends(labels_engine)]
+
+
+def documents_engine(
+        httpx: HttpxDep,
+        msm: MsmQuery = _DEFAULT_MSM,
+    ) -> DocumentSearchEngine:
+    return DevVespaDocumentSearchEngine(
+        settings=settings,
+        httpx=httpx,
+        msm=msm,
+    )
+
+DocumentsEngineDep = Annotated[DocumentSearchEngine, Depends(documents_engine)]
 
 
 def passages_order_by(

@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal, get_args
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from api.download import Column, fetch_documents_for_download, generate_csv
+from api.download import Column, stream_csv
 from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.geographies_taxonomy import geographies_taxonomy
 from api.health import router as health_router
@@ -16,7 +16,9 @@ from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.settings import settings
 from api.state import HttpxDep
 from api.utils import (
+    DocumentsEngineDep,
     LabelsEngineDep,
+    MsmQuery,
     PassagesEngineDep,
     documents_order_by,
     order_by,
@@ -69,24 +71,6 @@ ITEM_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
-# Shared by `/documents` and `/documents:download`: a download is the same search,
-# so the two must take the same threshold, or an export returns a wider set than
-# the page it was exported from. See FUS-421.
-MsmQuery = Annotated[
-    float,
-    Query(
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Minimum Should Match: the fraction of the query's terms a document "
-            "must contain, measured against its title and geographies, its "
-            "description, or its best-matching passage. 0 (default) leaves "
-            "every term optional; 1 requires all."
-        ),
-    ),
-]
-
-
 @router.get("/llms.txt", response_class=PlainTextResponse)
 def read_llms_txt() -> str:
     """
@@ -103,7 +87,7 @@ def read_llms_txt() -> str:
 )
 async def download_documents(
     filters: DocumentsFilterDep,
-    httpx: HttpxDep,
+    engine: DocumentsEngineDep,
     query: str | None = Query(None, description="What are you looking for?"),
     order_by: list[OrderBy] = Depends(documents_order_by),
     max_results: int = Query(
@@ -121,7 +105,6 @@ async def download_documents(
             "per column. Omitted gives the default column set."
         ),
     ),
-    msm: MsmQuery = _DEFAULT_MSM,
 ):
     """
     Stream the current search's results as a CSV, one row per document.
@@ -130,43 +113,11 @@ async def download_documents(
     `documents` resource, @see: https://google.aip.dev/136) rather than
     `/documents/download`, so it can never collide with `/documents/{document_id}`.
     """
-    logger.info(
-        "Downloading document search as CSV "
-        "(query=%r, max_results=%s, filters_present=%s, msm=%s, columns=%s)",
-        query,
-        max_results,
-        filters is not None,
-        msm,
-        columns,
-    )
-
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx, msm=msm)
-    try:
-        documents = await fetch_documents_for_download(
-            engine,
-            query=query,
-            order_by=order_by,
-            filters=filters,
-            max_results=max_results,
-        )
-    except Exception:
-        logger.exception(
-            "Error: document download request failed (query=%r, max_results=%s)",
-            query,
-            max_results,
-        )
-        raise
-
-    logger.info(
-        "Success: document download request completed (query=%r, results=%s)",
-        query,
-        len(documents),
-    )
 
     return StreamingResponse(
-        generate_csv(documents, columns=columns),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=search-results.csv"},
+        content=stream_csv(engine, columns, query, order_by, filters, max_results),
     )
 
 
