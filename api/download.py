@@ -21,6 +21,7 @@ particular app's column set sends that set; the mapping from app to
 columns lives with the caller, not here.
 """
 
+from asyncio import create_task
 import csv
 import math
 from datetime import datetime
@@ -238,53 +239,64 @@ async def stream_csv(
     page_count = math.ceil(max_results / internal_page_size)
     emitted = 0
 
-    for page in range(1, page_count + 1):
-        with tracer.start_as_current_span("download.page", attributes={"page": page}) as span:
-            try:
-                response = await engine.asearch(
-                    pagination=Pagination(
-                        page_size=internal_page_size,
-                        page_token=page,
-                    ),
-                    order_by=order_by,
-                    filters=filters,
-                    query=query,
-                )
+    async def fetch_page(page: int) -> ListResponse[Document]:
+        return await engine.asearch(
+            pagination=Pagination(
+                page_size=internal_page_size,
+                page_token=page,
+            ),
+            order_by=order_by,
+            filters=filters,
+            query=query,
+        )
 
-                results = response.results[:max_results - emitted]
-                collection_references: dict[str, CollectionReference] = {}
-                linked_collections: dict[str, DocumentWithoutRelationships] = {}
-                emitted += len(results)
 
-                if needs_collections:
+    next_page = create_task(fetch_page(1))
 
-                    linked_collections = {
-                        item.id: related.value
-                        for item in results
-                        for related in item.documents
-                        if related.type == "member_of"
-                    }
+    try:
+        for page in range(1, page_count + 1):
+            with tracer.start_as_current_span("download.page", attributes={"page": page}) as span:
+                try:
+                    response = await next_page
+                    if page < page_count:
+                        next_page = create_task(fetch_page(page + 1))
 
-                    if (collection_ids := [stub.id for stub in linked_collections.values()]):
-                        collection_references = await engine.collection_references(collection_ids)
+                    results = response.results[:max_results - emitted]
+                    collection_references: dict[str, CollectionReference] = {}
+                    linked_collections: dict[str, DocumentWithoutRelationships] = {}
+                    emitted += len(results)
 
-                for document in results:
+                    if needs_collections:
 
-                    collection = (
-                        collection_references.get(collection_stub.id)
-                        if (collection_stub := linked_collections.get(document.id))
-                        else None
-                    )
+                        linked_collections = {
+                            item.id: related.value
+                            for item in results
+                            for related in item.documents
+                            if related.type == "member_of"
+                        }
 
-                    yield writer.writerow({
-                        str(column): read_column(document, collection, column)
-                        for column in deduped_columns
-                    })
+                        if (collection_ids := [stub.id for stub in linked_collections.values()]):
+                            collection_references = await engine.collection_references(collection_ids)
 
-                if len(response.results) < internal_page_size or emitted >= max_results:
+                    for document in results:
+
+                        collection = (
+                            collection_references.get(collection_stub.id)
+                            if (collection_stub := linked_collections.get(document.id))
+                            else None
+                        )
+
+                        yield writer.writerow({
+                            str(column): read_column(document, collection, column)
+                            for column in deduped_columns
+                        })
+
+                    if len(response.results) < internal_page_size or emitted >= max_results:
+                        break
+
+                except Exception as e:
+                    span.record_exception(e)
+                    span.set_status(Status(StatusCode.ERROR, str(e)))
                     break
-
-            except Exception as e:
-                span.record_exception(e)
-                span.set_status(Status(StatusCode.ERROR, str(e)))
-                break
+    finally:
+        next_page.cancel()

@@ -6,7 +6,7 @@ import asyncio
 import json
 import re
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Literal
 
 import httpx2
 from pydantic import BaseModel, TypeAdapter
@@ -350,6 +350,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                     client=self._httpx,
                     request_body={
                         "yql": "select id, title, description from documents where id in (@ids)",
+                        "ranking.profile": "unranked",
                         "ids": document_ids,
                     },
                 )
