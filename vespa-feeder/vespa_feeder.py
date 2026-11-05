@@ -850,11 +850,11 @@ def vespa_feeder(
 
                 # A cancel mid-drain is neither outcome. Counting it completed
                 # makes a run stopped after 1 of 2 batches look identical to a
-                # full success - the worst failure to miss, because
-                # runs.completed and runs.failed are the natural numerator and
-                # denominator for a success rate. Counting it failed would be
-                # just as wrong and would page someone for an operator's own
-                # decision, so it is recorded as neither.
+                # full success - which is rubbish, because it makes it harder
+                # to calculate a success rate using runs.completed and
+                # runs.failed. Counting it failed would also be wrong and
+                # would alert despite it being a deliberate own decision, so 
+                # it is recorded as neither.
                 if not drained:
                     run_logger.warning(
                         "Run did not finish draining its batches, so it is "
