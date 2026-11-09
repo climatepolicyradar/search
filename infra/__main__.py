@@ -341,6 +341,8 @@ elif stack != "review":
                                     "iam:ListAccountAliases",
                                     "iam:GetPolicy",
                                     "iam:GetRole",
+                                    "iam:TagRole",
+                                    "ssm:AddTagsToResource",
                                     "acm:DescribeCertificate",
                                     # used for ECS deployment
                                     "ecs:DescribeServices",
