@@ -323,6 +323,90 @@ non_party = Label(
     type="author_type",
     labels=[LabelRelationship(type="subconcept_of", value=global_stocktake)],
 )
+submission_to_the_global_stocktake = Label(
+    id="document_type::Submission to the Global Stocktake",
+    value="Submission to the Global Stocktake",
+    type="document_type",
+    labels=[
+        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=non_party),
+    ],
+)
+technical_analysis_summary_report = Label(
+    id="document_type::Technical Analysis Summary Report",
+    value="Technical Analysis Summary Report",
+    type="document_type",
+    labels=[
+        LabelRelationship(type="subconcept_of", value=party),
+        LabelRelationship(type="subconcept_of", value=non_party),
+    ],
+)
+facilitative_sharing_of_views_report = Label(
+    id="document_type::Facilitative Sharing of Views Report",
+    value="Facilitative Sharing of Views Report",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+publication = Label(
+    id="document_type::Publication",
+    value="Publication",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+synthesis_report = Label(
+    id="document_type::Synthesis Report",
+    value="Synthesis Report",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+pre_session_document = Label(
+    id="document_type::Pre-Session Document",
+    value="Pre-Session Document",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+technical_analysis_technical_report = Label(
+    id="document_type::Technical Analysis Technical Report",
+    value="Technical Analysis Technical Report",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+ipcc_report = Label(
+    id="document_type::IPCC Report",
+    value="IPCC Report",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+global_stocktake_report = Label(
+    id="document_type::Report",
+    value="Report",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+intersessional_document = Label(
+    id="document_type::Intersessional Document",
+    value="Intersessional Document",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+summary_report = Label(
+    id="document_type::Summary Report",
+    value="Summary Report",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+global_stocktake_synthesis_report = Label(
+    id="document_type::Global Stocktake Synthesis Report",
+    value="Global Stocktake Synthesis Report",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=non_party)],
+)
+fast_start_finance_report = Label(
+    id="document_type::Fast-Start Finance Report",
+    value="Fast-Start Finance Report",
+    type="document_type",
+    labels=[LabelRelationship(type="subconcept_of", value=party)],
+)
 
 # region un submission
 un_submission = Label(
@@ -524,4 +608,17 @@ labels_taxonomy = [
     gst1,
     party,
     non_party,
+    submission_to_the_global_stocktake,
+    technical_analysis_summary_report,
+    facilitative_sharing_of_views_report,
+    publication,
+    synthesis_report,
+    pre_session_document,
+    technical_analysis_technical_report,
+    ipcc_report,
+    global_stocktake_report,
+    intersessional_document,
+    summary_report,
+    global_stocktake_synthesis_report,
+    fast_start_finance_report,
 ]
