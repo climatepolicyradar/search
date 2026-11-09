@@ -1,5 +1,7 @@
 """Table-driven tests for the feeder's S3 discovery and download helpers."""
 
+from pathlib import Path
+
 import pytest
 import vespa_feeder as feeder
 from helpers import put_s3_objects, read_jsonl, write_jsonl
@@ -166,6 +168,93 @@ def test_materialise_s3_files_writes_one_file_per_key(
 
     assert paths == [tmp_path / name for name in expected_files]
     assert {path.name: read_jsonl(path) for path in paths} == expected_files
+
+
+class _StubS3:
+    """An S3 client whose `download_file` is the callable under test."""
+
+    def __init__(self, download_file) -> None:
+        self.download_file = download_file
+
+
+def test_materialise_s3_files_downloads_single_threaded(
+    monkeypatch, s3_client, s3_bucket, tmp_path
+):
+    """
+    The transfer config disables threading, so a stalled download is visible.
+
+    With the Transfer Manager's pool the worker blocks on a future while pool
+    threads retry underneath it, which is why run 06aec620 could sit in this
+    phase for 52h with the socket timeouts already configured.
+    """
+    put_s3_objects(s3_client, s3_bucket, {"one.jsonl": b'{"id": 1}\n'})
+    transfer_configs = []
+
+    def record_config(bucket, key, filename, **kwargs):  # noqa: ARG001
+        transfer_configs.append(kwargs.get("Config"))
+        Path(filename).write_bytes(b'{"id": 1}\n')
+
+    monkeypatch.setattr(
+        feeder.boto3, "client", lambda *_args, **_kwargs: _StubS3(record_config)
+    )
+
+    feeder.materialise_s3_files(
+        bucket=s3_bucket, batched_s3_keys=["one.jsonl"], materialise_dir=tmp_path
+    )
+
+    assert [config.use_threads for config in transfer_configs] == [False]
+
+
+@pytest.mark.parametrize(
+    ("seconds_per_file", "expected_downloads"),
+    [
+        pytest.param(0.0, 3, id="fast-downloads-all-complete"),
+        pytest.param(10.0, 1, id="wedged-download-stops-the-batch"),
+    ],
+)
+def test_materialise_s3_files_stops_at_the_download_deadline(
+    monkeypatch, s3_client, s3_bucket, tmp_path, seconds_per_file, expected_downloads
+):
+    """
+    The deadline bounds the whole download phase, not a single socket read.
+
+    `_BOTO_CONFIG`'s read timeout bounds one read; the Transfer Manager's own
+    retries nest outside it, so only a deadline across the phase stops a batch
+    sitting here indefinitely.
+    """
+    objects = {f"{name}.jsonl": b'{"id": 1}\n' for name in ("one", "two", "three")}
+    put_s3_objects(s3_client, s3_bucket, objects)
+
+    elapsed = {"now": 0.0}
+    downloads = []
+
+    def fake_download(bucket, key, filename, **kwargs):  # noqa: ARG001
+        downloads.append(key)
+        elapsed["now"] += seconds_per_file
+        Path(filename).write_bytes(b'{"id": 1}\n')
+
+    monkeypatch.setattr(
+        feeder.boto3, "client", lambda *_args, **_kwargs: _StubS3(fake_download)
+    )
+    monkeypatch.setattr(feeder.time, "monotonic", lambda: elapsed["now"])
+
+    if expected_downloads == len(objects):
+        feeder.materialise_s3_files(
+            bucket=s3_bucket,
+            batched_s3_keys=list(objects),
+            materialise_dir=tmp_path,
+            download_timeout_seconds=5.0,
+        )
+    else:
+        with pytest.raises(TimeoutError, match="Timed out after 5s downloading"):
+            feeder.materialise_s3_files(
+                bucket=s3_bucket,
+                batched_s3_keys=list(objects),
+                materialise_dir=tmp_path,
+                download_timeout_seconds=5.0,
+            )
+
+    assert len(downloads) == expected_downloads
 
 
 @pytest.mark.parametrize(

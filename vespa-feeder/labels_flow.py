@@ -3,6 +3,7 @@ from task_runner import task_runner
 from vespa_feeder import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_SAMPLE_RATE,
+    RUN_TIMEOUT_SECONDS,
     vespa_feeder,
 )
 
@@ -12,9 +13,8 @@ from prefect import flow
 @flow(
     name="search-vespa-feeder-labels",
     description="Feed labels JSONL from S3 into Vespa",
-    # Bounds a hung run inside the 24h gap to the next schedule, so it
-    # fails rather than hanging and queueing tomorrow's run behind it.
-    timeout_seconds=20 * 60 * 60,
+    # Paired with the drain's own budget - see RUN_TIMEOUT_SECONDS.
+    timeout_seconds=RUN_TIMEOUT_SECONDS,
     task_runner=task_runner(max_workers=4),
     log_prints=True,
     on_completion=[SlackNotify.on_success],

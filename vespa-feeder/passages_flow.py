@@ -14,6 +14,7 @@ from task_runner import task_runner
 from vespa_feeder import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_SAMPLE_RATE,
+    RUN_TIMEOUT_SECONDS,
     vespa_feeder,
 )
 
@@ -199,9 +200,8 @@ def derive_heading_text(record: dict) -> dict:
 @flow(
     name="search-vespa-feeder-passages",
     description="Feed passages JSONL from the data-lake Snowflake export into Vespa, deriving document_ref per record",
-    # Bounds a hung run inside the 24h gap to the next schedule, so it
-    # fails rather than hanging and queueing tomorrow's run behind it.
-    timeout_seconds=20 * 60 * 60,
+    # Paired with the drain's own budget - see RUN_TIMEOUT_SECONDS.
+    timeout_seconds=RUN_TIMEOUT_SECONDS,
     task_runner=task_runner(max_workers=8),
     log_prints=True,
     on_completion=[SlackNotify.on_success],

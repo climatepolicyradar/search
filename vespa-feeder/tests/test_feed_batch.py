@@ -136,10 +136,10 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
         last_key = list(_BATCH_S3_OBJECTS)[-1]
         real_download_file = s3_client.download_file
 
-        def download_file(bucket: str, key: str, destination: str) -> None:
+        def download_file(bucket: str, key: str, destination: str, **kwargs) -> None:
             if key == last_key:
                 raise RuntimeError("s3 download failed")
-            real_download_file(bucket, key, destination)
+            real_download_file(bucket, key, destination, **kwargs)
 
         monkeypatch.setattr(s3_client, "download_file", download_file)
         monkeypatch.setattr(feeder.boto3, "client", lambda *args, **kwargs: s3_client)  # noqa: ARG005
@@ -214,7 +214,7 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
     # moto serves real objects but has no fault injection, so the download is
     # failed by hand - the same inline pattern
     # `test_feed_batch_leaves_nothing_on_disk_when_it_fails` uses.
-    def download_file(bucket: str, key: str, destination: str) -> None:
+    def download_file(bucket: str, key: str, destination: str, **kwargs) -> None:
         raise RuntimeError("s3 download failed")
 
     monkeypatch.setattr(s3_client, "download_file", download_file)
