@@ -1,7 +1,7 @@
 """Table-driven tests for the `vespa_feeder` flow itself."""
 
 import inspect
-import logging
+import signal
 import subprocess
 from pathlib import Path
 
@@ -44,17 +44,32 @@ class _FakeFuture:
     `ignores_raise_on_failure` for the other case: an interruption that fails
     the drain loop itself -- a cancel, or a flow-level timeout -- which arrives
     regardless of what the caller asked for.
+
+    Set `wedged` for a worker that never returns. Like the real future it then
+    raises `TimeoutError` only when a bound was actually passed, so a drain
+    that forgot to pass one hangs the test rather than quietly passing it.
     """
 
     def __init__(
         self,
         outcome: feeder.FeedResult | BaseException,
         ignores_raise_on_failure: bool = False,
+        wedged: bool = False,
     ) -> None:
         self.outcome = outcome
         self.ignores_raise_on_failure = ignores_raise_on_failure
+        self.wedged = wedged
 
     def result(self, timeout=None, raise_on_failure=True):
+        if self.wedged:
+            if timeout is None:
+                raise AssertionError(
+                    "drained a wedged batch with no timeout: this is the "
+                    "unbounded wait that let run 06aec620 hang for 52h"
+                )
+            raise TimeoutError(
+                f"Task run abc did not complete within {timeout} seconds"
+            )
         if isinstance(self.outcome, BaseException) and (
             raise_on_failure or self.ignores_raise_on_failure
         ):
@@ -645,80 +660,100 @@ def test_vespa_feeder_does_not_log_per_batch_progress_while_only_enqueueing(
     assert "Queued 1 batch(es) onto the task runner; 2 file(s) total" in logged
 
 
-def _capturing_logger() -> tuple[logging.Logger, list[str]]:
-    """
-    A real `logging.Logger` whose records are captured.
-
-    `stall_watchdog` takes the `logging.Logger | LoggerAdapter` the flow hands
-    it, so the tests pass one rather than widening the production signature to
-    fit a stand-in.
-    """
-    messages: list[str] = []
-
-    class _Capture(logging.Handler):
-        def emit(self, record: logging.LogRecord) -> None:
-            messages.append(record.getMessage())
-
-    logger = logging.getLogger(f"test-stall-watchdog-{len(messages)}-{id(messages)}")
-    logger.handlers = [_Capture()]
-    logger.propagate = False
-    return logger, messages
-
-
 @pytest.mark.parametrize(
-    ("keep_making_progress", "expect_sigterm"),
+    ("wedged", "expected_summary_fragment"),
     [
-        pytest.param(True, False, id="progressing-run-is-left-alone"),
-        pytest.param(False, True, id="stalled-run-is-terminated"),
+        pytest.param(True, "did not complete within", id="wedged-batch-is-abandoned"),
+        pytest.param(False, "s3 exploded", id="raising-batch-still-reported"),
     ],
 )
-def test_stall_watchdog_only_terminates_a_stalled_drain(
-    monkeypatch, keep_making_progress, expect_sigterm
+def test_vespa_feeder_abandons_a_batch_that_never_returns(
+    monkeypatch, summary_artifacts, wedged, expected_summary_fragment
 ):
     """
-    The watchdog ends a run whose drain has gone quiet past the limit.
+    A wedged batch must not hold the drain, and must still be reported.
 
     This is the guard the flow-level `timeout_seconds` cannot be: Prefect
-    raises it via SIGALRM, delivered only to the main thread, and the main
-    thread spends the drain blocked in `PrefectFuture.result()`. In run
-    06aec620 all 8 workers wedged, the 20h timeout never fired, and the run
-    sat for 52h until it was cancelled by hand.
+    raises that via SIGALRM, delivered only to the main thread, which spends
+    the drain blocked in `PrefectFuture.result()`. In run 06aec620 all 8
+    workers wedged, the 20h timeout never fired, and the run sat for 52h until
+    it was cancelled by hand.
     """
-    signals = []
-    monkeypatch.setattr(feeder.os, "kill", lambda _pid, sig: signals.append(sig))
-    monkeypatch.setattr(feeder, "_STALL_WATCHDOG_POLL_SECONDS", 0.01)
-    run_logger, messages = _capturing_logger()
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [_FakeFuture(RuntimeError("s3 exploded"), wedged=wedged)]
+        ),
+    )
 
-    # A limit shorter than the window below, so the only thing keeping the
-    # watchdog quiet is progress actually being reported.
-    with feeder.stall_watchdog(
-        stall_timeout_seconds=0.05, run_logger=run_logger
-    ) as record_progress:
-        for _ in range(10):
-            if keep_making_progress:
-                record_progress()
-            feeder.time.sleep(0.02)
+    # Fails the run rather than hanging it: an abandoned batch is lost data,
+    # so it must surface as a failure, not a quiet success.
+    with pytest.raises(feeder.VespaFeederFailed, match="1 raised"):
+        feeder.vespa_feeder(
+            s3_bucket="bucket",
+            s3_prefix="prefix/",
+            s3_export_prefix="x",
+            batch_result_timeout_seconds=0.01,
+        )
 
-    assert (signals == [feeder.signal.SIGTERM]) is expect_sigterm
-    assert bool(messages) is expect_sigterm
+    assert summary_artifacts, "the run must still publish its summary"
+    assert expected_summary_fragment in summary_artifacts[0]["markdown"]
 
 
-def test_stall_watchdog_stops_when_the_drain_finishes():
+def test_vespa_feeder_bounds_every_batch_wait(monkeypatch, summary_artifacts):
     """
-    A healthy drain must not leave the watchdog polling behind it.
+    The bound is passed per `.result()` call, so queue time never counts.
 
-    It is a daemon thread, so it would not hold the process open, but one left
-    per run would still escalate a stall that no longer exists.
+    `concurrent.futures` measures the timeout from the call, not from
+    submission, so batch 590 queued behind 589 others gets the same full
+    allowance as batch 1 - but a reviewer cannot tell that from the call site,
+    so pin that the drain really does pass the bound on every wait.
     """
-    with feeder.stall_watchdog(
-        stall_timeout_seconds=3600.0, run_logger=_capturing_logger()[0]
-    ):
-        pass
-    feeder.time.sleep(0.05)
+    timeouts: list[float | None] = []
 
-    watchdogs = [
-        thread
-        for thread in feeder.threading.enumerate()
-        if thread.name == "vespa-feeder-stall-watchdog" and thread.is_alive()
-    ]
-    assert watchdogs == []
+    class _RecordingFuture:
+        def result(self, timeout=None, raise_on_failure=True):  # noqa: ARG002
+            timeouts.append(timeout)
+            return _feed_result("one.jsonl")
+
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b", "c"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder, "feed_batch", _FakeFeedBatch([_RecordingFuture() for _ in range(3)])
+    )
+
+    feeder.vespa_feeder(
+        s3_bucket="bucket",
+        s3_prefix="prefix/",
+        s3_export_prefix="x",
+        batch_size=1,
+        batch_result_timeout_seconds=1234.0,
+    )
+
+    assert timeouts == [1234.0, 1234.0, 1234.0]
+
+
+def test_terminate_handler_does_not_deadlock_on_the_process_lock():
+    """
+    The SIGTERM handler must not block on a lock its own thread already holds.
+
+    A handler runs on the main thread between bytecodes, so it can interrupt a
+    frame that is inside `_vespa_feed_processes_lock` -- the drain's `finally`
+    and every spawn take it. With a plain `Lock` the handler would wait for a
+    release that only the interrupted frame can make, hanging the process for
+    good, which is the opposite of what a termination path is for.
+    """
+    # A real `Popen`, so the registry holds the type it is declared with. It
+    # exits immediately; `terminate()` on an exited process is a no-op, and
+    # what is under test is that the handler returns at all.
+    process = subprocess.Popen(["true"])  # noqa: S603, S607
+    try:
+        with feeder._vespa_feed_processes_lock:
+            feeder._vespa_feed_processes.add(process)
+            # Re-entering from the same thread is exactly what the handler does.
+            feeder._terminate_vespa_feed_processes(signal.SIGTERM, None)
+    finally:
+        with feeder._vespa_feed_processes_lock:
+            feeder._vespa_feed_processes.discard(process)
+        process.wait(timeout=5)
