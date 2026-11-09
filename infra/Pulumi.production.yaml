@@ -21,3 +21,7 @@ config:
     secure: AAABAPB1HCdeACsUocIQ/4M3sH/jp+vxtLJLmcxkVzrpSonrOqwtMUaHH4JLI/tUG8NIozpCfe160F/D0Gh+Sj+JgKNku5rzJWkZVWloCDO/iwkHJsVe
   search:vespa_dev_write_token:
     secure: AAABAGB+Pd5RBizPGywHXYRjETOl47OfYXOHreJ9BcPOmAa0u/2U9UhdFS4Y5XOccYdMJQJ6w+Hlmup6tD+FPjnyN1ruGnvQJo5lhfmrGmIji71jbd/n
+  aws:defaultTags:
+    tags:
+      Team: fusion
+      Environment: production
