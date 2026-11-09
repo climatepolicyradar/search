@@ -16,3 +16,7 @@ config:
     secure: AAABAGi1KhZRXOAUSzz+XUpfNqXlvqpwJUDCMVhOE+Ofz3JY8Ukjbx48Ymvw2jrQnaMzjUoR1w8JB5QBxDzgPYBfLuYpZjftzxqDZw==
   search:vespa_read_token:
     secure: AAABAAeHGJeGRjMHVFVlsK55keV81NtvwgH5oKD2kM2OsIqhF8VIEyBMEAhbGlSPP8zHRf+OO6Qaqk55KHZ9bJ72uOeu5awh5Mr9NTk65e6dI09mIg3Q
+  aws:defaultTags:
+    tags:
+      Team: fusion
+      Environment: review
