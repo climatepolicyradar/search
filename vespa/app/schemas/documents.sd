@@ -18,7 +18,7 @@ schema documents {
             bolding: on
         }
         field description type string {
-            indexing: index | summary
+            indexing: index | attribute | summary
             stemming: multiple
             linguistics {
                 profile: passage_analysis_kstem
@@ -157,6 +157,15 @@ schema documents {
             indexing: summary
         }
 
+        field deprecated_slug type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field last_updated_date type string {
+            indexing: attribute | summary
+        }
+
         field document_source type string {
             indexing: summary
         }
@@ -181,10 +190,6 @@ schema documents {
     }
     field title_attribute type string {
         indexing: input title | attribute
-    }
-
-    field description_attribute type string {
-        indexing: input description | attribute
     }
 
     # Title and geography names in one index field, so that query coverage
@@ -296,14 +301,6 @@ schema documents {
         indexing: input attributes_identifiers | get_value project_id | lowercase | index | attribute | summary
         stemming: none
         match: exact
-    }
-
-    field deprecated_slug type string {
-        indexing: input attributes_string | get_value deprecated_slug | attribute
-    }
-
-    field last_updated_date type string {
-        indexing: input attributes_string | get_value last_updated_date | attribute
     }
 
     fieldset identifiers {
@@ -551,11 +548,14 @@ schema documents {
     document-summary collection-reference {
         summary id {}
         summary title_attribute {}
-        summary description_attribute {}
+        summary description_attribute {
+            source: description
+        }
         summary deprecated_slug {}
     }
 
     document-summary sitemap {
+        summary id {}
         summary deprecated_slug {}
         summary last_updated_date {}
     }
