@@ -1,26 +1,27 @@
 """Tests for `GET /search/documents:download`."""
 
+from collections.abc import Generator
 from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
 from search.data_in_models import Document
 from search.engines import ListResponse, VespaError
 
 
 @pytest.fixture
-def document_client_and_engine_cls():
+def document_client_and_engine_cls(
+    test_client: TestClient,
+) -> Generator[tuple[TestClient, MagicMock], None]:
     with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
         mock_engine.asearch = AsyncMock(
             return_value=ListResponse(results=[], total_size=0, next_page_token=None)
         )
         mock_engine_cls.return_value = mock_engine
-        with TestClient(app) as client:
-            yield client, mock_engine_cls
+        yield test_client, mock_engine_cls
 
 
 @pytest.fixture

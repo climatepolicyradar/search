@@ -4,7 +4,8 @@
 # https://docs.astral.sh/ruff/rules/#pyflakes-f
 # https://docs.astral.sh/ruff/rules/#isort-i
 # https://docs.astral.sh/ruff/rules/#flake8-unused-arguments-arg
-select = ["D", "E", "F", "I", "ARG"]
+# https://docs.astral.sh/ruff/rules/banned-api/
+select = ["D", "E", "F", "I", "ARG", "TID251"]
 
 ignore = [
   "D100", # https://docs.astral.sh/ruff/rules/undocumented-public-module/
@@ -41,6 +42,9 @@ ignore = [
   # Test function names should be descriptive enough to understand the test's purpose, without always needing a docstring
   "D102", # https://docs.astral.sh/ruff/rules/undocumented-public-method/
 ]
+
+[lint.flake8-tidy-imports.banned-api]
+"api.main.app".msg = "Build an app with create_app() instead. The module-level app is a process-wide singleton whose state leaks between tests."
 
 [lint.isort]
 known-third-party = ["wandb"]

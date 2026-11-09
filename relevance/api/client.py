@@ -29,8 +29,8 @@ class SearchClient:
             with Client(base_url=url) as client:
                 yield cls(client)
         else:
-            from api.main import app
-            with TestClient(app) as client:
+            from api.main import create_app, production_lifespan
+            with TestClient(create_app(production_lifespan)) as client:
                 yield cls(client)
 
     def _get(self, path: str, request: SearchRequest) -> bytes:
