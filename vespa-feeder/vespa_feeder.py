@@ -19,8 +19,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import batched
 from pathlib import Path
@@ -126,24 +125,34 @@ _S3_DOWNLOAD_TIMEOUT_SECONDS = 5 * 60
 # concurrency nothing to buy here anyway.
 _S3_TRANSFER_CONFIG = TransferConfig(use_threads=False)
 
-# How long the drain may go without a single batch completing. See
-# `stall_watchdog` for why the flow-level `timeout_seconds` cannot do this.
+# How long the drain waits for any one batch before giving up on it.
 #
-# Sized against one batch, not the whole feed, because it bounds silence: a
-# batch is itself capped at `_VESPA_FEED_TIMEOUT_SECONDS` (45 min) plus
-# `_S3_DOWNLOAD_TIMEOUT_SECONDS` (5 min), and 90 min is ~1.8x that. A healthy
-# run never trips it however slow its slowest batch; a fully wedged one fails
-# in ~1.5h rather than sitting for days.
-_STALL_TIMEOUT_SECONDS = 90 * 60
-
-_STALL_WATCHDOG_POLL_SECONDS = 30
+# The drain resolves futures in submission order, so this is a bound on a
+# single `.result()` call, not on the run: a batch that is merely queued behind
+# others is not waiting on itself, and the wait restarts for each batch. What
+# it rules out is the drain blocking forever on a worker that has wedged.
+#
+# Sized against one batch, which is itself capped at
+# `_VESPA_FEED_TIMEOUT_SECONDS` (45 min) plus `_S3_DOWNLOAD_TIMEOUT_SECONDS`
+# (5 min). 90 min is ~1.8x that ceiling, so a healthy batch never trips it
+# however slow it is, while a wedged one is abandoned rather than hanging the
+# run for days.
+_BATCH_RESULT_TIMEOUT_SECONDS = 90 * 60
 
 
 # we store all `vespa feed` processes in this set to be able to
 # terminate them on SIGTERM of the main thread
 _vespa_feed_processes: set[subprocess.Popen] = set()
-# we use the `_vespa_feed_processes_lock` to `add` or `discard` or read the processes on `_vespa_feed_processes`
-_vespa_feed_processes_lock = threading.Lock()
+# Guards `add`/`discard`/read on `_vespa_feed_processes`.
+#
+# Reentrant, because `_terminate_vespa_feed_processes` takes it from inside a
+# signal handler. A handler runs on the main thread between bytecodes, so if
+# SIGTERM lands while that thread already holds this lock - it is taken in the
+# drain's `finally` and around every spawn - a plain Lock would block the
+# handler on a lock only the interrupted frame can release, hanging the process
+# for good. An RLock is re-acquirable by its owning thread, so the handler
+# proceeds.
+_vespa_feed_processes_lock = threading.RLock()
 # we store this value to be able to run it on `_terminate_vespa_feed_processes` to avoid
 # swallowing any `TerminationSignals`
 _main_thread_sigterm_handler: Callable | int | None = None
@@ -167,66 +176,6 @@ def _terminate_vespa_feed_processes(signum: int, frame: FrameType | None) -> Non
     # flow keeps submitting batches and never reports the cancellation.
     if callable(_main_thread_sigterm_handler):
         _main_thread_sigterm_handler(signum, frame)
-
-
-@contextmanager
-def stall_watchdog(
-    stall_timeout_seconds: float,
-    run_logger: logging.Logger | LoggerAdapter,
-) -> Iterator[Callable[[], None]]:
-    """
-    Fail the run from a side thread when the drain goes quiet for too long.
-
-    Yields the callback the drain calls for each batch it resolves. The
-    watchdog stops when the block exits, so a healthy drain leaves nothing
-    polling behind it.
-
-    The flow-level `timeout_seconds` cannot do this. Prefect implements it with
-    `AlarmCancelScope`, which raises via SIGALRM, and SIGALRM is only delivered
-    to the main thread - which spends the whole drain blocked in
-    `PrefectFuture.result()`. In run 06aec620 all 8 workers wedged, the main
-    thread parked on the first of them, and the 20h timeout never fired: the
-    run sat for 52h and was ended by hand.
-
-    A daemon thread is the one place that can still see the stall. It escalates
-    with SIGTERM, which Prefect does deliver to the main thread and which
-    `_terminate_vespa_feed_processes` already chains - so in-flight `vespa
-    feed` children are terminated and the run reports Cancelled, not hanging.
-
-    No lock guards `last_progress_at`: the drain only writes and the watchdog
-    only reads, a float assignment is atomic under the GIL, and a stale read
-    costs at most one poll interval.
-    """
-    stop = threading.Event()
-    last_progress_at = time.monotonic()
-
-    def record_progress() -> None:
-        nonlocal last_progress_at
-        last_progress_at = time.monotonic()
-
-    def watch() -> None:
-        while not stop.wait(_STALL_WATCHDOG_POLL_SECONDS):
-            stalled_for = time.monotonic() - last_progress_at
-            if stalled_for < stall_timeout_seconds:
-                continue
-
-            run_logger.error(
-                f"No batch has completed for {stalled_for:.0f}s "
-                f"(limit {stall_timeout_seconds:.0f}s). Terminating the run."
-            )
-            # SIGTERM rather than raising: an exception on this thread would
-            # not reach the blocked main thread, and os.kill delivers to the
-            # handler Prefect installed on it.
-            os.kill(os.getpid(), signal.SIGTERM)
-            return
-
-    threading.Thread(
-        target=watch, name="vespa-feeder-stall-watchdog", daemon=True
-    ).start()
-    try:
-        yield record_progress
-    finally:
-        stop.set()
 
 
 def _terminate_vespa_feed_processes_on_sigterm_handler() -> None:
@@ -802,7 +751,7 @@ def vespa_feeder(
     connections: int = _DEFAULT_CONNECTIONS,
     feed_timeout_seconds: int = _VESPA_FEED_TIMEOUT_SECONDS,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
-    stall_timeout_seconds: float = _STALL_TIMEOUT_SECONDS,
+    batch_result_timeout_seconds: float = _BATCH_RESULT_TIMEOUT_SECONDS,
 ) -> None:
     try:
         with tracer.start_as_current_span("vespa_feeder"):
@@ -900,34 +849,42 @@ def vespa_feeder(
             # batch raises here, so it is SIGTERM that would otherwise lose the summary.
             drained = False
             try:
-                with stall_watchdog(
-                    stall_timeout_seconds=stall_timeout_seconds,
-                    run_logger=run_logger,
-                ) as record_progress:
-                    for feed_result_future in feed_results_futures:
-                        # we do not raise to be able to aggregate and report on this in the markdown artifact.
-                        feed_result = feed_result_future.result(raise_on_failure=False)
-                        # Every outcome is progress, a raise included: the
-                        # watchdog is watching for silence, and a batch that
-                        # failed loudly means the drain is still moving.
-                        record_progress()
-                        if isinstance(feed_result, BaseException):
-                            run_logger.error(
-                                f"Batch raised {type(feed_result).__name__}: {feed_result}"
-                            )
-                            feed_results_exceptions.append(feed_result)
-                            continue
+                for feed_result_future in feed_results_futures:
+                    # Bounded, so a wedged batch cannot hold the drain forever.
+                    # This is the guard the flow-level `timeout_seconds` cannot
+                    # be: Prefect raises that via SIGALRM, delivered only to the
+                    # main thread, which spends the drain blocked right here. In
+                    # run 06aec620 all 8 workers wedged, the 20h timeout never
+                    # fired, and the run sat for 52h until cancelled by hand.
+                    #
+                    # we do not raise to be able to aggregate and report on this in the markdown artifact.
+                    try:
+                        feed_result = feed_result_future.result(
+                            timeout=batch_result_timeout_seconds,
+                            raise_on_failure=False,
+                        )
+                    except TimeoutError as timeout_error:
+                        run_logger.error(f"Batch timed out: {timeout_error}")
+                        feed_results_exceptions.append(timeout_error)
+                        continue
 
-                        feed_results.append(feed_result)
+                    if isinstance(feed_result, BaseException):
+                        run_logger.error(
+                            f"Batch raised {type(feed_result).__name__}: {feed_result}"
+                        )
+                        feed_results_exceptions.append(feed_result)
+                        continue
+
+                    feed_results.append(feed_result)
                 drained = True
             finally:
-                # A flow-level timeout, a cancel, or the stall watchdog's own
-                # SIGTERM all arrive on this thread, but worker threads blocked
-                # in `communicate()` never see any of them. Without this, the
-                # run ends while orphaned `vespa feed` children keep writing to
-                # Vespa until the container dies. We hook the `finally` rather
-                # than installing a SIGALRM handler, because Prefect owns that
-                # signal and competing for it would break its cancel scope.
+                # A flow-level timeout or a cancel arrives on this thread, but
+                # worker threads blocked in `communicate()` never see it.
+                # Without this, the run ends while orphaned `vespa feed`
+                # children keep writing to Vespa until the container dies. We
+                # hook the `finally` rather than installing a SIGALRM handler,
+                # because Prefect owns that signal and competing for it would
+                # break its cancel scope.
                 with _vespa_feed_processes_lock:
                     in_flight = list(_vespa_feed_processes)
                 for in_flight_process in in_flight:
