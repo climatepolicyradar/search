@@ -20,7 +20,6 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from itertools import batched
 from pathlib import Path
 from types import FrameType
@@ -29,13 +28,22 @@ import boto3
 import orjson
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
+from errors import (
+    BatchAbandoned,
+    FailedDocument,
+    FeedResult,
+    VespaError,
+    VespaFeederFailed,
+    VespaFeedError,
+    VespaFeedResponse,
+    VespaResponseError,
+)
 from mypy_boto3_s3 import S3Client
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
 from prefect.exceptions import MissingContextError
 from prefect.futures import PrefectFuture
 from prefect.runtime import deployment, flow_run
-from pydantic import BaseModel, ConfigDict, Field
 from telemetry import (
     feeder_metrics,
     force_flush,
@@ -127,17 +135,46 @@ _S3_TRANSFER_CONFIG = TransferConfig(use_threads=False)
 
 # How long the drain waits for any one batch before giving up on it.
 #
-# The drain resolves futures in submission order, so this is a bound on a
-# single `.result()` call, not on the run: a batch that is merely queued behind
-# others is not waiting on itself, and the wait restarts for each batch. What
-# it rules out is the drain blocking forever on a worker that has wedged.
-#
 # Sized against one batch, which is itself capped at
 # `_VESPA_FEED_TIMEOUT_SECONDS` (45 min) plus `_S3_DOWNLOAD_TIMEOUT_SECONDS`
 # (5 min). 90 min is ~1.8x that ceiling, so a healthy batch never trips it
 # however slow it is, while a wedged one is abandoned rather than hanging the
-# run for days.
+# run.
+#
+# On its own this does NOT bound the run. `concurrent.futures` measures a
+# timeout from the call, not from submission, so the allowance restarts for
+# every batch: with all workers wedged, N batches each wait the full 90 min.
+# At the passages flow's 589 batches that is 36 days - worse than the 52h hang
+# it was meant to fix. `_DRAIN_TIMEOUT_SECONDS` is what actually bounds the
+# run; this bounds a single wait within it.
 _BATCH_RESULT_TIMEOUT_SECONDS = 90 * 60
+
+# How long a whole run may take, as both the flow's `timeout_seconds` and the
+# drain's own budget. Every feeder flow passes this to `@flow`.
+#
+# One constant for the two because they are two expressions of the same
+# deadline, and they only work as a pair: Prefect raises `timeout_seconds` via
+# SIGALRM, delivered only to the main thread, which spends the drain blocked
+# in `.result()` - so it does not fire when it is most needed. The drain
+# budget is what actually stops the run at this point. Setting one without the
+# other gives a bound that either never fires or fires early, which is how run
+# 06aec620 sat for 52h under a 20h flow timeout.
+#
+# Sized to bound a hung run inside the 24h gap to the next schedule, so it
+# fails rather than hanging and queueing tomorrow's run behind it. The longest
+# passages run observed is ~6h, so it never fires in normal operation.
+RUN_TIMEOUT_SECONDS = 20 * 60 * 60
+
+# How long the whole drain may take, across every batch.
+#
+# The real bound on the run. Held as a deadline rather than a per-call
+# allowance so that wedged batches cannot accumulate: each `.result()` gets
+# whatever is left of the budget, so N wedged batches cost one budget between
+# them rather than N.
+#
+# A run that trips it has already lost its deadline; the point is that it
+# reports and exits instead of sitting for days.
+_DRAIN_TIMEOUT_SECONDS = RUN_TIMEOUT_SECONDS
 
 
 # we store all `vespa feed` processes in this set to be able to
@@ -178,6 +215,21 @@ def _terminate_vespa_feed_processes(signum: int, frame: FrameType | None) -> Non
         _main_thread_sigterm_handler(signum, frame)
 
 
+def _terminate_in_flight_feeds() -> int:
+    """
+    Terminate every `vespa feed` child still running, and say how many.
+
+    Snapshots under the lock and terminates outside it, so a worker finishing
+    normally can still `discard` itself while this runs. `terminate()` on a
+    process that has already exited is a no-op, so racing one is harmless.
+    """
+    with _vespa_feed_processes_lock:
+        in_flight = list(_vespa_feed_processes)
+    for in_flight_process in in_flight:
+        in_flight_process.terminate()
+    return len(in_flight)
+
+
 def _terminate_vespa_feed_processes_on_sigterm_handler() -> None:
     """
     Runs `_terminate_vespa_feed_processes` on the main threads `SIGTERM`.
@@ -200,86 +252,6 @@ def _terminate_vespa_feed_processes_on_sigterm_handler() -> None:
         )
 
 
-@dataclass
-class FailedDocument:
-    doc_id: str
-    error: str
-
-
-@dataclass
-class VespaFeedError:
-    """Transport layer gave up — no HTTP response received for some records."""
-
-    feeder_error_count: int  # feeder.error.count
-    failed_documents: list[FailedDocument]
-
-
-@dataclass
-class VespaResponseError:
-    """HTTP responses received but records still lost after exhausting retries."""
-
-    ok_count: int  # feeder.ok.count
-    operation_count: int  # feeder.operation.count
-    throttled_count: int  # requests that got a 429 at some point
-    other_http_error_count: int  # non-2xx responses other than 429, e.g. 5xx
-    failed_documents: list[FailedDocument]
-
-
-VespaError = VespaFeedError | VespaResponseError
-
-
-class VespaFeederFailed(Exception):
-    """Records were lost: `vespa feed` never recovered them, or a batch raised."""
-
-    def __init__(
-        self,
-        message: str,
-        failed_results: list["FeedResult"],
-        crashes: list[BaseException] | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.failed_results = failed_results
-        self.crashes = crashes or []
-
-    def __reduce__(self):
-        """
-        Without this, unpickling calls __init__ with `args`, which holds only the message
-
-        Prefect pickles exceptions to persist a failed run.
-        """
-        return (self.__class__, (str(self), self.failed_results, self.crashes))
-
-
-class VespaFeedResponse(BaseModel):
-    """Parses the JSON stats the `vespa feed` CLI prints to stdout."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    feeder_operation_count: int = Field(alias="feeder.operation.count", default=0)
-    feeder_ok_count: int = Field(alias="feeder.ok.count", default=0)
-    feeder_error_count: int = Field(alias="feeder.error.count", default=0)
-    # The CLI's own self-measured feed duration - comparing this against our
-    # wall-clock time around the subprocess call isolates process spawn/init/
-    # connection-setup overhead (ours - theirs) from actual transfer time.
-    feeder_seconds: float = Field(alias="feeder.seconds", default=0.0)
-    http_response_error_count: int = Field(alias="http.response.error.count", default=0)
-    http_response_code_counts: dict[str, int] = Field(
-        alias="http.response.code.counts", default_factory=dict
-    )
-
-
-@dataclass
-class FeedResult:
-    feed_paths: list[Path]
-    input_count: int
-    operation_count: int
-    ok_count: int
-    feeder_error_count: int  # transport-layer failures, no HTTP response received
-    throttled_count: int  # requests that got a 429 at some point (may have retried ok)
-    other_http_error_count: int  # non-2xx responses other than 429, e.g. 5xx
-    errors: list[VespaError]
-
-
 # The CLI's `logResult` drops a line only when it is a retry or a success, so
 # these survive without `--verbose` - which would log every successful op too,
 # meaning ~1GB of stderr on a passages run for nothing we read or used in Grafana.
@@ -293,7 +265,7 @@ def _parse_failed_documents(stderr: str) -> list[FailedDocument]:
     ]
 
 
-def _unique_failed_documents(result: "FeedResult") -> list[FailedDocument]:
+def _unique_failed_documents(result: FeedResult) -> list[FailedDocument]:
     """
     Every failed document in a result, each listed once.
 
@@ -310,7 +282,7 @@ def _unique_failed_documents(result: "FeedResult") -> list[FailedDocument]:
 
 
 def _build_run_summary_markdown(
-    results: list["FeedResult"],
+    results: list[FeedResult],
     exceptions: list[BaseException],
 ) -> str:
     """
@@ -752,6 +724,7 @@ def vespa_feeder(
     feed_timeout_seconds: int = _VESPA_FEED_TIMEOUT_SECONDS,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
     batch_result_timeout_seconds: float = _BATCH_RESULT_TIMEOUT_SECONDS,
+    drain_timeout_seconds: float = _DRAIN_TIMEOUT_SECONDS,
 ) -> None:
     try:
         with tracer.start_as_current_span("vespa_feeder"):
@@ -848,24 +821,83 @@ def vespa_feeder(
             # the finally is for a cancel mid-drain: `raise_on_failure=False` means no
             # batch raises here, so it is SIGTERM that would otherwise lose the summary.
             drained = False
+            # Bounds the drain as a whole, so wedged batches cannot accumulate.
+            # This is the guard the flow-level `timeout_seconds` cannot be:
+            # Prefect raises that via SIGALRM, delivered only to the main
+            # thread, which spends the drain blocked in `.result()`. In run
+            # 06aec620 all 8 workers wedged, the 20h timeout never fired, and
+            # the run sat for 52h until cancelled by hand.
+            drain_deadline = time.monotonic() + drain_timeout_seconds
             try:
-                for feed_result_future in feed_results_futures:
-                    # Bounded, so a wedged batch cannot hold the drain forever.
-                    # This is the guard the flow-level `timeout_seconds` cannot
-                    # be: Prefect raises that via SIGALRM, delivered only to the
-                    # main thread, which spends the drain blocked right here. In
-                    # run 06aec620 all 8 workers wedged, the 20h timeout never
-                    # fired, and the run sat for 52h until cancelled by hand.
-                    #
+                for batch_number, feed_result_future in enumerate(
+                    feed_results_futures, start=1
+                ):
+                    # Whatever is left of the run budget, capped at the
+                    # per-batch bound. Taking the lower of the two is what
+                    # stops N wedged batches costing N x the per-batch wait:
+                    # the budget is spent once across the drain, not reset by
+                    # each call the way `.result(timeout=...)` alone would.
+                    remaining = drain_deadline - time.monotonic()
+                    if remaining <= 0:
+                        # Every remaining batch is abandoned unwaited - there is
+                        # no budget left to tell a wedged one from a slow one.
+                        abandoned = len(feed_results_futures) - batch_number + 1
+                        run_logger.error(
+                            f"Drain exceeded {drain_timeout_seconds:.0f}s with "
+                            f"{abandoned} batch(es) unresolved; abandoning them."
+                        )
+                        feed_results_exceptions.extend(
+                            BatchAbandoned(
+                                f"Batch {abandoned_number}/{len(feed_results_futures)} "
+                                f"abandoned: drain exceeded "
+                                f"{drain_timeout_seconds:.0f}s before it was waited on"
+                            )
+                            for abandoned_number in range(
+                                batch_number, len(feed_results_futures) + 1
+                            )
+                        )
+                        # The drain's `finally` terminates these too, but it is
+                        # reached via the same path either way - keeping the
+                        # call here means both abandonment paths read alike.
+                        _terminate_in_flight_feeds()
+                        break
+
                     # we do not raise to be able to aggregate and report on this in the markdown artifact.
                     try:
                         feed_result = feed_result_future.result(
-                            timeout=batch_result_timeout_seconds,
+                            timeout=min(remaining, batch_result_timeout_seconds),
                             raise_on_failure=False,
                         )
                     except TimeoutError as timeout_error:
-                        run_logger.error(f"Batch timed out: {timeout_error}")
-                        feed_results_exceptions.append(timeout_error)
+                        run_logger.error(
+                            f"Batch {batch_number}/{len(feed_results_futures)} "
+                            f"timed out: {timeout_error}"
+                        )
+                        feed_results_exceptions.append(
+                            BatchAbandoned(
+                                f"Batch {batch_number}/{len(feed_results_futures)} "
+                                f"abandoned: {timeout_error}"
+                            )
+                        )
+                        # Stop the abandoned batch writing, rather than leaving
+                        # it to the drain's `finally`. `continue` gives up the
+                        # wait, not the work: the worker stays in
+                        # `communicate()` and its child keeps feeding Vespa for
+                        # however long the rest of the drain takes - records
+                        # landing after the run has already reported them
+                        # unaccounted for. Terminating here closes that window.
+                        #
+                        # This can also catch a healthy batch that happens to
+                        # be in flight, which is the deliberate trade: by the
+                        # time a batch has blown a 90 min bound the run is
+                        # being abandoned anyway, and a terminated feed is
+                        # re-fed, while an untracked one corrupts the accounting.
+                        terminated = _terminate_in_flight_feeds()
+                        if terminated:
+                            run_logger.warning(
+                                f"Terminated {terminated} in-flight vespa feed "
+                                "process(es) after abandoning a batch."
+                            )
                         continue
 
                     if isinstance(feed_result, BaseException):
@@ -885,10 +917,7 @@ def vespa_feeder(
                 # hook the `finally` rather than installing a SIGALRM handler,
                 # because Prefect owns that signal and competing for it would
                 # break its cancel scope.
-                with _vespa_feed_processes_lock:
-                    in_flight = list(_vespa_feed_processes)
-                for in_flight_process in in_flight:
-                    in_flight_process.terminate()
+                _terminate_in_flight_feeds()
 
                 # we then get the known failures from the vespa FeedResult
                 feed_results_errors = [

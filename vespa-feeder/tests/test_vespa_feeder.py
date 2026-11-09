@@ -704,12 +704,14 @@ def test_vespa_feeder_abandons_a_batch_that_never_returns(
 
 def test_vespa_feeder_bounds_every_batch_wait(monkeypatch, summary_artifacts):
     """
-    The bound is passed per `.result()` call, so queue time never counts.
+    Every wait is bounded by whatever is left of the run budget.
 
-    `concurrent.futures` measures the timeout from the call, not from
-    submission, so batch 590 queued behind 589 others gets the same full
-    allowance as batch 1 - but a reviewer cannot tell that from the call site,
-    so pin that the drain really does pass the bound on every wait.
+    `concurrent.futures` measures a timeout from the call, not from
+    submission, so passing the per-batch bound alone would restart the
+    allowance for every batch. Each wait must therefore be capped by the
+    remaining drain budget as well, and a reviewer cannot tell that from the
+    call site - so pin that the drain really does pass a bound on every wait,
+    and that the budget is spent down rather than reset.
     """
     timeouts: list[float | None] = []
 
@@ -729,9 +731,166 @@ def test_vespa_feeder_bounds_every_batch_wait(monkeypatch, summary_artifacts):
         s3_export_prefix="x",
         batch_size=1,
         batch_result_timeout_seconds=1234.0,
+        drain_timeout_seconds=9999.0,
     )
 
+    # The per-batch bound is the lower of the two here, so it caps every wait.
     assert timeouts == [1234.0, 1234.0, 1234.0]
+
+
+def test_vespa_feeder_caps_each_wait_by_the_remaining_drain_budget(
+    monkeypatch, summary_artifacts
+):
+    """
+    A wedged batch spends the run budget, it does not restart it.
+
+    This is the bug the per-batch bound alone could not catch: with all
+    workers wedged, N batches each waiting their own full allowance turns a
+    90 min bound into 90 x N minutes - 36 days at the passages flow's 589
+    batches, worse than the 52h hang it was meant to fix. The budget must be
+    spent once across the drain.
+    """
+    timeouts: list[float | None] = []
+    elapsed = {"now": 0.0}
+
+    class _WedgedFuture:
+        def result(self, timeout: float = 0.0, raise_on_failure=True):  # noqa: ARG002
+            timeouts.append(timeout)
+            # A wedged worker consumes the whole allowance it was given.
+            elapsed["now"] += timeout
+            raise TimeoutError(f"Task run abc did not complete within {timeout} seconds")
+
+    monkeypatch.setattr(feeder.time, "monotonic", lambda: elapsed["now"])
+    monkeypatch.setattr(
+        feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b", "c", "d"]  # noqa: ARG005
+    )
+    monkeypatch.setattr(
+        feeder, "feed_batch", _FakeFeedBatch([_WedgedFuture() for _ in range(4)])
+    )
+
+    with pytest.raises(feeder.VespaFeederFailed):
+        feeder.vespa_feeder(
+            s3_bucket="bucket",
+            s3_prefix="prefix/",
+            s3_export_prefix="x",
+            batch_size=1,
+            batch_result_timeout_seconds=100.0,
+            drain_timeout_seconds=250.0,
+        )
+
+    # 100 + 100 + 50, then the budget is gone and the 4th is never waited on -
+    # not 4 x 100. The drain is bounded by the budget, not by batch count.
+    assert timeouts == [100.0, 100.0, 50.0]
+    assert elapsed["now"] == 250.0
+
+
+def test_vespa_feeder_reports_every_batch_abandoned_at_the_drain_deadline(
+    monkeypatch, summary_artifacts
+):
+    """
+    Batches never waited on are still reported, not silently dropped.
+
+    When the budget runs out mid-drain the remaining futures are abandoned
+    unwaited. Their records were neither fed nor counted as missing, so they
+    have to reach the summary as unaccounted for - otherwise a run that
+    abandoned 500 batches looks like one that fed them.
+    """
+    elapsed = {"now": 0.0}
+
+    class _WedgedFuture:
+        def result(self, timeout: float = 0.0, raise_on_failure=True):  # noqa: ARG002
+            elapsed["now"] += timeout
+            raise TimeoutError(f"Task run abc did not complete within {timeout} seconds")
+
+    monkeypatch.setattr(feeder.time, "monotonic", lambda: elapsed["now"])
+    monkeypatch.setattr(
+        feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b", "c"]  # noqa: ARG005
+    )
+    monkeypatch.setattr(
+        feeder, "feed_batch", _FakeFeedBatch([_WedgedFuture() for _ in range(3)])
+    )
+
+    # One batch fits in the budget; the other two are abandoned unwaited.
+    with pytest.raises(feeder.VespaFeederFailed, match="3 raised"):
+        feeder.vespa_feeder(
+            s3_bucket="bucket",
+            s3_prefix="prefix/",
+            s3_export_prefix="x",
+            batch_size=1,
+            batch_result_timeout_seconds=100.0,
+            drain_timeout_seconds=100.0,
+        )
+
+    markdown = summary_artifacts[0]["markdown"]
+    assert "BatchAbandoned" in markdown
+    assert "3 batch(es) raised" in markdown
+
+
+def test_vespa_feeder_terminates_the_feed_of_an_abandoned_batch(
+    monkeypatch, summary_artifacts
+):
+    """
+    Abandoning a wait must also stop the work, or records land untracked.
+
+    `continue` gives up the wait, not the batch: the worker stays blocked in
+    `communicate()` and its `vespa feed` child keeps writing to Vespa for the
+    rest of the drain - records arriving after the run has already reported
+    them unaccounted for.
+
+    Two batches, so the leak window is real: the drain's own `finally` would
+    terminate the feed eventually, but only once every later batch has been
+    waited on. What is pinned here is that it happens at the moment of
+    abandonment, while the drain is still running.
+    """
+    terminated_while_draining = []
+
+    # A real `Popen`, so the registry holds the type it is declared with - the
+    # same reason `test_terminate_handler_does_not_deadlock_on_the_process_lock`
+    # uses one. It exits immediately, so `terminate()` is a harmless no-op and
+    # what is observed is only that the drain called it.
+    process = subprocess.Popen(["true"])  # noqa: S603, S607
+    monkeypatch.setattr(
+        process, "terminate", lambda: terminated_while_draining.append(process)
+    )
+    feeder._vespa_feed_processes.add(process)
+
+    # Resolves after the wedged batch, and records whether the abandoned
+    # batch's feed was already stopped by the time the drain reached it.
+    seen_terminated_before_second_batch = []
+
+    class _LaterFuture:
+        def result(self, timeout=None, raise_on_failure=True):  # noqa: ARG002
+            seen_terminated_before_second_batch.append(
+                bool(terminated_while_draining)
+            )
+            return _feed_result("one.jsonl")
+
+    monkeypatch.setattr(feeder, "list_s3_keys", lambda bucket, prefix: ["a", "b"])  # noqa: ARG005
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _FakeFeedBatch(
+            [_FakeFuture(RuntimeError("wedged"), wedged=True), _LaterFuture()]
+        ),
+    )
+
+    try:
+        with pytest.raises(feeder.VespaFeederFailed):
+            feeder.vespa_feeder(
+                s3_bucket="bucket",
+                s3_prefix="prefix/",
+                s3_export_prefix="x",
+                batch_size=1,
+                batch_result_timeout_seconds=0.01,
+            )
+    finally:
+        feeder._vespa_feed_processes.discard(process)
+        process.wait(timeout=5)
+
+    assert seen_terminated_before_second_batch == [True], (
+        "the abandoned batch's feed must be terminated as soon as it is "
+        "abandoned, not left writing until the whole drain finishes"
+    )
 
 
 def test_terminate_handler_does_not_deadlock_on_the_process_lock():
