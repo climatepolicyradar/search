@@ -12,3 +12,7 @@ config:
   vespa_metrics:lambda_timeout_seconds: "240"
   vespa_metrics:metric_collection_rate: rate(5 minutes)
   vespa_metrics:project: vespa_metrics
+  aws:defaultTags:
+    tags:
+      Team: fusion
+      Environment: staging
