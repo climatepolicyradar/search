@@ -341,8 +341,23 @@ elif stack != "review":
                                     "iam:ListAccountAliases",
                                     "iam:GetPolicy",
                                     "iam:GetRole",
+                                    # Tagging via aws:defaultTags. The provider reads
+                                    # existing tags before writing, and Untag* is needed
+                                    # to remove or rename a tag, not just add one.
                                     "iam:TagRole",
+                                    "iam:UntagRole",
+                                    "iam:TagPolicy",
+                                    "iam:UntagPolicy",
                                     "ssm:AddTagsToResource",
+                                    "ssm:RemoveTagsFromResource",
+                                    "ssm:ListTagsForResource",
+                                    "ecr:TagResource",
+                                    "ecr:UntagResource",
+                                    "ecr:ListTagsForResource",
+                                    "ecs:TagResource",
+                                    "ecs:UntagResource",
+                                    "s3:GetBucketTagging",
+                                    "s3:PutBucketTagging",
                                     "acm:DescribeCertificate",
                                     # used for ECS deployment
                                     "ecs:DescribeServices",
