@@ -6,7 +6,7 @@ import asyncio
 import json
 import re
 from http import HTTPStatus
-from typing import Any, Literal
+from typing import Any
 
 import httpx2
 from pydantic import BaseModel, TypeAdapter

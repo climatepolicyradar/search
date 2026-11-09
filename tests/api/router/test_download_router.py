@@ -21,6 +21,20 @@ def _document(id: str, title: str = "t", description: str | None = None) -> Docu
     return Document(id=id, title=title, description=description)
 
 
+def _empty_pages(stub_engine: StubDocumentSearchEngine, count: int = 4) -> None:
+    """
+    Queue the empty pages a download asks for past the end of the result set.
+
+    Every page of `max_results` is requested concurrently, so a search with
+    one page of matches still issues the remaining requests; Vespa answers
+    those from beyond the last offset with no hits.
+    """
+    for _ in range(count):
+        stub_engine.add_asearch_response(
+            ListResponse(results=[], next_page_token=None, total_size=0)
+        )
+
+
 def _download(
         test_client: TestClient,
         query: str = "toxic",
@@ -50,6 +64,7 @@ def test_download_returns_csv_with_content_disposition(
             total_size=1,
         )
     )
+    _empty_pages(stub_engine)
     stub_engine.add_collection_references_response({})
 
     response = _download(test_client)
@@ -160,6 +175,7 @@ def test_download_emits_the_requested_columns_in_order(
             total_size=1,
         )
     )
+    _empty_pages(stub_engine)
     stub_engine.add_collection_references_response({})
 
     response = _download(test_client, columns=["TITLE", "ID"])
@@ -180,6 +196,7 @@ def test_download_without_columns_still_returns_a_csv(
             total_size=1,
         )
     )
+    _empty_pages(stub_engine)
     stub_engine.add_collection_references_response({})
 
     response = _download(test_client)
@@ -220,6 +237,7 @@ def test_download_resolves_collection_reference_for_a_member_of_document(
             total_size=1,
         )
     )
+    _empty_pages(stub_engine)
     stub_engine.add_collection_references_response(
         {"collection-1": CollectionReference(id="collection-1", title="A Collection", description="About it")}
     )
@@ -245,6 +263,7 @@ def test_download_leaves_collection_columns_blank_without_a_relationship(
             total_size=1,
         )
     )
+    _empty_pages(stub_engine)
     response = _download(test_client, columns=["ID", "COLLECTION_TITLE"])
     assert response.status_code == HTTPStatus.OK
 

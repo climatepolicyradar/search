@@ -21,22 +21,19 @@ particular app's column set sends that set; the mapping from app to
 columns lives with the caller, not here.
 """
 
-from asyncio import create_task
+import asyncio
 import csv
 import math
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import AsyncGenerator, Protocol
-
-from opentelemetry import trace
-from opentelemetry.trace import Status, StatusCode
+from typing import Protocol
 
 from search.data_in_models import Document, DocumentWithoutRelationships
 from search.engines import ListResponse, OrderBy, Pagination
 from search.engines.dev_vespa import Filter
 from search.engines.dev_vespa.documents_search_engine import CollectionReference
 
-tracer = trace.get_tracer(__name__)
 
 class DocumentSearchEngine(Protocol):
     async def asearch(
@@ -61,6 +58,11 @@ class Echo:
     def write(self, value: str) -> str:
         """No-op file-like write to stream CSVs with"""
         return value
+
+@dataclass
+class DocumentWithCollection:
+    collection: CollectionReference | None
+    document: Document
 
 def _published_date(document: Document) -> str:
     """
@@ -207,7 +209,7 @@ DEFAULT_COLUMNS: list[Column] = [
 ]
 
 
-async def stream_csv(
+async def fetch_csv(
     engine: DocumentSearchEngine,
     columns: list[Column] | None,
     query: str | None,
@@ -215,12 +217,13 @@ async def stream_csv(
     filters: Filter | None,
     max_results: int,
     internal_page_size: int = 100,
-) -> AsyncGenerator[str]:
+) -> list[str]:
     """
-    Stream a CSV of the given search line by line
+    Build the CSV for a search, as a list of rows with the header first.
 
-    This is done serially to keep memory use constant, even with large max_results,
-    but it streams so the time-to-first-row is still reasonable.
+    The search is paged internally at `internal_page_size`, and every page is
+    fetched concurrently, so the whole result set is in memory before the first
+    row is returned.
     """
 
     deduped_columns = tuple(dict.fromkeys(columns or DEFAULT_COLUMNS))
@@ -234,13 +237,12 @@ async def stream_csv(
 
     header = [str(column) for column in deduped_columns]
     writer = csv.DictWriter(Echo(), fieldnames=header)
-    yield writer.writeheader()
+    output = [writer.writeheader()]
 
     page_count = math.ceil(max_results / internal_page_size)
-    emitted = 0
 
-    async def fetch_page(page: int) -> ListResponse[Document]:
-        return await engine.asearch(
+    async def fetch_page(page: int) -> list[DocumentWithCollection]:
+        results = await engine.asearch(
             pagination=Pagination(
                 page_size=internal_page_size,
                 page_token=page,
@@ -250,53 +252,32 @@ async def stream_csv(
             query=query,
         )
 
+        collections: dict[str, DocumentWithoutRelationships] = {}
+        collection_references: dict[str, CollectionReference] = {}
+        page_results: list[DocumentWithCollection] = []
 
-    next_page = create_task(fetch_page(1))
+        for item in results.results:
+            for related in item.documents:
+                if related.type == "member_of":
+                    collections.setdefault(item.id, related.value)
 
-    try:
-        for page in range(1, page_count + 1):
-            with tracer.start_as_current_span("download.page", attributes={"page": page}) as span:
-                try:
-                    response = await next_page
-                    if page < page_count:
-                        next_page = create_task(fetch_page(page + 1))
+        if needs_collections and (collection_ids := list(dict.fromkeys(stub.id for stub in collections.values()))):
+            collection_references = await engine.collection_references(collection_ids)
 
-                    results = response.results[:max_results - emitted]
-                    collection_references: dict[str, CollectionReference] = {}
-                    linked_collections: dict[str, DocumentWithoutRelationships] = {}
-                    emitted += len(results)
+        for result in results.results:
+            collection_stub = collections.get(result.id)
+            collection = collection_references.get(collection_stub.id) if collection_stub else None
+            page_results.append(DocumentWithCollection(collection=collection, document=result))
 
-                    if needs_collections:
+        return page_results
 
-                        linked_collections = {
-                            item.id: related.value
-                            for item in results
-                            for related in item.documents
-                            if related.type == "member_of"
-                        }
+    pages = await asyncio.gather(*[fetch_page(page) for page in range(1, page_count + 1)])
+    for result in [result for page in pages for result in page][:max_results]:
+        output.append(
+            writer.writerow({
+                str(column): read_column(result.document, result.collection, column)
+                for column in deduped_columns
+            })
+        )
 
-                        if (collection_ids := [stub.id for stub in linked_collections.values()]):
-                            collection_references = await engine.collection_references(collection_ids)
-
-                    for document in results:
-
-                        collection = (
-                            collection_references.get(collection_stub.id)
-                            if (collection_stub := linked_collections.get(document.id))
-                            else None
-                        )
-
-                        yield writer.writerow({
-                            str(column): read_column(document, collection, column)
-                            for column in deduped_columns
-                        })
-
-                    if len(response.results) < internal_page_size or emitted >= max_results:
-                        break
-
-                except Exception as e:
-                    span.record_exception(e)
-                    span.set_status(Status(StatusCode.ERROR, str(e)))
-                    break
-    finally:
-        next_page.cancel()
+    return output

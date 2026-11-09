@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal, get_args
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
-from api.download import Column, stream_csv
+from api.download import Column, fetch_csv
 from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.geographies_taxonomy import geographies_taxonomy
 from api.health import router as health_router
@@ -93,9 +93,10 @@ async def download_documents(
     max_results: int = Query(
         500,
         gt=0,
+        le=500,
         description=(
             "Maximum number of documents to include, most-relevant first. "
-            "Defaults to 500."
+            "Defaults to 500, which is also the maximum."
         ),
     ),
     columns: list[Column] | None = Query(
@@ -107,7 +108,7 @@ async def download_documents(
     ),
 ):
     """
-    Stream the current search's results as a CSV, one row per document.
+    Download the current search's results as a CSV, one row per document.
 
     Path is `/documents:download` (an AIP-136 custom method on the
     `documents` resource, @see: https://google.aip.dev/136) rather than
@@ -117,7 +118,7 @@ async def download_documents(
     return StreamingResponse(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=search-results.csv"},
-        content=stream_csv(engine, columns, query, order_by, filters, max_results),
+        content=await fetch_csv(engine, columns, query, order_by, filters, max_results),
     )
 
 
