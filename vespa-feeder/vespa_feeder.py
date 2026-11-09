@@ -19,7 +19,8 @@ import subprocess
 import tempfile
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import batched
 from pathlib import Path
@@ -27,6 +28,7 @@ from types import FrameType
 
 import boto3
 import orjson
+from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from mypy_boto3_s3 import S3Client
 from prefect.artifacts import create_markdown_artifact
@@ -105,6 +107,37 @@ _BOTO_CONFIG = Config(
     retries={"max_attempts": 3, "mode": "standard"},
 )
 
+# How long the whole download phase of one batch may take.
+#
+# The socket timeouts above bound a single read, not the operation:
+# `download_file` is the S3 Transfer Manager, whose own `num_download_attempts`
+# (5) nests OUTSIDE botocore's `max_attempts` (3), each able to restart a
+# stalled stream. Run 06aec620 wedged all 8 workers here for 52h with both
+# bounds in place, so only a deadline across the phase actually bounds it.
+#
+# Measured over 24h: p50 1.3s, p99 8.4s, max 17s for a 10-file batch, so 5 min
+# never fires in normal operation.
+_S3_DOWNLOAD_TIMEOUT_SECONDS = 5 * 60
+
+# Keeps every download on the calling worker thread, which is what makes a
+# stalled one visible: behind the Transfer Manager's pool the worker blocks on
+# a future while 10 pool threads retry underneath it, where neither the socket
+# timeouts nor the deadline above can see it. Per-file latency gives the
+# concurrency nothing to buy here anyway.
+_S3_TRANSFER_CONFIG = TransferConfig(use_threads=False)
+
+# How long the drain may go without a single batch completing. See
+# `stall_watchdog` for why the flow-level `timeout_seconds` cannot do this.
+#
+# Sized against one batch, not the whole feed, because it bounds silence: a
+# batch is itself capped at `_VESPA_FEED_TIMEOUT_SECONDS` (45 min) plus
+# `_S3_DOWNLOAD_TIMEOUT_SECONDS` (5 min), and 90 min is ~1.8x that. A healthy
+# run never trips it however slow its slowest batch; a fully wedged one fails
+# in ~1.5h rather than sitting for days.
+_STALL_TIMEOUT_SECONDS = 90 * 60
+
+_STALL_WATCHDOG_POLL_SECONDS = 30
+
 
 # we store all `vespa feed` processes in this set to be able to
 # terminate them on SIGTERM of the main thread
@@ -134,6 +167,66 @@ def _terminate_vespa_feed_processes(signum: int, frame: FrameType | None) -> Non
     # flow keeps submitting batches and never reports the cancellation.
     if callable(_main_thread_sigterm_handler):
         _main_thread_sigterm_handler(signum, frame)
+
+
+@contextmanager
+def stall_watchdog(
+    stall_timeout_seconds: float,
+    run_logger: logging.Logger | LoggerAdapter,
+) -> Iterator[Callable[[], None]]:
+    """
+    Fail the run from a side thread when the drain goes quiet for too long.
+
+    Yields the callback the drain calls for each batch it resolves. The
+    watchdog stops when the block exits, so a healthy drain leaves nothing
+    polling behind it.
+
+    The flow-level `timeout_seconds` cannot do this. Prefect implements it with
+    `AlarmCancelScope`, which raises via SIGALRM, and SIGALRM is only delivered
+    to the main thread - which spends the whole drain blocked in
+    `PrefectFuture.result()`. In run 06aec620 all 8 workers wedged, the main
+    thread parked on the first of them, and the 20h timeout never fired: the
+    run sat for 52h and was ended by hand.
+
+    A daemon thread is the one place that can still see the stall. It escalates
+    with SIGTERM, which Prefect does deliver to the main thread and which
+    `_terminate_vespa_feed_processes` already chains - so in-flight `vespa
+    feed` children are terminated and the run reports Cancelled, not hanging.
+
+    No lock guards `last_progress_at`: the drain only writes and the watchdog
+    only reads, a float assignment is atomic under the GIL, and a stale read
+    costs at most one poll interval.
+    """
+    stop = threading.Event()
+    last_progress_at = time.monotonic()
+
+    def record_progress() -> None:
+        nonlocal last_progress_at
+        last_progress_at = time.monotonic()
+
+    def watch() -> None:
+        while not stop.wait(_STALL_WATCHDOG_POLL_SECONDS):
+            stalled_for = time.monotonic() - last_progress_at
+            if stalled_for < stall_timeout_seconds:
+                continue
+
+            run_logger.error(
+                f"No batch has completed for {stalled_for:.0f}s "
+                f"(limit {stall_timeout_seconds:.0f}s). Terminating the run."
+            )
+            # SIGTERM rather than raising: an exception on this thread would
+            # not reach the blocked main thread, and os.kill delivers to the
+            # handler Prefect installed on it.
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
+    threading.Thread(
+        target=watch, name="vespa-feeder-stall-watchdog", daemon=True
+    ).start()
+    try:
+        yield record_progress
+    finally:
+        stop.set()
 
 
 def _terminate_vespa_feed_processes_on_sigterm_handler() -> None:
@@ -453,14 +546,31 @@ def get_ssm_parameter(name: str) -> str:
 
 @tracer.start_as_current_span("materialise_s3_files")
 def materialise_s3_files(
-    bucket: str, batched_s3_keys: list[str], materialise_dir: Path
+    bucket: str,
+    batched_s3_keys: list[str],
+    materialise_dir: Path,
+    download_timeout_seconds: float = _S3_DOWNLOAD_TIMEOUT_SECONDS,
 ) -> list[Path]:
     s3: S3Client = boto3.client("s3", config=_BOTO_CONFIG)
 
+    # Checked between files, not enforced on each: this runs on a
+    # ThreadPoolTaskRunner worker, where Prefect cannot interrupt blocking I/O,
+    # so nothing here can abort a download under way - only refuse the next.
+    # The socket timeouts bound a single file; this bounds the batch.
+    deadline = time.monotonic() + download_timeout_seconds
+
     materialised_s3_files = []
     for s3_key in batched_s3_keys:
+        if time.monotonic() > deadline:
+            raise TimeoutError(
+                f"Timed out after {download_timeout_seconds:.0f}s downloading "
+                f"{len(batched_s3_keys)} file(s) from s3://{bucket}: "
+                f"{len(materialised_s3_files)} done, stopped before {s3_key}"
+            )
         materialised_s3_file = materialise_dir / s3_key.split("/")[-1]
-        s3.download_file(bucket, s3_key, str(materialised_s3_file))
+        s3.download_file(
+            bucket, s3_key, str(materialised_s3_file), Config=_S3_TRANSFER_CONFIG
+        )
         materialised_s3_files.append(materialised_s3_file)
 
     return materialised_s3_files
@@ -692,6 +802,7 @@ def vespa_feeder(
     connections: int = _DEFAULT_CONNECTIONS,
     feed_timeout_seconds: int = _VESPA_FEED_TIMEOUT_SECONDS,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
+    stall_timeout_seconds: float = _STALL_TIMEOUT_SECONDS,
 ) -> None:
     try:
         with tracer.start_as_current_span("vespa_feeder"):
@@ -789,26 +900,34 @@ def vespa_feeder(
             # batch raises here, so it is SIGTERM that would otherwise lose the summary.
             drained = False
             try:
-                for feed_result_future in feed_results_futures:
-                    # we do not raise to be able to aggregate and report on this in the markdown artifact.
-                    feed_result = feed_result_future.result(raise_on_failure=False)
-                    if isinstance(feed_result, BaseException):
-                        run_logger.error(
-                            f"Batch raised {type(feed_result).__name__}: {feed_result}"
-                        )
-                        feed_results_exceptions.append(feed_result)
-                        continue
+                with stall_watchdog(
+                    stall_timeout_seconds=stall_timeout_seconds,
+                    run_logger=run_logger,
+                ) as record_progress:
+                    for feed_result_future in feed_results_futures:
+                        # we do not raise to be able to aggregate and report on this in the markdown artifact.
+                        feed_result = feed_result_future.result(raise_on_failure=False)
+                        # Every outcome is progress, a raise included: the
+                        # watchdog is watching for silence, and a batch that
+                        # failed loudly means the drain is still moving.
+                        record_progress()
+                        if isinstance(feed_result, BaseException):
+                            run_logger.error(
+                                f"Batch raised {type(feed_result).__name__}: {feed_result}"
+                            )
+                            feed_results_exceptions.append(feed_result)
+                            continue
 
-                    feed_results.append(feed_result)
+                        feed_results.append(feed_result)
                 drained = True
             finally:
-                # A flow-level timeout raises on this thread via Prefect's
-                # AlarmCancelScope, but worker threads blocked in `communicate()`
-                # never see it. Without this, the run fails while orphaned
-                # `vespa feed` children keep writing to Vespa until the container
-                # dies. We hook the `finally` rather than installing a SIGALRM
-                # handler, because Prefect owns that signal and competing for it
-                # would break its cancel scope.
+                # A flow-level timeout, a cancel, or the stall watchdog's own
+                # SIGTERM all arrive on this thread, but worker threads blocked
+                # in `communicate()` never see any of them. Without this, the
+                # run ends while orphaned `vespa feed` children keep writing to
+                # Vespa until the container dies. We hook the `finally` rather
+                # than installing a SIGALRM handler, because Prefect owns that
+                # signal and competing for it would break its cancel scope.
                 with _vespa_feed_processes_lock:
                     in_flight = list(_vespa_feed_processes)
                 for in_flight_process in in_flight:

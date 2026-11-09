@@ -643,3 +643,82 @@ def test_vespa_feeder_does_not_log_per_batch_progress_while_only_enqueueing(
 
     assert not [message for message in logged if message.startswith("Feeding batch ")]
     assert "Queued 1 batch(es) onto the task runner; 2 file(s) total" in logged
+
+
+def _capturing_logger() -> tuple[logging.Logger, list[str]]:
+    """
+    A real `logging.Logger` whose records are captured.
+
+    `stall_watchdog` takes the `logging.Logger | LoggerAdapter` the flow hands
+    it, so the tests pass one rather than widening the production signature to
+    fit a stand-in.
+    """
+    messages: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            messages.append(record.getMessage())
+
+    logger = logging.getLogger(f"test-stall-watchdog-{len(messages)}-{id(messages)}")
+    logger.handlers = [_Capture()]
+    logger.propagate = False
+    return logger, messages
+
+
+@pytest.mark.parametrize(
+    ("keep_making_progress", "expect_sigterm"),
+    [
+        pytest.param(True, False, id="progressing-run-is-left-alone"),
+        pytest.param(False, True, id="stalled-run-is-terminated"),
+    ],
+)
+def test_stall_watchdog_only_terminates_a_stalled_drain(
+    monkeypatch, keep_making_progress, expect_sigterm
+):
+    """
+    The watchdog ends a run whose drain has gone quiet past the limit.
+
+    This is the guard the flow-level `timeout_seconds` cannot be: Prefect
+    raises it via SIGALRM, delivered only to the main thread, and the main
+    thread spends the drain blocked in `PrefectFuture.result()`. In run
+    06aec620 all 8 workers wedged, the 20h timeout never fired, and the run
+    sat for 52h until it was cancelled by hand.
+    """
+    signals = []
+    monkeypatch.setattr(feeder.os, "kill", lambda _pid, sig: signals.append(sig))
+    monkeypatch.setattr(feeder, "_STALL_WATCHDOG_POLL_SECONDS", 0.01)
+    run_logger, messages = _capturing_logger()
+
+    # A limit shorter than the window below, so the only thing keeping the
+    # watchdog quiet is progress actually being reported.
+    with feeder.stall_watchdog(
+        stall_timeout_seconds=0.05, run_logger=run_logger
+    ) as record_progress:
+        for _ in range(10):
+            if keep_making_progress:
+                record_progress()
+            feeder.time.sleep(0.02)
+
+    assert (signals == [feeder.signal.SIGTERM]) is expect_sigterm
+    assert bool(messages) is expect_sigterm
+
+
+def test_stall_watchdog_stops_when_the_drain_finishes():
+    """
+    A healthy drain must not leave the watchdog polling behind it.
+
+    It is a daemon thread, so it would not hold the process open, but one left
+    per run would still escalate a stall that no longer exists.
+    """
+    with feeder.stall_watchdog(
+        stall_timeout_seconds=3600.0, run_logger=_capturing_logger()[0]
+    ):
+        pass
+    feeder.time.sleep(0.05)
+
+    watchdogs = [
+        thread
+        for thread in feeder.threading.enumerate()
+        if thread.name == "vespa-feeder-stall-watchdog" and thread.is_alive()
+    ]
+    assert watchdogs == []
