@@ -1764,11 +1764,11 @@ def test_passage_msm_is_only_sent_with_free_text(
 
 def _export_hit(
     id: str,
-    principal_id: str | None = None,
+    collection_id: str | None = None,
 ) -> dict[str, object]:
     fields: dict[str, object] = {"id": id, "title_attribute": "t"}
-    if principal_id is not None:
-        fields["principal_id"] = principal_id
+    if collection_id is not None:
+        fields["collection_id"] = collection_id
     return {"fields": fields}
 
 
@@ -1835,8 +1835,8 @@ async def test_export_resolves_each_collection_once(
     handler.add_response({
         "root": {
             "children": [
-                _export_hit("doc-1", principal_id="collection-1"),
-                _export_hit("doc-2", principal_id="collection-1"),
+                _export_hit("doc-1", collection_id="collection-1"),
+                _export_hit("doc-2", collection_id="collection-1"),
             ]
         }
     })
@@ -1854,28 +1854,42 @@ async def test_export_resolves_each_collection_once(
     assert [row.collection and row.collection.title for row in rows] == ["A Collection"] * 2
 
 
-async def test_export_leaves_a_self_referential_principal_without_a_collection(
+async def test_export_leaves_a_document_without_a_collection_id_alone(
     http_client: httpx2.AsyncClient,
     handler: MockHandler,
 ) -> None:
     """
-    A Principal is its own principal, so it belongs to no collection.
+    Most documents belong to no collection, and must cost no lookup.
 
-    `principal_id` answers "which Principal does this roll up to", and for a
-    Principal that is itself. Treating that as a collection would make every
-    Principal its own parent in the CSV.
+    The feeder only sets `collection_id` on a Principal that is `member_of`
+    something - 9% of the corpus - and clears it to "" otherwise, which Vespa
+    returns as an absent field.
     """
     engine = _document_engine(http_client)
-    handler.add_response({
-        "root": {"children": [_export_hit("doc-1", principal_id="doc-1")]}
-    })
+    handler.add_response({"root": {"children": [_export_hit("doc-1")]}})
 
     rows = await engine.export(
         query=None,
         limit=10,
         order_by=[],
     )
+    assert [row.collection for row in rows] == [None]
+    assert len(handler.all_json()) == 1
 
+
+async def test_export_treats_a_cleared_collection_id_as_no_collection(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """A document that has left its collection is fed `""`, not a missing field."""
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"children": [_export_hit("doc-1", collection_id="")]}})
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+    )
     assert [row.collection for row in rows] == [None]
     assert len(handler.all_json()) == 1
 
@@ -1886,7 +1900,7 @@ async def test_export_skips_the_collection_lookup_when_not_asked_for_it(
 ) -> None:
     engine = _document_engine(http_client)
     handler.add_response({
-        "root": {"children": [_export_hit("doc-1", principal_id="collection-1")]}
+        "root": {"children": [_export_hit("doc-1", collection_id="collection-1")]}
     })
 
     rows = await engine.export(
@@ -1982,3 +1996,32 @@ async def test_export_ranks_the_same_way_as_search(
     }
     assert ranking_inputs
     assert {k: v for k, v in export_request.items() if k.startswith("input.query(")} == ranking_inputs
+
+
+async def test_export_of_a_search_that_matched_nothing_is_empty(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    Vespa leaves `children` out altogether when nothing matched.
+
+    A download of a search with no results is an empty CSV, not a 500 - and
+    every other test here stubs `{"children": []}`, which is a shape Vespa
+    never actually sends for a miss.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"fields": {"totalCount": 0}, "coverage": {"coverage": 100}}})
+
+    rows = await engine.export(query="nothing matches this", limit=10, order_by=[])
+    assert rows == []
+
+
+async def test_collection_references_for_ids_that_resolve_to_nothing(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"fields": {"totalCount": 0}}})
+
+    references = await engine.collection_references(["no-such-collection"])
+    assert references == {}

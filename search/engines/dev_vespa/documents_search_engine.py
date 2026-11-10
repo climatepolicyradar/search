@@ -124,7 +124,9 @@ class VespaHit[A: BaseModel](BaseModel):
     fields: A
 
 class VespaRoot[A: BaseModel](BaseModel):
-    children: list[VespaHit[A]] | None
+    # Vespa omits `children` entirely when nothing matched, rather than
+    # sending an empty list.
+    children: list[VespaHit[A]] | None = None
 
 class VespaResponse[A: BaseModel](BaseModel):
     root: VespaRoot[A]
@@ -151,6 +153,7 @@ class ExportDocument(ByNameModel):
     description: str | None = Field(default=None, validation_alias="description_attribute")
     slug: str | None = Field(default=None, validation_alias="deprecated_slug")
     principal_id: str | None = None
+    collection_id: str | None = None
     labels: list[ExportLabel] = []
     attributes_string: dict[str, str] = {}
     attributes_double: dict[str, float] = {}
@@ -533,10 +536,9 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         documents: list[ExportDocument],
     ) -> dict[str, CollectionReference]:
         collection_id_of: dict[str, str] = {
-            document.id: document.principal_id
+            document.id: document.collection_id
             for document in documents
-            if document.principal_id is not None
-            and document.principal_id != document.id
+            if document.collection_id
         }
 
         if not collection_id_of:
