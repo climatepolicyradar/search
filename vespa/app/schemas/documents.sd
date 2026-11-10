@@ -178,6 +178,10 @@ schema documents {
             indexing: attribute | summary
             attribute: fast-search
         }
+
+        field collection_id type string {
+            indexing: attribute | summary
+        }
     }
 
     field title_sort type string {
@@ -563,6 +567,7 @@ schema documents {
         summary description_attribute { source: description }
         summary deprecated_slug {}
         summary principal_id {}
+        summary collection_id {}
         summary labels { struct-field: value, type, relationship }
         summary attributes_published_date {}
         summary attributes_string {}

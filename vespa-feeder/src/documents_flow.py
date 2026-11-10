@@ -13,7 +13,14 @@ from vespa_feeder import (
 from prefect import flow
 
 
-def _principal_id_from_document_source(document_source: dict) -> str | None:
+def _is_principal(document_source: dict[str, Any]) -> bool:
+    return any(
+        label.get("value", {}).get("id") == "status::Principal"
+        for label in document_source.get("labels", [])
+    )
+
+
+def _principal_id_from_document_source(document_source: dict[str, Any]) -> str | None:
     """
     Mirror of `_derive_principal_id` in `search/vespa/documents_feed_materializer.py`.
 
@@ -21,24 +28,46 @@ def _principal_id_from_document_source(document_source: dict) -> str | None:
     already embedded verbatim in every documents update record) rather than a
     `Document` model instance - vespa-feeder has no dependency on cpr_contracts.
     """
-    is_principal = any(
-        label.get("value", {}).get("id") == "status::Principal"
-        for label in document_source.get("labels", [])
-    )
-    if is_principal:
+    if _is_principal(document_source):
         return document_source.get("id")
 
     matches = [
-        rel
-        for rel in document_source.get("documents", [])
-        if rel.get("type") in {"member_of", "is_version_of"}
+        relationship
+        for relationship in document_source.get("documents", [])
+        if relationship.get("type") in {"member_of", "is_version_of"}
     ]
     if not matches:
         return None
     return matches[0].get("value", {}).get("id")
 
 
-def derive_id_if_missing(record: dict) -> dict:
+def _collection_id_from_document_source(document_source: dict[str, Any]) -> str | None:
+    if not _is_principal(document_source):
+        return None
+
+    matches = [
+        relationship
+        for relationship in document_source.get("documents", [])
+        if relationship.get("type") == "member_of"
+    ]
+
+    if not matches:
+        return None
+
+    return matches[0].get("value", {}).get("id")
+
+
+def _document_source(record: dict[str, Any]) -> dict[str, Any] | None:
+    raw: str | None = record.get("fields", {}).get("document_source", {}).get("assign")
+    if raw is None:
+        return None
+    return orjson.loads(raw)
+
+
+def derive_id_if_missing(
+    record: dict[str, Any],
+    document_source: dict[str, Any],
+) -> dict[str, Any]:
     """
     Use the `id` from the vespa update, or, if that is missing use the `id` from the `document_source` field.
 
@@ -49,23 +78,18 @@ def derive_id_if_missing(record: dict) -> dict:
     if "id" in record.get("fields", {}):
         return record
 
-    document_source_raw = (
-        record.get("fields", {}).get("document_source", {}).get("assign")
-    )
-    if document_source_raw is None:
-        return record
-
-    document_source = orjson.loads(document_source_raw)
     document_id = document_source.get("id")
     if document_id is not None:
         record["fields"]["id"] = {"assign": document_id}
     return record
 
 
-def derive_document_data(record: dict) -> dict:
+def derive_document_data(record: dict[str, Any]) -> dict[str, Any]:
     """Apply all passages derivers to a record, in sequence."""
-    record = derive_principal_id(record)
-    record = derive_id_if_missing(record)
+    if (document_source := _document_source(record)) is not None:
+        record = derive_principal_id(record, document_source)
+        record = derive_collection_id(record, document_source)
+        record = derive_id_if_missing(record, document_source)
     record = derive_hoisted_attributes(record)
 
     return record
@@ -89,17 +113,24 @@ def derive_hoisted_attributes(record: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-def derive_principal_id(record: dict) -> dict:
+def derive_principal_id(
+    record: dict[str, Any],
+    document_source: dict[str, Any],
+) -> dict[str, Any]:
     """Set `principal_id` on a documents update record, derived from its own `document_source`."""
-    document_source_raw = (
-        record.get("fields", {}).get("document_source", {}).get("assign")
-    )
-    if document_source_raw is None:
-        return record
-
-    principal_id = _principal_id_from_document_source(orjson.loads(document_source_raw))
+    principal_id = _principal_id_from_document_source(document_source)
     if principal_id is not None:
         record["fields"]["principal_id"] = {"assign": principal_id}
+    return record
+
+
+def derive_collection_id(
+    record: dict[str, Any],
+    document_source: dict[str, Any],
+) -> dict[str, Any]:
+    """Set `collection_id` on a documents update record, derived from its own `document_source`."""
+    collection_id = _collection_id_from_document_source(document_source)
+    record["fields"]["collection_id"] = {"assign": collection_id or ""}
     return record
 
 
@@ -108,7 +139,7 @@ def derive_principal_id(record: dict) -> dict:
 # before changing it.
 @flow(
     name="search-vespa-feeder-documents",
-    description="Feed documents JSONL from S3 into Vespa, deriving principal_id per record",
+    description="Feed documents JSONL from S3 into Vespa, deriving fields per record",
     # Paired with the drain's own budget - see RUN_TIMEOUT_SECONDS.
     timeout_seconds=RUN_TIMEOUT_SECONDS,
     task_runner=task_runner(max_workers=4),
