@@ -168,7 +168,6 @@ class DocumentQuery:
     phrases: list[str]
     where: str
     request_fields: dict[str, Any]
-    has_sort_overrides: bool
 
 class DocumentSearchEngine(Protocol):
     async def asearch(
@@ -373,12 +372,27 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         for index, phrase in enumerate(phrases):
             request_fields[f"exact_phrase_{index}"] = _normalize_currency_symbols(phrase)
 
+        # Ranking inputs. A sort replaces the rank profile's scoring entirely,
+        # so none of them would be read.
+        if not sort_overrides:
+            topic_ids = _topic_ids_from_filters(filters)
+            if topic_ids:
+                request_fields["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
+                request_fields["input.query(topic_weight)"] = self.topic_weight
+
+            if self.passages_breadth_weight is not None:
+                request_fields["input.query(passages_breadth_weight)"] = (
+                    self.passages_breadth_weight
+                )
+
+            if free_text and self.exact_weight is not None:
+                request_fields["input.query(exact_weight)"] = self.exact_weight
+
         return DocumentQuery(
             free_text=free_text,
             phrases=phrases,
             where=where,
             request_fields=request_fields,
-            has_sort_overrides=bool(sort_overrides),
         )
 
     @property
@@ -565,19 +579,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "offset": (pagination.page_token - 1) * pagination.page_size,
         }
         request_body.update(document_query.request_fields)
-
-        topic_ids = _topic_ids_from_filters(filters)
-        if topic_ids and not document_query.has_sort_overrides:
-            request_body["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
-            request_body["input.query(topic_weight)"] = self.topic_weight
-
-        if self.passages_breadth_weight is not None and not document_query.has_sort_overrides:
-            request_body["input.query(passages_breadth_weight)"] = (
-                self.passages_breadth_weight
-            )
-
-        if free_text and self.exact_weight is not None and not document_query.has_sort_overrides:
-            request_body["input.query(exact_weight)"] = self.exact_weight
 
         # `search-exact` adds the `*_not_stemmed` fields, which is where quoted
         # phrases match and so the only place they get bolded.

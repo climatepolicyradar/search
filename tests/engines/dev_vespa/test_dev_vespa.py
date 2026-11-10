@@ -1939,3 +1939,46 @@ async def test_export_reads_labels_that_carry_no_relationship(
         (None, "concept", "loan"),
         ("geography", "geography", "UK"),
     ]
+
+
+async def test_export_ranks_the_same_way_as_search(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    A download must come back in the order its search displayed.
+
+    The rank profile's inputs - the topic boost above all - decide that order.
+    An export that left them out would score the same documents differently and
+    hand back a file whose rows are in a different order to the results on
+    screen.
+    """
+    engine = _document_engine(http_client)
+    filters = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="labels.value.id", op="contains", value="concept::Q42"),
+        ],
+    )
+    handler.add_response({"root": {"children": []}})
+    handler.add_response({"root": {"children": []}})
+
+    await engine.export(
+        query="toxic",
+        limit=10,
+        order_by=[],
+        filters=filters,
+    )
+    await engine.asearch(
+        query="toxic",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=filters,
+    )
+
+    export_request, search_request = handler.all_json()
+    ranking_inputs = {
+        key: value for key, value in search_request.items() if key.startswith("input.query(")
+    }
+    assert ranking_inputs
+    assert {k: v for k, v in export_request.items() if k.startswith("input.query(")} == ranking_inputs
