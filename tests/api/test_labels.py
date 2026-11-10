@@ -7,23 +7,27 @@ The label search engine returns :class:`~search.data_in_models.Label`
 parses successfully.
 """
 
+from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.main import app
 from api.utils import labels_engine
 from search.engines import ListResponse
 from search.label import LabelSearchResult
 
 
 @pytest.fixture
-def labels_client():
+def labels_client(
+    app: FastAPI,
+    test_client: TestClient,
+) -> Generator[TestClient, None]:
     """
     Provide a test client with Vespa label search mocked.
 
-    :yield: HTTP client for the search API.
+    :return: HTTP client for the search API.
     :rtype: TestClient
     """
     data_in_label = LabelSearchResult(
@@ -40,10 +44,8 @@ def labels_client():
         next_page_token=None,
     )
     app.dependency_overrides[labels_engine] = lambda: mock_engine
-    try:
-        yield TestClient(app)
-    finally:
-        del app.dependency_overrides[labels_engine]
+    yield test_client
+    del app.dependency_overrides[labels_engine]
 
 
 def test_labels_endpoint_serialises_data_in_label_results(
@@ -99,7 +101,9 @@ def test_labels_endpoint_exposes_alternative_labels(
     ]
 
 
-def test_labels_taxonomy_does_not_expose_alternative_labels() -> None:
+def test_labels_taxonomy_does_not_expose_alternative_labels(
+    test_client: TestClient,
+) -> None:
     """
     Ensure ``/search/labels-taxonomy`` keeps the shared ``DataInLabel`` shape.
 
@@ -111,7 +115,7 @@ def test_labels_taxonomy_does_not_expose_alternative_labels() -> None:
     :return: ``None``.
     :rtype: None
     """
-    response = TestClient(app).get("/search/labels-taxonomy")
+    response = test_client.get("/search/labels-taxonomy")
 
     assert response.status_code == 200, response.text
     results = response.json()["results"]

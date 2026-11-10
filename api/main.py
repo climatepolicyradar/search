@@ -1,4 +1,5 @@
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 from pathlib import Path
@@ -9,6 +10,7 @@ import httpx2
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.types import Lifespan
 
 from api.health import router as health_router
 from api.observability.src.api import (
@@ -35,7 +37,7 @@ UNMATCHED_ROUTE_LABEL = "unmatched"
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def production_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown events."""
     async with httpx2.AsyncClient(http2=True) as client:
         state = cast(State, app.state)
@@ -76,26 +78,6 @@ API_DESCRIPTION = (
     "expert-curated concept."
 )
 
-logger.debug("🚀 Starting FastAPI application")
-app = FastAPI(
-    title=API_TITLE,
-    description=API_DESCRIPTION,
-    version=API_VERSION,
-    lifespan=lifespan,
-    docs_url="/search/docs",
-    redoc_url="/search/redoc",
-    openapi_url="/search/openapi.json",
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.exception_handler(VespaError)
 async def handle_vespa_error(request: Request, exc: VespaError) -> JSONResponse:
     """
     Surface a failed Vespa request to the client.
@@ -121,7 +103,7 @@ async def handle_vespa_error(request: Request, exc: VespaError) -> JSONResponse:
     elif exc.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
         # retry: Vespa is having a bad day, and retrying later may work
         status_code = HTTPStatus.SERVICE_UNAVAILABLE
-    
+
     logger.error(
         "Error: Vespa request failed while serving request method=%s path=%s "
         "(vespa_status=%s, returned_status=%s): %s",
@@ -152,7 +134,6 @@ def metric_route(request: Request) -> str:
     return (route.path if (route := request.scope.get("route")) else UNMATCHED_ROUTE_LABEL)
 
 
-@app.middleware("http")
 async def log_request_lifecycle(request: Request, call_next):
     """Log incoming API requests with outcome and latency."""
     start_time = perf_counter()
@@ -213,14 +194,15 @@ async def log_request_lifecycle(request: Request, call_next):
     return response
 
 
-@app.get("/")
 @router.get("")
 async def root(request: Request):
     """
     Root endpoint: API information as schema.org JSON-LD.
 
-    We use both routers to make sure we can have /search available publicly
-    and / available to the ECS health check.
+    Registered twice: here on `router`, serving `/search`, and in `create_app`
+    on the app itself, serving `/`. The `router` registration stays at module
+    scope because `router` is shared between apps - inside `create_app` it would
+    add a duplicate route to it on every call.
     """
     base = str(request.base_url).rstrip("/")
     return {
@@ -248,7 +230,7 @@ async def root(request: Request):
                     "Machine-readable contract: response shapes, enum values "
                     "and parameter types."
                 ),
-                "url": f"{base}{app.openapi_url}",
+                "url": f"{base}{request.app.openapi_url}",
                 "encodingFormat": "application/json",
             },
         ],
@@ -269,8 +251,40 @@ async def root(request: Request):
     }
 
 
-app.include_router(router)
+def create_app(lifespan: Lifespan[FastAPI]) -> FastAPI:
+    """
+    Build an app.
+
+    `lifespan` is a parameter so that tests can start the app with their own
+    startup - the lifespan runs before any request, so `dependency_overrides`,
+    which is request-scoped, cannot reach what it builds.
+    """
+    logger.debug("🚀 Starting FastAPI application")
+    app = FastAPI(
+        title=API_TITLE,
+        description=API_DESCRIPTION,
+        version=API_VERSION,
+        lifespan=lifespan,
+        docs_url="/search/docs",
+        redoc_url="/search/redoc",
+        openapi_url="/search/openapi.json",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.exception_handler(VespaError)(handle_vespa_error)
+    app.middleware("http")(log_request_lifecycle)
+    app.get("/")(root)
+    app.include_router(router)
+    telemetry.instrument_fastapi(app)
+    return app
 
 
-telemetry.instrument_fastapi(app)
+app = create_app(production_lifespan)
+
+
 telemetry.setup_exception_hook()

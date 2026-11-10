@@ -6,10 +6,10 @@ import asyncio
 import json
 import re
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Protocol
 
 import httpx2
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from vespa.querybuilder import Grouping as G
 
 from search.bolding import (
@@ -117,6 +117,40 @@ _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # `None` rather than 0.0 so quoted phrases keep the schema's default weight.
 # See PR #651 for how this was chosen.
 _DEFAULT_EXACT_WEIGHT: float | None = None
+
+
+class VespaHit[A: BaseModel](BaseModel):
+    fields: A
+
+class VespaRoot[A: BaseModel](BaseModel):
+    children: list[VespaHit[A]] | None
+
+class VespaResponse[A: BaseModel](BaseModel):
+    root: VespaRoot[A]
+
+class CollectionReference(BaseModel):
+    description: str | None = None
+    title: str | None = None
+    id: str
+
+class DocumentSearchEngine(Protocol):
+    async def asearch(
+            self,
+            query: str | None,
+            pagination: Pagination,
+            order_by: list[OrderBy],
+            filters: Filter | None = None,
+        ) -> ListResponse[Document]:
+        """Search documents."""
+        ...
+
+    async def collection_references(
+            self,
+            document_ids: list[str],
+        ) -> dict[str, CollectionReference]:
+        """Resolve collection references for the given document ids."""
+        ...
+
 
 def _document_phrase_yql(count: int) -> str:
     """One phrase clause per quoted phrase, each matching title OR description OR passages."""
@@ -314,6 +348,33 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 query=query, pagination=pagination, order_by=order_by, filters=filters
             )
         )
+
+    async def collection_references(
+        self,
+        document_ids: list[str]
+    ) -> dict[str, CollectionReference]:
+        """
+        Fetch collection references for the given document IDs
+
+        This does technically fetch any document but I named it for its use,
+        there isn't really a reason to call this outside the CSV downloads.
+        """
+        return {
+            hit.fields.id: hit.fields
+            for hit in VespaResponse[CollectionReference].model_validate(
+                await aexecute_vespa_query(
+                    endpoint=f"{self.settings.vespa_endpoint}/search",
+                    token=self.settings.vespa_read_token,
+                    request_context="descriptions",
+                    client=self._httpx,
+                    request_body={
+                        "yql": "select id, title, description from documents where id in (@ids)",
+                        "ranking.profile": "unranked",
+                        "ids": document_ids,
+                    },
+                )
+            ).root.children or []
+        }
 
     async def asearch(
         self,
