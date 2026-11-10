@@ -22,6 +22,7 @@ COPY service-manifest.json .
 COPY feeder_metrics.py .
 COPY telemetry.py .
 COPY task_runner.py .
+COPY errors.py .
 COPY vespa_feeder.py .
 COPY labels_flow.py .
 COPY documents_flow.py .
