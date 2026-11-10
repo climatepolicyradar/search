@@ -104,6 +104,7 @@ class Column(StrEnum):
     COLLECTION_DESCRIPTION = "COLLECTION_DESCRIPTION"
     BUNDLE_ID = "BUNDLE_ID"
     BUNDLE_TITLE = "BUNDLE_TITLE"
+    BUNDLE_DESCRIPTION = "BUNDLE_DESCRIPTION"
     CASE_STATUS = "CASE_STATUS"
     CASE_NUMBER = "CASE_NUMBER"
     AT_ISSUE = "AT_ISSUE"
@@ -122,7 +123,7 @@ def read_column(
     One cell's text: the field ``column`` names, off ``document``.
 
     A column name always means the same data wherever it is asked for. Two
-    names may read the same source - `COLLECTION_TITLE` and a future
+    names may read the same source - `COLLECTION_TITLE` and
     `BUNDLE_TITLE` are the same collection field under the name a given app
     uses for it - but a name never changes what it reads depending on who
     is asking.
@@ -160,6 +161,8 @@ def read_column(
             return collection and collection.id or ""
         case Column.BUNDLE_TITLE:
             return collection and collection.title or ""
+        case Column.BUNDLE_DESCRIPTION:
+            return collection and collection.description or ""
         case Column.CASE_STATUS:
             return _attribute(document, "case_status")
         case Column.CASE_NUMBER:
@@ -215,6 +218,7 @@ async def fetch_csv(
         Column.COLLECTION_DESCRIPTION in deduped_columns or
         Column.COLLECTION_TITLE in deduped_columns or
         Column.BUNDLE_TITLE in deduped_columns or
+        Column.BUNDLE_DESCRIPTION in deduped_columns or
         Column.BUNDLE_ID in deduped_columns
     )
 

@@ -252,6 +252,42 @@ def test_download_resolves_collection_reference_for_a_member_of_document(
     assert stub_engine.collection_references_requests == [["collection-1"]]
 
 
+def test_download_reads_collection_fields_under_their_ccc_names(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    document = Document(
+        id="doc-1",
+        title="A Climate Document",
+        documents=[
+            DocumentRelationship(
+                type="member_of",
+                value=DocumentWithoutRelationships(id="collection-1", title="c"),
+            )
+        ],
+    )
+    stub_engine.add_asearch_response(
+        ListResponse(
+            next_page_token=None,
+            results=[document],
+            total_size=1,
+        )
+    )
+    _empty_pages(stub_engine)
+    stub_engine.add_collection_references_response(
+        {"collection-1": CollectionReference(id="collection-1", title="A Collection", description="About it")}
+    )
+
+    response = _download(
+        test_client,
+        columns=["BUNDLE_ID", "BUNDLE_TITLE", "BUNDLE_DESCRIPTION"],
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.text.splitlines()[1] == "collection-1,A Collection,About it"
+    assert stub_engine.collection_references_requests == [["collection-1"]]
+
+
 def test_download_leaves_collection_columns_blank_without_a_relationship(
         test_client: TestClient,
         stub_engine: StubDocumentSearchEngine,
