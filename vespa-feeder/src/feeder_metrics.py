@@ -27,6 +27,9 @@ class FeederMetrics:
         self._task_duration: Optional[Histogram] = None
         self._runs_completed: Optional[Counter] = None
         self._runs_failed: Optional[Counter] = None
+        self._runs_crashed: Optional[Counter] = None
+        self._batches_expected: Optional[Gauge] = None
+        self._batches_completed: Optional[Counter] = None
 
         if not self._disabled:
             self._create_instruments()
@@ -70,6 +73,21 @@ class FeederMetrics:
         self._runs_failed = self._metrics_service.create_counter(
             name="runs.failed",
             description="Flow runs that failed",
+            unit="1",
+        )
+        self._runs_crashed = self._metrics_service.create_counter(
+            name="runs.crashed",
+            description="Flow runs that crashed (the process died, e.g. OOM/SIGKILL)",
+            unit="1",
+        )
+        self._batches_expected = self._metrics_service.create_gauge(
+            name="run.batches_expected",
+            description="Batches queued for this run, emitted before any feeding starts",
+            unit="1",
+        )
+        self._batches_completed = self._metrics_service.create_counter(
+            name="run.batches_completed",
+            description="Batches that finished feeding in this run",
             unit="1",
         )
 
@@ -117,6 +135,43 @@ class FeederMetrics:
         if self._disabled or self._runs_failed is None:
             return
         self._runs_failed.add(
+            1, {"deployment_name": deployment_name, "run_name": run_name}
+        )
+
+    def record_run_crashed(self, deployment_name: str, run_name: str) -> None:
+        """
+        Increment the crashed runs counter for a deployment run.
+
+        Called from the `on_crashed` hook rather than the flow, because a
+        crash is the process dying: nothing in the flow gets to run. The
+        hook's process is the only one still alive to report it.
+        """
+        if self._disabled or self._runs_crashed is None:
+            return
+        self._runs_crashed.add(
+            1, {"deployment_name": deployment_name, "run_name": run_name}
+        )
+
+    def record_batches_expected(
+        self, batch_count: int, deployment_name: str, run_name: str
+    ) -> None:
+        """
+        Record how many batches this run queued.
+
+        The denominator for `run.batches_completed`. Set once, before any
+        feeding, so a run that dies early still reports what it set out to do.
+        """
+        if self._disabled or self._batches_expected is None:
+            return
+        self._batches_expected.set(
+            batch_count, {"deployment_name": deployment_name, "run_name": run_name}
+        )
+
+    def record_batch_completed(self, deployment_name: str, run_name: str) -> None:
+        """Increment the completed batches counter for a deployment run."""
+        if self._disabled or self._batches_completed is None:
+            return
+        self._batches_completed.add(
             1, {"deployment_name": deployment_name, "run_name": run_name}
         )
 

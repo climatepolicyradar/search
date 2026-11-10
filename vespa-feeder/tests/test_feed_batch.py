@@ -205,6 +205,11 @@ def test_feed_batch_records_what_it_fed(
     assert task_duration["task_name"] == "feed_batch"
     assert task_duration["duration_s"] >= 0
 
+    recording_metrics.record_batch_completed.assert_called_once_with(
+        deployment_name=expected_deployment,
+        run_name=expected_run_name,
+    )
+
 
 def test_feed_batch_records_its_duration_even_when_it_fails(
     monkeypatch, temp_workspace, s3_client, s3_bucket, recording_metrics
@@ -240,6 +245,10 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
         recording_metrics.record_task_duration.call_args.kwargs["task_name"]
         == "feed_batch"
     )
+
+    # A batch that raised fed nothing, so counting it would overstate how far
+    # a crashed run actually got - which is the one thing this counter is for.
+    recording_metrics.record_batch_completed.assert_not_called()
 
 
 @pytest.mark.parametrize(

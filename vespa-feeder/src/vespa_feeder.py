@@ -391,6 +391,15 @@ def feed_batch(
             run_name=run_name,
         )
 
+        # Paired with `run.batches_expected` to give progress as a fraction.
+        # Here rather than in the `finally` so it counts batches that fed,
+        # not batches that were attempted: a batch that raised has not made
+        # progress, and counting it would overstate how far a crashed run got.
+        feeder_metrics.record_batch_completed(
+            deployment_name=deployment_name,
+            run_name=run_name,
+        )
+
         return feed_result
     finally:
         feeder_metrics.record_task_duration(
@@ -473,6 +482,20 @@ def vespa_feeder(
             )
 
             s3_key_batches = list(batched(s3_keys, batch_size))
+
+            # Before the submit loop, so it is exported within the first
+            # interval (~5s) and lands hours before any plausible OOM. This is
+            # the denominator the surviving counters are read against: without
+            # it a crash at 80% and one at 5% are the same reading, because
+            # `records.fed` alone has no total to be a fraction of. It is also
+            # the only signal a run that dies before its first batch emits at
+            # all - the dashboard's Runs table is built from per-file feed
+            # stats, so such a run otherwise leaves no row.
+            feeder_metrics.record_batches_expected(
+                batch_count=len(s3_key_batches),
+                deployment_name=deployment_name,
+                run_name=run_name,
+            )
 
             feed_results_futures: list[PrefectFuture[FeedResult]] = []
             for batch_number, batched_s3_keys in enumerate(s3_key_batches, start=1):
