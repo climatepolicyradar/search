@@ -94,9 +94,6 @@ class FeederMetrics:
             description="Batches that finished feeding in this run",
             unit="1",
         )
-        # The three retry signals below are transport/HTTP attempts that mostly
-        # self-heal. They are not record loss - `records.error` is - and are
-        # recorded for diagnostic context only.
         self._feeder_errors = self._metrics_service.create_counter(
             name="records.feeder_errors",
             description="Transport-layer failures with no HTTP response received",
@@ -149,11 +146,8 @@ class FeederMetrics:
         """
         Record a batch's retry attempts and the files it fed.
 
-        Kept apart from `record_feed_stats` because these are a different
-        kind of fact: transport and HTTP retries that mostly self-heal, not
-        the outcome of the feed. Summed per run they are what the dashboard's
-        Runs table reports as "Retry Attempts", for diagnostic context beside
-        the records actually lost.
+        Retries mostly self-heal and are not record loss - `records.error`
+        is. Kept apart from `record_feed_stats` for that reason.
         """
         if self._disabled:
             return
@@ -199,9 +193,8 @@ class FeederMetrics:
         """
         Increment the crashed runs counter for a deployment run.
 
-        Called from the `on_crashed` hook rather than the flow, because a
-        crash is the process dying: nothing in the flow gets to run. The
-        hook's process is the only one still alive to report it.
+        Called from the `on_crashed` hook, not the flow - a crash kills the
+        flow process before any of its own reporting runs.
         """
         if self._disabled or self._runs_crashed is None:
             return
@@ -215,8 +208,7 @@ class FeederMetrics:
         """
         Record how many batches this run queued.
 
-        The denominator for `run.batches_completed`. Set once, before any
-        feeding, so a run that dies early still reports what it set out to do.
+        The denominator for `run.batches_completed`.
         """
         if self._disabled or self._batches_expected is None:
             return

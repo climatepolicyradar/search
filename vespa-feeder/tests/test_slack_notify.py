@@ -48,13 +48,7 @@ def test_format_feed_stats_renders_zero_counts_rather_than_the_placeholder() -> 
 def test_format_feed_stats_says_unknown_rather_than_the_placeholder_on_a_crash(
     monkeypatch,
 ) -> None:
-    """
-    A crash leaves no stats to read, and `—` reads as "zero records fed".
-
-    The flow process dies before it sets them, and this hook runs in a
-    different process which re-imports `telemetry` fresh - so the dict is
-    empty whichever way round. The honest answer is that we do not know.
-    """
+    """A crash leaves no stats to read, and `—` reads as "zero records fed"."""
     monkeypatch.setattr(deployment, "name", "search-vespa-feeder-passages")
 
     rendered = SlackNotify._format_feed_stats(crashed=True)
@@ -67,11 +61,9 @@ def test_format_feed_stats_links_to_the_deployment_dashboard_on_a_crash(
     monkeypatch,
 ) -> None:
     """
-    The counts survive the crash in Grafana, so the message points there.
+    The counts survive in Grafana, so the message points there.
 
-    The run name is deliberately absent: `_build_blocks` already puts
-    `{flow.name}/{deployment.name}/{flow_run.name}` in the header, so
-    repeating it here is noise.
+    The run name is deliberately absent - the header already carries it.
     """
     monkeypatch.setattr(deployment, "name", "search-vespa-feeder-passages")
 
@@ -82,12 +74,7 @@ def test_format_feed_stats_links_to_the_deployment_dashboard_on_a_crash(
 
 
 def test_format_feed_stats_prefers_real_counts_to_the_crash_wording() -> None:
-    """
-    A crash that somehow has stats reports them rather than claiming ignorance.
-
-    `crashed=True` says the run crashed, not that the counts are unreadable;
-    if they are there, they are better than a link.
-    """
+    """A crash that somehow has stats reports them rather than a link."""
     telemetry.set_feed_stats(input_count=120, ok_count=118, total_errors=2)
 
     assert "in=120 ok=118 err=2" in SlackNotify._format_feed_stats(crashed=True)
@@ -96,8 +83,7 @@ def test_format_feed_stats_prefers_real_counts_to_the_crash_wording() -> None:
 def test_non_crash_paths_keep_the_placeholder() -> None:
     """
     Only the crash path changes. A cancel reaches the drain's `finally` and
-    sets real stats, so its empty-dict case is a genuine anomaly worth
-    showing as one rather than blaming on a crash.
+    sets real stats, so its empty-dict case is a genuine anomaly.
     """
     assert SlackNotify._format_feed_stats() == "*Records fed*\n`—`"
 
@@ -106,11 +92,8 @@ def test_on_crashed_records_the_crash_and_flushes(monkeypatch) -> None:
     """
     The crash metric is emitted from the hook, and flushed before it returns.
 
-    This is the only reporting channel a SIGKILL cannot take with it: every
-    end-of-run signal in `vespa_feeder`'s `finally` runs inside the process
-    that died. The hook's own process exits as soon as this returns, too
-    soon for the ~5s periodic export, so the flush is what actually gets the
-    counter out - without it the metric is recorded and then discarded.
+    Without the flush the hook's process exits before the periodic export
+    fires, and the metric is recorded then discarded.
     """
     monkeypatch.setattr(deployment, "name", "search-vespa-feeder-passages")
     recorded: list[dict] = []
@@ -121,8 +104,6 @@ def test_on_crashed_records_the_crash_and_flushes(monkeypatch) -> None:
         lambda **kwargs: recorded.append(kwargs),
     )
     monkeypatch.setattr(slack_notify, "force_flush", lambda: flushed.append(True))
-    # `_send` returns early outside prod, but assert the notification is still
-    # reached rather than relying on that.
     sent: list[bool] = []
 
     async def _send(cls, flow, flow_run, state, crashed=False):  # noqa: ANN001, ARG001
@@ -149,12 +130,7 @@ def test_on_crashed_records_the_crash_and_flushes(monkeypatch) -> None:
 
 
 def test_on_crashed_still_notifies_when_the_metric_fails(monkeypatch) -> None:
-    """
-    Telemetry failing must not also cost us the Slack alert.
-
-    The hook runs in a short-lived process that may have no working exporter;
-    a crash alert nobody sees is strictly worse than one without a metric.
-    """
+    """Telemetry failing must not also cost us the Slack alert."""
     monkeypatch.setattr(deployment, "name", "search-vespa-feeder-passages")
 
     def _boom(**kwargs) -> None:  # noqa: ANN003, ARG001

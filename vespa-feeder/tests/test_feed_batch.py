@@ -210,9 +210,6 @@ def test_feed_batch_records_what_it_fed(
         run_name=expected_run_name,
     )
 
-    # Retries are reported separately from outcomes: these are attempts that
-    # mostly self-heal, not records lost, and the Runs table shows them as
-    # diagnostic context beside Missing rather than as a failure signal.
     recording_metrics.record_retry_stats.assert_called_once_with(
         feeder_error_count=0,
         throttled_count=0,
@@ -258,8 +255,7 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
         == "feed_batch"
     )
 
-    # A batch that raised fed nothing, so counting it would overstate how far
-    # a crashed run actually got - which is the one thing this counter is for.
+    # A batch that raised fed nothing, so it is not progress.
     recording_metrics.record_batch_completed.assert_not_called()
 
 

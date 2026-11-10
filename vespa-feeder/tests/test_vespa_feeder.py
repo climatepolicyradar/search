@@ -335,13 +335,8 @@ def test_vespa_feeder_records_the_batch_count_before_feeding_starts(
     monkeypatch, summary_artifacts, recording_metrics, prefect_run_identity
 ):
     """
-    The denominator is emitted at submit time, not at the end of the run.
-
-    It is the only figure that makes the surviving per-batch counters
-    readable: `records.fed` alone has no total to be a fraction of, so a
-    crash at 80% and one at 5% look the same. Emitting it before any feeding
-    means it survives a crash, and is present even for a run that dies
-    before its first batch.
+    The denominator is emitted at submit time, not at the end of the run,
+    so it survives a crash.
     """
     expected_deployment, expected_run_name = prefect_run_identity
     monkeypatch.setattr(
@@ -350,9 +345,8 @@ def test_vespa_feeder_records_the_batch_count_before_feeding_starts(
         lambda bucket, prefix: ["a", "b", "c", "d"],  # noqa: ARG005
     )
 
-    # Ordering is the whole point, so record it rather than only the value:
-    # emitted after the drain the call still carries the right number, and
-    # is still lost to the SIGKILL this exists to survive.
+    # Ordering matters, not just the value - emitted after the drain the
+    # call still carries the right number but is lost to the crash.
     events: list[str] = []
     recording_metrics.record_batches_expected.side_effect = (
         lambda **kwargs: events.append("expected")  # noqa: ARG005
@@ -378,8 +372,6 @@ def test_vespa_feeder_records_the_batch_count_before_feeding_starts(
         s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=2
     )
 
-    # 4 keys at batch_size=2 is 2 batches, so the denominator is 2, not the
-    # 4 files or the 1 run.
     recording_metrics.record_batches_expected.assert_called_once_with(
         batch_count=2,
         deployment_name=expected_deployment,

@@ -16,9 +16,8 @@ class SlackNotify:
     SLACK_BLOCK = "slack-navigator-notifier-bot"
     CHANNEL = "prod-updates"
     FLOW_RUN_URL = "{base_url}/flow-runs/flow-run/{run_id}"
-    # Pre-filtered to the deployment. The dashboard has a `deployment_name`
-    # template variable but no `run_name` one, so this narrows to the right
-    # feeder and its Runs table, grouped by run_name, does the rest.
+    # Pre-filtered to the deployment; the dashboard has no `run_name`
+    # variable, so its Runs table does the rest.
     GRAFANA_URL = (
         "https://climatepolicyradar.grafana.net/d/vespa-feeder-flows"
         "?var-deployment_name={deployment_name}&from=now-24h&to=now"
@@ -33,15 +32,9 @@ class SlackNotify:
         """
         The "Records fed" field, which a crash cannot fill in.
 
-        `get_feed_stats()` reads module-level state set by the flow process at
-        the end of its drain. A crash kills that process before the drain
-        finishes, and the hook runs in a different process which re-imports
-        `telemetry` fresh - so the dict is empty either way. Printing `—` for
-        that read as "zero records fed" when the truth is "we do not know".
-
-        The counts themselves survive the crash, because they are exported
-        every ~5s as they accumulate; they are just not reachable from here.
-        So this says so and points at the place that has them.
+        A crash kills the flow process before it sets the stats, and this
+        hook runs in a different process, so the dict is empty either way.
+        Printing `—` read as "zero records fed" rather than "unknown".
         """
         stats = get_feed_stats()
         if crashed and not stats:
@@ -155,15 +148,9 @@ class SlackNotify:
         """
         Record the crash and notify Slack on a Prefect flow crash (e.g. OOM/SIGKILL).
 
-        The metric is emitted here rather than in the flow because a crash is
-        the flow process dying: every end-of-run signal in `vespa_feeder`'s
-        `finally` is skipped. This hook runs in a separate process, so it is
-        the only place left that can report the run crashed at all.
-
-        That process exits as soon as the hook returns, which is too soon for
-        the ~5s periodic export to fire, so the flush is what actually gets
-        the counter out. Neither step is allowed to stop the notification:
-        telemetry failing is not a reason to also lose the Slack alert.
+        This hook's process is the only one still alive after a crash, so it
+        is the only place the run can be reported from. It exits as soon as
+        the hook returns, hence the explicit flush.
         """
         try:
             feeder_metrics.record_run_crashed(

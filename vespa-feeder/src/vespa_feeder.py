@@ -391,11 +391,8 @@ def feed_batch(
             run_name=run_name,
         )
 
-        # The retry counts and file count the Runs table aggregates per run.
-        # They came from a `vespa feed stats:` log line in v1, which `9dcb83b`
-        # deleted along with the metric call sites - leaving the panel parsing
-        # a line nothing emits. As metrics they cannot silently stop matching
-        # a regex, and they survive a crash the way the log line did not.
+        # Replaces the `vespa feed stats:` log line `9dcb83b` deleted, which
+        # the dashboard's Runs table still parsed.
         feeder_metrics.record_retry_stats(
             feeder_error_count=feed_result.feeder_error_count,
             throttled_count=feed_result.throttled_count,
@@ -405,10 +402,8 @@ def feed_batch(
             run_name=run_name,
         )
 
-        # Paired with `run.batches_expected` to give progress as a fraction.
-        # Here rather than in the `finally` so it counts batches that fed,
-        # not batches that were attempted: a batch that raised has not made
-        # progress, and counting it would overstate how far a crashed run got.
+        # Not in the `finally` - a batch that raised fed nothing, so counting
+        # it would overstate how far a crashed run got.
         feeder_metrics.record_batch_completed(
             deployment_name=deployment_name,
             run_name=run_name,
@@ -497,14 +492,8 @@ def vespa_feeder(
 
             s3_key_batches = list(batched(s3_keys, batch_size))
 
-            # Before the submit loop, so it is exported within the first
-            # interval (~5s) and lands hours before any plausible OOM. This is
-            # the denominator the surviving counters are read against: without
-            # it a crash at 80% and one at 5% are the same reading, because
-            # `records.fed` alone has no total to be a fraction of. It is also
-            # the only signal a run that dies before its first batch emits at
-            # all - the dashboard's Runs table is built from per-file feed
-            # stats, so such a run otherwise leaves no row.
+            # Before the submit loop so it survives a crash, giving the
+            # per-batch counters a denominator to be read against.
             feeder_metrics.record_batches_expected(
                 batch_count=len(s3_key_batches),
                 deployment_name=deployment_name,
@@ -543,9 +532,6 @@ def vespa_feeder(
 
             # the finally is for a cancel mid-drain: `raise_on_failure=False` means no
             # batch raises here, so it is SIGTERM that would otherwise lose the summary.
-            # It does nothing for a SIGKILL, which cannot be caught: an OOM kills this
-            # process mid-drain and every signal below is lost with it. That is what
-            # the per-batch metrics and `runs.crashed` are for.
             drained = False
             # Bounds the drain as a whole, so wedged batches cannot accumulate.
             # This is the guard the flow-level `timeout_seconds` cannot be:
@@ -658,12 +644,8 @@ def vespa_feeder(
                 run_failed = bool(feed_results_errors or feed_results_exceptions)
 
                 # publish the artifact in Prefect
-                #
-                # End-of-run only: this `finally` is inside the flow process,
-                # so a SIGKILL (OOM) skips it entirely and a crashed run has
-                # no artifact at all. Absence means "did not finish", never
-                # "fed nothing" - the per-batch metrics are what report a
-                # crash, because they are exported as they accumulate. See
+                # Lost on a SIGKILL, so its absence means the run did not
+                # finish, never that it fed nothing. See
                 # docs/run-reporting-and-crashes.md.
                 create_markdown_artifact(
                     key="vespa-feeder-run-summary",

@@ -11,12 +11,8 @@ from observability.service_manifest import ServiceManifest
 from observability.telemetry_config import TelemetryConfig
 from opentelemetry import trace
 
-# Beside this module, inside `src`, rather than at the service root. Prefect
-# copies the flow code out of the image into a temp run directory and executes
-# it from there, so `__file__` is that copy - and a manifest resolved a level
-# above it pointed at `/tmp/service-manifest.json`, which does not exist. The
-# load failed on every run and fell back to defaults, losing the manifest's
-# team and version. Keeping it in `src` means it travels with the code.
+# Inside `src` so it travels with the flow code. Prefect runs that code from
+# a temp directory, where a path resolved above `__file__` does not exist.
 _MANIFEST_PATH = Path(__file__).parent / "service-manifest.json"
 _logger = logging.getLogger(__name__)
 
