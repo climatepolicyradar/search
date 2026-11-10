@@ -32,9 +32,9 @@ def _principal_id_from_document_source(document_source: dict[str, Any]) -> str |
         return document_source.get("id")
 
     matches = [
-        rel
-        for rel in document_source.get("documents", [])
-        if rel.get("type") in {"member_of", "is_version_of"}
+        relationship
+        for relationship in document_source.get("documents", [])
+        if relationship.get("type") in {"member_of", "is_version_of"}
     ]
     if not matches:
         return None
@@ -46,10 +46,11 @@ def _collection_id_from_document_source(document_source: dict[str, Any]) -> str 
         return None
 
     matches = [
-        rel
-        for rel in document_source.get("documents", [])
-        if rel.get("type") == "member_of"
+        relationship
+        for relationship in document_source.get("documents", [])
+        if relationship.get("type") == "member_of"
     ]
+
     if not matches:
         return None
 
