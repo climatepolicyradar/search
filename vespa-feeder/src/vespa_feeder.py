@@ -529,6 +529,9 @@ def vespa_feeder(
 
             # the finally is for a cancel mid-drain: `raise_on_failure=False` means no
             # batch raises here, so it is SIGTERM that would otherwise lose the summary.
+            # It does nothing for a SIGKILL, which cannot be caught: an OOM kills this
+            # process mid-drain and every signal below is lost with it. That is what
+            # the per-batch metrics and `runs.crashed` are for.
             drained = False
             # Bounds the drain as a whole, so wedged batches cannot accumulate.
             # This is the guard the flow-level `timeout_seconds` cannot be:
@@ -641,6 +644,13 @@ def vespa_feeder(
                 run_failed = bool(feed_results_errors or feed_results_exceptions)
 
                 # publish the artifact in Prefect
+                #
+                # End-of-run only: this `finally` is inside the flow process,
+                # so a SIGKILL (OOM) skips it entirely and a crashed run has
+                # no artifact at all. Absence means "did not finish", never
+                # "fed nothing" - the per-batch metrics are what report a
+                # crash, because they are exported as they accumulate. See
+                # docs/run-reporting-and-crashes.md.
                 create_markdown_artifact(
                     key="vespa-feeder-run-summary",
                     markdown=_build_run_summary_markdown(
