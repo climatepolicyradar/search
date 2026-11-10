@@ -5,6 +5,7 @@ import signal
 import subprocess
 
 import pytest
+import run_summary
 import vespa_feeder as feeder
 from helpers import (
     FakeVespaFeed,
@@ -141,7 +142,7 @@ def test_feed_derived_files_bounds_the_batch_not_each_file(
                         throttled_count=5,
                         other_http_error_count=2,
                         failed_documents=[
-                            feeder.FailedDocument(
+                            run_summary.FailedDocument(
                                 doc_id="id:doc:doc::9",
                                 error="got status 503 (service unavailable)",
                             )

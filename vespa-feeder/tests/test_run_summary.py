@@ -10,6 +10,7 @@ one file per batch, where a batch count and a file count look identical.
 from pathlib import Path
 
 import pytest
+import run_summary
 import vespa_feeder as feeder
 
 
@@ -53,7 +54,7 @@ def test_files_processed_counts_files_rather_than_batches():
     batches of 10 - roughly 5,720 files. Off by an order of magnitude in the
     number used to judge how much of a run succeeded.
     """
-    markdown = feeder._build_run_summary_markdown(
+    markdown = run_summary._build_run_summary_markdown(
         [_result(files=10), _result(files=10), _result(files=4)], []
     )
 
@@ -70,7 +71,7 @@ def test_a_raised_batch_is_reported_as_unaccounted_for():
     ten files' worth of records and still show `Missing: 0` with otherwise
     clean totals.
     """
-    markdown = feeder._build_run_summary_markdown(
+    markdown = run_summary._build_run_summary_markdown(
         [_result(files=10)], [RuntimeError("HeadObject: Not Found")]
     )
 
@@ -82,7 +83,7 @@ def test_a_raised_batch_is_reported_as_unaccounted_for():
 
 def test_a_clean_run_claims_nothing_is_unaccounted_for():
     """The unaccounted-for row is noise on a run where every batch reported."""
-    markdown = feeder._build_run_summary_markdown([_result(files=10)], [])
+    markdown = run_summary._build_run_summary_markdown([_result(files=10)], [])
 
     assert "Unaccounted for" not in markdown
     assert "not in the totals above" not in markdown
@@ -98,7 +99,7 @@ def test_failed_documents_are_listed_once_per_doc_id():
     so concatenating them listed every doc id twice and inflated "+N more".
     """
     failed_documents = [
-        feeder.FailedDocument(doc_id=f"id:doc::{n}", error="status 500")
+        run_summary.FailedDocument(doc_id=f"id:doc::{n}", error="status 500")
         for n in range(5)
     ]
     result = _result(
@@ -119,7 +120,7 @@ def test_failed_documents_are_listed_once_per_doc_id():
         ],
     )
 
-    markdown = feeder._build_run_summary_markdown([result], [])
+    markdown = run_summary._build_run_summary_markdown([result], [])
 
     assert markdown.count("`id:doc::0`") == 1
     # Five unique docs, three sampled, so two remain - not seven.
@@ -134,7 +135,7 @@ def test_a_failing_batch_is_not_counted_as_both_processed_and_failed():
     appeared in both rows and the run looked like it had more batches than
     it ran.
     """
-    markdown = feeder._build_run_summary_markdown(
+    markdown = run_summary._build_run_summary_markdown(
         [
             _result(files=10, prefix="ok"),
             _result(
@@ -149,7 +150,7 @@ def test_a_failing_batch_is_not_counted_as_both_processed_and_failed():
                         throttled_count=0,
                         other_http_error_count=1,
                         failed_documents=[
-                            feeder.FailedDocument(
+                            run_summary.FailedDocument(
                                 doc_id="id:doc::1", error="status 500"
                             )
                         ],
@@ -179,7 +180,7 @@ def test_a_failing_batch_is_not_counted_as_both_processed_and_failed():
 )
 def test_throttle_rate_divides_by_every_operation_reported(results, expected_rate):
     """The denominator is every operation, failing batches included."""
-    assert _row(feeder._build_run_summary_markdown(results, []), "Throttle rate") == (
+    assert _row(run_summary._build_run_summary_markdown(results, []), "Throttle rate") == (
         expected_rate
     )
 
@@ -209,7 +210,7 @@ def test_throttle_rate_includes_operations_from_failing_batches():
         ],
     )
 
-    markdown = feeder._build_run_summary_markdown([throttled, failing], [])
+    markdown = run_summary._build_run_summary_markdown([throttled, failing], [])
 
     # 50 throttled over 200 operations, not over the 100 that went well.
     assert _row(markdown, "Throttle rate") == "25.00%"
@@ -230,13 +231,13 @@ def test_a_mixed_run_reports_every_category_at_once():
                 throttled_count=0,
                 other_http_error_count=3,
                 failed_documents=[
-                    feeder.FailedDocument(doc_id="id:doc::1", error="status 500")
+                    run_summary.FailedDocument(doc_id="id:doc::1", error="status 500")
                 ],
             )
         ],
     )
 
-    markdown = feeder._build_run_summary_markdown(
+    markdown = run_summary._build_run_summary_markdown(
         [_result(files=10, prefix="ok"), failing], [RuntimeError("boom")]
     )
 

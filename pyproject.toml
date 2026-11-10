@@ -92,3 +92,6 @@ disable = [
 pythonVersion = "3.13"
 venvPath = "."
 venv = ".venv"
+# vespa-feeder keeps its modules under `src` and installs nothing as a package,
+# so without this every intra-package import there reads as unresolved.
+extraPaths = ["vespa-feeder/src"]

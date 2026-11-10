@@ -4,6 +4,7 @@ import logging
 import subprocess
 
 import pytest
+import s3 as s3_module
 import vespa_feeder as feeder
 from helpers import FakeVespaFeed, put_s3_objects, vespa_feed_stdout
 
@@ -142,7 +143,7 @@ def test_feed_batch_leaves_nothing_on_disk_when_it_fails(
             real_download_file(bucket, key, destination, **kwargs)
 
         monkeypatch.setattr(s3_client, "download_file", download_file)
-        monkeypatch.setattr(feeder.boto3, "client", lambda *args, **kwargs: s3_client)  # noqa: ARG005
+        monkeypatch.setattr(s3_module.boto3, "client", lambda *args, **kwargs: s3_client)  # noqa: ARG005
     monkeypatch.setattr(feeder.subprocess, "Popen", vespa_feed())
 
     with pytest.raises(expected_exception):
@@ -218,7 +219,7 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
         raise RuntimeError("s3 download failed")
 
     monkeypatch.setattr(s3_client, "download_file", download_file)
-    monkeypatch.setattr(feeder.boto3, "client", lambda *args, **kwargs: s3_client)  # noqa: ARG005
+    monkeypatch.setattr(s3_module.boto3, "client", lambda *args, **kwargs: s3_client)  # noqa: ARG005
     monkeypatch.setattr(feeder.subprocess, "Popen", FakeVespaFeed())
 
     with pytest.raises(RuntimeError, match="s3 download failed"):
