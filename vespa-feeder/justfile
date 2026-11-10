@@ -14,5 +14,8 @@ push:
     aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
     docker push "$registry/search-vespa-feeder:latest"
 
+# PYTHONPATH mirrors the Dockerfile, so the flow modules import by the same
+# names here as they do in the image - which matters because Prefect stores a
+# deployment's entrypoint as a module name rather than a path.
 deploy:
-    uv run python src/deployments.py
+    PYTHONPATH=src uv run python deployments.py

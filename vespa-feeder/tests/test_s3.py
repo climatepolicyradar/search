@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+import s3 as s3_module
 import vespa_feeder as feeder
 from helpers import put_s3_objects, read_jsonl, write_jsonl
 
@@ -195,7 +196,7 @@ def test_materialise_s3_files_downloads_single_threaded(
         Path(filename).write_bytes(b'{"id": 1}\n')
 
     monkeypatch.setattr(
-        feeder.boto3, "client", lambda *_args, **_kwargs: _StubS3(record_config)
+        s3_module.boto3, "client", lambda *_args, **_kwargs: _StubS3(record_config)
     )
 
     feeder.materialise_s3_files(
@@ -234,9 +235,9 @@ def test_materialise_s3_files_stops_at_the_download_deadline(
         Path(filename).write_bytes(b'{"id": 1}\n')
 
     monkeypatch.setattr(
-        feeder.boto3, "client", lambda *_args, **_kwargs: _StubS3(fake_download)
+        s3_module.boto3, "client", lambda *_args, **_kwargs: _StubS3(fake_download)
     )
-    monkeypatch.setattr(feeder.time, "monotonic", lambda: elapsed["now"])
+    monkeypatch.setattr(s3_module.time, "monotonic", lambda: elapsed["now"])
 
     if expected_downloads == len(objects):
         feeder.materialise_s3_files(
@@ -343,12 +344,12 @@ def test_delete_materialised_s3_files_removes_every_file_it_is_given(
     ("build_client", "expected_service"),
     [
         pytest.param(
-            lambda: feeder.boto3.client("s3", config=feeder._BOTO_CONFIG),
+            lambda: s3_module.boto3.client("s3", config=s3_module._BOTO_CONFIG),
             "s3",
             id="s3",
         ),
         pytest.param(
-            lambda: feeder.boto3.client("ssm", config=feeder._BOTO_CONFIG),
+            lambda: s3_module.boto3.client("ssm", config=s3_module._BOTO_CONFIG),
             "ssm",
             id="ssm",
         ),
@@ -370,8 +371,8 @@ def test_boto_clients_are_built_with_explicit_socket_timeouts(
     client = build_client()
 
     assert client.meta.service_model.service_name == expected_service
-    assert client.meta.config.connect_timeout == feeder._S3_CONNECT_TIMEOUT_SECONDS
-    assert client.meta.config.read_timeout == feeder._S3_READ_TIMEOUT_SECONDS
+    assert client.meta.config.connect_timeout == s3_module._S3_CONNECT_TIMEOUT_SECONDS
+    assert client.meta.config.read_timeout == s3_module._S3_READ_TIMEOUT_SECONDS
     # botocore normalises `max_attempts=3` to `total_max_attempts=4`:
     # three retries after the initial call.
     assert client.meta.config.retries["total_max_attempts"] == 4

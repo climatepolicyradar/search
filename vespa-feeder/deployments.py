@@ -1,7 +1,7 @@
 """
 Prefect deployment for the vespa-feeder flows.
 
-Run with: uv run python vespa-feeder/src/deployments.py
+Run with: `just deploy` from vespa-feeder/ (it sets PYTHONPATH=src)
 """
 
 from dataclasses import dataclass

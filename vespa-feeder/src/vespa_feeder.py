@@ -13,7 +13,6 @@ deriver function. Nothing in this module is domain-specific.
 
 import logging
 import os
-import re
 import signal
 import subprocess
 import tempfile
@@ -24,13 +23,9 @@ from itertools import batched
 from pathlib import Path
 from types import FrameType
 
-import boto3
 import orjson
-from boto3.s3.transfer import TransferConfig
-from botocore.config import Config
 from errors import (
     BatchAbandoned,
-    FailedDocument,
     FeedResult,
     VespaError,
     VespaFeederFailed,
@@ -38,12 +33,23 @@ from errors import (
     VespaFeedResponse,
     VespaResponseError,
 )
-from mypy_boto3_s3 import S3Client
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
 from prefect.exceptions import MissingContextError
 from prefect.futures import PrefectFuture
 from prefect.runtime import deployment, flow_run
+from run_summary import (
+    _build_run_summary_markdown,
+    _parse_failed_documents,
+)
+from s3 import (
+    delete_materialised_s3_files,
+    get_latest_s3_export_prefix,
+    get_ssm_parameter,
+    list_s3_keys,
+    materialise_derived_files,
+    materialise_s3_files,
+)
 from telemetry import (
     feeder_metrics,
     force_flush,
@@ -94,44 +100,6 @@ DEFAULT_SAMPLE_RATE = 1.0
 # adds bounded retries, a timed-out batch loses its records, so failing a batch
 # that would have completed is a real cost.
 _VESPA_FEED_TIMEOUT_SECONDS = 45 * 60
-
-# Socket-level bounds for every S3/SSM call.
-#
-# Measured over 24h: `materialise_s3_files` p50 1.3s, p99 8.4s, max 17s. These
-# are generous multiples of that, so they never fire in normal operation and
-# only catch a genuinely wedged socket. boto3's own defaults are 60s, but they
-# sit under a retry layer that can extend a stalled call indefinitely.
-#
-# This is a socket timeout rather than a wrapper around the call because the
-# task runs on a ThreadPoolTaskRunner worker, where Prefect cannot interrupt
-# blocking I/O -- a wrapper would not actually interrupt anything.
-_S3_CONNECT_TIMEOUT_SECONDS = 10
-_S3_READ_TIMEOUT_SECONDS = 120
-
-_BOTO_CONFIG = Config(
-    connect_timeout=_S3_CONNECT_TIMEOUT_SECONDS,
-    read_timeout=_S3_READ_TIMEOUT_SECONDS,
-    retries={"max_attempts": 3, "mode": "standard"},
-)
-
-# How long the whole download phase of one batch may take.
-#
-# The socket timeouts above bound a single read, not the operation:
-# `download_file` is the S3 Transfer Manager, whose own `num_download_attempts`
-# (5) nests OUTSIDE botocore's `max_attempts` (3), each able to restart a
-# stalled stream. Run 06aec620 wedged all 8 workers here for 52h with both
-# bounds in place, so only a deadline across the phase actually bounds it.
-#
-# Measured over 24h: p50 1.3s, p99 8.4s, max 17s for a 10-file batch, so 5 min
-# never fires in normal operation.
-_S3_DOWNLOAD_TIMEOUT_SECONDS = 5 * 60
-
-# Keeps every download on the calling worker thread, which is what makes a
-# stalled one visible: behind the Transfer Manager's pool the worker blocks on
-# a future while 10 pool threads retry underneath it, where neither the socket
-# timeouts nor the deadline above can see it. Per-file latency gives the
-# concurrency nothing to buy here anyway.
-_S3_TRANSFER_CONFIG = TransferConfig(use_threads=False)
 
 # How long the drain waits for any one batch before giving up on it.
 #
@@ -252,279 +220,6 @@ def _terminate_vespa_feed_processes_on_sigterm_handler() -> None:
         )
 
 
-# The CLI's `logResult` drops a line only when it is a retry or a success, so
-# these survive without `--verbose` - which would log every successful op too,
-# meaning ~1GB of stderr on a passages run for nothing we read or used in Grafana.
-_GIVING_UP_RE = re.compile(r"^feed: (.+) for put (\S+): giving up", re.MULTILINE)
-
-
-def _parse_failed_documents(stderr: str) -> list[FailedDocument]:
-    return [
-        FailedDocument(doc_id=giving_up_match.group(2), error=giving_up_match.group(1))
-        for giving_up_match in _GIVING_UP_RE.finditer(stderr)
-    ]
-
-
-def _unique_failed_documents(result: FeedResult) -> list[FailedDocument]:
-    """
-    Every failed document in a result, each listed once.
-
-    A batch that loses records to a transport failure produces both a
-    `VespaFeedError` and a `VespaResponseError`, and both are built from the
-    same parsed stderr - so concatenating their `failed_documents` lists the
-    same doc id twice and inflates the "+N more" count.
-    """
-    unique_failed_documents: dict[str, FailedDocument] = {}
-    for error in result.errors:
-        for failed_document in error.failed_documents:
-            unique_failed_documents.setdefault(failed_document.doc_id, failed_document)
-    return list(unique_failed_documents.values())
-
-
-def _build_run_summary_markdown(
-    results: list[FeedResult],
-    exceptions: list[BaseException],
-) -> str:
-    """
-    Summarise a run: what was fed, what was lost, and what is unaccounted for.
-
-    `results` is every batch that reported back, whether or not it lost
-    records. Failures are derived from it rather than passed separately,
-    because passing a subset alongside the whole meant a failing batch was
-    counted in both the processed and the failed rows.
-
-    A batch that raised never produced a `FeedResult`, so its records cannot
-    be counted. They are reported as unaccounted for rather than silently
-    omitted: a run could previously lose ten files' worth of records and
-    still show `Missing: 0`.
-    """
-    failures = [result for result in results if result.errors]
-
-    total_files = sum(len(result.feed_paths) for result in results)
-    total_input = sum(result.input_count for result in results)
-    total_operation = sum(result.operation_count for result in results)
-    total_ok = sum(result.ok_count for result in results)
-    total_missing = total_operation - total_ok
-    total_feeder_errors = sum(result.feeder_error_count for result in results)
-    total_throttled = sum(result.throttled_count for result in results)
-    total_other_http_errors = sum(result.other_http_error_count for result in results)
-
-    # Denominator is every operation reported by any batch, failing ones
-    # included. Excluding failures measured the throttle rate only over the
-    # batches that went well.
-    throttle_rate = total_throttled / total_operation if total_operation else 0.0
-
-    icon = "🚨" if failures or exceptions else "✅"
-    status = (
-        f"**{len(failures) + len(exceptions)}/{len(results) + len(exceptions)} "
-        "batch(es) failed**"
-        if failures or exceptions
-        else "**All files indexed successfully**"
-    )
-
-    markdown = (
-        f"### Vespa Feeder Run Summary\n\n{icon} {status}\n\n"
-        "| Metric | Value |\n|---|---|\n"
-        f"| Files processed | {total_files} |\n"
-        f"| Batches | {len(results) + len(exceptions)} |\n"
-        f"| Batches with lost records | {len(failures)} |\n"
-        f"| Batches that raised | {len(exceptions)} |\n"
-        f"| Input records | {total_input} |\n"
-        f"| Operations | {total_operation} |\n"
-        f"| OK | {total_ok} |\n"
-        f"| **Missing (not recovered after retries)** | **{total_missing}** |\n"
-    )
-
-    if exceptions:
-        markdown += (
-            f"| **Unaccounted for ({len(exceptions)} batch(es) raised)** | "
-            "**unknown** |\n"
-        )
-
-    markdown += (
-        f"| — | — |\n"
-        f"| _Transient, self-resolved (no data lost):_ | |\n"
-        f"| Transport retries (feeder errors) | {total_feeder_errors} |\n"
-        f"| Throttled (429) | {total_throttled} |\n"
-        f"| Other non-2xx responses | {total_other_http_errors} |\n"
-        f"| Throttle rate | {throttle_rate:.2%} |\n"
-    )
-
-    if exceptions:
-        markdown += (
-            "\nA batch that raised never reported a result, so its records are "
-            "not in the totals above: they were neither fed nor counted as "
-            "missing. Treat the totals as a lower bound on what was attempted.\n"
-        )
-
-    if failures:
-        markdown += (
-            "\n#### Batches with lost records\n\n"
-            "| Files | OK / Operation | Missing | Sample failed documents |\n"
-            "|---|---|---|---|\n"
-        )
-        for result in failures:
-            failed_documents = _unique_failed_documents(result)
-            sample = "; ".join(
-                f"`{failed_document.doc_id}`: {failed_document.error}"
-                for failed_document in failed_documents[:3]
-            )
-            if len(failed_documents) > 3:
-                sample += f" (+{len(failed_documents) - 3} more)"
-            markdown += (
-                f"| `{', '.join(path.name for path in result.feed_paths)}` | "
-                f"{result.ok_count}/{result.operation_count} | "
-                f"{result.operation_count - result.ok_count} | {sample or '—'} |\n"
-            )
-
-    if exceptions:
-        markdown += (
-            "\n#### Batches that raised\n\n"
-            "These never reported a result, so their records were not fed.\n\n"
-            "| Exception | Message |\n|---|---|\n"
-        )
-        for exception in exceptions:
-            detail = str(exception).replace("|", "\\|").replace("\n", " ")
-            markdown += f"| `{type(exception).__name__}` | {detail} |\n"
-
-    return markdown
-
-
-_EXPORT_NAME_RE = re.compile(r"^\d{8}T\d{6}Z$")
-
-
-def get_latest_s3_export_prefix(bucket: str, prefix: str) -> str:
-    """
-    The newest immutable snapshot under `prefix`, e.g. `20260922T190625Z`.
-
-    `/latest` is mutable which can, and has, been mutated during a run
-    causing S3 404 errors.
-
-    These keys are generated in the data-lake
-    @see: https://github.com/climatepolicyradar/data-lake/blob/bac07d00c9d799efa126e245accad590d4a0d1e5/orchestration/flows/data_export.py#L106
-    """
-    s3: S3Client = boto3.client("s3", config=_BOTO_CONFIG)
-
-    paginator = s3.get_paginator("list_objects_v2")
-    export_names = sorted(
-        (
-            common_prefix.get("Prefix", "").removeprefix(prefix).removesuffix("/")
-            for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/")
-            # because of `Delimiter`, we get `CommonPrefixes` returned as an aggregation
-            # e.g. { "CommonPrefixes": [
-            #   "production/published/pipeline_data_in_vespa_documents_updates_v1/20260630T082046Z",
-            #   "production/published/pipeline_data_in_vespa_documents_updates_v1/20260714T103748Z",
-            #   ...
-            #   "production/published/pipeline_data_in_vespa_documents_updates_v1/latest",
-            # ]}
-            #
-            # `CommonPrefixes` has a `MaxKeys` of 1000 - which, given this buckets expires objects
-            # every 90 days, has very little risk of us hitting that.
-            for common_prefix in page.get("CommonPrefixes", [])
-        ),
-        reverse=True,
-    )
-    for export_name in export_names:
-        # we check for a timestamp in case there are other rogue values or `latest`
-        if _EXPORT_NAME_RE.match(export_name):
-            return export_name
-
-    raise FileNotFoundError(
-        f"No timestamped snapshots found under s3://{bucket}/{prefix}"
-    )
-
-
-def list_s3_keys(bucket: str, prefix: str) -> list[str]:
-    s3: S3Client = boto3.client("s3", config=_BOTO_CONFIG)
-
-    prefix = prefix.rstrip("/") + "/"
-    paginator = s3.get_paginator("list_objects_v2")
-    objects = sorted(
-        [
-            obj
-            for page in paginator.paginate(Bucket=bucket, Prefix=prefix)
-            for obj in page.get("Contents", [])
-        ],
-        key=lambda obj: obj.get("Key", ""),
-    )
-    if not objects:
-        raise FileNotFoundError(f"No objects found at s3://{bucket}/{prefix}")
-
-    keys = [obj.get("Key", "") for obj in objects]
-
-    return keys
-
-
-def get_ssm_parameter(name: str) -> str:
-    response = boto3.client("ssm", config=_BOTO_CONFIG).get_parameter(
-        Name=name, WithDecryption=True
-    )
-    value = response["Parameter"].get("Value")
-    if value is None:
-        raise ValueError(f"SSM parameter {name} has no value")
-    return value.strip()
-
-
-@tracer.start_as_current_span("materialise_s3_files")
-def materialise_s3_files(
-    bucket: str,
-    batched_s3_keys: list[str],
-    materialise_dir: Path,
-    download_timeout_seconds: float = _S3_DOWNLOAD_TIMEOUT_SECONDS,
-) -> list[Path]:
-    s3: S3Client = boto3.client("s3", config=_BOTO_CONFIG)
-
-    # Checked between files, not enforced on each: this runs on a
-    # ThreadPoolTaskRunner worker, where Prefect cannot interrupt blocking I/O,
-    # so nothing here can abort a download under way - only refuse the next.
-    # The socket timeouts bound a single file; this bounds the batch.
-    deadline = time.monotonic() + download_timeout_seconds
-
-    materialised_s3_files = []
-    for s3_key in batched_s3_keys:
-        if time.monotonic() > deadline:
-            raise TimeoutError(
-                f"Timed out after {download_timeout_seconds:.0f}s downloading "
-                f"{len(batched_s3_keys)} file(s) from s3://{bucket}: "
-                f"{len(materialised_s3_files)} done, stopped before {s3_key}"
-            )
-        materialised_s3_file = materialise_dir / s3_key.split("/")[-1]
-        s3.download_file(
-            bucket, s3_key, str(materialised_s3_file), Config=_S3_TRANSFER_CONFIG
-        )
-        materialised_s3_files.append(materialised_s3_file)
-
-    return materialised_s3_files
-
-
-@tracer.start_as_current_span("materialise_derived_files")
-def materialise_derived_files(
-    materialised_s3_files: list[Path],
-    derive_data_from_source: Callable[[dict], dict] | None,
-) -> list[Path]:
-    """
-    Write a `.derived` copy of every source file, deriver or no deriver.
-
-    This allows `feed_batch` to delete the S3 sources as soon as this returns.
-    """
-    derive = derive_data_from_source or (lambda record: record)
-
-    materialised_derived_files = []
-    for materialised_s3_file in materialised_s3_files:
-        derived_file = materialised_s3_file.with_name(
-            f"{materialised_s3_file.stem}.derived{materialised_s3_file.suffix}"
-        )
-        with materialised_s3_file.open("rb") as src, derived_file.open("wb") as dst:
-            for line in src:
-                if not line.strip():
-                    continue
-                record = derive(orjson.loads(line))
-                dst.write(orjson.dumps(record) + b"\n")
-        materialised_derived_files.append(derived_file)
-
-    return materialised_derived_files
-
-
 @tracer.start_as_current_span("feed_derived_files")
 def feed_derived_files(
     materialised_derived_files: list[Path],
@@ -626,15 +321,6 @@ def feed_derived_files(
     )
 
 
-@tracer.start_as_current_span("delete_materialised_s3_files")
-def delete_materialised_s3_files(materialised_s3_files: list[Path]) -> None:
-    for materialised_s3_file in materialised_s3_files:
-        materialised_s3_file.unlink(missing_ok=True)
-
-
-# Caching here would be wrong. A batch with failed documents
-# returns a `FeedResult` and finishes Completed, so it
-# would cache as a success and never be re-fed.
 @task(cache_policy=NO_CACHE)
 @tracer.start_as_current_span("feed_batch")
 def feed_batch(

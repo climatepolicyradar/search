@@ -44,10 +44,9 @@ tests/
 .env.local
 
 # Deployment, which runs from a developer's machine or CI against the Prefect
-# API - it is not part of the runtime image. Its flow imports still resolve
-# because Prefect stores an entrypoint as a module name, and the flow modules
-# themselves are copied in.
-src/deployments.py
+# API - it is not part of the runtime image. It sits outside `src` for that
+# reason: `src` is what ships.
+deployments.py
 
 # Local tooling
 justfile
