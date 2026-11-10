@@ -5,22 +5,22 @@ description = "Tests for measuring the relevance of our search results"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-  "boto3>=1.43.122",
+  "boto3>=1.43.126",
   "duckdb>=1.5.6",
   "fastapi[standard]>=0.143.3",
   "httpx2>=2.16.0",
-  "posthog>=7.81.1",
+  "posthog>=7.86.0",
   # @related: PREFECT_VERSION
   # This should match the Dockerfiles using prefect as that's what we deploy to prefect
   # which can cause unexpected results.
-  "prefect[slack]==3.9.0",
-  "pydantic>=2.14.2",
+  "prefect[slack]==3.9.2",
+  "pydantic>=2.14.3",
   "pydantic-settings>=2.16.2",
   "python-dotenv>=1.2.4",
   "pyvespa>=1.2.10",
   "requests>=2.34.2",
   "rich>=15.0.0",
-  "typer>=0.27.3",
+  "typer>=0.28.0",
   "uvicorn>=0.54.0",
   "components>=1.0.5",
   "polyfactory>=3.5.0",
@@ -36,25 +36,25 @@ dependencies = [
   "pyright>=1.1.414",
   "moto>=5.2.5",
   "wandb>=0.31.0",
-  "pandas>=3.1.0",
+  "pandas>=3.1.1",
   "scikit-learn>=1.9.1",
   "cpr-contracts",
 ]
 
 [dependency-groups]
-research = ["snowflake-connector-python>=5.1.0", "openpyxl>=3.1.5"]
+research = ["snowflake-connector-python>=5.2.0", "openpyxl>=3.1.5"]
 dev = [
-  "pulumi-aws>=7.52.1,<8.0.0",
-  "pulumi-docker>=5.2.0,<6.0.0",
+  "pulumi-aws>=7.54.0,<8.0.0",
+  "pulumi-docker>=5.2.2,<6.0.0",
   "pulumi-docker-build>=0.0.23,<1.0.0",
-  "pulumi-pulumiservice>=1.5.0",
-  "pulumi>=3.273.0,<4.0.0",
+  "pulumi-pulumiservice>=1.7.0",
+  "pulumi>=3.274.1,<4.0.0",
   "pytest>=9.2.0",
   "pytest-asyncio>=1.4.1",
-  "hypothesis>=6.170.14",
+  "hypothesis>=6.170.15",
   "boto3-stubs[s3,ssm]>=1.43.122",
   "pulumiverse-grafana>=2.44.0",
-  "pydantic-evals>=2.63.0",
+  "pydantic-evals>=2.66.0",
   "wandb[eval-table]>=0.31.0",
 ]
 
@@ -62,7 +62,7 @@ dev = [
 constraint-dependencies = ["griffe>=2"]
 
 [tool.uv.sources]
-components = { git = "https://github.com/climatepolicyradar/infra", subdirectory = "components", tag = "v1.0.5" }
+components = { git = "https://github.com/climatepolicyradar/infra", subdirectory = "components", tag = "v1.2.1" }
 cpr-contracts = { git = "https://github.com/climatepolicyradar/contracts", tag = "v0.1.3" }
 
 [build-system]
