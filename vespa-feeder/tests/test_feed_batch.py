@@ -210,6 +210,18 @@ def test_feed_batch_records_what_it_fed(
         run_name=expected_run_name,
     )
 
+    # Retries are reported separately from outcomes: these are attempts that
+    # mostly self-heal, not records lost, and the Runs table shows them as
+    # diagnostic context beside Missing rather than as a failure signal.
+    recording_metrics.record_retry_stats.assert_called_once_with(
+        feeder_error_count=0,
+        throttled_count=0,
+        other_http_error_count=0,
+        file_count=2,
+        deployment_name=expected_deployment,
+        run_name=expected_run_name,
+    )
+
 
 def test_feed_batch_records_its_duration_even_when_it_fails(
     monkeypatch, temp_workspace, s3_client, s3_bucket, recording_metrics

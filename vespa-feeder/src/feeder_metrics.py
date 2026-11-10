@@ -30,6 +30,10 @@ class FeederMetrics:
         self._runs_crashed: Optional[Counter] = None
         self._batches_expected: Optional[Gauge] = None
         self._batches_completed: Optional[Counter] = None
+        self._feeder_errors: Optional[Counter] = None
+        self._throttled: Optional[Counter] = None
+        self._other_http_errors: Optional[Counter] = None
+        self._files_fed: Optional[Counter] = None
 
         if not self._disabled:
             self._create_instruments()
@@ -90,6 +94,29 @@ class FeederMetrics:
             description="Batches that finished feeding in this run",
             unit="1",
         )
+        # The three retry signals below are transport/HTTP attempts that mostly
+        # self-heal. They are not record loss - `records.error` is - and are
+        # recorded for diagnostic context only.
+        self._feeder_errors = self._metrics_service.create_counter(
+            name="records.feeder_errors",
+            description="Transport-layer failures with no HTTP response received",
+            unit="1",
+        )
+        self._throttled = self._metrics_service.create_counter(
+            name="records.throttled",
+            description="Requests that got a 429 at some point (may have retried ok)",
+            unit="1",
+        )
+        self._other_http_errors = self._metrics_service.create_counter(
+            name="records.other_http_errors",
+            description="Non-2xx responses other than 429, e.g. 5xx",
+            unit="1",
+        )
+        self._files_fed = self._metrics_service.create_counter(
+            name="run.files_fed",
+            description="Files fed to Vespa in this run",
+            unit="1",
+        )
 
     def record_feed_stats(
         self,
@@ -109,6 +136,36 @@ class FeederMetrics:
             self._records_ok.add(ok_count, attrs)
         if self._records_error is not None:
             self._records_error.add(total_errors, attrs)
+
+    def record_retry_stats(
+        self,
+        feeder_error_count: int,
+        throttled_count: int,
+        other_http_error_count: int,
+        file_count: int,
+        deployment_name: str,
+        run_name: str = "",
+    ) -> None:
+        """
+        Record a batch's retry attempts and the files it fed.
+
+        Kept apart from `record_feed_stats` because these are a different
+        kind of fact: transport and HTTP retries that mostly self-heal, not
+        the outcome of the feed. Summed per run they are what the dashboard's
+        Runs table reports as "Retry Attempts", for diagnostic context beside
+        the records actually lost.
+        """
+        if self._disabled:
+            return
+        attrs = {"deployment_name": deployment_name, "run_name": run_name}
+        if self._feeder_errors is not None:
+            self._feeder_errors.add(feeder_error_count, attrs)
+        if self._throttled is not None:
+            self._throttled.add(throttled_count, attrs)
+        if self._other_http_errors is not None:
+            self._other_http_errors.add(other_http_error_count, attrs)
+        if self._files_fed is not None:
+            self._files_fed.add(file_count, attrs)
 
     def record_run_duration(
         self, duration_s: float, deployment_name: str, run_name: str = ""

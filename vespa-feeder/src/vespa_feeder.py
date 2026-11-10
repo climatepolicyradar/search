@@ -391,6 +391,20 @@ def feed_batch(
             run_name=run_name,
         )
 
+        # The retry counts and file count the Runs table aggregates per run.
+        # They came from a `vespa feed stats:` log line in v1, which `9dcb83b`
+        # deleted along with the metric call sites - leaving the panel parsing
+        # a line nothing emits. As metrics they cannot silently stop matching
+        # a regex, and they survive a crash the way the log line did not.
+        feeder_metrics.record_retry_stats(
+            feeder_error_count=feed_result.feeder_error_count,
+            throttled_count=feed_result.throttled_count,
+            other_http_error_count=feed_result.other_http_error_count,
+            file_count=len(feed_result.feed_paths),
+            deployment_name=deployment_name,
+            run_name=run_name,
+        )
+
         # Paired with `run.batches_expected` to give progress as a fraction.
         # Here rather than in the `finally` so it counts batches that fed,
         # not batches that were attempted: a batch that raised has not made
