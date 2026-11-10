@@ -3,7 +3,11 @@
 import json
 from typing import Any
 
-from documents_flow import derive_collection_id, derive_hoisted_attributes
+from documents_flow import (
+    derive_collection_id,
+    derive_document_data,
+    derive_hoisted_attributes,
+)
 
 
 def _record(attributes: dict[str, str]) -> dict[str, Any]:
@@ -60,12 +64,13 @@ def test_record_without_attributes_string_is_unchanged() -> None:
     assert record["fields"] == {}
 
 
-def _source_record(document_source: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _derive(document_source: dict[str, Any]) -> dict[str, Any]:
+    record: dict[str, Any] = {
         "create": True,
         "update": "id:documents:documents::doc-0",
         "fields": {"document_source": {"assign": json.dumps(document_source)}},
     }
+    return derive_collection_id(record, document_source)
 
 
 def _principal(id: str, relationships: list[dict[str, Any]]) -> dict[str, Any]:
@@ -81,22 +86,22 @@ def _member_of(target: str) -> dict[str, Any]:
 
 
 def test_principal_takes_the_collection_it_is_a_member_of() -> None:
-    record: dict[str, Any] = derive_collection_id(
-        _source_record(
-            _principal("Sabin.family.19829.0", [_member_of("Sabin.collection.19831.0")])
-        )
+    record: dict[str, Any] = _derive(
+        _principal("Sabin.family.19829.0", [_member_of("Sabin.collection.19831.0")])
     )
-
     assert record["fields"]["collection_id"] == {"assign": "Sabin.collection.19831.0"}
 
 
-def test_principal_without_a_collection_has_no_collection_id() -> None:
-    """Absent, not empty - a blank cell and "no collection" are the same thing here."""
-    record: dict[str, Any] = derive_collection_id(
-        _source_record(_principal("Sabin.family.1.0", []))
-    )
+def test_principal_without_a_collection_is_cleared() -> None:
+    """
+    Always assigned, so leaving a collection takes effect.
 
-    assert "collection_id" not in record["fields"]
+    These are partial updates: a field the record does not mention keeps whatever
+    Vespa already had. Omitting `collection_id` would leave a document that has
+    left its collection still naming it, with nothing to correct it on a later feed.
+    """
+    record: dict[str, Any] = _derive(_principal("Sabin.family.1.0", []))
+    assert record["fields"]["collection_id"] == {"assign": ""}
 
 
 def test_non_principal_member_of_its_family_has_no_collection_id() -> None:
@@ -111,10 +116,8 @@ def test_non_principal_member_of_its_family_has_no_collection_id() -> None:
         "labels": [{"value": {"id": "status::Published"}}],
         "documents": [_member_of("Sabin.family.12835.0")],
     }
-
-    record: dict[str, Any] = derive_collection_id(_source_record(document_source))
-
-    assert "collection_id" not in record["fields"]
+    record: dict[str, Any] = _derive(document_source)
+    assert record["fields"]["collection_id"] == {"assign": ""}
 
 
 def test_is_version_of_is_not_a_collection() -> None:
@@ -122,26 +125,21 @@ def test_is_version_of_is_not_a_collection() -> None:
         "CCLW.family.9987.0",
         [{"type": "is_version_of", "value": {"id": "CCLW.family.9987.0"}}],
     )
-
-    record: dict[str, Any] = derive_collection_id(_source_record(document_source))
-
-    assert "collection_id" not in record["fields"]
+    record: dict[str, Any] = _derive(document_source)
+    assert record["fields"]["collection_id"] == {"assign": ""}
 
 
 def test_principal_in_several_collections_takes_the_first() -> None:
-    record: dict[str, Any] = derive_collection_id(
-        _source_record(
-            _principal(
-                "Sabin.family.2.0",
-                [_member_of("Sabin.collection.1.0"), _member_of("Sabin.collection.2.0")],
-            )
+    record: dict[str, Any] = _derive(
+        _principal(
+            "Sabin.family.2.0",
+            [_member_of("Sabin.collection.1.0"), _member_of("Sabin.collection.2.0")],
         )
     )
-
     assert record["fields"]["collection_id"] == {"assign": "Sabin.collection.1.0"}
 
 
-def test_record_without_document_source_is_unchanged() -> None:
+def test_record_without_document_source_is_left_alone() -> None:
+    """The source derivers are skipped entirely rather than each re-checking for it."""
     input_record: dict[str, Any] = {"create": True, "fields": {}}
-
-    assert derive_collection_id(input_record) == {"create": True, "fields": {}}
+    assert derive_document_data(input_record) == {"create": True, "fields": {}}
