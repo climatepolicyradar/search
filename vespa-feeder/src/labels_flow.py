@@ -1,3 +1,4 @@
+from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
 from task_runner import task_runner
 from vespa_feeder import (
@@ -25,13 +26,13 @@ from prefect import flow
 def labels_feeder_flow(
     batch_size: int = DEFAULT_BATCH_SIZE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
-) -> None:
+) -> State | None:
     # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
     # We do not get the label --> label relationships from Snowflake.
     # We have an interim solution of having our own materializer until that
     # work has been done upstream.
     # @see: https://app.notion.com/p/climatepolicyradar/RFC-Label-relationships-Tech-Debt-Mandate-3c79109609a48031bb45c50e01b9735c?source=copy_link
-    vespa_feeder(
+    return vespa_feeder(
         s3_bucket="cpr-cache",
         s3_prefix="search/vespa/labels_feed_materializer.jsonl",
         batch_size=batch_size,

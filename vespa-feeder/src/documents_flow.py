@@ -1,6 +1,7 @@
 from typing import Any
 
 import orjson
+from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
 from task_runner import task_runner
 from vespa_feeder import (
@@ -153,10 +154,10 @@ def documents_feeder_flow(
     batch_size: int = DEFAULT_BATCH_SIZE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
     s3_export_prefix: str | None = None,
-) -> None:
+) -> State | None:
     bucket = "cpr-prod-snowflake-data-export"
     prefix = "production/published/pipeline_data_in_vespa_documents_updates_v1/"
-    vespa_feeder(
+    return vespa_feeder(
         s3_bucket=bucket,
         s3_prefix=prefix,
         s3_export_prefix=s3_export_prefix,

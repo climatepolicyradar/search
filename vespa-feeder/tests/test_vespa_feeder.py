@@ -11,6 +11,7 @@ from helpers import FakeVespaFeedProcess
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.util._once import Once
+from prefect.client.schemas.objects import StateType
 from prefect.futures import PrefectFuture
 from prefect.logging import disable_run_logger
 
@@ -126,6 +127,16 @@ class _FakeFeedBatch:
         return future
 
 
+def _assert_failed(state, match: str | None = None) -> str:
+    """The run ended Failed, with `match` in its message; returns the message."""
+    assert state is not None, "a run that lost records must return a Failed state"
+    assert state.type is StateType.FAILED, f"expected Failed, got {state.type}"
+    message = state.message or ""
+    if match is not None:
+        assert match in message, f"{match!r} not in {message!r}"
+    return message
+
+
 @pytest.fixture
 def summary_artifacts(monkeypatch):
     """Stubs everything `vespa_feeder` touches bar the batches, capturing artifacts."""
@@ -168,13 +179,13 @@ def test_vespa_feeder_keeps_the_good_batches_when_one_raises(
         ),
     )
 
-    with pytest.raises(feeder.VespaFeederFailed) as exc_info:
-        feeder.vespa_feeder(
-            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
-        )
+    state = feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+    )
 
-    assert [str(crash) for crash in exc_info.value.crashes] == ["HeadObject: Not Found"]
-    assert exc_info.value.failed_results == []
+    # The exception type is named in the message, so the cause is readable
+    # without opening the logs.
+    _assert_failed(state, "RuntimeError")
 
     markdown = summary_artifacts[0]["markdown"]
     assert "| Files processed | 2 |" in markdown
@@ -445,10 +456,11 @@ def test_vespa_feeder_records_a_failed_run(
         ),
     )
 
-    with pytest.raises(feeder.VespaFeederFailed):
-        feeder.vespa_feeder(
-            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
-        )
+    state = feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+    )
+
+    _assert_failed(state)
 
     recording_metrics.record_run_failed.assert_called_once_with(
         expected_deployment, expected_run_name
@@ -587,10 +599,11 @@ def test_vespa_feeder_flushes_telemetry_when_the_run_fails(
         _FakeFeedBatch([_FakeFuture(RuntimeError("HeadObject: Not Found"))]),
     )
 
-    with pytest.raises(feeder.VespaFeederFailed):
-        feeder.vespa_feeder(
-            s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
-        )
+    state = feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=1
+    )
+
+    _assert_failed(state)
 
     assert telemetry_calls == ["force_flush", "shutdown"]
 
@@ -738,13 +751,14 @@ def test_vespa_feeder_abandons_a_batch_that_never_returns(
 
     # Fails the run rather than hanging it: an abandoned batch is lost data,
     # so it must surface as a failure, not a quiet success.
-    with pytest.raises(feeder.VespaFeederFailed, match="1 raised"):
-        feeder.vespa_feeder(
-            s3_bucket="bucket",
-            s3_prefix="prefix/",
-            s3_export_prefix="x",
-            batch_result_timeout_seconds=0.01,
-        )
+    state = feeder.vespa_feeder(
+        s3_bucket="bucket",
+        s3_prefix="prefix/",
+        s3_export_prefix="x",
+        batch_result_timeout_seconds=0.01,
+    )
+
+    _assert_failed(state, "1/1 batch(es) raised")
 
     assert summary_artifacts, "the run must still publish its summary"
     assert expected_summary_fragment in summary_artifacts[0]["markdown"]
@@ -816,15 +830,16 @@ def test_vespa_feeder_caps_each_wait_by_the_remaining_drain_budget(
         feeder, "feed_batch", _FakeFeedBatch([_WedgedFuture() for _ in range(4)])
     )
 
-    with pytest.raises(feeder.VespaFeederFailed):
-        feeder.vespa_feeder(
-            s3_bucket="bucket",
-            s3_prefix="prefix/",
-            s3_export_prefix="x",
-            batch_size=1,
-            batch_result_timeout_seconds=100.0,
-            drain_timeout_seconds=250.0,
-        )
+    state = feeder.vespa_feeder(
+        s3_bucket="bucket",
+        s3_prefix="prefix/",
+        s3_export_prefix="x",
+        batch_size=1,
+        batch_result_timeout_seconds=100.0,
+        drain_timeout_seconds=250.0,
+    )
+
+    _assert_failed(state)
 
     # 100 + 100 + 50, then the budget is gone and the 4th is never waited on -
     # not 4 x 100. The drain is bounded by the budget, not by batch count.
@@ -859,15 +874,16 @@ def test_vespa_feeder_reports_every_batch_abandoned_at_the_drain_deadline(
     )
 
     # One batch fits in the budget; the other two are abandoned unwaited.
-    with pytest.raises(feeder.VespaFeederFailed, match="3 raised"):
-        feeder.vespa_feeder(
-            s3_bucket="bucket",
-            s3_prefix="prefix/",
-            s3_export_prefix="x",
-            batch_size=1,
-            batch_result_timeout_seconds=100.0,
-            drain_timeout_seconds=100.0,
-        )
+    state = feeder.vespa_feeder(
+        s3_bucket="bucket",
+        s3_prefix="prefix/",
+        s3_export_prefix="x",
+        batch_size=1,
+        batch_result_timeout_seconds=100.0,
+        drain_timeout_seconds=100.0,
+    )
+
+    _assert_failed(state, "3/3 batch(es) raised")
 
     markdown = summary_artifacts[0]["markdown"]
     assert "BatchAbandoned" in markdown
@@ -923,14 +939,14 @@ def test_vespa_feeder_terminates_the_feed_of_an_abandoned_batch(
     )
 
     try:
-        with pytest.raises(feeder.VespaFeederFailed):
-            feeder.vespa_feeder(
-                s3_bucket="bucket",
-                s3_prefix="prefix/",
-                s3_export_prefix="x",
-                batch_size=1,
-                batch_result_timeout_seconds=0.01,
-            )
+        state = feeder.vespa_feeder(
+            s3_bucket="bucket",
+            s3_prefix="prefix/",
+            s3_export_prefix="x",
+            batch_size=1,
+            batch_result_timeout_seconds=0.01,
+        )
+        _assert_failed(state)
     finally:
         feeder._vespa_feed_processes.discard(process)
         process.wait(timeout=5)
