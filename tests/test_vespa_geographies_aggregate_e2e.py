@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 
-from api.main import app
+from api.main import create_app, production_lifespan
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from tests.vespa_e2e import _TEST_SETTINGS
 
@@ -62,7 +62,7 @@ def _feed_document(vespa_app: Vespa, document: Document) -> None:
 def api_client(vespa_app: Vespa, monkeypatch: pytest.MonkeyPatch):
     """A TestClient whose routes talk to the e2e Vespa rather than a mock."""
     monkeypatch.setattr("api.routers.settings", _TEST_SETTINGS)
-    with TestClient(app) as client:
+    with TestClient(create_app(production_lifespan)) as client:
         yield client
 
 
