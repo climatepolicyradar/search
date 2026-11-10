@@ -11,10 +11,13 @@ from observability.service_manifest import ServiceManifest
 from observability.telemetry_config import TelemetryConfig
 from opentelemetry import trace
 
-# The service root, a level above `src`, which is where the manifest lives:
-# it describes the service rather than belonging to any module, and the
-# Dockerfile copies it in beside `src` rather than into it.
-_MANIFEST_PATH = Path(__file__).parent.parent / "service-manifest.json"
+# Beside this module, inside `src`, rather than at the service root. Prefect
+# copies the flow code out of the image into a temp run directory and executes
+# it from there, so `__file__` is that copy - and a manifest resolved a level
+# above it pointed at `/tmp/service-manifest.json`, which does not exist. The
+# load failed on every run and fell back to defaults, losing the manifest's
+# team and version. Keeping it in `src` means it travels with the code.
+_MANIFEST_PATH = Path(__file__).parent / "service-manifest.json"
 _logger = logging.getLogger(__name__)
 
 # Short export interval for batch jobs — ensures metrics are exported before
