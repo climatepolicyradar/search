@@ -18,10 +18,6 @@ ENV PYTHONPATH=/opt/prefect/vespa-feeder/src
 COPY pyproject.toml .
 RUN pip install --no-cache-dir .
 
-# Describes the service rather than belonging to any module, so it sits at the
-# service root and `telemetry.py` resolves it a level above `src`.
-COPY service-manifest.json .
-
 # The whole source tree, rather than a line per module. Listing files
 # individually meant a new module built a working image that crashed on import
 # at run time - `errors.py` was added and missed, and nothing caught it until

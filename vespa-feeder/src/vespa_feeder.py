@@ -391,6 +391,24 @@ def feed_batch(
             run_name=run_name,
         )
 
+        # Replaces the `vespa feed stats:` log line `9dcb83b` deleted, which
+        # the dashboard's Runs table still parsed.
+        feeder_metrics.record_retry_stats(
+            feeder_error_count=feed_result.feeder_error_count,
+            throttled_count=feed_result.throttled_count,
+            other_http_error_count=feed_result.other_http_error_count,
+            file_count=len(feed_result.feed_paths),
+            deployment_name=deployment_name,
+            run_name=run_name,
+        )
+
+        # Not in the `finally` - a batch that raised fed nothing, so counting
+        # it would overstate how far a crashed run got.
+        feeder_metrics.record_batch_completed(
+            deployment_name=deployment_name,
+            run_name=run_name,
+        )
+
         return feed_result
     finally:
         feeder_metrics.record_task_duration(
@@ -473,6 +491,14 @@ def vespa_feeder(
             )
 
             s3_key_batches = list(batched(s3_keys, batch_size))
+
+            # Before the submit loop so it survives a crash, giving the
+            # per-batch counters a denominator to be read against.
+            feeder_metrics.record_batches_expected(
+                batch_count=len(s3_key_batches),
+                deployment_name=deployment_name,
+                run_name=run_name,
+            )
 
             feed_results_futures: list[PrefectFuture[FeedResult]] = []
             for batch_number, batched_s3_keys in enumerate(s3_key_batches, start=1):
@@ -618,6 +644,9 @@ def vespa_feeder(
                 run_failed = bool(feed_results_errors or feed_results_exceptions)
 
                 # publish the artifact in Prefect
+                # Lost on a SIGKILL, so its absence means the run did not
+                # finish, never that it fed nothing. See
+                # docs/run-reporting-and-crashes.md.
                 create_markdown_artifact(
                     key="vespa-feeder-run-summary",
                     markdown=_build_run_summary_markdown(

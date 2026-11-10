@@ -331,6 +331,54 @@ def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
     assert "| Batches that raised | 0 |" in markdown
 
 
+def test_vespa_feeder_records_the_batch_count_before_feeding_starts(
+    monkeypatch, summary_artifacts, recording_metrics, prefect_run_identity
+):
+    """The denominator is emitted at submit time, so it survives a crash."""
+    expected_deployment, expected_run_name = prefect_run_identity
+    monkeypatch.setattr(
+        feeder,
+        "list_s3_keys",
+        lambda bucket, prefix: ["a", "b", "c", "d"],  # noqa: ARG005
+    )
+
+    # Ordering matters, not just the value - emitted after the drain the
+    # call still carries the right number but is lost to the crash.
+    events: list[str] = []
+    recording_metrics.record_batches_expected.side_effect = (
+        lambda **kwargs: events.append("expected")  # noqa: ARG005
+    )
+
+    class _RecordingFeedBatch(_FakeFeedBatch):
+        def submit(self, **kwargs):
+            events.append("submit")
+            return super().submit(**kwargs)
+
+    monkeypatch.setattr(
+        feeder,
+        "feed_batch",
+        _RecordingFeedBatch(
+            [
+                _FakeFuture(_feed_result("one.jsonl")),
+                _FakeFuture(_feed_result("two.jsonl")),
+            ]
+        ),
+    )
+
+    feeder.vespa_feeder(
+        s3_bucket="bucket", s3_prefix="prefix/", s3_export_prefix="x", batch_size=2
+    )
+
+    recording_metrics.record_batches_expected.assert_called_once_with(
+        batch_count=2,
+        deployment_name=expected_deployment,
+        run_name=expected_run_name,
+    )
+    assert events[0] == "expected", (
+        f"batches_expected must be emitted before the first submit, got {events}"
+    )
+
+
 def test_vespa_feeder_records_a_completed_run(
     monkeypatch, summary_artifacts, recording_metrics, prefect_run_identity
 ):

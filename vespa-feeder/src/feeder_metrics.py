@@ -27,6 +27,13 @@ class FeederMetrics:
         self._task_duration: Optional[Histogram] = None
         self._runs_completed: Optional[Counter] = None
         self._runs_failed: Optional[Counter] = None
+        self._runs_crashed: Optional[Counter] = None
+        self._batches_expected: Optional[Gauge] = None
+        self._batches_completed: Optional[Counter] = None
+        self._feeder_errors: Optional[Counter] = None
+        self._throttled: Optional[Counter] = None
+        self._other_http_errors: Optional[Counter] = None
+        self._files_fed: Optional[Counter] = None
 
         if not self._disabled:
             self._create_instruments()
@@ -72,6 +79,41 @@ class FeederMetrics:
             description="Flow runs that failed",
             unit="1",
         )
+        self._runs_crashed = self._metrics_service.create_counter(
+            name="runs.crashed",
+            description="Flow runs that crashed (the process died, e.g. OOM/SIGKILL)",
+            unit="1",
+        )
+        self._batches_expected = self._metrics_service.create_gauge(
+            name="run.batches_expected",
+            description="Batches queued for this run, emitted before any feeding starts",
+            unit="1",
+        )
+        self._batches_completed = self._metrics_service.create_counter(
+            name="run.batches_completed",
+            description="Batches that finished feeding in this run",
+            unit="1",
+        )
+        self._feeder_errors = self._metrics_service.create_counter(
+            name="records.feeder_errors",
+            description="Transport-layer failures with no HTTP response received",
+            unit="1",
+        )
+        self._throttled = self._metrics_service.create_counter(
+            name="records.throttled",
+            description="Requests that got a 429 at some point (may have retried ok)",
+            unit="1",
+        )
+        self._other_http_errors = self._metrics_service.create_counter(
+            name="records.other_http_errors",
+            description="Non-2xx responses other than 429, e.g. 5xx",
+            unit="1",
+        )
+        self._files_fed = self._metrics_service.create_counter(
+            name="run.files_fed",
+            description="Files fed to Vespa in this run",
+            unit="1",
+        )
 
     def record_feed_stats(
         self,
@@ -91,6 +133,33 @@ class FeederMetrics:
             self._records_ok.add(ok_count, attrs)
         if self._records_error is not None:
             self._records_error.add(total_errors, attrs)
+
+    def record_retry_stats(
+        self,
+        feeder_error_count: int,
+        throttled_count: int,
+        other_http_error_count: int,
+        file_count: int,
+        deployment_name: str,
+        run_name: str = "",
+    ) -> None:
+        """
+        Record a batch's retry attempts and the files it fed.
+
+        Retries mostly self-heal and are not record loss - `records.error`
+        is. Kept apart from `record_feed_stats` for that reason.
+        """
+        if self._disabled:
+            return
+        attrs = {"deployment_name": deployment_name, "run_name": run_name}
+        if self._feeder_errors is not None:
+            self._feeder_errors.add(feeder_error_count, attrs)
+        if self._throttled is not None:
+            self._throttled.add(throttled_count, attrs)
+        if self._other_http_errors is not None:
+            self._other_http_errors.add(other_http_error_count, attrs)
+        if self._files_fed is not None:
+            self._files_fed.add(file_count, attrs)
 
     def record_run_duration(
         self, duration_s: float, deployment_name: str, run_name: str = ""
@@ -117,6 +186,41 @@ class FeederMetrics:
         if self._disabled or self._runs_failed is None:
             return
         self._runs_failed.add(
+            1, {"deployment_name": deployment_name, "run_name": run_name}
+        )
+
+    def record_run_crashed(self, deployment_name: str, run_name: str) -> None:
+        """
+        Increment the crashed runs counter for a deployment run.
+
+        Called from the `on_crashed` hook, not the flow - a crash kills the
+        flow process before any of its own reporting runs.
+        """
+        if self._disabled or self._runs_crashed is None:
+            return
+        self._runs_crashed.add(
+            1, {"deployment_name": deployment_name, "run_name": run_name}
+        )
+
+    def record_batches_expected(
+        self, batch_count: int, deployment_name: str, run_name: str
+    ) -> None:
+        """
+        Record how many batches this run queued.
+
+        The denominator for `run.batches_completed`.
+        """
+        if self._disabled or self._batches_expected is None:
+            return
+        self._batches_expected.set(
+            batch_count, {"deployment_name": deployment_name, "run_name": run_name}
+        )
+
+    def record_batch_completed(self, deployment_name: str, run_name: str) -> None:
+        """Increment the completed batches counter for a deployment run."""
+        if self._disabled or self._batches_completed is None:
+            return
+        self._batches_completed.add(
             1, {"deployment_name": deployment_name, "run_name": run_name}
         )
 

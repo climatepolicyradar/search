@@ -205,6 +205,20 @@ def test_feed_batch_records_what_it_fed(
     assert task_duration["task_name"] == "feed_batch"
     assert task_duration["duration_s"] >= 0
 
+    recording_metrics.record_batch_completed.assert_called_once_with(
+        deployment_name=expected_deployment,
+        run_name=expected_run_name,
+    )
+
+    recording_metrics.record_retry_stats.assert_called_once_with(
+        feeder_error_count=0,
+        throttled_count=0,
+        other_http_error_count=0,
+        file_count=2,
+        deployment_name=expected_deployment,
+        run_name=expected_run_name,
+    )
+
 
 def test_feed_batch_records_its_duration_even_when_it_fails(
     monkeypatch, temp_workspace, s3_client, s3_bucket, recording_metrics
@@ -240,6 +254,9 @@ def test_feed_batch_records_its_duration_even_when_it_fails(
         recording_metrics.record_task_duration.call_args.kwargs["task_name"]
         == "feed_batch"
     )
+
+    # A batch that raised fed nothing, so it is not progress.
+    recording_metrics.record_batch_completed.assert_not_called()
 
 
 @pytest.mark.parametrize(
