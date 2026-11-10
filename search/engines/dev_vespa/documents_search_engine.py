@@ -6,7 +6,7 @@ import asyncio
 import json
 import re
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Protocol
 
 import httpx2
 from pydantic import BaseModel, TypeAdapter
@@ -132,6 +132,25 @@ class CollectionReference(BaseModel):
     description: str | None = None
     title: str | None = None
     id: str
+
+class DocumentSearchEngine(Protocol):
+    async def asearch(
+            self,
+            query: str | None,
+            pagination: Pagination,
+            order_by: list[OrderBy],
+            filters: Filter | None = None,
+        ) -> ListResponse[Document]:
+        """Search documents."""
+        ...
+
+    async def collection_references(
+            self,
+            document_ids: list[str],
+        ) -> dict[str, CollectionReference]:
+        """Resolve collection references for the given document ids."""
+        ...
+
 
 def _document_phrase_yql(count: int) -> str:
     """One phrase clause per quoted phrase, each matching title OR description OR passages."""

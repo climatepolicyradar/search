@@ -27,31 +27,14 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Protocol
 
 from search.data_in_models import Document, DocumentWithoutRelationships
-from search.engines import ListResponse, OrderBy, Pagination
+from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import Filter
-from search.engines.dev_vespa.documents_search_engine import CollectionReference
-
-
-class DocumentSearchEngine(Protocol):
-    async def asearch(
-            self,
-            query: str | None,
-            pagination: Pagination,
-            order_by: list[OrderBy],
-            filters: Filter | None = None,
-        ) -> ListResponse[Document]:
-        """Search documents."""
-        ...
-
-    async def collection_references(
-            self,
-            document_ids: list[str],
-        ) -> dict[str, CollectionReference]:
-        """Resolve collection references for the given document ids."""
-        ...
+from search.engines.dev_vespa.documents_search_engine import (
+    CollectionReference,
+    DocumentSearchEngine,
+)
 
 
 class Echo:

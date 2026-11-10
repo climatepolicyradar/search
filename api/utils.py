@@ -2,7 +2,6 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, HTTPException, Query, status
 
-from api.download import DocumentSearchEngine
 from api.settings import settings
 from api.state import HttpxDep
 from search.engines import OrderBy, Pagination
@@ -13,6 +12,9 @@ from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
+)
+from search.engines.dev_vespa.documents_search_engine import (
+    DocumentSearchEngine,
 )
 from search.engines.dev_vespa.passages_search_engine import (
     DEFAULT_PASSAGE_RANK_PROFILE,
