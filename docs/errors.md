@@ -108,8 +108,8 @@ review.
 
 Covered by `tests/api/test_vespa_unavailable.py` (every route returns `503`,
 no-matches is still a `200`, and an error response is not logged as a success)
-and `tests/engines/test_dev_vespa_errors.py` (each failure mode raises, and no
-caller swallows it, and the client socket timeout outlives Vespa's own query
-budget). `tests/test_relevance_tests.py` pins the harness side: an
+and `tests/engines/vespa_query/test_client_errors.py` (each failure mode raises,
+and no caller swallows it, and the client socket timeout outlives Vespa's own
+query budget). `tests/test_relevance_tests.py` pins the harness side: an
 infrastructure failure is not counted as a relevance failure. If you add a route
 or an engine method that calls a dependency, add it there.

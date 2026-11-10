@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+from http import HTTPStatus
 from typing import Any
+from urllib.parse import quote
 
 import httpx2
 
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
 from search.engines.dev_vespa.labels import DevVespaInstanceAddIn
 from search.engines.vespa_query.client import (
+    API_TIMEOUT,
+    HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
     Settings,
+    VespaError,
     _get_total_count,
     aexecute_vespa_query,
 )
@@ -338,6 +343,84 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             free_text=free_text,
             bolding=bolding,
         )
+
+    async def aget_with_context(
+        self, text_block_id: str, context: int
+    ) -> list[Passage] | None:
+        """
+        Fetch one passage with up to `context` passages either side of it.
+
+        :raises VespaError: When Vespa can't be reached, answers with an error,
+            or its context for the passage doesn't include it
+        :return: The passages in reading order, or `None` when there is no
+            passage with that id.
+        """
+        # The docid is built from the passage id at feed time, so this is a key
+        # lookup. A search on `id` would scan it, as it isn't `fast-search`.
+        endpoint = (
+            f"{self.settings.vespa_endpoint}/document/v1/passages/passages/docid/"
+            f"{quote(text_block_id, safe='')}"
+        )
+        headers = (
+            {"Authorization": f"Bearer {self.settings.vespa_read_token}"}
+            if self.settings.vespa_read_token
+            else {}
+        )
+        logger.info("Vespa request started [passages.get]")
+        try:
+            response = await self._httpx.get(
+                endpoint,
+                params={"fieldSet": "passages:document_id,idx"},
+                timeout=API_TIMEOUT,
+                headers=headers,
+            )
+        except httpx2.HTTPError as exc:
+            raise VespaError("Vespa request failed", status_code=None) from exc
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            return None
+        if response.status_code != HTTPStatus.OK:
+            body_preview = (response.text or "")[:HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS]
+            raise VespaError(
+                f"Vespa returned status {response.status_code}: {body_preview}",
+                status_code=response.status_code,
+            )
+        try:
+            fields = response.json()["fields"]
+            document_id, idx = fields["document_id"], int(fields["idx"])
+        except (ValueError, KeyError, TypeError) as exc:
+            raise VespaError(
+                f"Vespa returned an unreadable passage {text_block_id!r}",
+                status_code=None,
+            ) from exc
+
+        # Fetched by search even with no context, because only a search
+        # returns the imported `principal_id`.
+        neighbours = await self._aexecute(
+            request_body={
+                # Ids go in as query parameters, so they can't inject YQL.
+                "yql": "select * from sources passages where document_id contains "
+                f"@document_id and range(idx, {idx - context}, {idx + context}) "
+                "order by idx asc",
+                "hits": 2 * context + 1,
+                "timeout": "5s",
+                "presentation.summary": _passage_summary(
+                    debug=self.debug, bolding=False, has_phrases=False
+                ),
+                "presentation.bolding": "false",
+                "document_id": document_id,
+            },
+            free_text="",
+            bolding=False,
+            request_context="passages.get_context",
+        )
+        if text_block_id not in {
+            neighbour.text_block_id for neighbour in neighbours.results
+        }:
+            raise VespaError(
+                f"Context for passage {text_block_id!r} didn't include it",
+                status_code=None,
+            )
+        return neighbours.results
 
     def _request_body(
         self,

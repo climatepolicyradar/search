@@ -245,6 +245,19 @@ def test_passage_search_propagates_vespa_error(settings, failing_query) -> None:
         )
 
 
+def test_passage_get_with_context_propagates_vespa_error(settings) -> None:
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("Vespa is down")
+
+    engine = DevVespaPassageSearchEngine(
+        httpx=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+        settings=settings,
+    )
+
+    with pytest.raises(VespaError):
+        asyncio.run(engine.aget_with_context("p_1_b_1", context=1))
+
+
 def test_label_search_propagates_vespa_error(
     settings, failing_query, http_client: httpx2.AsyncClient
 ) -> None:

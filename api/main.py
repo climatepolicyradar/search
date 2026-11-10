@@ -1,6 +1,6 @@
 import os
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from http import HTTPStatus
 from pathlib import Path
 from time import perf_counter
@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.types import Lifespan
 
 from api.health import router as health_router
+from api.mcp.server import build_server
 from api.observability.src.api import (
     FastAPITelemetry,
     MetricsService,
@@ -21,6 +22,7 @@ from api.observability.src.api import (
 )
 from api.routers import router
 from api.search_metrics import SearchMetrics
+from api.settings import settings
 from api.state import State
 from search.engines import VespaError
 from search.log import get_logger
@@ -36,12 +38,33 @@ HEALTH_ROUTE_PATH = f"{router.prefix}{health_router.prefix}"
 UNMATCHED_ROUTE_LABEL = "unmatched"
 
 
+MCP_PATH = "/search/mcp"
+
+
+def get_shared_httpx_client() -> httpx2.AsyncClient:
+    """Get the app's one HTTP client for calling Vespa, made at startup."""
+    return cast(State, app.state)["httpx"]
+
+
+if settings.mcp_enabled:
+    mcp_server = build_server(httpx=get_shared_httpx_client)
+    # Stateless, so any task can serve any call.
+    mcp_app = mcp_server.http_app(path="/", stateless_http=True)
+else:
+    mcp_app = None
+
+
 @asynccontextmanager
 async def production_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown events."""
-    async with httpx2.AsyncClient(http2=True) as client:
+    async with AsyncExitStack() as stack:
+        client = await stack.enter_async_context(httpx2.AsyncClient(http2=True))
         state = cast(State, app.state)
         state["httpx"] = client
+        if mcp_app is not None:
+            # FastAPI doesn't run the startup of apps added with `app.mount`,
+            # so the MCP's is started here. It can't handle requests without it.
+            await stack.enter_async_context(mcp_app.lifespan(app))
         yield
 
 
@@ -177,6 +200,10 @@ async def log_request_lifecycle(request: Request, call_next):
     # adds volume. Metrics are still recorded.
     if route_path.startswith(HEALTH_ROUTE_PATH):
         return response
+    # A failed MCP tool call is still an HTTP 200, so this line would say
+    # "Success". The MCP's own call log has the real outcome.
+    if route_path.startswith(MCP_PATH):
+        return response
 
     # An error response logged at INFO as "Success" is invisible to log grepping
     # and error alerting. A 4xx is us correctly refusing a bad request, so it is
@@ -280,6 +307,8 @@ def create_app(lifespan: Lifespan[FastAPI]) -> FastAPI:
     app.middleware("http")(log_request_lifecycle)
     app.get("/")(root)
     app.include_router(router)
+    if mcp_app is not None:
+        app.mount(MCP_PATH, mcp_app)
     telemetry.instrument_fastapi(app)
     return app
 
