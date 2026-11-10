@@ -554,6 +554,22 @@ schema documents {
         summary deprecated_slug {}
     }
 
+    # Everything a CSV download reads, served entirely from attributes.
+    # This is to avoid the same explosive disk reads mentioned on collection-reference
+    document-summary csv {
+        omit-summary-features
+        summary id {}
+        summary title_attribute {}
+        summary description_attribute { source: description }
+        summary deprecated_slug {}
+        summary principal_id {}
+        summary labels { struct-field: value, type, relationship }
+        summary attributes_published_date {}
+        summary attributes_string {}
+        summary attributes_double {}
+        summary attributes_boolean {}
+    }
+
     document-summary sitemap {
         summary id {}
         summary deprecated_slug {}
