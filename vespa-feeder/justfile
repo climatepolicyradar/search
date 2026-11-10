@@ -15,4 +15,4 @@ push:
     docker push "$registry/search-vespa-feeder:latest"
 
 deploy:
-    uv run python deployments.py
+    uv run python src/deployments.py

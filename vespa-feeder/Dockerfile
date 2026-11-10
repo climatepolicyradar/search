@@ -9,22 +9,21 @@ RUN curl -fsSL "https://github.com/vespa-engine/vespa/releases/download/v${VESPA
     | tar -xzf - -C /usr/local/bin --strip-components=2 "vespa-cli_${VESPA_CLI_VERSION}_linux_amd64/bin/vespa"
 
 WORKDIR /opt/prefect/vespa-feeder
-ENV PYTHONPATH=/opt/prefect/vespa-feeder
+# `src` so the flow modules keep importing as `vespa_feeder`, `errors` and so
+# on - Prefect stores a deployment's entrypoint as a module name, not a path,
+# so those names have to resolve exactly as they did before the move.
+ENV PYTHONPATH=/opt/prefect/vespa-feeder/src
 
 # Install Python deps first so this layer is cached independently of source changes.
 COPY pyproject.toml .
 RUN pip install --no-cache-dir .
 
-COPY observability/ ./observability/
-
-COPY slack_notify.py .
+# Describes the service rather than belonging to any module, so it sits at the
+# service root and `telemetry.py` resolves it a level above `src`.
 COPY service-manifest.json .
-COPY feeder_metrics.py .
-COPY telemetry.py .
-COPY task_runner.py .
-COPY errors.py .
-COPY vespa_feeder.py .
-COPY labels_flow.py .
-COPY documents_flow.py .
-COPY passages_derived_data.py .
-COPY passages_flow.py .
+
+# The whole source tree, rather than a line per module. Listing files
+# individually meant a new module built a working image that crashed on import
+# at run time - `errors.py` was added and missed, and nothing caught it until
+# the feeder ran. A directory copy cannot drift from what the code imports.
+COPY src/ ./src/
