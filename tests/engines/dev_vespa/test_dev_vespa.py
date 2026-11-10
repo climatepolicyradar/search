@@ -1760,3 +1760,182 @@ def test_passage_msm_is_only_sent_with_free_text(
     expected: dict[str, float],
 ) -> None:
     assert passages_search_engine._msm_request_fields(msm, free_text) == expected
+
+
+def _export_hit(
+    id: str,
+    principal_id: str | None = None,
+) -> dict[str, object]:
+    fields: dict[str, object] = {"id": id, "title_attribute": "t"}
+    if principal_id is not None:
+        fields["principal_id"] = principal_id
+    return {"fields": fields}
+
+
+async def test_export_reads_the_csv_summary_class(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    The export must not answer from `search`, which is backed by disk.
+
+    Every field a CSV column reads is an attribute, and `csv` is the summary
+    class that says so - asking for `search` would load the whole document row,
+    passages included, for every row of the file.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"children": []}})
+
+    await engine.export(
+        query="needle",
+        limit=10,
+        order_by=[],
+    )
+
+    assert handler.last_json()["presentation.summary"] == "csv"
+
+
+async def test_export_matches_the_search_where_clause(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """A download must cover the same documents as the search it was run from."""
+    engine = _document_engine(http_client)
+    filters = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="labels.value.id", op="contains", value="geography::USA"),
+        ],
+    )
+    handler.add_response({"root": {"children": []}})
+    handler.add_response({"root": {"children": []}})
+
+    await engine.export(
+        query='toxic "waste site"',
+        limit=10,
+        order_by=[],
+        filters=filters,
+    )
+    await engine.asearch(
+        query='toxic "waste site"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=filters,
+    )
+
+    export_request, search_request = handler.all_json()
+    assert export_request["yql"] == search_request["yql"]
+
+
+async def test_export_resolves_each_collection_once(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    engine = _document_engine(http_client)
+    handler.add_response({
+        "root": {
+            "children": [
+                _export_hit("doc-1", principal_id="collection-1"),
+                _export_hit("doc-2", principal_id="collection-1"),
+            ]
+        }
+    })
+    handler.add_response({
+        "root": {"children": [{"fields": {"id": "collection-1", "title_attribute": "A Collection"}}]}
+    })
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+    )
+
+    assert handler.last_json()["ids"] == ["collection-1"]
+    assert [row.collection and row.collection.title for row in rows] == ["A Collection"] * 2
+
+
+async def test_export_leaves_a_self_referential_principal_without_a_collection(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    A Principal is its own principal, so it belongs to no collection.
+
+    `principal_id` answers "which Principal does this roll up to", and for a
+    Principal that is itself. Treating that as a collection would make every
+    Principal its own parent in the CSV.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response({
+        "root": {"children": [_export_hit("doc-1", principal_id="doc-1")]}
+    })
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+    )
+
+    assert [row.collection for row in rows] == [None]
+    assert len(handler.all_json()) == 1
+
+
+async def test_export_skips_the_collection_lookup_when_not_asked_for_it(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    engine = _document_engine(http_client)
+    handler.add_response({
+        "root": {"children": [_export_hit("doc-1", principal_id="collection-1")]}
+    })
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+        resolve_collections=False,
+    )
+
+    assert [row.collection for row in rows] == [None]
+    assert len(handler.all_json()) == 1
+
+
+async def test_export_reads_labels_that_carry_no_relationship(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    Concepts are denormalised into `labels` with no `relationship`.
+
+    Two thirds of the label elements on a real document are this shape, and
+    the attribute combiner leaves the key out entirely rather than sending
+    null, so requiring it rejects the whole response.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response({
+        "root": {
+            "children": [
+                {
+                    "fields": {
+                        "id": "doc-1",
+                        "labels": [
+                            {"type": "concept", "value": "loan"},
+                            {"relationship": "geography", "type": "geography", "value": "UK"},
+                        ],
+                    }
+                }
+            ]
+        }
+    })
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+    )
+
+    labels = rows[0].document.labels
+    assert [(label.relationship, label.type, label.value) for label in labels] == [
+        (None, "concept", "loan"),
+        ("geography", "geography", "UK"),
+    ]

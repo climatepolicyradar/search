@@ -16,6 +16,9 @@ class MockHandler:
     def last_json(self) -> dict[str, Any]:
         return json.loads(self._requests[-1].read())
 
+    def all_json(self) -> list[dict[str, Any]]:
+        return [json.loads(request.read()) for request in self._requests]
+
     def handle(self, request: httpx2.Request) -> httpx2.Response:
         self._requests.append(request)
         if not self._responses:
