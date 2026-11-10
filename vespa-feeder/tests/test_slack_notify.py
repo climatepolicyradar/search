@@ -1,13 +1,16 @@
 """Unit tests for the Slack notification's feed-stats formatting."""
 
 import asyncio
-from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 import slack_notify
 import telemetry
+from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.runtime import deployment
 from slack_notify import SlackNotify
+
+from prefect import flow
 
 
 @pytest.fixture(autouse=True)
@@ -29,6 +32,20 @@ def isolated_feed_stats(monkeypatch):
     never uses.
     """
     monkeypatch.setattr(telemetry, "_feed_stats", {})
+
+
+@pytest.fixture
+def crashed_run():
+    """The flow, run and state a crashed run's `on_crashed` hook is handed."""
+
+    @flow(name="search-vespa-feeder-passages")
+    def passages_feeder_flow() -> None: ...
+
+    return (
+        passages_feeder_flow,
+        FlowRun(name="ingenious-tarsier", flow_id=uuid4()),
+        State(type=StateType.CRASHED, name="Crashed"),
+    )
 
 
 def test_format_feed_stats_renders_the_counts_that_were_set() -> None:
@@ -81,14 +98,11 @@ def test_format_feed_stats_prefers_real_counts_to_the_crash_wording() -> None:
 
 
 def test_non_crash_paths_keep_the_placeholder() -> None:
-    """
-    Only the crash path changes. A cancel reaches the drain's `finally` and
-    sets real stats, so its empty-dict case is a genuine anomaly.
-    """
+    """A cancel sets real stats, so an empty dict there is a genuine anomaly."""
     assert SlackNotify._format_feed_stats() == "*Records fed*\n`—`"
 
 
-def test_on_crashed_records_the_crash_and_flushes(monkeypatch) -> None:
+def test_on_crashed_records_the_crash_and_flushes(monkeypatch, crashed_run) -> None:
     """
     The crash metric is emitted from the hook, and flushed before it returns.
 
@@ -111,11 +125,10 @@ def test_on_crashed_records_the_crash_and_flushes(monkeypatch) -> None:
 
     monkeypatch.setattr(SlackNotify, "_send", classmethod(_send))
 
+    crashed_flow, crashed_flow_run, crashed_state = crashed_run
     asyncio.run(
         SlackNotify.on_crashed(
-            flow=SimpleNamespace(name="search-vespa-feeder-passages"),
-            flow_run=SimpleNamespace(name="ingenious-tarsier"),
-            state=SimpleNamespace(name="Crashed"),
+            flow=crashed_flow, flow_run=crashed_flow_run, state=crashed_state
         )
     )
 
@@ -129,7 +142,9 @@ def test_on_crashed_records_the_crash_and_flushes(monkeypatch) -> None:
     assert sent == [True]
 
 
-def test_on_crashed_still_notifies_when_the_metric_fails(monkeypatch) -> None:
+def test_on_crashed_still_notifies_when_the_metric_fails(
+    monkeypatch, crashed_run
+) -> None:
     """Telemetry failing must not also cost us the Slack alert."""
     monkeypatch.setattr(deployment, "name", "search-vespa-feeder-passages")
 
@@ -144,11 +159,10 @@ def test_on_crashed_still_notifies_when_the_metric_fails(monkeypatch) -> None:
 
     monkeypatch.setattr(SlackNotify, "_send", classmethod(_send))
 
+    crashed_flow, crashed_flow_run, crashed_state = crashed_run
     asyncio.run(
         SlackNotify.on_crashed(
-            flow=SimpleNamespace(name="search-vespa-feeder-passages"),
-            flow_run=SimpleNamespace(name="ingenious-tarsier"),
-            state=SimpleNamespace(name="Crashed"),
+            flow=crashed_flow, flow_run=crashed_flow_run, state=crashed_state
         )
     )
 

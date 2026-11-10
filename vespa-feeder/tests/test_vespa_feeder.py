@@ -334,10 +334,7 @@ def test_vespa_feeder_writes_the_summary_and_returns_when_every_batch_works(
 def test_vespa_feeder_records_the_batch_count_before_feeding_starts(
     monkeypatch, summary_artifacts, recording_metrics, prefect_run_identity
 ):
-    """
-    The denominator is emitted at submit time, not at the end of the run,
-    so it survives a crash.
-    """
+    """The denominator is emitted at submit time, so it survives a crash."""
     expected_deployment, expected_run_name = prefect_run_identity
     monkeypatch.setattr(
         feeder,
