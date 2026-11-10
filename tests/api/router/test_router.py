@@ -1,12 +1,13 @@
 """Tests for ``GET /search/documents/{document_id}``."""
 
+from collections.abc import Generator
 from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import API_TITLE, API_VERSION, app
+from api.main import API_TITLE, API_VERSION
 from search.data_in_models import Document
 from search.engines import ListResponse, VespaError
 from search.engines.dev_vespa import CountAggregation
@@ -14,51 +15,48 @@ from search.label import Label
 
 
 @pytest.fixture
-def document_client():
-    """Provide a test client with the document engine mocked."""
-    with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
-        mock_engine = MagicMock()
-        mock_engine.aget = AsyncMock()
-        mock_engine.asearch = AsyncMock()
-        mock_engine.aaggregations = AsyncMock()
-        mock_engine_cls.return_value = mock_engine
-        yield TestClient(app), mock_engine
+def document_engine() -> Generator[MagicMock, None]:
+    """Mock the document engine behind the document routes."""
+    with patch("api.routers.DevVespaDocumentSearchEngine") as engine_cls:
+        engine = MagicMock()
+        engine.aget = AsyncMock()
+        engine.asearch = AsyncMock()
+        engine.aaggregations = AsyncMock()
+        engine_cls.return_value = engine
+        yield engine
 
 
-def test_get_document_returns_200_when_found(document_client) -> None:
-    client, mock_engine = document_client
-    mock_engine.aget.return_value = Document(
+def test_get_document_returns_200_when_found(test_client: TestClient, document_engine: MagicMock) -> None:
+    document_engine.aget.return_value = Document(
         id="doc-1",
         title="A Climate Document",
         description="About climate.",
     )
 
-    response = client.get("/search/documents/doc-1")
+    response = test_client.get("/search/documents/doc-1")
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["data"]["id"] == "doc-1"
-    mock_engine.aget.assert_called_once_with("doc-1")
+    document_engine.aget.assert_called_once_with("doc-1")
 
 
-def test_get_document_returns_404_when_not_found(document_client) -> None:
-    client, mock_engine = document_client
-    mock_engine.aget.return_value = None
+def test_get_document_returns_404_when_not_found(test_client: TestClient, document_engine: MagicMock) -> None:
+    document_engine.aget.return_value = None
 
-    response = client.get("/search/documents/missing-id")
+    response = test_client.get("/search/documents/missing-id")
 
     assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_get_document_returns_503_on_vespa_error(document_client) -> None:
-    client, mock_engine = document_client
-    mock_engine.aget.side_effect = VespaError("Vespa is down", status_code=None)
+def test_get_document_returns_503_on_vespa_error(test_client: TestClient, document_engine: MagicMock) -> None:
+    document_engine.aget.side_effect = VespaError("Vespa is down", status_code=None)
 
-    response = client.get("/search/documents/doc-1")
+    response = test_client.get("/search/documents/doc-1")
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
 
 
-def test_aggregations_are_omitted_unless_requested(document_client) -> None:
+def test_aggregations_are_omitted_unless_requested(test_client: TestClient, document_engine: MagicMock) -> None:
     """
     `aggregations.labels` is part of the read mask, not a freebie.
 
@@ -66,41 +64,38 @@ def test_aggregations_are_omitted_unless_requested(document_client) -> None:
     response size, so a caller that does not ask for it must not pay for the
     query or receive the payload.
     """
-    client, mock_engine = document_client
-    mock_engine.asearch.return_value = ListResponse(
+    document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 
-    response = client.get("/search/documents", params={"query": "toxic"})
+    response = test_client.get("/search/documents", params={"query": "toxic"})
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["aggregations"] is None
-    mock_engine.aaggregations.assert_not_called()
+    document_engine.aaggregations.assert_not_called()
 
 
-def test_aggregations_are_returned_when_requested(document_client) -> None:
-    client, mock_engine = document_client
-    mock_engine.asearch.return_value = ListResponse(
+def test_aggregations_are_returned_when_requested(test_client: TestClient, document_engine: MagicMock) -> None:
+    document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
     # An empty aggregation set is a legitimate result, and must still be
     # reported as `[]` rather than collapsing back into "not requested".
-    mock_engine.aaggregations.return_value = []
+    document_engine.aaggregations.return_value = []
 
-    response = client.get(
+    response = test_client.get(
         "/search/documents",
         params={"query": "toxic", "fields": "aggregations.labels"},
     )
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["aggregations"] == {"labels": []}
-    mock_engine.aaggregations.assert_called_once()
+    document_engine.aaggregations.assert_called_once()
 
 
-def test_an_unknown_field_is_rejected(document_client) -> None:
-    client, _ = document_client
+def test_an_unknown_field_is_rejected(test_client: TestClient, document_engine: MagicMock) -> None:
 
-    response = client.get(
+    response = test_client.get(
         "/search/documents", params={"query": "toxic", "fields": "not.a.field"}
     )
 
@@ -305,13 +300,13 @@ def test_get_geographies_taxonomy_rejects_unknown_type(test_client: TestClient) 
 
 
 @pytest.fixture
-def geographies_aggregate_client():
-    """Provide a test client with the document engine's aggregations mocked."""
-    with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
-        mock_engine = MagicMock()
-        mock_engine.aaggregations = AsyncMock()
-        mock_engine_cls.return_value = mock_engine
-        yield TestClient(app), mock_engine
+def geographies_aggregate_engine() -> Generator[MagicMock, None]:
+    """Mock the document engine's aggregations, behind /geographies:aggregate."""
+    with patch("api.routers.DevVespaDocumentSearchEngine") as engine_cls:
+        engine = MagicMock()
+        engine.aaggregations = AsyncMock()
+        engine_cls.return_value = engine
+        yield engine
 
 
 def _aggregation(label_type: str, label_id: str, count: int) -> CountAggregation[Label]:
@@ -322,7 +317,8 @@ def _aggregation(label_type: str, label_id: str, count: int) -> CountAggregation
 
 
 def test_aggregate_geographies_drops_non_geography_labels(
-    geographies_aggregate_client,
+    test_client: TestClient,
+    geographies_aggregate_engine: MagicMock,
 ) -> None:
     """
     The engine groups every label and concept, not just geographies.
@@ -330,8 +326,7 @@ def test_aggregate_geographies_drops_non_geography_labels(
     Anything outside region/country/subdivision must not leak into a
     geographies endpoint.
     """
-    client, mock_engine = geographies_aggregate_client
-    mock_engine.aaggregations.return_value = [
+    geographies_aggregate_engine.aaggregations.return_value = [
         _aggregation("country", "AUS", 10),
         _aggregation("category", "Law", 99),
         _aggregation("region", "oceania", 5),
@@ -339,7 +334,7 @@ def test_aggregate_geographies_drops_non_geography_labels(
         _aggregation("author", "someone", 7),
     ]
 
-    response = client.get("/search/geographies:aggregate")
+    response = test_client.get("/search/geographies:aggregate")
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()["data"]
@@ -347,16 +342,16 @@ def test_aggregate_geographies_drops_non_geography_labels(
 
 
 def test_aggregate_geographies_filters_by_requested_type(
-    geographies_aggregate_client,
+    test_client: TestClient,
+    geographies_aggregate_engine: MagicMock,
 ) -> None:
-    client, mock_engine = geographies_aggregate_client
-    mock_engine.aaggregations.return_value = [
+    geographies_aggregate_engine.aaggregations.return_value = [
         _aggregation("country", "AUS", 10),
         _aggregation("region", "oceania", 5),
         _aggregation("subdivision", "AU-NSW", 2),
     ]
 
-    response = client.get(
+    response = test_client.get(
         "/search/geographies:aggregate",
         params={"labels.value.type": "subdivision"},
     )
@@ -367,16 +362,16 @@ def test_aggregate_geographies_filters_by_requested_type(
 
 
 def test_aggregate_geographies_filters_by_multiple_types(
-    geographies_aggregate_client,
+    test_client: TestClient,
+    geographies_aggregate_engine: MagicMock,
 ) -> None:
-    client, mock_engine = geographies_aggregate_client
-    mock_engine.aaggregations.return_value = [
+    geographies_aggregate_engine.aaggregations.return_value = [
         _aggregation("country", "AUS", 10),
         _aggregation("region", "oceania", 5),
         _aggregation("subdivision", "AU-NSW", 2),
     ]
 
-    response = client.get(
+    response = test_client.get(
         "/search/geographies:aggregate",
         params=[
             ("labels.value.type", "region"),
@@ -390,23 +385,23 @@ def test_aggregate_geographies_filters_by_multiple_types(
 
 
 def test_aggregate_geographies_preserves_counts(
-    geographies_aggregate_client,
+    test_client: TestClient,
+    geographies_aggregate_engine: MagicMock,
 ) -> None:
-    client, mock_engine = geographies_aggregate_client
-    mock_engine.aaggregations.return_value = [_aggregation("country", "AUS", 42)]
+    geographies_aggregate_engine.aaggregations.return_value = [_aggregation("country", "AUS", 42)]
 
-    response = client.get("/search/geographies:aggregate")
+    response = test_client.get("/search/geographies:aggregate")
 
     assert response.status_code == HTTPStatus.OK
     assert response.json()["data"][0]["count"] == 42
 
 
 def test_aggregate_geographies_rejects_unknown_type(
-    geographies_aggregate_client,
+    test_client: TestClient,
+    geographies_aggregate_engine: MagicMock,
 ) -> None:
-    client, _ = geographies_aggregate_client
 
-    response = client.get(
+    response = test_client.get(
         "/search/geographies:aggregate",
         params={"labels.value.type": "planet"},
     )
@@ -415,19 +410,19 @@ def test_aggregate_geographies_rejects_unknown_type(
 
 
 def test_aggregate_geographies_passes_query_and_filters_to_the_engine(
-    geographies_aggregate_client,
+    test_client: TestClient,
+    geographies_aggregate_engine: MagicMock,
 ) -> None:
     """The endpoint's contract is that it scopes to the same set as /documents."""
-    client, mock_engine = geographies_aggregate_client
-    mock_engine.aaggregations.return_value = []
+    geographies_aggregate_engine.aaggregations.return_value = []
 
-    response = client.get(
+    response = test_client.get(
         "/search/geographies:aggregate",
         params={"query": "flooding"},
     )
 
     assert response.status_code == HTTPStatus.OK
-    assert mock_engine.aaggregations.call_args.kwargs["query"] == "flooding"
+    assert geographies_aggregate_engine.aaggregations.call_args.kwargs["query"] == "flooding"
 
 
 def test_root_advertises_the_docs_as_schema_org_json_ld(test_client: TestClient) -> None:

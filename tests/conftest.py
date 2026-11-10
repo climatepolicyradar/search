@@ -1,16 +1,22 @@
 """Pytest configuration and shared fixtures."""
 
 import os
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
+from contextlib import asynccontextmanager
+from typing import cast
 
 import boto3
 import httpx2
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from hypothesis import find
 from hypothesis import strategies as st
 from moto import mock_aws
 
+from api.main import create_app
+from api.state import State
+from api.utils import documents_engine
 from relevance_tests import TestResult
 from search import Primitive
 from search.identifiers import generate_id
@@ -20,7 +26,22 @@ from tests.common_strategies import (
     label_strategy,
     passage_strategy,
 )
+from tests.engines.dev_vespa.stub_documents_search_engine import (
+    StubDocumentSearchEngine,
+)
 from tests.http import MockHandler
+
+
+def override_dependency[T](
+    app: FastAPI,
+    key: Callable[..., object],
+    value: T,
+) -> Generator[T]:
+    app.dependency_overrides[key] = lambda: value
+    try:
+        yield value
+    finally:
+        del app.dependency_overrides[key]
 
 
 @pytest.fixture(scope="function")
@@ -40,17 +61,43 @@ async def live_http_client() -> AsyncGenerator[httpx2.AsyncClient, None]:
         yield client
 
 @pytest.fixture(scope="function")
-def test_client(http_client: httpx2.AsyncClient) -> Generator[TestClient, None]:
-    from api.main import app
-    from api.state import httpx
+def app(http_client: httpx2.AsyncClient) -> FastAPI:
+    """
+    An app of its own, with Vespa wired to `http_client` instead of the network.
 
-    try:
-        app.dependency_overrides[httpx] = lambda: http_client
-        with TestClient(app=app, base_url="http://localhost") as client:
-            yield client
-    finally:
-        del app.dependency_overrides[httpx]
+    `api.main.app` is built once at import and its `app.state` lives for the
+    whole process, so a client left there by one test's lifespan is still there
+    - closed - for the next. Building one per test keeps that state per test.
+    """
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        cast(State, app.state)["httpx"] = http_client
+        yield
+
+    return create_app(lifespan=lifespan)
+
+
+@pytest.fixture(scope="function")
+def test_client(app: FastAPI) -> Generator[TestClient, None]:
+    """
+    A client that has entered the app's lifespan.
+
+    The lifespan runs before any request, so `dependency_overrides` cannot
+    reach what it builds. Entering it here makes that the default, rather than
+    something each test has to remember.
+    """
+    with TestClient(app=app, base_url="http://localhost") as client:
+        yield client
+
+
+@pytest.fixture(scope="function")
+def stub_engine(app: FastAPI) -> Generator[StubDocumentSearchEngine]:
+    yield from override_dependency(
+        app=app,
+        key=documents_engine,
+        value=StubDocumentSearchEngine(),
+    )
 
 
 @pytest.fixture(scope="function")

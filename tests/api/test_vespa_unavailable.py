@@ -10,25 +10,21 @@ logged as a success hides the outage from whoever is on call.
 """
 
 import logging
+from collections.abc import Generator
 from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx2
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.main import app
 from api.utils import labels_engine, passages_engine
 from search.engines import ListResponse, VespaError
 
 
 @pytest.fixture
-def client():
-    with TestClient(app) as client:
-        yield client
-
-
-@pytest.fixture
-def document_engine():
+def document_engine() -> Generator[MagicMock, None]:
     """Mock the document engine used by ``/documents`` and ``/documents/{id}``."""
     with patch("api.routers.DevVespaDocumentSearchEngine") as mock_engine_cls:
         mock_engine = MagicMock()
@@ -42,7 +38,7 @@ def document_engine():
 
 
 @pytest.fixture
-def passage_engine():
+def passage_engine(app: FastAPI) -> Generator[MagicMock, None]:
     mock_engine = MagicMock()
     mock_engine.last_debug_info = None
     mock_engine.asearch = AsyncMock()
@@ -52,7 +48,7 @@ def passage_engine():
 
 
 @pytest.fixture
-def label_engine():
+def label_engine(app: FastAPI) -> Generator[MagicMock, None]:
     mock_engine = MagicMock()
     mock_engine.last_debug_info = None
     mock_engine.asearch = AsyncMock()
@@ -61,27 +57,34 @@ def label_engine():
     del app.dependency_overrides[labels_engine]
 
 
-def _assert_unavailable(response) -> None:
+def _assert_unavailable(response: httpx2.Response) -> None:
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     # A VespaError with no upstream status - no response arrived - falls back
     # to 503. The message is passed through verbatim.
     assert response.json()["detail"] == "Vespa is down"
 
 
-def test_get_document_returns_503(client, document_engine) -> None:
+def test_get_document_returns_503(
+    test_client: TestClient,
+    document_engine: MagicMock,
+) -> None:
     document_engine.aget.side_effect = VespaError("Vespa is down", status_code=None)
 
-    _assert_unavailable(client.get("/search/documents/doc-1"))
+    _assert_unavailable(test_client.get("/search/documents/doc-1"))
 
 
-def test_search_documents_returns_503(client, document_engine) -> None:
+def test_search_documents_returns_503(
+    test_client: TestClient,
+    document_engine: MagicMock,
+) -> None:
     document_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
-    _assert_unavailable(client.get("/search/documents", params={"query": "toxic"}))
+    _assert_unavailable(test_client.get("/search/documents", params={"query": "toxic"}))
 
 
 def test_search_documents_returns_503_when_only_aggregations_fail(
-    client, document_engine
+    test_client: TestClient,
+    document_engine: MagicMock,
 ) -> None:
     """Search and aggregations are fanned out together; either failing is a 503."""
     document_engine.asearch.return_value = ListResponse(
@@ -92,7 +95,7 @@ def test_search_documents_returns_503_when_only_aggregations_fail(
     )
 
     _assert_unavailable(
-        client.get(
+        test_client.get(
             "/search/documents",
             params={"query": "toxic", "fields": "aggregations.labels"},
         )
@@ -100,7 +103,8 @@ def test_search_documents_returns_503_when_only_aggregations_fail(
 
 
 def test_search_documents_returns_503_when_only_facets_fail(
-    client, document_engine
+    test_client: TestClient,
+    document_engine: MagicMock,
 ) -> None:
     document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
@@ -111,27 +115,38 @@ def test_search_documents_returns_503_when_only_facets_fail(
     )
 
     _assert_unavailable(
-        client.get(
+        test_client.get(
             "/search/documents",
             params={"query": "toxic", "fields": "facets.labels.value.type"},
         )
     )
 
 
-def test_search_passages_returns_503(client, passage_engine) -> None:
+def test_search_passages_returns_503(
+    test_client: TestClient,
+    passage_engine: MagicMock,
+) -> None:
     passage_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
-    _assert_unavailable(client.get("/search/passages", params={"query": "toxic"}))
+    _assert_unavailable(test_client.get("/search/passages", params={"query": "toxic"}))
 
 
-def test_search_labels_returns_503(client, label_engine) -> None:
+def test_search_labels_returns_503(
+    test_client: TestClient,
+    label_engine: MagicMock,
+) -> None:
     label_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
-    _assert_unavailable(client.get("/search/labels", params={"query": "toxic"}))
+    _assert_unavailable(test_client.get("/search/labels", params={"query": "toxic"}))
 
 
 @pytest.fixture
-def engine_for(request, document_engine, passage_engine, label_engine):
+def engine_for(
+    request: pytest.FixtureRequest,
+    document_engine: MagicMock,
+    passage_engine: MagicMock,
+    label_engine: MagicMock,
+) -> MagicMock:
     """Resolve a route to the engine that serves it."""
     return {
         "/search/documents": document_engine,
@@ -165,7 +180,11 @@ def engine_for(request, document_engine, passage_engine, label_engine):
     ],
 )
 def test_the_upstream_status_maps_to_the_status_we_return(
-    client, engine_for, request, upstream, expected
+    test_client: TestClient,
+    engine_for: MagicMock,
+    request: pytest.FixtureRequest,
+    upstream: int | None,
+    expected: HTTPStatus,
 ) -> None:
     """
     Vespa's status is its verdict on our request, not ours on the caller's.
@@ -178,13 +197,17 @@ def test_the_upstream_status_maps_to_the_status_we_return(
         "Vespa returned status [ctx]: upstream detail", status_code=upstream
     )
 
-    response = client.get(route, params={"query": "toxic"})
+    response = test_client.get(route, params={"query": "toxic"})
 
     assert response.status_code == expected
     assert response.json()["detail"] == "Vespa returned status [ctx]: upstream detail"
 
 
-def test_a_503_is_not_logged_as_a_success(client, document_engine, caplog) -> None:
+def test_a_503_is_not_logged_as_a_success(
+    test_client: TestClient,
+    document_engine: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """
     The request-lifecycle log must not call a handled error a success.
 
@@ -195,7 +218,7 @@ def test_a_503_is_not_logged_as_a_success(client, document_engine, caplog) -> No
     document_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
     with caplog.at_level(logging.INFO, logger="api.main"):
-        client.get("/search/documents", params={"query": "toxic"})
+        test_client.get("/search/documents", params={"query": "toxic"})
 
     lifecycle_logs = [
         record for record in caplog.records if "Request completed" in record.message
@@ -205,7 +228,10 @@ def test_a_503_is_not_logged_as_a_success(client, document_engine, caplog) -> No
     assert lifecycle_logs[0].getMessage().startswith("Error: Request completed")
 
 
-def test_a_400_is_logged_as_rejected_not_as_an_error(client, caplog) -> None:
+def test_a_400_is_logged_as_rejected_not_as_an_error(
+    test_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """
     A client's bad request warns: neither a success nor our failure.
 
@@ -213,7 +239,7 @@ def test_a_400_is_logged_as_rejected_not_as_an_error(client, caplog) -> None:
     bucket as an outage - a burst of 400s is usually a caller bug worth seeing.
     """
     with caplog.at_level(logging.INFO, logger="api.main"):
-        response = client.get("/search/passages", params={"filters": "not-json"})
+        response = test_client.get("/search/passages", params={"filters": "not-json"})
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     lifecycle_logs = [
@@ -224,13 +250,17 @@ def test_a_400_is_logged_as_rejected_not_as_an_error(client, caplog) -> None:
     assert lifecycle_logs[0].getMessage().startswith("Rejected: Request completed")
 
 
-def test_a_200_is_still_logged_as_a_success(client, document_engine, caplog) -> None:
+def test_a_200_is_still_logged_as_a_success(
+    test_client: TestClient,
+    document_engine: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 
     with caplog.at_level(logging.INFO, logger="api.main"):
-        response = client.get("/search/documents", params={"query": "toxic"})
+        response = test_client.get("/search/documents", params={"query": "toxic"})
 
     assert response.status_code == HTTPStatus.OK
     lifecycle_logs = [
@@ -241,13 +271,16 @@ def test_a_200_is_still_logged_as_a_success(client, document_engine, caplog) -> 
     assert lifecycle_logs[0].getMessage().startswith("Success: Request completed")
 
 
-def test_no_matches_is_still_a_200(client, document_engine) -> None:
+def test_no_matches_is_still_a_200(
+    test_client: TestClient,
+    document_engine: MagicMock,
+) -> None:
     """The counterpart to the above: an empty result set is a successful answer."""
     document_engine.asearch.return_value = ListResponse(
         results=[], total_size=0, next_page_token=None
     )
 
-    response = client.get("/search/documents", params={"query": "no-such-thing"})
+    response = test_client.get("/search/documents", params={"query": "no-such-thing"})
 
     assert response.status_code == HTTPStatus.OK
     body = response.json()
