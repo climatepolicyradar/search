@@ -8,15 +8,17 @@ Read this before concluding anything from a missing artifact.
 
 ## What survives what
 
-| Channel                                          | Clean finish | Cancel / timeout (SIGTERM) | Crash (SIGKILL, OOM) |
-| ------------------------------------------------ | ------------ | -------------------------- | -------------------- |
-| Markdown run summary artifact                    | yes          | yes                        | **no**               |
-| Slack "Records fed" counts                       | yes          | yes                        | **no**               |
-| `runs.completed` / `runs.failed`                 | yes          | neither, by design         | **no**               |
-| `run.duration` / `last_run.duration`             | yes          | yes                        | **no**               |
-| `records.fed` / `records.ok` / `records.error`   | yes          | yes                        | **yes**              |
-| `run.batches_expected` / `run.batches_completed` | yes          | yes                        | **yes**              |
-| `runs.crashed`                                   | n/a          | n/a                        | **yes**              |
+| Channel                                                     | Clean finish | Cancel / timeout (SIGTERM) | Crash (SIGKILL, OOM) |
+| ----------------------------------------------------------- | ------------ | -------------------------- | -------------------- |
+| Markdown run summary artifact                               | yes          | yes                        | **no**               |
+| Slack "Records fed" counts                                  | yes          | yes                        | **no**               |
+| `runs.completed` / `runs.failed`                            | yes          | neither, by design         | **no**               |
+| `run.duration` / `last_run.duration`                        | yes          | yes                        | **no**               |
+| `records.fed` / `records.ok` / `records.error`              | yes          | yes                        | **yes**              |
+| `records.feeder_errors` / `throttled` / `other_http_errors` | yes          | yes                        | **yes**              |
+| `run.batches_expected` / `run.batches_completed`            | yes          | yes                        | **yes**              |
+| `run.files_fed`                                             | yes          | yes                        | **yes**              |
+| `runs.crashed`                                              | n/a          | n/a                        | **yes**              |
 
 ## Why
 
@@ -54,6 +56,12 @@ denominator and a crash at 80% is indistinguishable from one at 5%.
 
 These are short-lived runs emitting roughly one observation a day, so query them
 by grouping on `run_name`. `rate()` and `increase()` are meaningless here.
+
+The dashboard's Runs table shows all of this as one row per run. It is built on
+these metrics rather than on logs: it previously parsed a `vespa feed stats:`
+line that the v1 removal deleted, and sat empty for six weeks before anyone
+noticed. A regex over logs can stop matching silently, and logs die with the
+process, so a log-backed table could never report a crashed run at all.
 
 ## Partial application in Vespa
 
