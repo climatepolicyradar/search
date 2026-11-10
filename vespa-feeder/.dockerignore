@@ -1,0 +1,70 @@
+# The build context is `vespa-feeder/` (see the `build` recipe in the
+# justfile), so the repo root's .dockerignore does not apply here and this file
+# has to stand on its own.
+#
+# `COPY src/ ./src/` takes a directory rather than a line per module, which is
+# what stops the image drifting from what the code imports. The trade is that
+# anything sitting in `src` is copied too, so the exclusions below are what
+# keep build artefacts and local caches out of the image.
+
+# Version control
+.git
+.gitignore
+
+# Python
+.venv
+venv
+**/__pycache__
+*.pyc
+**/*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.hypothesis
+tests/
+
+# Linting
+.ruff_cache
+.mypy_cache
+.pylint.d
+
+# Environment
+.env
+.env.local
+
+# Deployment, which runs from a developer's machine or CI against the Prefect
+# API - it is not part of the runtime image. Its flow imports still resolve
+# because Prefect stores an entrypoint as a module name, and the flow modules
+# themselves are copied in.
+src/deployments.py
+
+# Local tooling
+justfile
+uv.lock
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs
+docs/
+*.md
+!README.md
