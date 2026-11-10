@@ -1,3 +1,5 @@
+from typing import Any
+
 import orjson
 from slack_notify import SlackNotify
 from task_runner import task_runner
@@ -64,6 +66,25 @@ def derive_document_data(record: dict) -> dict:
     """Apply all passages derivers to a record, in sequence."""
     record = derive_principal_id(record)
     record = derive_id_if_missing(record)
+    record = derive_hoisted_attributes(record)
+
+    return record
+
+
+# Hoisted so they can be served from memory: `attributes_string` is in no document
+# summary, so a value inside it is otherwise only reachable by grouping.
+_HOISTED_ATTRIBUTE_KEYS: tuple[str, ...] = ("deprecated_slug", "last_updated_date")
+
+
+def derive_hoisted_attributes(record: dict[str, Any]) -> dict[str, Any]:
+    """Set `deprecated_slug` and `last_updated_date` from the record's own `attributes_string`."""
+    attributes = record.get("fields", {}).get("attributes_string", {}).get("assign")
+
+    if attributes is None:
+        return record
+
+    for key in _HOISTED_ATTRIBUTE_KEYS:
+        record["fields"][key] = {"assign": attributes.get(key, "")}
 
     return record
 

@@ -18,7 +18,7 @@ schema documents {
             bolding: on
         }
         field description type string {
-            indexing: index | summary
+            indexing: index | attribute | summary
             stemming: multiple
             linguistics {
                 profile: passage_analysis_kstem
@@ -157,6 +157,15 @@ schema documents {
             indexing: summary
         }
 
+        field deprecated_slug type string {
+            indexing: attribute | summary
+            attribute: fast-search
+        }
+
+        field last_updated_date type string {
+            indexing: attribute | summary
+        }
+
         field document_source type string {
             indexing: summary
         }
@@ -185,7 +194,7 @@ schema documents {
 
     # Title and geography names in one index field, so that query coverage
     # across both is accounted for by fieldMatch(title_geo).completeness. This
-    # lets a country's own law outrank projects that merely name the country 
+    # lets a country's own law outrank projects that merely name the country
     # in their titles. See rank-profile bm25-title-geo.
     field title_geo type string {
         indexing: input title . " " . (input geographies | join " ") | index
@@ -416,7 +425,7 @@ schema documents {
         #   q = fraction of the query's terms found in that element
         #   w = element weight, which is 1 for every element of an array<string>
         #
-        # So matchCount is the number of matching passages, and coverageSum 
+        # So matchCount is the number of matching passages, and coverageSum
         # is that count with each passage discounted by query coverage.
         # They are identical for a single-term query. Neither uses corpus
         # statistics, so scores are reproducible on a small synthetic index.
@@ -445,7 +454,7 @@ schema documents {
             expression: query(title_weight) * fieldMatch(title_geo).completeness * bm25(title_geo) + query(title_proximity_weight) * nativeProximity(title_geo)
         }
                 # log(1 + x) damping, consistent with topic_score() above. This means a long
-        # report with many mentions can't run away with the top of the list - 
+        # report with many mentions can't run away with the top of the list -
         # tenfold more matches is worth roughly twice the score, not ten times.
         function passages_breadth_score() {
             expression: query(passages_breadth_weight) * log(1 + elementSimilarity(passages_text).coverageSum)
@@ -507,7 +516,7 @@ schema documents {
     # `document-summary default` is deliberately left implicit.
     # Vespa owns that class: it holds every field declared `summary`,
     # so it is quite expensive.
-    # 
+    #
     # We avoid using the `default` `document-summary` by setting the default to
     # `search` in ../app/services.xml. This removes someone accidentally fogetting
     # to specify a `presentation.summary`, us defaulting to `default` and our
@@ -519,7 +528,7 @@ schema documents {
     #
     # Declaring an empty block causes warnings in the deploy because Vespa only
     # marks the class `from-disk` when it creates the class itself.
-    
+
     # Search hits. Everything `DevVespaDocumentSearchEngine.search` reads, and
     # nothing of the passage payload.
     document-summary search {
@@ -531,6 +540,24 @@ schema documents {
         summary document_source {}
         summary attributes_published_date {}
         summary principal_id {}
+    }
+
+    # Just enough of a document to name it as another document's collection.
+    # See https://app.notion.com/p/climatepolicyradar/Deep-dive-into-Vespa-performance-4139109609a480b4acf2fb09f16579f8
+    # the TLDR is we're avoiding reading the summary fields as they contain all passages
+    document-summary collection-reference {
+        summary id {}
+        summary title_attribute {}
+        summary description_attribute {
+            source: description
+        }
+        summary deprecated_slug {}
+    }
+
+    document-summary sitemap {
+        summary id {}
+        summary deprecated_slug {}
+        summary last_updated_date {}
     }
 
     # `search`, plus title and description bolded with the quoted phrases. Only
