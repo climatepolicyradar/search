@@ -18,6 +18,12 @@ class AsearchRequest:
 
 
 @dataclass
+class LabelCountsRequest:
+    filters: Filter | None
+    label_types: list[str]
+
+
+@dataclass
 class ExportRequest:
     query: str | None
     limit: int
@@ -34,6 +40,8 @@ class StubDocumentSearchEngine:
         self._collection_references_responses: list[dict[str, CollectionReference] | VespaError] = []
         self.export_requests: list[ExportRequest] = []
         self._export_responses: list[list[ExportRow] | VespaError] = []
+        self.label_counts_requests: list[LabelCountsRequest] = []
+        self._label_counts_responses: list[dict[str, int] | VespaError] = []
 
     def add_asearch_response(self, response: ListResponse[Document] | VespaError) -> None:
         self._asearch_responses.append(response)
@@ -46,6 +54,9 @@ class StubDocumentSearchEngine:
 
     def add_export_response(self, response: list[ExportRow] | VespaError) -> None:
         self._export_responses.append(response)
+
+    def add_label_counts_response(self, response: dict[str, int] | VespaError) -> None:
+        self._label_counts_responses.append(response)
 
     async def export(
             self,
@@ -86,6 +97,23 @@ class StubDocumentSearchEngine:
             )
         )
         match self._asearch_responses.pop(0):
+            case VespaError() as error:
+                raise error
+            case response:
+                return response
+
+    async def label_counts(
+            self,
+            filters: Filter | None,
+            label_types: list[str],
+        ) -> dict[str, int]:
+        self.label_counts_requests.append(
+            LabelCountsRequest(
+                filters=filters,
+                label_types=label_types,
+            )
+        )
+        match self._label_counts_responses.pop(0):
             case VespaError() as error:
                 raise error
             case response:

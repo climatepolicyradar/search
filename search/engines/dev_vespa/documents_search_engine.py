@@ -44,6 +44,7 @@ from search.engines.vespa_query.filters import (
     _get_label_types_from_filters,
     _prune_filter,
     _topic_ids_from_filters,
+    normalise_topic_id,
 )
 from search.engines.vespa_query.query_text_modifiers import (
     _normalize_currency_symbols,
@@ -120,17 +121,45 @@ _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # See PR #651 for how this was chosen.
 _DEFAULT_EXACT_WEIGHT: float | None = None
 
+# currently fits the whole dataset
+_LABEL_COUNTS_MAX_GROUPS = 10_000
+
+
+def _fix_concept_label_ids(label_id: str) -> str:
+    return (
+        normalise_topic_id(label_id)
+        if label_id.startswith("Q") and label_id[1:].isdecimal()
+        else label_id
+    )
+
 
 class VespaHit[A: BaseModel](BaseModel):
     fields: A
 
 class VespaRoot[A: BaseModel](BaseModel):
-    # Vespa omits `children` entirely when nothing matched, rather than
-    # sending an empty list.
     children: list[VespaHit[A]] | None = None
 
 class VespaResponse[A: BaseModel](BaseModel):
     root: VespaRoot[A]
+
+class VespaGroupCount(BaseModel):
+    count: int = Field(validation_alias="count()")
+
+class VespaGroup(BaseModel):
+    fields: VespaGroupCount
+    value: str
+
+class VespaGroupList(BaseModel):
+    children: list[VespaGroup] = []
+
+class VespaGroupingRoot(BaseModel):
+    children: list[VespaGroupList] = []
+
+class VespaGroupingHits(BaseModel):
+    children: list[VespaGroupingRoot] = []
+
+class VespaGroupingResponse(BaseModel):
+    root: VespaGroupingHits
 
 class ByNameModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -201,6 +230,14 @@ class DocumentSearchEngine(Protocol):
             resolve_collections: bool = True,
         ) -> list[ExportRow]:
         """Fetch documents for a CSV export, read entirely from attributes."""
+        ...
+
+    async def label_counts(
+            self,
+            filters: Filter | None,
+            label_types: list[str],
+        ) -> dict[str, int]:
+        """Count documents per label id, for labels of the given types."""
         ...
 
 
@@ -834,6 +871,46 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                 )
             )
         return count_aggregations
+
+    async def label_counts(
+        self,
+        filters: Filter | None,
+        label_types: list[str],
+    ) -> dict[str, int]:
+        """Count documents per label id, for labels of the given types."""
+        if not label_types:
+            return {}
+
+        where = "true"
+        if filters is not None:
+            where += _build_filter_query(
+                filters,
+                field_map=documents_filter_field_to_vespa_field_map,
+                struct_map=documents_filter_struct_field_to_vespa_field_map,
+            )
+
+        yql = (
+            f"select labels.id from documents where {where} "
+            "| all(group(labels.id) filter(in(labels.type, @types)) "
+            f"max({_LABEL_COUNTS_MAX_GROUPS}) each(output(count())))"
+        )
+
+        response = VespaGroupingResponse.model_validate(
+            await aexecute_vespa_query(
+                token=self.settings.vespa_read_token,
+                endpoint=f"{self.settings.vespa_endpoint}/search",
+                request_body={"yql": yql, "hits": 0, "types": label_types},
+                request_context="documents.label_counts",
+                client=self._httpx,
+            )
+        )
+
+        return {
+            _fix_concept_label_ids(group.value): group.fields.count
+            for grouping_root in response.root.children
+            for group_list in grouping_root.children
+            for group in group_list.children
+        }
 
     async def _arun_facet_query(
         self,

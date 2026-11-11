@@ -2025,3 +2025,134 @@ async def test_collection_references_for_ids_that_resolve_to_nothing(
 
     references = await engine.collection_references(["no-such-collection"])
     assert references == {}
+
+
+_LABEL_COUNTS_RESPONSE = {
+    "root": {
+        "id": "toplevel",
+        "children": [
+            {
+                "id": "group:root:0",
+                "children": [
+                    {
+                        "id": "grouplist:labels.id",
+                        "label": "labels.id",
+                        "children": [
+                            {
+                                "id": 'group:string:concept::Q1',
+                                "value": "concept::Q1",
+                                "fields": {"count()": 7},
+                            },
+                            {
+                                "id": 'group:string:concept::Q2',
+                                "value": "concept::Q2",
+                                "fields": {"count()": 3},
+                            },
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+}
+
+
+async def test_label_counts_reads_a_count_per_group(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    counts = await _document_engine(http_client).label_counts(
+        filters=None,
+        label_types=["concept"],
+    )
+    assert counts == {"concept::Q1": 7, "concept::Q2": 3}
+
+
+async def test_label_counts_groups_by_label_id_for_the_given_types(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        filters=None,
+        label_types=["concept", "keyword"],
+    )
+    body = handler.last_json()
+    assert "group(labels.id) filter(in(labels.type, @types))" in body["yql"]
+    assert body["types"] == ["concept", "keyword"]
+
+
+async def test_label_counts_applies_filters_to_the_document_set(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    filters = Filter(
+        op="and",
+        filters=[FieldFilter(field="labels.value.id", op="contains", value="concept::Q1")],
+    )
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(filters=filters, label_types=["concept"])
+    assert "concept::Q1" in handler.last_json()["yql"].split("|")[0]
+
+
+async def test_label_counts_asks_vespa_nothing_without_types(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    counts = await _document_engine(http_client).label_counts(filters=None, label_types=[])
+    assert counts == {}
+
+
+async def test_label_counts_on_an_empty_grouping(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response({"root": {"id": "toplevel", "children": [{"id": "group:root:0"}]}})
+    counts = await _document_engine(http_client).label_counts(
+        filters=None,
+        label_types=["concept"],
+    )
+    assert counts == {}
+
+
+_MIXED_ID_SHAPE_RESPONSE = {
+    "root": {
+        "id": "toplevel",
+        "children": [
+            {
+                "id": "group:root:0",
+                "children": [
+                    {
+                        "id": "grouplist:labels.id",
+                        "children": [
+                            {"value": "Q708", "fields": {"count()": 4}},
+                            {"value": "keyword::Flood", "fields": {"count()": 2}},
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+}
+
+
+async def test_label_counts_namespaces_bare_wikibase_ids(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    Note to future finders of this:
+
+    This is a _very_ sharp edge in our schema: Label IDs of concepts aren't prefixed in documents
+    but are prefixed in labels, so we have to manually put `concept::` back in front of them.
+
+    The check is a bit grim in that we only have IDs. We _could_ do two level grouping (type, id)
+    but it is a decent chunk slower and feels a shame to fix a (hopefully) temporary data issue.
+
+    We can fix this more permanently when we've got more control over schema shapes via Snowflake.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response(_MIXED_ID_SHAPE_RESPONSE)
+    counts = await engine.label_counts(label_types=["concept", "keyword"], filters=None)
+    assert counts == {"concept::Q708": 4, "keyword::Flood": 2}
