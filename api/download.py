@@ -25,6 +25,9 @@ import csv
 from datetime import datetime
 from enum import StrEnum
 
+import httpx2
+from pydantic import HttpUrl
+
 from search.engines import OrderBy
 from search.engines.dev_vespa import Filter
 from search.engines.dev_vespa.documents_search_engine import (
@@ -91,12 +94,26 @@ class Column(StrEnum):
     PRINCIPAL_LAWS = "PRINCIPAL_LAWS"
     CASE_CATEGORIES = "CASE_CATEGORIES"
     JURISDICTIONS = "JURISDICTIONS"
+    URL = "URL"
+    BUNDLE_URL = "BUNDLE_URL"
+
+
+class BaseUrlRequired(Exception):
+    pass
+
+
+_URL_COLUMNS = (Column.URL, Column.BUNDLE_URL)
+
+
+def _page_url(base_url: HttpUrl, page: str, slug: str) -> str:
+    return str(httpx2.URL(str(base_url)).copy_with(path=f"/{page}/{slug}"))
 
 
 def read_column(
         document: ExportDocument,
         collection: CollectionReference | None,
-        column: Column
+        column: Column,
+        base_url: HttpUrl | None,
     ) -> str:
     """
     One cell's text: the field ``column`` names, off ``document``.
@@ -110,10 +127,6 @@ def read_column(
     Matching on the column rather than looking a reader up in a table means
     a column added to `Column` without a branch here is a type error, not a
     `KeyError` part-way through a download.
-
-    TODO: FUS-819 - URL
-    The above column also belongs here but is absent until the data behind
-    it exists. It is left out for now rather than offered empty.
     """
     match column:
         case Column.ID:
@@ -156,6 +169,10 @@ def read_column(
             return _label_type(document, "case_category")
         case Column.JURISDICTIONS:
             return _label_type(document, "jurisdiction")
+        case Column.URL:
+            return _page_url(base_url, "document", document.slug) if base_url and document.slug else ""
+        case Column.BUNDLE_URL:
+            return _page_url(base_url, "collections", collection.slug) if base_url and collection and collection.slug else ""
 
 
 # Sent when a caller names no columns. Keeping a default means an ad-hoc
@@ -181,6 +198,7 @@ async def fetch_csv(
     order_by: list[OrderBy],
     filters: Filter | None,
     max_results: int,
+    base_url: HttpUrl | None,
 ) -> list[str]:
     """
     Build the CSV for a search, as a list of rows with the header first.
@@ -193,12 +211,16 @@ async def fetch_csv(
 
     deduped_columns = tuple(dict.fromkeys(columns or DEFAULT_COLUMNS))
 
+    if base_url is None and any(column in deduped_columns for column in _URL_COLUMNS):
+        raise BaseUrlRequired()
+
     needs_collections = (
         Column.COLLECTION_DESCRIPTION in deduped_columns or
         Column.COLLECTION_TITLE in deduped_columns or
         Column.BUNDLE_TITLE in deduped_columns or
         Column.BUNDLE_DESCRIPTION in deduped_columns or
-        Column.BUNDLE_ID in deduped_columns
+        Column.BUNDLE_ID in deduped_columns or
+        Column.BUNDLE_URL in deduped_columns
     )
 
     header = [str(column) for column in deduped_columns]
@@ -216,7 +238,12 @@ async def fetch_csv(
     for row in rows:
         output.append(
             writer.writerow({
-                str(column): read_column(row.document, row.collection, column)
+                str(column): read_column(
+                    document=row.document,
+                    collection=row.collection,
+                    column=column,
+                    base_url=base_url,
+                )
                 for column in deduped_columns
             })
         )

@@ -138,6 +138,7 @@ class ByNameModel(BaseModel):
 class CollectionReference(ByNameModel):
     description: str | None = Field(default=None, validation_alias="description_attribute")
     title: str | None = Field(default=None, validation_alias="title_attribute")
+    slug: str | None = Field(default=None, validation_alias="deprecated_slug")
     id: str
 
 
