@@ -2053,3 +2053,49 @@ async def test_nature_based_solutions_highlights_the_phrase_in_title_and_descrip
 
 # endregion Query rewrites (EQUIV)
 
+
+
+@pytest.mark.asyncio
+async def test_export_descriptions_are_never_bolded(
+    vespa_app: Vespa,
+    live_http_client: httpx2.AsyncClient,
+) -> None:
+    """
+    A CSV cell is data, not a snippet.
+
+    `description` is `bolding: on` and `asearch` turns bolding off per
+    request, so the question is whether the `csv` summary's
+    `description_attribute` inherits the transform from its source. If it
+    does, every DESCRIPTION cell for a matching query carries `<hi>` markup -
+    and DESCRIPTION is in the default column set.
+    """
+    doc = DocumentFactory.build(
+        id="doc-export-bolding",
+        title="Forest strategy",
+        description="Protecting forests and the forest sector.",
+        labels=[],
+    )
+    _feed_document_with_id(vespa_app, doc)
+
+    engine = DevVespaDocumentSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    rows = await engine.export(
+        query="forest",
+        limit=10,
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )
+
+    descriptions = [row.document.description for row in rows]
+    assert descriptions == ["Protecting forests and the forest sector."]
+
+    bolding_engine = DevVespaDocumentSearchEngine(
+        settings=_TEST_SETTINGS,
+        httpx=live_http_client,
+        bolding=True,
+    )
+    searched = (await bolding_engine.asearch(
+        query="forest",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )).results
+
+    assert "<hi>forests</hi>" in (searched[0].description or "")

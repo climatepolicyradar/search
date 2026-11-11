@@ -150,3 +150,50 @@ def _build_run_summary_markdown(
             markdown += f"| `{type(exception).__name__}` | {detail} |\n"
 
     return markdown
+
+
+def _build_failure_message(
+    feed_results: list[FeedResult],
+    feed_results_errors: list[FeedResult],
+    feed_results_exceptions: list[BaseException],
+    records_lost: int,
+    run_ui_url: str | None = None,
+) -> str:
+    """
+    The state message for a run that lost records or had a batch raise.
+
+    Prefect shows this verbatim, so it has to say what was lost without a
+    traceback to read. Records lost is the figure that matters; batches and
+    files locate it.
+
+    `run_ui_url` is `prefect.runtime.flow_run.ui_url`, which is None outside
+    a run context.
+    """
+    total_batches = len(feed_results) + len(feed_results_exceptions)
+    parts = []
+
+    if feed_results_errors:
+        files_lost = sum(len(result.feed_paths) for result in feed_results_errors)
+        parts.append(
+            f"lost {records_lost:,} record(s) across "
+            f"{len(feed_results_errors)}/{total_batches} batch(es) "
+            f"({files_lost} file(s))"
+        )
+
+    if feed_results_exceptions:
+        # Named rather than counted - which exception it was is the first
+        # thing you need, and the state message may be all that is read.
+        reasons = ", ".join(
+            sorted({type(exception).__name__ for exception in feed_results_exceptions})
+        )
+        parts.append(
+            f"{len(feed_results_exceptions)}/{total_batches} batch(es) "
+            f"raised ({reasons})"
+        )
+
+    artifact = (
+        f"See the run summary artifact at {run_ui_url}/artifacts"
+        if run_ui_url
+        else "See the vespa-feeder-run-summary artifact"
+    )
+    return f"vespa_feed: {' and '.join(parts)}. {artifact} for the breakdown."

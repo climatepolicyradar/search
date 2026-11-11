@@ -71,7 +71,7 @@ def app(http_client: httpx2.AsyncClient) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-        app.state.shared = State(httpx=http_client)
+        app.state.deps = State(httpx=http_client)
         yield
 
     return create_app(lifespan=lifespan)

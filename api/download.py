@@ -21,19 +21,20 @@ particular app's column set sends that set; the mapping from app to
 columns lives with the caller, not here.
 """
 
-import asyncio
 import csv
-import math
-from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from search.data_in_models import Document, DocumentWithoutRelationships
-from search.engines import OrderBy, Pagination
+import httpx2
+from pydantic import HttpUrl
+
+from search.engines import OrderBy
 from search.engines.dev_vespa import Filter
 from search.engines.dev_vespa.documents_search_engine import (
     CollectionReference,
     DocumentSearchEngine,
+    ExportDocument,
+    ExportRow,
 )
 
 
@@ -42,12 +43,7 @@ class Echo:
         """No-op file-like write to stream CSVs with"""
         return value
 
-@dataclass
-class DocumentWithCollection:
-    collection: CollectionReference | None
-    document: Document
-
-def _published_date(document: Document) -> str:
+def _published_date(document: ExportDocument) -> str:
     """
     Parse published date.
 
@@ -58,8 +54,8 @@ def _published_date(document: Document) -> str:
     the date alone. A value that will not parse yields an empty cell rather
     than failing the whole download.
     """
-    raw = document.attributes.get("published_date")
-    if not isinstance(raw, str):
+    raw = document.attributes_string.get("published_date")
+    if raw is None:
         return ""
     try:
         return datetime.fromisoformat(raw).date().isoformat()
@@ -67,28 +63,14 @@ def _published_date(document: Document) -> str:
         return ""
 
 
-def _labels(document: Document, relation_type: str) -> str:
+def _labels(document: ExportDocument, relation_type: str) -> str:
     """Read semicolon separated labels of the given *relationship* type off the document"""
-    return "; ".join(label.value.value for label in document.labels if label.type == relation_type)
+    return "; ".join(label.value for label in document.labels if label.relationship == relation_type)
 
 
-def _label_type(document: Document, value_type: str) -> str:
+def _label_type(document: ExportDocument, value_type: str) -> str:
     """Read semicolon separated labels of the given *label* type off the document"""
-    return "; ".join(label.value.value for label in document.labels if label.value.type == value_type)
-
-
-def _attribute(document: Document, key: str) -> str:
-    """
-    Take ``key`` out of a document's attributes, as text.
-
-    An absent attribute gives ``""``, so a document missing one reads as
-    an empty cell rather than failing the download. Attributes are typed
-    ``str | float | bool``, so the value is stringified: `csv` would
-    otherwise raise on a non-string only at write time, failing the whole
-    download for one cell.
-    """
-    value = document.attributes.get(key)
-    return "" if value is None else str(value)
+    return "; ".join(label.value for label in document.labels if label.type == value_type)
 
 
 class Column(StrEnum):
@@ -112,12 +94,27 @@ class Column(StrEnum):
     PRINCIPAL_LAWS = "PRINCIPAL_LAWS"
     CASE_CATEGORIES = "CASE_CATEGORIES"
     JURISDICTIONS = "JURISDICTIONS"
+    URL = "URL"
+    COLLECTION_URL = "COLLECTION_URL"
+    BUNDLE_URL = "BUNDLE_URL"
+
+
+class BaseUrlRequired(Exception):
+    pass
+
+
+_URL_COLUMNS = (Column.URL, Column.COLLECTION_URL, Column.BUNDLE_URL)
+
+
+def _page_url(base_url: HttpUrl, page: str, slug: str) -> str:
+    return str(httpx2.URL(str(base_url)).copy_with(path=f"/{page}/{slug}"))
 
 
 def read_column(
-        document: Document,
+        document: ExportDocument,
         collection: CollectionReference | None,
-        column: Column
+        column: Column,
+        base_url: HttpUrl | None,
     ) -> str:
     """
     One cell's text: the field ``column`` names, off ``document``.
@@ -131,16 +128,12 @@ def read_column(
     Matching on the column rather than looking a reader up in a table means
     a column added to `Column` without a branch here is a type error, not a
     `KeyError` part-way through a download.
-
-    TODO: FUS-819 - URL
-    The above column also belongs here but is absent until the data behind
-    it exists. It is left out for now rather than offered empty.
     """
     match column:
         case Column.ID:
             return document.id
         case Column.TITLE:
-            return document.title
+            return document.title or ""
         case Column.DESCRIPTION:
             return document.description or ""
         case Column.GEOGRAPHIES:
@@ -153,30 +146,30 @@ def read_column(
             return _labels(document, "category")
         case Column.PROVIDER:
             return _labels(document, "provider")
-        case Column.COLLECTION_TITLE:
+        case Column.COLLECTION_TITLE | Column.BUNDLE_TITLE:
             return collection and collection.title or ""
-        case Column.COLLECTION_DESCRIPTION:
+        case Column.COLLECTION_DESCRIPTION | Column.BUNDLE_DESCRIPTION:
             return collection and collection.description or ""
         case Column.BUNDLE_ID:
             return collection and collection.id or ""
-        case Column.BUNDLE_TITLE:
-            return collection and collection.title or ""
-        case Column.BUNDLE_DESCRIPTION:
-            return collection and collection.description or ""
         case Column.CASE_STATUS:
-            return _attribute(document, "case_status")
+            return document.attributes_string.get("case_status", "")
         case Column.CASE_NUMBER:
-            return _attribute(document, "identifier::case_number")
+            return document.attributes_string.get("identifier::case_number", "")
         case Column.AT_ISSUE:
-            return _attribute(document, "core_object")
+            return document.attributes_string.get("core_object", "")
         case Column.ORIGINAL_CASE_NAME:
-            return _attribute(document, "original_case_name")
+            return document.attributes_string.get("original_case_name", "")
         case Column.PRINCIPAL_LAWS:
             return _label_type(document, "principal_law")
         case Column.CASE_CATEGORIES:
             return _label_type(document, "case_category")
         case Column.JURISDICTIONS:
             return _label_type(document, "jurisdiction")
+        case Column.URL:
+            return _page_url(base_url, "document", document.slug) if base_url and document.slug else ""
+        case Column.COLLECTION_URL | Column.BUNDLE_URL:
+            return _page_url(base_url, "collections", collection.slug) if base_url and collection and collection.slug else ""
 
 
 # Sent when a caller names no columns. Keeping a default means an ad-hoc
@@ -202,67 +195,53 @@ async def fetch_csv(
     order_by: list[OrderBy],
     filters: Filter | None,
     max_results: int,
-    internal_page_size: int = 100,
+    base_url: HttpUrl | None,
 ) -> list[str]:
     """
     Build the CSV for a search, as a list of rows with the header first.
 
-    The search is paged internally at `internal_page_size`, and every page is
-    fetched concurrently, so the whole result set is in memory before the first
-    row is returned.
+    One request for the whole file. `max_results` is capped at 500 by the
+    route, and the export reads only attributes, so there is nothing to spread
+    across pages: paging it re-ran the match and rank once per page and threw
+    all but one page's worth away.
     """
 
     deduped_columns = tuple(dict.fromkeys(columns or DEFAULT_COLUMNS))
+
+    if base_url is None and any(column in deduped_columns for column in _URL_COLUMNS):
+        raise BaseUrlRequired()
 
     needs_collections = (
         Column.COLLECTION_DESCRIPTION in deduped_columns or
         Column.COLLECTION_TITLE in deduped_columns or
         Column.BUNDLE_TITLE in deduped_columns or
         Column.BUNDLE_DESCRIPTION in deduped_columns or
-        Column.BUNDLE_ID in deduped_columns
+        Column.BUNDLE_ID in deduped_columns or
+        Column.COLLECTION_URL in deduped_columns or
+        Column.BUNDLE_URL in deduped_columns
     )
 
     header = [str(column) for column in deduped_columns]
     writer = csv.DictWriter(Echo(), fieldnames=header)
     output = [writer.writeheader()]
 
-    page_count = math.ceil(max_results / internal_page_size)
+    rows: list[ExportRow] = await engine.export(
+        query=query,
+        limit=max_results,
+        order_by=order_by,
+        filters=filters,
+        resolve_collections=needs_collections,
+    )
 
-    async def fetch_page(page: int) -> list[DocumentWithCollection]:
-        results = await engine.asearch(
-            pagination=Pagination(
-                page_size=internal_page_size,
-                page_token=page,
-            ),
-            order_by=order_by,
-            filters=filters,
-            query=query,
-        )
-
-        collections: dict[str, DocumentWithoutRelationships] = {}
-        collection_references: dict[str, CollectionReference] = {}
-        page_results: list[DocumentWithCollection] = []
-
-        for item in results.results:
-            for related in item.documents:
-                if related.type == "member_of":
-                    collections.setdefault(item.id, related.value)
-
-        if needs_collections and (collection_ids := list(dict.fromkeys(stub.id for stub in collections.values()))):
-            collection_references = await engine.collection_references(collection_ids)
-
-        for result in results.results:
-            collection_stub = collections.get(result.id)
-            collection = collection_references.get(collection_stub.id) if collection_stub else None
-            page_results.append(DocumentWithCollection(collection=collection, document=result))
-
-        return page_results
-
-    pages = await asyncio.gather(*[fetch_page(page) for page in range(1, page_count + 1)])
-    for result in [result for page in pages for result in page][:max_results]:
+    for row in rows:
         output.append(
             writer.writerow({
-                str(column): read_column(result.document, result.collection, column)
+                str(column): read_column(
+                    document=row.document,
+                    collection=row.collection,
+                    column=column,
+                    base_url=base_url,
+                )
                 for column in deduped_columns
             })
         )

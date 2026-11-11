@@ -6,6 +6,7 @@ from typing import Annotated, Any, Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import HttpUrl
 
 from api.download import Column, fetch_csv
 from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
@@ -62,7 +63,12 @@ _VESPA_UNAVAILABLE_RESPONSE: dict[int | str, dict[str, Any]] = {
     },
 }
 SEARCH_RESPONSES: dict[int | str, dict[str, Any]] = {
-    HTTPStatus.BAD_REQUEST: {"description": ("Malformed `filters` JSON")},
+    HTTPStatus.BAD_REQUEST: {
+        "description": (
+            "Malformed `filters` JSON, or a URL column was asked for without "
+            "`base_url`."
+        )
+    },
     **_VESPA_UNAVAILABLE_RESPONSE,
 }
 ITEM_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -106,6 +112,14 @@ async def download_documents(
             "per column. Omitted gives the default column set."
         ),
     ),
+    base_url: HttpUrl | None = Query(
+        None,
+        description=(
+            "Origin of the app the download is for, e.g. "
+            "https://app.climatepolicyradar.org. Required when URL or "
+            "BUNDLE_URL is among the columns."
+        ),
+    ),
 ):
     """
     Download the current search's results as a CSV, one row per document.
@@ -118,7 +132,15 @@ async def download_documents(
     return StreamingResponse(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=search-results.csv"},
-        content=await fetch_csv(engine, columns, query, order_by, filters, max_results),
+        content=await fetch_csv(
+            engine=engine,
+            columns=columns,
+            query=query,
+            order_by=order_by,
+            filters=filters,
+            max_results=max_results,
+            base_url=base_url,
+        ),
     )
 
 

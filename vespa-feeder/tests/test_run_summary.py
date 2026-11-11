@@ -249,3 +249,65 @@ def test_a_mixed_run_reports_every_category_at_once():
     assert _row(markdown, "OK") == "17"
     assert _row(markdown, "**Missing (not recovered after retries)**") == "**3**"
     assert "2/3 batch(es) failed" in markdown
+
+
+def _failing_result() -> feeder.FeedResult:
+    return _result(files=2, operation_count=10, ok_count=6, errors=["lost"])
+
+
+def test_failure_message_leads_with_the_records_lost() -> None:
+    """Records lost is the figure that matters; batches and files locate it."""
+    lost = _failing_result()
+
+    message = run_summary._build_failure_message(
+        feed_results=[lost, _result()],
+        feed_results_errors=[lost],
+        feed_results_exceptions=[],
+        records_lost=1200,
+    )
+
+    assert "lost 1,200 record(s) across 1/2 batch(es) (2 file(s))" in message
+
+
+def test_failure_message_names_the_exception_type() -> None:
+    """The cause should be readable without opening the logs."""
+    message = run_summary._build_failure_message(
+        feed_results=[_result()],
+        feed_results_errors=[],
+        feed_results_exceptions=[RuntimeError("HeadObject: Not Found")],
+        records_lost=0,
+    )
+
+    assert "1/2 batch(es) raised (RuntimeError)" in message
+
+
+def test_failure_message_links_to_the_run_when_it_has_a_url() -> None:
+    lost = _failing_result()
+
+    message = run_summary._build_failure_message(
+        feed_results=[lost],
+        feed_results_errors=[lost],
+        feed_results_exceptions=[],
+        records_lost=4,
+        run_ui_url="https://app.prefect.cloud/account/a/workspace/w/flow-runs/flow-run/r",
+    )
+
+    assert (
+        "https://app.prefect.cloud/account/a/workspace/w/flow-runs/flow-run/r/artifacts"
+        in message
+    )
+
+
+def test_failure_message_names_the_artifact_when_there_is_no_url() -> None:
+    """`flow_run.ui_url` is None outside a run context, e.g. a local run."""
+    lost = _failing_result()
+
+    message = run_summary._build_failure_message(
+        feed_results=[lost],
+        feed_results_errors=[lost],
+        feed_results_exceptions=[],
+        records_lost=4,
+    )
+
+    assert "See the vespa-feeder-run-summary artifact" in message
+    assert "None" not in message

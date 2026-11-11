@@ -13,6 +13,8 @@ from pydantic import BaseModel
 
 from api.settings import settings
 from api.state import HttpxDep
+from api.taxonomy.deps import TaxonomyServiceDep
+from api.taxonomy.service import TaxonomyService
 from search.engines import OrderBy, Pagination, VespaError
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
@@ -108,6 +110,11 @@ async def probe_labels_search(client: httpx2.AsyncClient) -> None:
     )
 
 
+async def probe_taxonomy_loaded(service: TaxonomyService) -> None:
+    """The polled taxonomy has loaded at least once."""
+    service.roots()
+
+
 async def probe_passages_search(client: httpx2.AsyncClient) -> None:
     await DevVespaPassageSearchEngine(settings=settings, httpx=client).asearch(
         query=PROBE_QUERY,
@@ -121,13 +128,14 @@ async def probe_passages_search(client: httpx2.AsyncClient) -> None:
 Probe = Callable[[], Awaitable[None]]
 
 
-def probes(http: HttpxDep) -> dict[str, Probe]:
+def probes(http: HttpxDep, taxonomy: TaxonomyServiceDep) -> dict[str, Probe]:
     return {
         "vespa": partial(probe_vespa, http),
         "documents.search": partial(probe_documents_search, http),
         "documents.get": partial(probe_documents_get, http),
         "labels.search": partial(probe_labels_search, http),
         "passages.search": partial(probe_passages_search, http),
+        "taxonomy.loaded": partial(probe_taxonomy_loaded, taxonomy),
     }
 
 

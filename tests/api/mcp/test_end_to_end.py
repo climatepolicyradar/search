@@ -34,7 +34,7 @@ def mcp_client(
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         state = State(httpx=http_client)
         async with build_mcp(app=app, state=state):
-            app.state.shared = state
+            app.state.deps = state
             yield
 
     return TestClient(create_app(lifespan=lifespan))

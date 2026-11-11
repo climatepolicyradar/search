@@ -5,6 +5,7 @@ from typing import Any
 
 from documents_flow import (
     derive_collection_id,
+    derive_distinct_concept_ids,
     derive_document_data,
     derive_hoisted_attributes,
 )
@@ -143,3 +144,24 @@ def test_record_without_document_source_is_left_alone() -> None:
     """The source derivers are skipped entirely rather than each re-checking for it."""
     input_record: dict[str, Any] = {"create": True, "fields": {}}
     assert derive_document_data(input_record) == {"create": True, "fields": {}}
+
+
+def _counts_record(concept_counts: dict[str, Any] | None) -> dict[str, Any]:
+    fields: dict[str, Any] = {} if concept_counts is None else {"concept_counts": {"assign": concept_counts}}
+    return {"create": True, "update": "id:documents:documents::doc-0", "fields": fields}
+
+
+def test_distinct_concept_ids_are_the_keys_of_concept_counts() -> None:
+    record = derive_distinct_concept_ids(_counts_record({"concept::Q708": 1, "concept::Q557": 14}))
+    assert record["fields"]["distinct_concept_ids"] == {"assign": ["concept::Q557", "concept::Q708"]}
+
+
+def test_concept_counts_are_left_where_they_are() -> None:
+    """Ranking reads the tensor, so deriving the ids must not disturb it."""
+    record = derive_distinct_concept_ids(_counts_record({"concept::Q557": 14}))
+    assert record["fields"]["concept_counts"] == {"assign": {"concept::Q557": 14}}
+
+
+def test_record_without_concept_counts_is_unchanged() -> None:
+    record = derive_distinct_concept_ids(_counts_record(None))
+    assert record["fields"] == {}

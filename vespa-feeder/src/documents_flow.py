@@ -1,6 +1,7 @@
 from typing import Any
 
 import orjson
+from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
 from task_runner import task_runner
 from vespa_feeder import (
@@ -84,6 +85,18 @@ def derive_id_if_missing(
     return record
 
 
+def derive_distinct_concept_ids(record: dict[str, Any]) -> dict[str, Any]:
+    """Set `distinct_concept_ids` from the keys of the record's own `concept_counts`, so concepts can be grouped."""
+    concept_counts = record.get("fields", {}).get("concept_counts", {}).get("assign")
+
+    if concept_counts is None:
+        return record
+
+    record["fields"]["distinct_concept_ids"] = {"assign": sorted(concept_counts)}
+
+    return record
+
+
 def derive_document_data(record: dict[str, Any]) -> dict[str, Any]:
     """Apply all passages derivers to a record, in sequence."""
     if (document_source := _document_source(record)) is not None:
@@ -91,6 +104,7 @@ def derive_document_data(record: dict[str, Any]) -> dict[str, Any]:
         record = derive_collection_id(record, document_source)
         record = derive_id_if_missing(record, document_source)
     record = derive_hoisted_attributes(record)
+    record = derive_distinct_concept_ids(record)
 
     return record
 
@@ -153,10 +167,10 @@ def documents_feeder_flow(
     batch_size: int = DEFAULT_BATCH_SIZE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
     s3_export_prefix: str | None = None,
-) -> None:
+) -> State | None:
     bucket = "cpr-prod-snowflake-data-export"
     prefix = "production/published/pipeline_data_in_vespa_documents_updates_v1/"
-    vespa_feeder(
+    return vespa_feeder(
         s3_bucket=bucket,
         s3_prefix=prefix,
         s3_export_prefix=s3_export_prefix,

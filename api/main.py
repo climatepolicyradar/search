@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import Lifespan
 
+from api.download import BaseUrlRequired
 from api.health import router as health_router
 from api.mcp.server import build_server
 from api.observability.src.api import (
@@ -22,6 +23,7 @@ from api.routers import router
 from api.search_metrics import SearchMetrics
 from api.settings import settings
 from api.state import State, build_state
+from api.taxonomy.service import TaxonomyNotLoadedError
 from search.engines import VespaError
 from search.log import get_logger
 
@@ -59,7 +61,7 @@ async def build_mcp(app: FastAPI, state: State) -> AsyncGenerator[None]:
 async def production_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown events."""
     async with build_state() as state, build_mcp(app=app, state=state):
-        app.state.shared = state
+        app.state.deps = state
         yield
 
 
@@ -132,6 +134,37 @@ async def handle_vespa_error(request: Request, exc: VespaError) -> JSONResponse:
         exc,
     )
     return JSONResponse(status_code=status_code, content={"detail": str(exc)})
+
+
+async def handle_base_url_required(request: Request, _exc: BaseUrlRequired) -> JSONResponse:
+    """Reject a download that asked for a URL column without a `base_url` to build it from."""
+    logger.warning(
+        "Rejected: download requested a URL column without base_url method=%s path=%s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=HTTPStatus.BAD_REQUEST,
+        content={"detail": "base_url is required when requesting URL or BUNDLE_URL."},
+    )
+
+
+async def handle_taxonomy_not_loaded(
+    request: Request,
+    exc: TaxonomyNotLoadedError,
+) -> JSONResponse:
+    """Surface a taxonomy that has not loaded yet as a 503."""
+    logger.error(
+        "Error: The taxonomy is not loaded while serving request method=%s "
+        "path=%s: %s",
+        request.method,
+        request.url.path,
+        exc,
+    )
+    return JSONResponse(
+        status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        content={"detail": "The taxonomy is not available yet"},
+    )
 
 
 def metric_route(request: Request) -> str:
@@ -299,6 +332,8 @@ def create_app(lifespan: Lifespan[FastAPI]) -> FastAPI:
         allow_headers=["*"],
     )
     app.exception_handler(VespaError)(handle_vespa_error)
+    app.exception_handler(BaseUrlRequired)(handle_base_url_required)
+    app.exception_handler(TaxonomyNotLoadedError)(handle_taxonomy_not_loaded)
     app.middleware("http")(log_request_lifecycle)
     app.get("/")(root)
     app.include_router(router)

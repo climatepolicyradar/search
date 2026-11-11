@@ -5,12 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any, Protocol
 from urllib.parse import quote
 
 import httpx2
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from vespa.querybuilder import Grouping as G
 
 from search.bolding import (
@@ -124,15 +125,54 @@ class VespaHit[A: BaseModel](BaseModel):
     fields: A
 
 class VespaRoot[A: BaseModel](BaseModel):
-    children: list[VespaHit[A]] | None
+    # Vespa omits `children` entirely when nothing matched, rather than
+    # sending an empty list.
+    children: list[VespaHit[A]] | None = None
 
 class VespaResponse[A: BaseModel](BaseModel):
     root: VespaRoot[A]
 
-class CollectionReference(BaseModel):
-    description: str | None = None
-    title: str | None = None
+class ByNameModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CollectionReference(ByNameModel):
+    description: str | None = Field(default=None, validation_alias="description_attribute")
+    title: str | None = Field(default=None, validation_alias="title_attribute")
+    slug: str | None = Field(default=None, validation_alias="deprecated_slug")
     id: str
+
+
+class ExportLabel(BaseModel):
+    relationship: str | None = None
+    type: str
+    value: str
+
+
+class ExportDocument(ByNameModel):
+    id: str
+    title: str | None = Field(default=None, validation_alias="title_attribute")
+    description: str | None = Field(default=None, validation_alias="description_attribute")
+    slug: str | None = Field(default=None, validation_alias="deprecated_slug")
+    principal_id: str | None = None
+    collection_id: str | None = None
+    labels: list[ExportLabel] = []
+    attributes_string: dict[str, str] = {}
+    attributes_double: dict[str, float] = {}
+    attributes_boolean: dict[str, bool] = {}
+
+
+class ExportRow(BaseModel):
+    document: ExportDocument
+    collection: CollectionReference | None = None
+
+
+@dataclass(frozen=True)
+class DocumentQuery:
+    free_text: str
+    phrases: list[str]
+    where: str
+    request_fields: dict[str, Any]
 
 class DocumentSearchEngine(Protocol):
     async def asearch(
@@ -150,6 +190,17 @@ class DocumentSearchEngine(Protocol):
             document_ids: list[str],
         ) -> dict[str, CollectionReference]:
         """Resolve collection references for the given document ids."""
+        ...
+
+    async def export(
+            self,
+            query: str | None,
+            limit: int,
+            order_by: list[OrderBy],
+            filters: Filter | None = None,
+            resolve_collections: bool = True,
+        ) -> list[ExportRow]:
+        """Fetch documents for a CSV export, read entirely from attributes."""
         ...
 
 
@@ -293,6 +344,62 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             return {}
         return {"input.query(msm)": self.msm}
 
+    def _document_query(
+        self,
+        query: str | None,
+        filters: Filter | None,
+        order_by: list[OrderBy],
+    ) -> DocumentQuery:
+        free_text, phrases = _parse_query(query) if query else ("", [])
+
+        where = "true"
+        if free_text:
+            where += self._userQuery
+        where += _document_phrase_yql(len(phrases))
+        where += _build_filter_query(
+            filters,
+            field_map=documents_filter_field_to_vespa_field_map,
+            struct_map=documents_filter_struct_field_to_vespa_field_map,
+        )
+
+        sort_overrides = _ranking_overrides_for_document_order_by(order_by)
+        request_fields: dict[str, Any] = {
+            "timeout": "5s",
+            "model.language": "en",
+            "ranking.profile": self.ranking_profile,
+            **self._msm_request_fields(free_text),
+        }
+        request_fields.update(sort_overrides)
+        if free_text:
+            normalized_free_text = _normalize_currency_symbols(free_text)
+            request_fields["query"] = normalized_free_text
+            request_fields["geo_query"] = _resolve_geography_aliases(normalized_free_text)
+        for index, phrase in enumerate(phrases):
+            request_fields[f"exact_phrase_{index}"] = _normalize_currency_symbols(phrase)
+
+        # Ranking inputs. A sort replaces the rank profile's scoring entirely,
+        # so none of them would be read.
+        if not sort_overrides:
+            topic_ids = _topic_ids_from_filters(filters)
+            if topic_ids:
+                request_fields["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
+                request_fields["input.query(topic_weight)"] = self.topic_weight
+
+            if self.passages_breadth_weight is not None:
+                request_fields["input.query(passages_breadth_weight)"] = (
+                    self.passages_breadth_weight
+                )
+
+            if free_text and self.exact_weight is not None:
+                request_fields["input.query(exact_weight)"] = self.exact_weight
+
+        return DocumentQuery(
+            free_text=free_text,
+            phrases=phrases,
+            where=where,
+            request_fields=request_fields,
+        )
+
     @property
     def parameters(self) -> dict[str, Any]:
         """Tuning parameters, surfaced in the search engine's ID and W&B logging."""
@@ -369,12 +476,83 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
                     request_context="descriptions",
                     client=self._httpx,
                     request_body={
-                        "yql": "select id, title, description from documents where id in (@ids)",
+                        "yql": "select * from documents where id in (@ids)",
                         "ranking.profile": "unranked",
+                        "presentation.summary": "collection-reference",
                         "ids": document_ids,
                     },
                 )
             ).root.children or []
+        }
+
+    async def export(
+        self,
+        query: str | None,
+        limit: int,
+        order_by: list[OrderBy],
+        filters: Filter | None = None,
+        resolve_collections: bool = True,
+    ) -> list[ExportRow]:
+        """
+        Fetch documents for a CSV export, read entirely from attributes.
+
+        `asearch` answers from the `search` document summary, which is backed by
+        disk: every hit loads the whole document row, passages included. Nothing
+        a CSV column reads needs that, so this reads the `csv` summary class
+        instead, and resolves each row's collection from `principal_id` rather
+        than walking `document_source`.
+        """
+        document_query = self._document_query(query, filters, order_by)
+
+        request_body: dict[str, Any] = {
+            "yql": f"select * from sources documents where {document_query.where}",
+            "hits": limit,
+            "presentation.summary": "csv",
+            **document_query.request_fields,
+        }
+
+        documents = [
+            hit.fields
+            for hit in VespaResponse[ExportDocument].model_validate(
+                await aexecute_vespa_query(
+                    endpoint=f"{self.settings.vespa_endpoint}/search",
+                    token=self.settings.vespa_read_token,
+                    request_context="documents.export",
+                    request_body=request_body,
+                    client=self._httpx,
+                )
+            ).root.children or []
+        ]
+
+        collections = (
+            await self._export_collections(documents) if resolve_collections else {}
+        )
+
+        return [
+            ExportRow(document=document, collection=collections.get(document.id))
+            for document in documents
+        ]
+
+    async def _export_collections(
+        self,
+        documents: list[ExportDocument],
+    ) -> dict[str, CollectionReference]:
+        collection_id_of: dict[str, str] = {
+            document.id: document.collection_id
+            for document in documents
+            if document.collection_id
+        }
+
+        if not collection_id_of:
+            return {}
+
+        references = await self.collection_references(
+            list(dict.fromkeys(collection_id_of.values())),
+        )
+        return {
+            document_id: references[collection_id]
+            for document_id, collection_id in collection_id_of.items()
+            if collection_id in references
         }
 
     async def asearch(
@@ -386,21 +564,11 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
     ) -> ListResponse[Document]:
         """Fetch a list of relevant search results."""
 
-        where = "true "
+        document_query = self._document_query(query, filters, order_by)
+        free_text = document_query.free_text
+        phrases = document_query.phrases
 
-        if filters is not None:
-            where += _build_filter_query(
-                filters,
-                field_map=documents_filter_field_to_vespa_field_map,
-                struct_map=documents_filter_struct_field_to_vespa_field_map,
-            )
-
-        free_text, phrases = _parse_query(query) if query else ("", [])
-
-        yql = f"select * from sources documents where {where}"
-        if free_text:
-            yql += self._userQuery
-        yql += _document_phrase_yql(len(phrases))
+        yql = f"select * from sources documents where {document_query.where}"
         logger.info(
             "🔎 Document search query built (query=%r, free_text=%r, phrases=%r, yql=%s)",
             query,
@@ -409,38 +577,12 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             yql,
         )
 
-        sort_overrides = _ranking_overrides_for_document_order_by(order_by)
-
         request_body: dict[str, Any] = {
             "yql": yql,
             "hits": pagination.page_size,
             "offset": (pagination.page_token - 1) * pagination.page_size,
-            "timeout": "5s",
-            "model.language": "en",
-            "ranking.profile": self.ranking_profile,
         }
-        request_body.update(sort_overrides)
-        request_body.update(self._msm_request_fields(free_text))
-
-        if free_text:
-            normalized_free_text = _normalize_currency_symbols(free_text)
-            request_body["query"] = normalized_free_text
-            request_body["geo_query"] = _resolve_geography_aliases(normalized_free_text)
-        for i, phrase in enumerate(phrases):
-            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
-
-        topic_ids = _topic_ids_from_filters(filters)
-        if topic_ids and not sort_overrides:
-            request_body["input.query(topic_q)"] = dict.fromkeys(topic_ids, 1.0)
-            request_body["input.query(topic_weight)"] = self.topic_weight
-
-        if self.passages_breadth_weight is not None and not sort_overrides:
-            request_body["input.query(passages_breadth_weight)"] = (
-                self.passages_breadth_weight
-            )
-
-        if free_text and self.exact_weight is not None and not sort_overrides:
-            request_body["input.query(exact_weight)"] = self.exact_weight
+        request_body.update(document_query.request_fields)
 
         # `search-exact` adds the `*_not_stemmed` fields, which is where quoted
         # phrases match and so the only place they get bolded.
@@ -619,19 +761,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         """Return aggregations (label/concept groups with counts) filtered by the search query."""
         # Build the top-level where clause from the search query and any filters,
         # mirroring how `search()` constructs its YQL.
-        free_text, phrases = _parse_query(query) if query else ("", [])
-
-        where = "true"
-        if free_text:
-            where += self._userQuery
-        where += _document_phrase_yql(len(phrases))
-
-        if filters is not None:
-            where += _build_filter_query(
-                filters,
-                field_map=documents_filter_field_to_vespa_field_map,
-                struct_map=documents_filter_struct_field_to_vespa_field_map,
-            )
+        document_query = self._document_query(query, filters, order_by=[])
+        where = document_query.where
 
         # Group labels and concepts across all documents matching the search query.
         # The top-level `where` already scopes the document set.
@@ -666,16 +797,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         request_body: dict[str, Any] = {
             "yql": yql,
             "hits": 0,
-            "timeout": "5s",
-            "model.language": "en",
-            "ranking.profile": self.ranking_profile,
-            **self._msm_request_fields(free_text),
+            **document_query.request_fields,
         }
-        if free_text:
-            request_body["query"] = free_text
-            request_body["geo_query"] = _resolve_geography_aliases(free_text)
-        for i, phrase in enumerate(phrases):
-            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
         response = await aexecute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
@@ -719,17 +842,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         group_attributes: list[str],
     ) -> dict[str, dict[tuple[str, str], tuple[Label, int]]]:
         """Run a Vespa grouping query and return label/concept buckets partitioned by attribute."""
-        free_text, phrases = _parse_query(query) if query else ("", [])
-
-        where = "true"
-        if free_text:
-            where += self._userQuery
-        where += _document_phrase_yql(len(phrases))
-        where += _build_filter_query(
-            where_filter,
-            field_map=documents_filter_field_to_vespa_field_map,
-            struct_map=documents_filter_struct_field_to_vespa_field_map,
-        )
+        document_query = self._document_query(query, where_filter, order_by=[])
+        where = document_query.where
 
         inner_groups = [
             G.all(
@@ -747,16 +861,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         request_body: dict[str, Any] = {
             "yql": yql,
             "hits": 0,
-            "timeout": "5s",
-            "model.language": "en",
-            "ranking.profile": self.ranking_profile,
-            **self._msm_request_fields(free_text),
+            **document_query.request_fields,
         }
-        if free_text:
-            request_body["query"] = free_text
-            request_body["geo_query"] = _resolve_geography_aliases(free_text)
-        for i, phrase in enumerate(phrases):
-            request_body[f"exact_phrase_{i}"] = _normalize_currency_symbols(phrase)
         response = await aexecute_vespa_query(
             endpoint=f"{self.settings.vespa_endpoint}/search",
             token=self.settings.vespa_read_token,
