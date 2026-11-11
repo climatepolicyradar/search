@@ -20,9 +20,10 @@ def _row(
         title: str = "t",
         description: str | None = None,
         collection: CollectionReference | None = None,
+        slug: str | None = None,
     ) -> ExportRow:
     return ExportRow(
-        document=ExportDocument(id=id, title=title, description=description),
+        document=ExportDocument(id=id, title=title, description=description, slug=slug),
         collection=collection,
     )
 
@@ -33,6 +34,7 @@ def _download(
         columns: list[str] | None = None,
         max_results: int | None = None,
         msm: float | None = None,
+        base_url: str | None = None,
     ) -> httpx2.Response:
     params: list[tuple[str, str]] = [("query", query)]
     if columns is not None:
@@ -41,6 +43,8 @@ def _download(
         params.append(("max_results", str(max_results)))
     if msm is not None:
         params.append(("msm", str(msm)))
+    if base_url is not None:
+        params.append(("base_url", base_url))
     return test_client.get("/search/documents:download", params=tuple(params))
 
 
@@ -198,3 +202,172 @@ def test_download_asks_for_collections_only_when_a_column_needs_them(
 
     requested = [request.resolve_collections for request in stub_engine.export_requests]
     assert requested == [False, True]
+
+
+def test_download_builds_urls_from_the_callers_base_url(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    """The caller owns the host; the API appends the slug it holds."""
+    collection = CollectionReference(id="collection-1", title="A Collection", slug="a-collection")
+    stub_engine.add_export_response([_row("doc-1", collection=collection, slug="a-document")])
+
+    response = _download(
+        test_client,
+        columns=["URL", "BUNDLE_URL"],
+        base_url="https://www.climatecasechart.com",
+    )
+
+    expected = (
+        "https://www.climatecasechart.com/document/a-document,"
+        "https://www.climatecasechart.com/collections/a-collection"
+    )
+    assert response.text.splitlines()[1] == expected
+
+
+def test_download_does_not_double_the_slash_after_a_trailing_slash(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    stub_engine.add_export_response([_row("doc-1", slug="a-document")])
+
+    response = _download(
+        test_client,
+        columns=["URL"],
+        base_url="https://www.climatecasechart.com/",
+    )
+
+    assert response.text.splitlines()[1] == "https://www.climatecasechart.com/document/a-document"
+
+
+def test_download_leaves_the_url_blank_for_a_document_without_a_slug(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    """
+    Around 4% of principals carry no slug.
+
+    There is no page to link to, so the cell is empty - but the row, and the
+    rest of the download, are still correct and still a 200.
+    """
+    stub_engine.add_export_response([_row("doc-1", slug=None)])
+
+    response = _download(test_client, columns=["ID", "URL"], base_url="https://example.org")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.text.splitlines()[1] == "doc-1,"
+
+
+def test_download_leaves_the_bundle_url_blank_without_a_collection(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    stub_engine.add_export_response([_row("doc-1", slug="a-document")])
+
+    response = _download(test_client, columns=["ID", "BUNDLE_URL"], base_url="https://example.org")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.text.splitlines()[1] == "doc-1,"
+
+
+def test_download_rejects_a_url_column_without_a_base_url(test_client: TestClient) -> None:
+    """
+    A URL column with no host to build from is the caller's error, not an empty column.
+
+    Answering 200 with a blank URL would be indistinguishable from the
+    no-slug case above, which is a legitimate result.
+    """
+    response = _download(test_client, columns=["ID", "URL"])
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_download_without_a_url_column_does_not_need_a_base_url(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    stub_engine.add_export_response([_row("doc-1")])
+
+    response = _download(test_client, columns=["ID", "TITLE"])
+
+    assert response.status_code == HTTPStatus.OK
+
+
+def test_download_asks_for_collections_when_only_the_bundle_url_is_wanted(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    """
+    `BUNDLE_URL` is read off the collection, so it has to ask for one.
+
+    Without this the column comes back empty with a 200, which is
+    indistinguishable from a document that genuinely has no collection.
+    """
+    stub_engine.add_export_response([_row("doc-1")])
+
+    _download(test_client, columns=["BUNDLE_URL"], base_url="https://example.org")
+
+    assert [request.resolve_collections for request in stub_engine.export_requests] == [True]
+
+
+def test_download_rejects_a_base_url_that_is_not_a_url(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    """
+    An unusable `base_url` is refused rather than built into a broken link.
+
+    Without a scheme and host there is nothing to join a slug onto, so every
+    URL cell would be a relative path handed back with a 200.
+    """
+    stub_engine.add_export_response([_row("doc-1", slug="a-document")])
+
+    response = _download(test_client, columns=["URL"], base_url="not-a-url")
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_download_rejects_an_empty_base_url(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    stub_engine.add_export_response([_row("doc-1", slug="a-document")])
+
+    response = _download(test_client, columns=["URL"], base_url="")
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_download_reads_the_collection_url_under_its_cpr_name(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    """`COLLECTION_URL` and `BUNDLE_URL` are one page under two apps' names."""
+    collection = CollectionReference(id="collection-1", title="A Collection", slug="a-collection")
+    stub_engine.add_export_response([_row("doc-1", collection=collection)])
+
+    response = _download(
+        test_client,
+        columns=["COLLECTION_URL", "BUNDLE_URL"],
+        base_url="https://app.climatepolicyradar.org",
+    )
+
+    cell = "https://app.climatepolicyradar.org/collections/a-collection"
+    assert response.text.splitlines()[1] == f"{cell},{cell}"
+
+
+def test_download_asks_for_collections_when_only_the_collection_url_is_wanted(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    stub_engine.add_export_response([_row("doc-1")])
+
+    _download(test_client, columns=["COLLECTION_URL"], base_url="https://example.org")
+
+    assert [request.resolve_collections for request in stub_engine.export_requests] == [True]
+
+
+def test_download_rejects_a_collection_url_without_a_base_url(test_client: TestClient) -> None:
+    response = _download(test_client, columns=["COLLECTION_URL"])
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST

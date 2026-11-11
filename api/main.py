@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import Lifespan
 
+from api.download import BaseUrlRequired
 from api.health import router as health_router
 from api.observability.src.api import (
     FastAPITelemetry,
@@ -114,6 +115,19 @@ async def handle_vespa_error(request: Request, exc: VespaError) -> JSONResponse:
         exc,
     )
     return JSONResponse(status_code=status_code, content={"detail": str(exc)})
+
+
+async def handle_base_url_required(request: Request, _exc: BaseUrlRequired) -> JSONResponse:
+    """Reject a download that asked for a URL column without a `base_url` to build it from."""
+    logger.warning(
+        "Rejected: download requested a URL column without base_url method=%s path=%s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=HTTPStatus.BAD_REQUEST,
+        content={"detail": "base_url is required when requesting URL or BUNDLE_URL."},
+    )
 
 
 def metric_route(request: Request) -> str:
@@ -277,6 +291,7 @@ def create_app(lifespan: Lifespan[FastAPI]) -> FastAPI:
         allow_headers=["*"],
     )
     app.exception_handler(VespaError)(handle_vespa_error)
+    app.exception_handler(BaseUrlRequired)(handle_base_url_required)
     app.middleware("http")(log_request_lifecycle)
     app.get("/")(root)
     app.include_router(router)
