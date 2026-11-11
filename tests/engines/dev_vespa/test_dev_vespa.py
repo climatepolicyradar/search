@@ -1760,3 +1760,268 @@ def test_passage_msm_is_only_sent_with_free_text(
     expected: dict[str, float],
 ) -> None:
     assert passages_search_engine._msm_request_fields(msm, free_text) == expected
+
+
+def _export_hit(
+    id: str,
+    collection_id: str | None = None,
+) -> dict[str, object]:
+    fields: dict[str, object] = {"id": id, "title_attribute": "t"}
+    if collection_id is not None:
+        fields["collection_id"] = collection_id
+    return {"fields": fields}
+
+
+async def test_export_reads_the_csv_summary_class(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    The export must not answer from `search`, which is backed by disk.
+
+    Every field a CSV column reads is an attribute, and `csv` is the summary
+    class that says so - asking for `search` would load the whole document row,
+    passages included, for every row of the file.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"children": []}})
+
+    await engine.export(
+        query="needle",
+        limit=10,
+        order_by=[],
+    )
+
+    assert handler.last_json()["presentation.summary"] == "csv"
+
+
+async def test_export_matches_the_search_where_clause(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """A download must cover the same documents as the search it was run from."""
+    engine = _document_engine(http_client)
+    filters = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="labels.value.id", op="contains", value="geography::USA"),
+        ],
+    )
+    handler.add_response({"root": {"children": []}})
+    handler.add_response({"root": {"children": []}})
+
+    await engine.export(
+        query='toxic "waste site"',
+        limit=10,
+        order_by=[],
+        filters=filters,
+    )
+    await engine.asearch(
+        query='toxic "waste site"',
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=filters,
+    )
+
+    export_request, search_request = handler.all_json()
+    assert export_request["yql"] == search_request["yql"]
+
+
+async def test_export_resolves_each_collection_once(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    engine = _document_engine(http_client)
+    handler.add_response({
+        "root": {
+            "children": [
+                _export_hit("doc-1", collection_id="collection-1"),
+                _export_hit("doc-2", collection_id="collection-1"),
+            ]
+        }
+    })
+    handler.add_response({
+        "root": {"children": [{"fields": {"id": "collection-1", "title_attribute": "A Collection"}}]}
+    })
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+    )
+
+    assert handler.last_json()["ids"] == ["collection-1"]
+    assert [row.collection and row.collection.title for row in rows] == ["A Collection"] * 2
+
+
+async def test_export_leaves_a_document_without_a_collection_id_alone(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    Most documents belong to no collection, and must cost no lookup.
+
+    The feeder only sets `collection_id` on a Principal that is `member_of`
+    something - 9% of the corpus - and clears it to "" otherwise, which Vespa
+    returns as an absent field.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"children": [_export_hit("doc-1")]}})
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+    )
+    assert [row.collection for row in rows] == [None]
+    assert len(handler.all_json()) == 1
+
+
+async def test_export_treats_a_cleared_collection_id_as_no_collection(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """A document that has left its collection is fed `""`, not a missing field."""
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"children": [_export_hit("doc-1", collection_id="")]}})
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+    )
+    assert [row.collection for row in rows] == [None]
+    assert len(handler.all_json()) == 1
+
+
+async def test_export_skips_the_collection_lookup_when_not_asked_for_it(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    engine = _document_engine(http_client)
+    handler.add_response({
+        "root": {"children": [_export_hit("doc-1", collection_id="collection-1")]}
+    })
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+        resolve_collections=False,
+    )
+
+    assert [row.collection for row in rows] == [None]
+    assert len(handler.all_json()) == 1
+
+
+async def test_export_reads_labels_that_carry_no_relationship(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    Concepts are denormalised into `labels` with no `relationship`.
+
+    Two thirds of the label elements on a real document are this shape, and
+    the attribute combiner leaves the key out entirely rather than sending
+    null, so requiring it rejects the whole response.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response({
+        "root": {
+            "children": [
+                {
+                    "fields": {
+                        "id": "doc-1",
+                        "labels": [
+                            {"type": "concept", "value": "loan"},
+                            {"relationship": "geography", "type": "geography", "value": "UK"},
+                        ],
+                    }
+                }
+            ]
+        }
+    })
+
+    rows = await engine.export(
+        query=None,
+        limit=10,
+        order_by=[],
+    )
+
+    labels = rows[0].document.labels
+    assert [(label.relationship, label.type, label.value) for label in labels] == [
+        (None, "concept", "loan"),
+        ("geography", "geography", "UK"),
+    ]
+
+
+async def test_export_ranks_the_same_way_as_search(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    A download must come back in the order its search displayed.
+
+    The rank profile's inputs - the topic boost above all - decide that order.
+    An export that left them out would score the same documents differently and
+    hand back a file whose rows are in a different order to the results on
+    screen.
+    """
+    engine = _document_engine(http_client)
+    filters = Filter(
+        op="and",
+        filters=[
+            FieldFilter(field="labels.value.id", op="contains", value="concept::Q42"),
+        ],
+    )
+    handler.add_response({"root": {"children": []}})
+    handler.add_response({"root": {"children": []}})
+
+    await engine.export(
+        query="toxic",
+        limit=10,
+        order_by=[],
+        filters=filters,
+    )
+    await engine.asearch(
+        query="toxic",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[],
+        filters=filters,
+    )
+
+    export_request, search_request = handler.all_json()
+    ranking_inputs = {
+        key: value for key, value in search_request.items() if key.startswith("input.query(")
+    }
+    assert ranking_inputs
+    assert {k: v for k, v in export_request.items() if k.startswith("input.query(")} == ranking_inputs
+
+
+async def test_export_of_a_search_that_matched_nothing_is_empty(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    Vespa leaves `children` out altogether when nothing matched.
+
+    A download of a search with no results is an empty CSV, not a 500 - and
+    every other test here stubs `{"children": []}`, which is a shape Vespa
+    never actually sends for a miss.
+    """
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"fields": {"totalCount": 0}, "coverage": {"coverage": 100}}})
+
+    rows = await engine.export(query="nothing matches this", limit=10, order_by=[])
+    assert rows == []
+
+
+async def test_collection_references_for_ids_that_resolve_to_nothing(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    engine = _document_engine(http_client)
+    handler.add_response({"root": {"fields": {"totalCount": 0}}})
+
+    references = await engine.collection_references(["no-such-collection"])
+    assert references == {}
