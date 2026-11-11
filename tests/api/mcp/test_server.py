@@ -152,6 +152,7 @@ def test_search_documents_sends_limit_order_and_filters(document_engine: MagicMo
     kwargs = document_engine.asearch.await_args.kwargs
     assert kwargs["query"] == "adaptation"
     assert kwargs["pagination"].page_size == 5
+    assert kwargs["pagination"].page_token == 1
     assert [(order.field, order.direction) for order in kwargs["order_by"]] == [
         ("relevance", "desc")
     ]
@@ -402,6 +403,35 @@ def test_documents_has_more_uses_the_total_when_known(
 
     assert result.structured_content is not None
     assert result.structured_content["has_more"] is has_more
+
+
+def test_search_documents_sends_the_page(document_engine: MagicMock):
+    call("search_documents", {"query": "adaptation", "limit": 5, "page": 3})
+
+    pagination = document_engine.asearch.await_args.kwargs["pagination"]
+    assert (pagination.page_token, pagination.page_size) == (3, 5)
+
+
+@pytest.mark.parametrize(("total_size", "has_more"), [(4, False), (5, True)])
+def test_documents_has_more_counts_earlier_pages(
+    document_engine: MagicMock, total_size: int, has_more: bool
+):
+    document_engine.asearch.return_value = ListResponse(
+        results=[make_document(id=f"doc.{number}") for number in range(2)],
+        total_size=total_size,
+        next_page_token=None,
+    )
+
+    result = call("search_documents", {"query": "climate law", "limit": 2, "page": 2})
+
+    assert result.structured_content is not None
+    assert result.structured_content["has_more"] is has_more
+
+
+def test_page_below_one_is_rejected(document_engine: MagicMock):
+    with pytest.raises(ToolError):
+        call("search_documents", {"query": "adaptation", "page": 0})
+    document_engine.asearch.assert_not_awaited()
 
 
 def test_get_passage_returns_full_text_with_neighbours(passage_engine: MagicMock):

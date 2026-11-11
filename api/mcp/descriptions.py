@@ -81,8 +81,14 @@ DOCUMENT_IDS = (
     "combined with other filters."
 )
 DOCUMENT_ID = "A document id, e.g. 'CCLW.family.2042.0'."
-LIMIT = (
+_LIMIT = (
     "How many results to return. has_more means there are more matches, so the "
     "number of results is never a total."
 )
+DOCUMENT_LIMIT = f"{_LIMIT} To see them, ask for the next page."
+PASSAGE_LIMIT = (
+    f"{_LIMIT} There's no next page, so to see other matches, narrow the query "
+    "or filters."
+)
+PAGE = "Which page of results to return, starting at 1. Pages are limit long."
 TOPIC_LIMIT = "How many topics to return."

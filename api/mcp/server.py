@@ -134,12 +134,15 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
         published_before: Annotated[
             date | None, Field(description=descriptions.PUBLISHED_BEFORE)
         ] = None,
-        limit: Annotated[Limit, Field(description=descriptions.LIMIT)] = DEFAULT_LIMIT,
+        limit: Annotated[
+            Limit, Field(description=descriptions.DOCUMENT_LIMIT)
+        ] = DEFAULT_LIMIT,
+        page: Annotated[int, Field(ge=1, description=descriptions.PAGE)] = 1,
     ) -> DocumentResults:
         engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
         results = await engine.asearch(
             query=query,
-            pagination=Pagination(page_token=1, page_size=limit),
+            pagination=Pagination(page_token=page, page_size=limit),
             order_by=BY_RELEVANCE,
             filters=build_filter(
                 geographies=geographies,
@@ -157,7 +160,7 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
                 DocumentHit.from_document(document) for document in results.results
             ],
             has_more=(
-                results.total_size > limit
+                results.total_size > page * limit
                 if results.total_size is not None
                 else len(results.results) >= limit
             ),
@@ -182,7 +185,9 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
         topics: Annotated[
             list[str] | None, Field(description=descriptions.TOPICS)
         ] = None,
-        limit: Annotated[Limit, Field(description=descriptions.LIMIT)] = DEFAULT_LIMIT,
+        limit: Annotated[
+            Limit, Field(description=descriptions.PASSAGE_LIMIT)
+        ] = DEFAULT_LIMIT,
     ) -> PassageResults:
         engine = DevVespaPassageSearchEngine(settings=settings, httpx=httpx)
         pagination = Pagination(page_token=1, page_size=limit * PASSAGE_OVERFETCH)

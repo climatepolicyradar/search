@@ -36,7 +36,9 @@ def _one_of(allowed: list[str]) -> Callable[[str], str]:
     return check
 
 
-CATEGORY_NAMES = _label_values(labels_taxonomy, "category")
+# Corporate disclosures are indexed and returned, but kept out of
+# `labels_taxonomy` because that also builds the website's filter tree.
+CATEGORY_NAMES = [*_label_values(labels_taxonomy, "category"), "Corporate Disclosure"]
 # Stored as `topic` labels, but called response areas on the site.
 RESPONSE_AREA_NAMES = _label_values(labels_taxonomy, "topic")
 REGION_NAMES = _label_values(geographies_taxonomy, "region")

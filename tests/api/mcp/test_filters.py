@@ -25,7 +25,6 @@ def label_ids(group: Filter) -> list[str | float | bool]:
 
 
 TAXONOMY_TYPES = [
-    (Category, labels_taxonomy, "category"),
     (ResponseArea, labels_taxonomy, "topic"),
     (Region, geographies_taxonomy, "region"),
 ]
@@ -40,6 +39,29 @@ def test_schema_lists_every_taxonomy_value(
 
     assert TypeAdapter(arg_type).json_schema()["enum"] == expected
     assert TypeAdapter(arg_type).validate_python(expected[0]) == expected[0]
+
+
+def test_schema_lists_every_category_plus_corporate_disclosure():
+    # `Any`, as in the parametrized tests, since pyright rejects an `Annotated`
+    # alias passed to `TypeAdapter`.
+    category_type: Any = Category
+    taxonomy_categories = [
+        label.value for label in labels_taxonomy if label.type == "category"
+    ]
+
+    assert TypeAdapter(category_type).json_schema()["enum"] == [
+        *taxonomy_categories,
+        "Corporate Disclosure",
+    ]
+
+
+def test_corporate_disclosure_filters_on_its_label_id():
+    tree = build_filter(categories=["Corporate Disclosure"])
+
+    assert tree is not None
+    (group,) = tree.filters
+    assert isinstance(group, Filter)
+    assert label_ids(group) == ["category::Corporate Disclosure"]
 
 
 @pytest.mark.parametrize("arg_type", [Category, ResponseArea, Region])

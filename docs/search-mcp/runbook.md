@@ -48,24 +48,24 @@ every" should go to the data lake MCP, and Claude will say so.
 
 ## Tools
 
-| Tool               | Use it to                                                       | Args                                                                                                                        |
-| ------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `search_documents` | Find laws, policies and cases, one result per law               | `query`, `geographies`, `regions`, `categories`, `response_areas`, `topics`, `published_after`, `published_before`, `limit` |
-| `search_passages`  | Find text to quote, across everything or inside given documents | `query`, `document_ids`, `geographies`, `regions`, `categories`, `topics`, `limit`                                          |
-| `get_passage`      | Read a passage in full, with the passages either side           | `text_block_id`, `context` (0 to 3, default 1)                                                                              |
-| `get_document`     | Look up one document by id                                      | `document_id`                                                                                                               |
-| `search_topics`    | Turn a subject into a topic id for the `topics` filter          | `query`, `limit`                                                                                                            |
+| Tool               | Use it to                                                       | Args                                                                                                                                |
+| ------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `search_documents` | Find laws, policies and cases, one result per law               | `query`, `geographies`, `regions`, `categories`, `response_areas`, `topics`, `published_after`, `published_before`, `limit`, `page` |
+| `search_passages`  | Find text to quote, across everything or inside given documents | `query`, `document_ids`, `geographies`, `regions`, `categories`, `topics`, `limit`                                                  |
+| `get_passage`      | Read a passage in full, with the passages either side           | `text_block_id`, `context` (0 to 3, default 1)                                                                                      |
+| `get_document`     | Look up one document by id                                      | `document_id`                                                                                                                       |
+| `search_topics`    | Turn a subject into a topic id for the `topics` filter          | `query`, `limit`                                                                                                                    |
 
 ### Filters
 
-| Arg                                   | Format                                         | Example                  |
-| ------------------------------------- | ---------------------------------------------- | ------------------------ |
-| `geographies`                         | ISO 3166-1 alpha-3 country codes               | `["KEN", "GBR"]`         |
-| `regions`                             | World Bank region names                        | `["Sub-Saharan Africa"]` |
-| `categories`                          | One of the 7 categories                        | `["Law", "Policy"]`      |
-| `response_areas`                      | One of 4 policy response areas, documents only | `["Adaptation"]`         |
-| `topics`                              | Ids from `search_topics`                       | `["concept::Q1343"]`     |
-| `published_after`, `published_before` | ISO dates, documents only                      | `"2020-01-01"`           |
+| Arg                                   | Format                                                | Example                  |
+| ------------------------------------- | ----------------------------------------------------- | ------------------------ |
+| `geographies`                         | ISO 3166-1 alpha-3 country codes                      | `["KEN", "GBR"]`         |
+| `regions`                             | World Bank region names                               | `["Sub-Saharan Africa"]` |
+| `categories`                          | One of the 7 site categories, or Corporate Disclosure | `["Law", "Policy"]`      |
+| `response_areas`                      | One of 4 policy response areas, documents only        | `["Adaptation"]`         |
+| `topics`                              | Ids from `search_topics`                              | `["concept::Q1343"]`     |
+| `published_after`, `published_before` | ISO dates, documents only                             | `"2020-01-01"`           |
 
 - Any value within one filter matches, and different filters must all match
 - `document_ids` can't be combined with other filters, because searching within
@@ -78,6 +78,9 @@ every" should go to the data lake MCP, and Claude will say so.
 - `limit` defaults to 10 and is capped at 25
 - Search tools return `results` and `has_more`. `has_more` means there may be
   more matches, so the count is never a total
+- `search_documents` takes `page` (from 1) to fetch more. `search_passages` has
+  no next page, because it drops repeats and headings after fetching, so Claude
+  narrows the query or filters instead
 - Passages include their law's `document_title`, so Claude can cite them without
   another call
 - Passages over 1,500 characters are cut at a sentence end, end in "…" and are
