@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Protocol
 
 import httpx2
+from opentelemetry import trace
 from pydantic import ValidationError
 
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
@@ -25,6 +26,7 @@ from search.label import LabelSearchResult
 from search.log import get_logger
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 labels_filter_field_to_vespa_field_map: dict[str, list[str]] = {}
 labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
@@ -33,6 +35,54 @@ labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
     "labels.value.value": ArrayStructField("labels", "value"),
     "labels.value.type": ArrayStructField("labels", "type"),
 }
+
+_ALL_LABELS_HITS = 10_000
+
+
+def _label_from_hit(hit: dict[str, Any]) -> LabelSearchResult:
+    fields = hit.get("fields", {})
+
+    alternative_labels = fields.get("alternative_labels", [])
+    if not isinstance(alternative_labels, list):
+        alternative_labels = []
+
+    return LabelSearchResult.model_validate(
+        {
+            "id": fields.get("id"),
+            "type": fields.get("type"),
+            "value": fields.get("value"),
+            "alternative_labels": alternative_labels,
+            "labels": [
+                {
+                    "type": relationship.get("relationship"),
+                    "value": {
+                        "id": relationship.get("id"),
+                        "type": relationship.get("type"),
+                        "value": relationship.get("value"),
+                    },
+                    "timestamp": relationship.get("timestamp"),
+                }
+                for relationship in fields.get("labels", [])
+            ],
+        }
+    )
+
+
+class LabelSearchEngine(Protocol):
+    async def asearch(
+            self,
+            query: str | None,
+            pagination: Pagination,
+            order_by: list[OrderBy],
+            filters: Filter | None = None,
+            label_type: str | None = None,
+        ) -> ListResponse[LabelSearchResult]:
+        """Search labels."""
+        ...
+
+    async def all_labels(self) -> list[LabelSearchResult]:
+        """Fetch every active label."""
+        ...
 
 
 class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchResult]):
@@ -99,8 +149,6 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
         if label_type:
             yql += f' and type contains "{label_type}"'
 
-        logger.info("🔎 Label search query built (query=%r, yql=%s)", query, yql)
-
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
@@ -125,33 +173,8 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
 
         for hit in response.get("root", {}).get("children", []):
             fields = hit.get("fields", {})
-            alternative_labels = fields.get("alternative_labels", [])
-            if not isinstance(alternative_labels, list):
-                alternative_labels = []
-            subconcept_labels = fields.get("subconcept_labels", [])
-            if not isinstance(subconcept_labels, list):
-                subconcept_labels = []
-
-            label_data = {
-                "id": fields.get("id"),
-                "type": fields.get("type"),
-                "value": fields.get("value"),
-                "alternative_labels": alternative_labels,
-                "labels": [
-                    {
-                        "type": relationship.get("relationship"),
-                        "value": {
-                            "id": relationship.get("id"),
-                            "type": relationship.get("type"),
-                            "value": relationship.get("value"),
-                        },
-                        "timestamp": relationship.get("timestamp"),
-                    }
-                    for relationship in fields.get("labels", []) or []
-                ],
-            }
             try:
-                label = LabelSearchResult.model_validate(label_data)
+                label = _label_from_hit(hit)
             except ValidationError:
                 logger.warning("Label fields are invalid for hit id=%r", hit.get("id"))
                 continue
@@ -173,6 +196,35 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
         self.last_debug_info = debug_info
         total_size = _get_total_count(response)
         return ListResponse(results=labels, total_size=total_size, next_page_token=None)
+
+    async def all_labels(self) -> list[LabelSearchResult]:
+        """Fetch every active label, for callers that need the whole taxonomy."""
+        with tracer.start_as_current_span("labels.all") as span:
+            response = await aexecute_vespa_query(
+                endpoint=f"{self.settings.vespa_endpoint}/search",
+                token=self.settings.vespa_read_token,
+                request_body={
+                    "yql": 'select * from sources labels where status contains "active"',
+                    "hits": _ALL_LABELS_HITS,
+                    "ranking.profile": "unranked",
+                    "query_profile": "default",
+                },
+                request_context="labels.all",
+                client=self._httpx,
+            )
+
+            labels: list[LabelSearchResult] = []
+            for hit in response.get("root", {}).get("children", []):
+                try:
+                    labels.append(_label_from_hit(hit))
+                except ValidationError:
+                    logger.warning(
+                        "Label fields are invalid for hit id=%r", hit.get("id")
+                    )
+
+            span.set_attribute("labels.count", len(labels))
+            span.set_attribute("labels.total", _get_total_count(response) or 0)
+            return labels
 
     def count(self, query: str) -> int:
         """Return hit count for DevVespaLabelSearchEngine."""

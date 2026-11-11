@@ -16,6 +16,9 @@ from search.engines.dev_vespa import (
 from search.engines.dev_vespa.documents_search_engine import (
     DocumentSearchEngine,
 )
+from search.engines.dev_vespa.labels_search_engine import (
+    LabelSearchEngine,
+)
 from search.engines.dev_vespa.passages_search_engine import (
     DEFAULT_PASSAGE_RANK_PROFILE,
 )
@@ -189,7 +192,7 @@ def labels_engine(httpx: HttpxDep) -> DevVespaLabelSearchEngine:
     return DevVespaLabelSearchEngine(settings=settings, httpx=httpx)
 
 
-LabelsEngineDep = Annotated[DevVespaLabelSearchEngine, Depends(labels_engine)]
+LabelsEngineDep = Annotated[LabelSearchEngine, Depends(labels_engine)]
 
 
 def documents_engine(
