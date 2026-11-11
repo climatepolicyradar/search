@@ -1,5 +1,3 @@
-"""Holds the label taxonomy in memory, refreshed from Vespa on a timer."""
-
 from __future__ import annotations
 
 import asyncio

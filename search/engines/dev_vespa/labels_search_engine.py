@@ -6,6 +6,7 @@ import asyncio
 from typing import Any, Protocol
 
 import httpx2
+from opentelemetry import trace
 from pydantic import ValidationError
 
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
@@ -25,6 +26,7 @@ from search.label import LabelSearchResult
 from search.log import get_logger
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 labels_filter_field_to_vespa_field_map: dict[str, list[str]] = {}
 labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
@@ -147,8 +149,6 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
         if label_type:
             yql += f' and type contains "{label_type}"'
 
-        logger.info("🔎 Label search query built (query=%r, yql=%s)", query, yql)
-
         request_body: dict[str, Any] = {
             "yql": yql,
             "query": query,
@@ -199,33 +199,32 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
 
     async def all_labels(self) -> list[LabelSearchResult]:
         """Fetch every active label, for callers that need the whole taxonomy."""
-        yql = 'select * from sources labels where status contains "active"'
+        with tracer.start_as_current_span("labels.all") as span:
+            response = await aexecute_vespa_query(
+                endpoint=f"{self.settings.vespa_endpoint}/search",
+                token=self.settings.vespa_read_token,
+                request_body={
+                    "yql": 'select * from sources labels where status contains "active"',
+                    "hits": _ALL_LABELS_HITS,
+                    "ranking.profile": "unranked",
+                    "query_profile": "default",
+                },
+                request_context="labels.all",
+                client=self._httpx,
+            )
 
-        logger.info("🔎 Fetching all active labels (yql=%s)", yql)
+            labels: list[LabelSearchResult] = []
+            for hit in response.get("root", {}).get("children", []):
+                try:
+                    labels.append(_label_from_hit(hit))
+                except ValidationError:
+                    logger.warning(
+                        "Label fields are invalid for hit id=%r", hit.get("id")
+                    )
 
-        response = await aexecute_vespa_query(
-            endpoint=f"{self.settings.vespa_endpoint}/search",
-            token=self.settings.vespa_read_token,
-            request_body={
-                "yql": yql,
-                "hits": _ALL_LABELS_HITS,
-                "timeout": "10s",
-                "ranking.profile": "unranked",
-                "query_profile": "default",
-            },
-            request_context="labels.all",
-            client=self._httpx,
-        )
-
-        labels: list[LabelSearchResult] = []
-        for hit in response.get("root", {}).get("children", []):
-            try:
-                labels.append(_label_from_hit(hit))
-            except ValidationError:
-                logger.warning("Label fields are invalid for hit id=%r", hit.get("id"))
-
-        logger.info("Fetched %s active labels", len(labels))
-        return labels
+            span.set_attribute("labels.count", len(labels))
+            span.set_attribute("labels.total", _get_total_count(response) or 0)
+            return labels
 
     def count(self, query: str) -> int:
         """Return hit count for DevVespaLabelSearchEngine."""
