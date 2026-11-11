@@ -5,34 +5,26 @@ from http import HTTPStatus
 import httpx2
 from fastapi.testclient import TestClient
 
-from search.data_in_models import (
-    Document,
-    DocumentRelationship,
-    DocumentWithoutRelationships,
+from search.engines.dev_vespa.documents_search_engine import (
+    CollectionReference,
+    ExportDocument,
+    ExportRow,
 )
-from search.engines import ListResponse
-from search.engines.dev_vespa.documents_search_engine import CollectionReference
 from tests.engines.dev_vespa.stub_documents_search_engine import (
     StubDocumentSearchEngine,
 )
 
 
-def _document(id: str, title: str = "t", description: str | None = None) -> Document:
-    return Document(id=id, title=title, description=description)
-
-
-def _empty_pages(stub_engine: StubDocumentSearchEngine, count: int = 4) -> None:
-    """
-    Queue the empty pages a download asks for past the end of the result set.
-
-    Every page of `max_results` is requested concurrently, so a search with
-    one page of matches still issues the remaining requests; Vespa answers
-    those from beyond the last offset with no hits.
-    """
-    for _ in range(count):
-        stub_engine.add_asearch_response(
-            ListResponse(results=[], next_page_token=None, total_size=0)
-        )
+def _row(
+        id: str,
+        title: str = "t",
+        description: str | None = None,
+        collection: CollectionReference | None = None,
+    ) -> ExportRow:
+    return ExportRow(
+        document=ExportDocument(id=id, title=title, description=description),
+        collection=collection,
+    )
 
 
 def _download(
@@ -57,15 +49,7 @@ def test_download_returns_csv_with_content_disposition(
         test_client: TestClient,
     ) -> None:
 
-    stub_engine.add_asearch_response(
-        ListResponse(
-            results=[_document("doc-1", "A Climate Document")],
-            next_page_token=None,
-            total_size=1,
-        )
-    )
-    _empty_pages(stub_engine)
-    stub_engine.add_collection_references_response({})
+    stub_engine.add_export_response([_row("doc-1", "A Climate Document")])
 
     response = _download(test_client)
 
@@ -75,84 +59,36 @@ def test_download_returns_csv_with_content_disposition(
     assert "doc-1" in response.text
 
 
-def test_download_defaults_max_results_to_500(
+def test_download_asks_for_the_whole_file_in_one_request(
         stub_engine: StubDocumentSearchEngine,
         test_client: TestClient,
     ) -> None:
     """
-    Omitting `max_results` caps the download at 500 rows.
+    `max_results` is the page size, and there is only one page.
 
-    The cap is asserted through the pages requested, since that is what
-    the endpoint does with it: 500 rows at 100 per page is 5 pages, each
-    asking for its own 100. Asserting one page's size alone would hold
-    for any default at all.
+    The export reads attributes only, so there is nothing to spread across
+    pages; paging re-ran the match and rank once per page for one page's worth
+    of rows.
     """
-    for _ in range(5):
-        stub_engine.add_asearch_response(
-            ListResponse(
-                results=[_document(f"doc-{i}") for i in range(100)],
-                next_page_token=None,
-                total_size=500,
-            )
-        )
-        stub_engine.add_collection_references_response({})
+    stub_engine.add_export_response([_row(f"doc-{i}") for i in range(500)])
 
     response = _download(test_client)
 
     assert response.status_code == HTTPStatus.OK
-    page_sizes = [request.pagination.page_size for request in stub_engine.asearch_requests]
-    assert page_sizes == [100] * 5
+    assert [request.limit for request in stub_engine.export_requests] == [500]
 
 
 def test_download_respects_max_results_query_param(
         stub_engine: StubDocumentSearchEngine,
         test_client: TestClient,
     ) -> None:
-    stub_engine.add_asearch_response(
-        ListResponse(
-            results=[_document(f"doc-{i}") for i in range(5)],
-            next_page_token=None,
-            total_size=5,
-        )
-    )
-    stub_engine.add_collection_references_response({})
+    stub_engine.add_export_response([_row(f"doc-{i}") for i in range(5)])
 
     response = _download(test_client, max_results=5)
 
-    assert stub_engine.asearch_requests[0].pagination.page_size == 100
+    assert stub_engine.export_requests[0].limit == 5
     body_rows = response.text.strip().splitlines()[1:]
     assert len(body_rows) == 5
-
-
-def test_download_pages_without_overlap_when_max_results_is_not_a_whole_page(
-        stub_engine: StubDocumentSearchEngine,
-        test_client: TestClient,
-    ) -> None:
-    """
-    A `max_results` that is not a multiple of the page size still pages cleanly.
-
-    The engine derives its offset as `(page_token - 1) * page_size`, so a page
-    size shrunk to fit the remainder would rewind the offset: at 150 a second
-    page of 50 would start at 50, re-emitting rows already written and never
-    reaching 100-149. The page size stays fixed and the last page is truncated.
-    """
-    for page in range(2):
-        stub_engine.add_asearch_response(
-            ListResponse(
-                results=[_document(f"doc-{i}") for i in range(page * 100, page * 100 + 100)],
-                next_page_token=None,
-                total_size=200,
-            )
-        )
-
-    response = _download(test_client, max_results=150)
-
-    page_sizes = [request.pagination.page_size for request in stub_engine.asearch_requests]
-    assert page_sizes == [100, 100]
-    body_rows = response.text.strip().splitlines()[1:]
-    assert len(body_rows) == 150
-    assert len(set(body_rows)) == 150
-    assert body_rows[-1].startswith("doc-149,")
 
 
 def test_download_rejects_non_positive_max_results(test_client: TestClient) -> None:
@@ -168,15 +104,7 @@ def test_download_emits_the_requested_columns_in_order(
         stub_engine: StubDocumentSearchEngine,
     ) -> None:
     """The caller names the columns and their order; the API supplies them."""
-    stub_engine.add_asearch_response(
-        ListResponse(
-            results=[_document("doc-1", "A Climate Document")],
-            next_page_token=None,
-            total_size=1,
-        )
-    )
-    _empty_pages(stub_engine)
-    stub_engine.add_collection_references_response({})
+    stub_engine.add_export_response([_row("doc-1", "A Climate Document")])
 
     response = _download(test_client, columns=["TITLE", "ID"])
 
@@ -189,15 +117,7 @@ def test_download_without_columns_still_returns_a_csv(
         stub_engine: StubDocumentSearchEngine,
     ) -> None:
     """`columns` is optional, so an ad-hoc caller gets a usable CSV."""
-    stub_engine.add_asearch_response(
-        ListResponse(
-            results=[_document("doc-1", "A Climate Document")],
-            next_page_token=None,
-            total_size=1,
-        )
-    )
-    _empty_pages(stub_engine)
-    stub_engine.add_collection_references_response({})
+    stub_engine.add_export_response([_row("doc-1", "A Climate Document")])
 
     response = _download(test_client)
     assert response.status_code == HTTPStatus.OK
@@ -216,31 +136,12 @@ def test_download_rejects_a_column_the_api_does_not_know(test_client: TestClient
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_download_resolves_collection_reference_for_a_member_of_document(
+def test_download_writes_the_collection_resolved_for_a_row(
         test_client: TestClient,
         stub_engine: StubDocumentSearchEngine,
     ) -> None:
-    document = Document(
-        id="doc-1",
-        title="A Climate Document",
-        documents=[
-            DocumentRelationship(
-                type="member_of",
-                value=DocumentWithoutRelationships(id="collection-1", title="c"),
-            )
-        ],
-    )
-    stub_engine.add_asearch_response(
-        ListResponse(
-            next_page_token=None,
-            results=[document],
-            total_size=1,
-        )
-    )
-    _empty_pages(stub_engine)
-    stub_engine.add_collection_references_response(
-        {"collection-1": CollectionReference(id="collection-1", title="A Collection", description="About it")}
-    )
+    collection = CollectionReference(id="collection-1", title="A Collection", description="About it")
+    stub_engine.add_export_response([_row("doc-1", "A Climate Document", collection=collection)])
 
     response = _download(
         test_client,
@@ -249,34 +150,14 @@ def test_download_resolves_collection_reference_for_a_member_of_document(
 
     assert response.status_code == HTTPStatus.OK
     assert response.text.splitlines()[1] == "doc-1,A Collection,About it"
-    assert stub_engine.collection_references_requests == [["collection-1"]]
 
 
 def test_download_reads_collection_fields_under_their_ccc_names(
         test_client: TestClient,
         stub_engine: StubDocumentSearchEngine,
     ) -> None:
-    document = Document(
-        id="doc-1",
-        title="A Climate Document",
-        documents=[
-            DocumentRelationship(
-                type="member_of",
-                value=DocumentWithoutRelationships(id="collection-1", title="c"),
-            )
-        ],
-    )
-    stub_engine.add_asearch_response(
-        ListResponse(
-            next_page_token=None,
-            results=[document],
-            total_size=1,
-        )
-    )
-    _empty_pages(stub_engine)
-    stub_engine.add_collection_references_response(
-        {"collection-1": CollectionReference(id="collection-1", title="A Collection", description="About it")}
-    )
+    collection = CollectionReference(id="collection-1", title="A Collection", description="About it")
+    stub_engine.add_export_response([_row("doc-1", "A Climate Document", collection=collection)])
 
     response = _download(
         test_client,
@@ -285,23 +166,35 @@ def test_download_reads_collection_fields_under_their_ccc_names(
 
     assert response.status_code == HTTPStatus.OK
     assert response.text.splitlines()[1] == "collection-1,A Collection,About it"
-    assert stub_engine.collection_references_requests == [["collection-1"]]
 
 
-def test_download_leaves_collection_columns_blank_without_a_relationship(
+def test_download_leaves_collection_columns_blank_without_a_collection(
         test_client: TestClient,
         stub_engine: StubDocumentSearchEngine,
     ) -> None:
-    stub_engine.add_asearch_response(
-        ListResponse(
-            results=[_document("doc-1", "A Climate Document")],
-            next_page_token=None,
-            total_size=1,
-        )
-    )
-    _empty_pages(stub_engine)
-    response = _download(test_client, columns=["ID", "COLLECTION_TITLE"])
-    assert response.status_code == HTTPStatus.OK
+    stub_engine.add_export_response([_row("doc-1", "A Climate Document")])
 
+    response = _download(test_client, columns=["ID", "COLLECTION_TITLE"])
+
+    assert response.status_code == HTTPStatus.OK
     assert response.text.splitlines()[1] == "doc-1,"
-    assert stub_engine.collection_references_requests == []
+
+
+def test_download_asks_for_collections_only_when_a_column_needs_them(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    """
+    A download of plain document columns should not pay for the collection lookup.
+
+    `resolve_collections` is what spares it: without it the engine makes a
+    second Vespa call per page for a value no column reads.
+    """
+    stub_engine.add_export_response([_row("doc-1")])
+    _download(test_client, columns=["ID", "TITLE"])
+
+    stub_engine.add_export_response([_row("doc-2")])
+    _download(test_client, columns=["ID", "COLLECTION_TITLE"])
+
+    requested = [request.resolve_collections for request in stub_engine.export_requests]
+    assert requested == [False, True]
