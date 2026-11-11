@@ -28,17 +28,19 @@ from errors import (
     BatchAbandoned,
     FeedResult,
     VespaError,
-    VespaFeederFailed,
     VespaFeedError,
     VespaFeedResponse,
     VespaResponseError,
 )
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
+from prefect.client.schemas.objects import State
 from prefect.exceptions import MissingContextError
 from prefect.futures import PrefectFuture
 from prefect.runtime import deployment, flow_run
+from prefect.states import Failed
 from run_summary import (
+    _build_failure_message,
     _build_run_summary_markdown,
     _parse_failed_documents,
 )
@@ -429,7 +431,7 @@ def vespa_feeder(
     sample_rate: float = DEFAULT_SAMPLE_RATE,
     batch_result_timeout_seconds: float = _BATCH_RESULT_TIMEOUT_SECONDS,
     drain_timeout_seconds: float = _DRAIN_TIMEOUT_SECONDS,
-) -> None:
+) -> State | None:
     try:
         with tracer.start_as_current_span("vespa_feeder"):
             run_logger = get_run_logger()
@@ -613,8 +615,12 @@ def vespa_feeder(
                         continue
 
                     if isinstance(feed_result, BaseException):
+                        # exc_info so the traceback survives. The run ends in a
+                        # Failed state rather than by raising, so this is the
+                        # only place the stack is recorded.
                         run_logger.error(
-                            f"Batch raised {type(feed_result).__name__}: {feed_result}"
+                            f"Batch raised {type(feed_result).__name__}: {feed_result}",
+                            exc_info=feed_result,
                         )
                         feed_results_exceptions.append(feed_result)
                         continue
@@ -686,13 +692,19 @@ def vespa_feeder(
                     feeder_metrics.record_run_completed(deployment_name, run_name)
 
             if feed_results_errors or feed_results_exceptions:
-                raise VespaFeederFailed(
-                    f"vespa_feed: of {len(feed_results) + len(feed_results_exceptions)} "
-                    f"batch(es), {len(feed_results_errors)} lost records and "
-                    f"{len(feed_results_exceptions)} raised. See the "
-                    "vespa-feeder-run-summary artifact and per-batch error logs above.",
-                    feed_results_errors,
-                    feed_results_exceptions,
+                # Failed rather than raised. Losing records is an outcome of
+                # the feed, not an error in running it, and raising wrapped
+                # the message in "encountered an exception" plus a traceback
+                # pointing at this line - which says nothing about the cause.
+                # Batches that raised are logged with their tracebacks above.
+                return Failed(
+                    message=_build_failure_message(
+                        feed_results=feed_results,
+                        feed_results_errors=feed_results_errors,
+                        feed_results_exceptions=feed_results_exceptions,
+                        records_lost=total_operation - total_ok,
+                        run_ui_url=flow_run.ui_url,
+                    )
                 )
     finally:
         # Outside the span, and outside the inner finally: shutdown() tears
