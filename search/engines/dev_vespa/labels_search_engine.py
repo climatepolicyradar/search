@@ -62,7 +62,7 @@ def _label_from_hit(hit: dict[str, Any]) -> LabelSearchResult:
                     },
                     "timestamp": relationship.get("timestamp"),
                 }
-                for relationship in fields.get("labels", []) or []
+                for relationship in fields.get("labels", [])
             ],
         }
     )
