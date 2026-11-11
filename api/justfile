@@ -21,7 +21,3 @@ dev:
 # The API with the search MCP mounted at /search/mcp
 dev-mcp:
     MCP_ENABLED=true uv run fastapi dev ./main.py --port 8000
-
-# The search MCP on its own at http://127.0.0.1:8001/mcp
-mcp:
-    cd .. && uv run python -m api.mcp.standalone

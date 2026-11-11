@@ -16,7 +16,11 @@ from api.geographies_taxonomy import geographies_taxonomy
 from api.labels_taxonomy import labels_taxonomy
 from search.data_in_models import Label
 from search.engines.dev_vespa import AttributesCondition, FieldFilter, Filter
-from search.engines.vespa_query.filters import normalise_topic_id
+from search.engines.vespa_query.filters import (
+    TOPIC_FILTER_FIELD,
+    TOPIC_ID_PREFIX,
+    normalise_topic_id,
+)
 
 
 def _label_values(taxonomy: list[Label], label_type: str) -> list[str]:
@@ -33,7 +37,8 @@ def _one_of(allowed: list[str]) -> Callable[[str], str]:
 
 
 CATEGORY_NAMES = _label_values(labels_taxonomy, "category")
-TOPIC_NAMES = _label_values(labels_taxonomy, "topic")
+# Stored as `topic` labels, but called response areas on the site.
+RESPONSE_AREA_NAMES = _label_values(labels_taxonomy, "topic")
 REGION_NAMES = _label_values(geographies_taxonomy, "region")
 
 # Built from the taxonomies rather than as a `Literal`, which pyright requires
@@ -43,10 +48,10 @@ Category = Annotated[
     AfterValidator(_one_of(CATEGORY_NAMES)),
     WithJsonSchema({"type": "string", "enum": CATEGORY_NAMES}),
 ]
-Topic = Annotated[
+ResponseArea = Annotated[
     str,
-    AfterValidator(_one_of(TOPIC_NAMES)),
-    WithJsonSchema({"type": "string", "enum": TOPIC_NAMES}),
+    AfterValidator(_one_of(RESPONSE_AREA_NAMES)),
+    WithJsonSchema({"type": "string", "enum": RESPONSE_AREA_NAMES}),
 ]
 Region = Annotated[
     str,
@@ -57,7 +62,6 @@ REGION_IDS = {
     label.value: label.id for label in geographies_taxonomy if label.type == "region"
 }
 
-LABEL_ID_FIELD = "labels.value.id"
 # Passages only see their document's labels as exact `{type}::{id}::{value}`
 # strings, so a label stored under a second name won't match.
 PASSAGE_DOCUMENT_LABELS_FIELD = "labels_type_id_value_attribute"
@@ -69,7 +73,7 @@ COUNTRY_NAMES = {
     for label in geographies_taxonomy
     if label.type == "country"
 }
-CONCEPT_ID = re.compile(r"concept::Q\d+")
+TOPIC_ID = re.compile(rf"{re.escape(TOPIC_ID_PREFIX)}Q\d+")
 
 
 class FilterArgError(ValueError):
@@ -84,8 +88,8 @@ def build_filter(
     geographies: list[str] | None = None,
     regions: list[Region] | None = None,
     categories: list[Category] | None = None,
-    topics: list[Topic] | None = None,
-    concepts: list[str] | None = None,
+    response_areas: list[ResponseArea] | None = None,
+    topics: list[str] | None = None,
     published_after: date | None = None,
     published_before: date | None = None,
     principals_only: bool = False,
@@ -97,8 +101,8 @@ def build_filter(
     :param principals_only: One result per law, policy or case, rather than
         one per version or filing.
     :param for_passages: Match countries, regions and categories on the
-        passage's document, since passages only carry concepts themselves.
-    :raises FilterArgError: When a geography or concept isn't a valid id, or
+        passage's document, since passages only carry topics themselves.
+    :raises FilterArgError: When a geography or topic isn't a valid id, or
         the date range is impossible
     :return: The filter tree, or `None` when no arg is set
     """
@@ -147,10 +151,10 @@ def build_filter(
                 ]
             )
         )
+    if response_areas:
+        groups.append(_any([_label(f"topic::{area}") for area in response_areas]))
     if topics:
-        groups.append(_any([_label(f"topic::{topic}") for topic in topics]))
-    if concepts:
-        groups.append(_any([_label(_concept_id(concept)) for concept in concepts]))
+        groups.append(_any([_label(_topic_id(topic)) for topic in topics]))
     if principals_only:
         groups.append(_any([_label(PRINCIPAL_LABEL_ID)]))
     if published_after is not None:
@@ -170,14 +174,14 @@ def _country_code(code: str) -> str:
     return normalised
 
 
-def _concept_id(concept: str) -> str:
-    concept_id = normalise_topic_id(concept.strip())
-    if not CONCEPT_ID.fullmatch(concept_id):
+def _topic_id(topic: str) -> str:
+    topic_id = normalise_topic_id(topic.strip())
+    if not TOPIC_ID.fullmatch(topic_id):
         raise FilterArgError(
-            f"{concept!r} isn't a concept id. "
-            "Use find_concepts to look up its id, e.g. 'concept::Q1343'."
+            f"{topic!r} isn't a topic id. "
+            "Use search_topics to look up its id, e.g. 'concept::Q1343'."
         )
-    return concept_id
+    return topic_id
 
 
 def _any(filters: list[FieldFilter]) -> Filter:
@@ -185,7 +189,7 @@ def _any(filters: list[FieldFilter]) -> Filter:
 
 
 def _label(label_id: str) -> FieldFilter:
-    return FieldFilter(field=LABEL_ID_FIELD, op="contains", value=label_id)
+    return FieldFilter(field=TOPIC_FILTER_FIELD, op="contains", value=label_id)
 
 
 def _document_label(

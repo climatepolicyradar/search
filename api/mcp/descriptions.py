@@ -24,9 +24,9 @@ _FILTERS = (
 SEARCH_DOCUMENTS = (
     "Find climate laws, policies, court cases and other documents, one result "
     "per law, policy or case. E.g. 'which policies in Kenya cover adaptation "
-    "finance'. For a broad theme use topics. For a narrower subject, get its id "
-    f"from find_concepts and pass it as concepts. {_FILTERS} To read or quote a "
-    "document, pass its id to search_passages."
+    "finance'. For a broad area like adaptation use response_areas. For a "
+    "narrower subject, get its id from search_topics and pass it as topics. "
+    f"{_FILTERS} To read or quote a document, pass its id to search_passages."
 )
 
 SEARCH_PASSAGES = (
@@ -34,9 +34,8 @@ SEARCH_PASSAGES = (
     "act say about adaptation finance'. Pass document_ids to search inside "
     f"documents from search_documents. {_FILTERS} Long passages are cut, end "
     "in '…' and have text_truncated set. Call get_passage before quoting or "
-    "summarising one. Text is matched by its words. Most text is in English, "
-    "including translations, so search in English first. If that finds nothing "
-    "relevant in a document, it may be in its original language, so try that."
+    "summarising one. Text is matched by its words, and only English text is "
+    "searchable, so always write the query in English."
 )
 
 GET_PASSAGE = (
@@ -44,11 +43,11 @@ GET_PASSAGE = (
     "when a passage is text_truncated, or to see the text around a quote."
 )
 
-FIND_CONCEPTS = (
-    "Look up CPR's curated concepts, e.g. 'just transition', to get ids for the "
-    "concepts filter. More precise than putting the subject in the query, "
-    "because it only matches text tagged with that concept. If nothing fits, "
-    "leave concepts out and put the subject in the query."
+SEARCH_TOPICS = (
+    "Look up CPR's curated topics, e.g. 'just transition', to get ids for the "
+    "topics filter. More precise than putting the subject in the query, "
+    "because it only matches text tagged with that topic. If nothing fits, "
+    "leave topics out and put the subject in the query."
 )
 
 GET_DOCUMENT = (
@@ -60,13 +59,13 @@ GET_DOCUMENT = (
 QUERY = "What to search for, in plain words."
 GEOGRAPHIES = "Countries, as ISO 3166-1 alpha-3 codes, e.g. ['KEN', 'GBR']."
 CATEGORIES = "Kinds of document."
-TOPICS = (
-    "Broad themes. Only laws and policies are tagged, so this leaves out other "
-    "kinds of document."
+RESPONSE_AREAS = (
+    "Broad policy response areas. Only laws and policies are tagged, so this "
+    "leaves out other kinds of document."
 )
-CONCEPTS = (
-    "Concept ids from find_concepts, e.g. ['concept::Q1343']. Tagging isn't "
-    "exhaustive, so if this returns little, try a broader concept or drop it."
+TOPICS = (
+    "Topic ids from search_topics, e.g. ['concept::Q1343']. Tagging isn't "
+    "exhaustive, so if this returns little, try a broader topic or drop it."
 )
 REGIONS = (
     "World Bank regions. For other groups, like small island states, list their "
@@ -74,7 +73,7 @@ REGIONS = (
 )
 TEXT_BLOCK_ID = "A text_block_id from search_passages."
 CONTEXT = "How many passages to include before and after it."
-CONCEPT_QUERY = "The subject to look up, in plain words."
+TOPIC_QUERY = "The subject to look up, in plain words."
 PUBLISHED_AFTER = "Published on or after this date."
 PUBLISHED_BEFORE = "Published on or before this date."
 DOCUMENT_IDS = (
@@ -86,4 +85,4 @@ LIMIT = (
     "How many results to return. has_more means there are more matches, so the "
     "number of results is never a total."
 )
-CONCEPT_LIMIT = "How many concepts to return."
+TOPIC_LIMIT = "How many topics to return."

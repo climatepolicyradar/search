@@ -20,7 +20,7 @@ from search.passage import Passage
 
 DESCRIPTION_MAX_CHARS = 300
 PASSAGE_TEXT_MAX_CHARS = 1500
-# Enough for the model to recognise a concept; some have hundreds.
+# Enough for the model to recognise a topic; some have hundreds.
 ALTERNATIVE_NAMES_MAX = 5
 
 # Only real tags, which start with a letter or "/". Prose like "< 1.5C and
@@ -192,14 +192,14 @@ def dedupe_passages(passages: list[Passage]) -> list[Passage]:
     return unique
 
 
-class ConceptHit(BaseModel):
+class TopicHit(BaseModel):
     id: str
     name: str
     alternative_names: list[str]
 
     @classmethod
     def from_label(cls, label: LabelSearchResult) -> Self:
-        """Keep a concept's id and names, dropping its relationships."""
+        """Keep a topic's id and names, dropping its relationships."""
         return cls(
             id=label.id,
             name=label.value,
@@ -207,8 +207,8 @@ class ConceptHit(BaseModel):
         )
 
 
-class ConceptResults(BaseModel):
-    results: list[ConceptHit]
+class TopicResults(BaseModel):
+    results: list[TopicHit]
 
 
 def _unescape(text: str) -> str:

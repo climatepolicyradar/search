@@ -4,10 +4,10 @@ from api.mcp.models import (
     ALTERNATIVE_NAMES_MAX,
     DESCRIPTION_MAX_CHARS,
     PASSAGE_TEXT_MAX_CHARS,
-    ConceptHit,
     DocumentDetail,
     DocumentHit,
     PassageHit,
+    TopicHit,
 )
 from search.data_in_models import Document, Label, LabelRelationship
 from search.label import LabelSearchResult
@@ -211,15 +211,15 @@ def test_html_is_stripped_from_descriptions():
     assert hit.description == "An act about climate & energy."
 
 
-def test_concept_hit_caps_alternative_names():
-    concept = LabelSearchResult(
+def test_topic_hit_caps_alternative_names():
+    topic = LabelSearchResult(
         id="concept::Q1343",
         type="concept",
         value="adaptation finance",
         alternative_labels=[f"name {number}" for number in range(200)],
     )
 
-    hit = ConceptHit.from_label(concept)
+    hit = TopicHit.from_label(topic)
 
     assert len(hit.alternative_names) == ALTERNATIVE_NAMES_MAX
 

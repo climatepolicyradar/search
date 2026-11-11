@@ -10,7 +10,7 @@ from api.mcp.filters import (
     Category,
     FilterArgError,
     Region,
-    Topic,
+    ResponseArea,
     build_filter,
 )
 from search.engines.dev_vespa import AttributesCondition, FieldFilter, Filter
@@ -26,7 +26,7 @@ def label_ids(group: Filter) -> list[str | float | bool]:
 
 TAXONOMY_TYPES = [
     (Category, labels_taxonomy, "category"),
-    (Topic, labels_taxonomy, "topic"),
+    (ResponseArea, labels_taxonomy, "topic"),
     (Region, geographies_taxonomy, "region"),
 ]
 
@@ -42,7 +42,7 @@ def test_schema_lists_every_taxonomy_value(
     assert TypeAdapter(arg_type).validate_python(expected[0]) == expected[0]
 
 
-@pytest.mark.parametrize("arg_type", [Category, Topic, Region])
+@pytest.mark.parametrize("arg_type", [Category, ResponseArea, Region])
 def test_value_outside_the_taxonomy_is_rejected(arg_type: Any):
     with pytest.raises(ValidationError):
         TypeAdapter(arg_type).validate_python("Atlantis")
@@ -77,8 +77,8 @@ def test_categories_are_ored_label_ids():
     assert label_ids(group) == ["category::Law", "category::UN submission"]
 
 
-def test_topics_are_ored_label_ids():
-    tree = build_filter(topics=["Adaptation", "Loss and damage"])
+def test_response_areas_are_ored_label_ids():
+    tree = build_filter(response_areas=["Adaptation", "Loss and damage"])
 
     assert tree is not None
     (group,) = tree.filters
@@ -117,8 +117,8 @@ def test_groups_are_anded():
     assert len(tree.filters) == 3
 
 
-def test_concepts_take_bare_or_prefixed_ids():
-    tree = build_filter(concepts=["Q1343", "concept::Q7987"])
+def test_topics_take_bare_or_prefixed_ids():
+    tree = build_filter(topics=["Q1343", "concept::Q7987"])
 
     assert tree is not None
     (group,) = tree.filters
@@ -126,9 +126,9 @@ def test_concepts_take_bare_or_prefixed_ids():
     assert label_ids(group) == ["concept::Q1343", "concept::Q7987"]
 
 
-def test_concept_name_points_to_find_concepts():
-    with pytest.raises(FilterArgError, match="find_concepts"):
-        build_filter(concepts=["adaptation finance"])
+def test_topic_name_points_to_search_topics():
+    with pytest.raises(FilterArgError, match="search_topics"):
+        build_filter(topics=["adaptation finance"])
 
 
 def test_country_name_asks_for_iso3():
@@ -181,8 +181,8 @@ def test_passages_match_document_labels_on_their_document():
     ]
 
 
-def test_passages_match_concepts_on_their_own_labels():
-    tree = build_filter(concepts=["Q1343"], for_passages=True)
+def test_passages_match_topics_on_their_own_labels():
+    tree = build_filter(topics=["Q1343"], for_passages=True)
 
     assert tree is not None
     (group,) = tree.filters

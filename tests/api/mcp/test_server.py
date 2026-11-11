@@ -8,6 +8,7 @@ what reaches the model, not search quality.
 import asyncio
 import logging
 from collections.abc import Iterator
+from contextlib import nullcontext
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx2
@@ -16,6 +17,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
 from api.mcp.server import build_server, document_titles
+from api.state import State
 from search.engines import ListResponse, VespaError
 from search.label import LabelSearchResult
 from search.passage import Passage
@@ -25,7 +27,7 @@ EXPECTED_TOOLS = {
     "search_documents",
     "search_passages",
     "get_document",
-    "find_concepts",
+    "search_topics",
     "get_passage",
 }
 
@@ -80,7 +82,7 @@ def passage_engine() -> Iterator[MagicMock]:
 def label_engine() -> Iterator[MagicMock]:
     with patch("api.mcp.server.DevVespaLabelSearchEngine") as engine_cls:
         engine = MagicMock()
-        concept = LabelSearchResult(
+        topic = LabelSearchResult(
             id="concept::Q1343",
             type="concept",
             value="adaptation finance",
@@ -88,16 +90,21 @@ def label_engine() -> Iterator[MagicMock]:
         )
         engine.asearch = AsyncMock(
             return_value=ListResponse(
-                results=[concept], total_size=1, next_page_token=None
+                results=[topic], total_size=1, next_page_token=None
             )
         )
         engine_cls.return_value = engine
         yield engine
 
 
+def server():
+    """The MCP with a stand-in client. The engines are mocked, so it's never used."""
+    return build_server(lifespan=lambda _: nullcontext(State(httpx=MagicMock())))
+
+
 def call(tool: str, arguments: dict):
     async def run():
-        async with Client(build_server(httpx=MagicMock)) as client:
+        async with Client(server()) as client:
             return await client.call_tool(tool, arguments)
 
     return asyncio.run(run())
@@ -105,7 +112,7 @@ def call(tool: str, arguments: dict):
 
 def list_tools():
     async def run():
-        async with Client(build_server(httpx=MagicMock)) as client:
+        async with Client(server()) as client:
             return await client.list_tools()
 
     return asyncio.run(run())
@@ -121,6 +128,11 @@ def test_every_tool_is_read_only():
     for tool in list_tools():
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is True
+
+
+def test_shared_client_is_injected_not_an_argument_for_the_model():
+    for tool in list_tools():
+        assert "httpx" not in tool.input_schema["properties"]
 
 
 def test_search_documents_returns_trimmed_hits(document_engine: MagicMock):
@@ -207,9 +219,9 @@ def test_limit_over_the_cap_is_rejected(document_engine: MagicMock):
     document_engine.asearch.assert_not_awaited()
 
 
-def test_unknown_topic_is_rejected(document_engine: MagicMock):
+def test_unknown_response_area_is_rejected(document_engine: MagicMock):
     with pytest.raises(ToolError):
-        call("search_documents", {"query": "flooding", "topics": ["Floods"]})
+        call("search_documents", {"query": "flooding", "response_areas": ["Floods"]})
     document_engine.asearch.assert_not_awaited()
 
 
@@ -252,8 +264,8 @@ def test_vespa_errors_only_suggest_retrying_when_it_could_help(
     assert "secret upstream detail" not in str(exc.value)
 
 
-def test_find_concepts_searches_concept_labels(label_engine: MagicMock):
-    result = call("find_concepts", {"query": "adaptation finance"})
+def test_search_topics_searches_concept_labels(label_engine: MagicMock):
+    result = call("search_topics", {"query": "adaptation finance"})
 
     assert label_engine.asearch.await_args.kwargs["label_type"] == "concept"
     assert result.structured_content is not None
@@ -265,11 +277,11 @@ def test_find_concepts_searches_concept_labels(label_engine: MagicMock):
     }
 
 
-def test_concepts_reach_both_search_engines(
+def test_topics_reach_both_search_engines(
     document_engine: MagicMock, passage_engine: MagicMock
 ):
-    call("search_documents", {"query": "adaptation", "concepts": ["Q1343"]})
-    call("search_passages", {"query": "adaptation", "concepts": ["Q1343"]})
+    call("search_documents", {"query": "adaptation", "topics": ["Q1343"]})
+    call("search_passages", {"query": "adaptation", "topics": ["Q1343"]})
 
     for engine in (document_engine, passage_engine):
         filters = engine.asearch.await_args.kwargs["filters"]
@@ -277,15 +289,15 @@ def test_concepts_reach_both_search_engines(
 
 
 def test_bad_filter_arg_tells_the_model_how_to_fix_it(document_engine: MagicMock):
-    with pytest.raises(ToolError, match="find_concepts"):
-        call("search_documents", {"query": "adaptation", "concepts": ["adaptation"]})
+    with pytest.raises(ToolError, match="search_topics"):
+        call("search_documents", {"query": "adaptation", "topics": ["adaptation"]})
     document_engine.asearch.assert_not_awaited()
 
 
 def test_call_log_records_successes_without_caplog_lowering_the_level():
     # caplog.at_level would hide this: the logger must be at INFO on its own,
     # or every Success line is dropped in the running service.
-    build_server(httpx=MagicMock)
+    server()
 
     assert logging.getLogger("api.mcp.middleware").isEnabledFor(logging.INFO)
 
@@ -498,13 +510,13 @@ def test_regions_reach_both_search_engines(
         assert "region::SSF" in filters.model_dump_json()
 
 
-def test_search_passages_has_no_topics_filter():
-    # Topics are on a law's Principal, which passages can't see, so the filter
-    # would quietly match almost nothing.
+def test_search_passages_has_no_response_areas_filter():
+    # Response areas are on a law's Principal, which passages can't see, so the
+    # filter would quietly match almost nothing.
     tools = {tool.name: tool for tool in list_tools()}
 
-    assert "topics" in tools["search_documents"].input_schema["properties"]
-    assert "topics" not in tools["search_passages"].input_schema["properties"]
+    assert "response_areas" in tools["search_documents"].input_schema["properties"]
+    assert "response_areas" not in tools["search_passages"].input_schema["properties"]
 
 
 def passages(count: int) -> ListResponse:
@@ -553,7 +565,7 @@ def test_get_passage_with_no_context(passage_engine: MagicMock):
         {"geographies": ["KEN"]},
         {"regions": ["Sub-Saharan Africa"]},
         {"categories": ["Law"]},
-        {"concepts": ["Q1343"]},
+        {"topics": ["Q1343"]},
     ],
 )
 def test_document_ids_with_any_label_filter_is_refused(

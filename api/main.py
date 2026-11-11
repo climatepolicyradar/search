@@ -1,12 +1,10 @@
 import os
 from collections.abc import AsyncGenerator
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from http import HTTPStatus
 from pathlib import Path
 from time import perf_counter
-from typing import cast
 
-import httpx2
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -23,7 +21,7 @@ from api.observability.src.api import (
 from api.routers import router
 from api.search_metrics import SearchMetrics
 from api.settings import settings
-from api.state import State
+from api.state import State, build_state
 from search.engines import VespaError
 from search.log import get_logger
 
@@ -41,30 +39,27 @@ UNMATCHED_ROUTE_LABEL = "unmatched"
 MCP_PATH = "/search/mcp"
 
 
-def get_shared_httpx_client() -> httpx2.AsyncClient:
-    """Get the app's one HTTP client for calling Vespa, made at startup."""
-    return cast(State, app.state)["httpx"]
+@asynccontextmanager
+async def build_mcp(app: FastAPI, state: State) -> AsyncGenerator[None]:
+    if not settings.mcp_enabled:
+        yield
+        return
 
-
-if settings.mcp_enabled:
-    mcp_server = build_server(httpx=get_shared_httpx_client)
+    server = build_server(lifespan=lambda _: nullcontext(state))
     # Stateless, so any task can serve any call.
-    mcp_app = mcp_server.http_app(path="/", stateless_http=True)
-else:
-    mcp_app = None
+    mcp_app = server.http_app(path="/", stateless_http=True)
+    # FastAPI doesn't run the startup of apps added with `app.mount`, so the
+    # MCP's is started here. It can't handle requests without it.
+    async with mcp_app.router.lifespan_context(mcp_app):
+        app.mount(MCP_PATH, mcp_app)
+        yield
 
 
 @asynccontextmanager
 async def production_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown events."""
-    async with AsyncExitStack() as stack:
-        client = await stack.enter_async_context(httpx2.AsyncClient(http2=True))
-        state = cast(State, app.state)
-        state["httpx"] = client
-        if mcp_app is not None:
-            # FastAPI doesn't run the startup of apps added with `app.mount`,
-            # so the MCP's is started here. It can't handle requests without it.
-            await stack.enter_async_context(mcp_app.lifespan(app))
+    async with build_state() as state, build_mcp(app=app, state=state):
+        app.state.shared = state
         yield
 
 
@@ -307,8 +302,6 @@ def create_app(lifespan: Lifespan[FastAPI]) -> FastAPI:
     app.middleware("http")(log_request_lifecycle)
     app.get("/")(root)
     app.include_router(router)
-    if mcp_app is not None:
-        app.mount(MCP_PATH, mcp_app)
     telemetry.instrument_fastapi(app)
     return app
 

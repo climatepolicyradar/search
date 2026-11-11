@@ -5,7 +5,7 @@ Each tool checks its args, builds a filter, calls one engine method and trims
 the result.
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from datetime import date
 from typing import Annotated
 
@@ -17,22 +17,29 @@ from fastmcp.server.server import LifespanCallable
 from pydantic import Field
 
 from api.mcp import descriptions
-from api.mcp.filters import Category, FilterArgError, Region, Topic, build_filter
+from api.mcp.filters import (
+    Category,
+    FilterArgError,
+    Region,
+    ResponseArea,
+    build_filter,
+)
 from api.mcp.middleware import CallLogMiddleware, ErrorMessageMiddleware
 from api.mcp.models import (
-    ConceptHit,
-    ConceptResults,
     DocumentDetail,
     DocumentHit,
     DocumentResults,
     PassageHit,
     PassageInContext,
     PassageResults,
+    TopicHit,
+    TopicResults,
     dedupe_passages,
     title_id,
     worth_quoting,
 )
 from api.settings import settings
+from api.state import HttpxDep
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
@@ -86,16 +93,11 @@ async def document_titles(
     return {document.id: document.title for document in results.results}
 
 
-def build_server(
-    httpx: Callable[[], httpx2.AsyncClient],
-    lifespan: LifespanCallable | None = None,
-) -> FastMCP:
+def build_server(lifespan: LifespanCallable) -> FastMCP:
     """
     Build the search MCP.
 
-    :param httpx: Returns the process's shared HTTP client. A callable, because
-        the client only exists once the app's lifespan has started.
-    :param lifespan: Set when running standalone, to own that client.
+    :param lifespan: Yields the app's `State`, which tools read with `HttpxDep`.
     """
     mcp = FastMCP(
         "cpr-search",
@@ -109,6 +111,7 @@ def build_server(
 
     @mcp.tool(description=descriptions.SEARCH_DOCUMENTS, annotations=READ_ONLY)
     async def search_documents(
+        httpx: HttpxDep,
         query: Annotated[str, Field(description=descriptions.QUERY)],
         geographies: Annotated[
             list[str] | None, Field(description=descriptions.GEOGRAPHIES)
@@ -119,11 +122,11 @@ def build_server(
         categories: Annotated[
             list[Category] | None, Field(description=descriptions.CATEGORIES)
         ] = None,
-        topics: Annotated[
-            list[Topic] | None, Field(description=descriptions.TOPICS)
+        response_areas: Annotated[
+            list[ResponseArea] | None, Field(description=descriptions.RESPONSE_AREAS)
         ] = None,
-        concepts: Annotated[
-            list[str] | None, Field(description=descriptions.CONCEPTS)
+        topics: Annotated[
+            list[str] | None, Field(description=descriptions.TOPICS)
         ] = None,
         published_after: Annotated[
             date | None, Field(description=descriptions.PUBLISHED_AFTER)
@@ -133,7 +136,7 @@ def build_server(
         ] = None,
         limit: Annotated[Limit, Field(description=descriptions.LIMIT)] = DEFAULT_LIMIT,
     ) -> DocumentResults:
-        engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx())
+        engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
         results = await engine.asearch(
             query=query,
             pagination=Pagination(page_token=1, page_size=limit),
@@ -142,8 +145,8 @@ def build_server(
                 geographies=geographies,
                 regions=regions,
                 categories=categories,
+                response_areas=response_areas,
                 topics=topics,
-                concepts=concepts,
                 published_after=published_after,
                 published_before=published_before,
                 principals_only=True,
@@ -162,6 +165,7 @@ def build_server(
 
     @mcp.tool(description=descriptions.SEARCH_PASSAGES, annotations=READ_ONLY)
     async def search_passages(
+        httpx: HttpxDep,
         query: Annotated[str, Field(description=descriptions.QUERY)],
         document_ids: Annotated[
             list[str] | None, Field(description=descriptions.DOCUMENT_IDS)
@@ -175,20 +179,20 @@ def build_server(
         categories: Annotated[
             list[Category] | None, Field(description=descriptions.CATEGORIES)
         ] = None,
-        concepts: Annotated[
-            list[str] | None, Field(description=descriptions.CONCEPTS)
+        topics: Annotated[
+            list[str] | None, Field(description=descriptions.TOPICS)
         ] = None,
         limit: Annotated[Limit, Field(description=descriptions.LIMIT)] = DEFAULT_LIMIT,
     ) -> PassageResults:
-        engine = DevVespaPassageSearchEngine(settings=settings, httpx=httpx())
+        engine = DevVespaPassageSearchEngine(settings=settings, httpx=httpx)
         pagination = Pagination(page_token=1, page_size=limit * PASSAGE_OVERFETCH)
         if document_ids:
             # `asearch_within` ORs filters with the query, so label filters
             # would widen the search. Raise so the model knows they weren't applied.
-            if geographies or regions or categories or concepts:
+            if geographies or regions or categories or topics:
                 raise FilterArgError(
                     "document_ids can't be combined with geographies, regions, "
-                    "categories or concepts. The documents are already chosen, "
+                    "categories or topics. The documents are already chosen, "
                     "so search within them using just the query."
                 )
             results = await engine.asearch_within(
@@ -206,13 +210,13 @@ def build_server(
                     geographies=geographies,
                     regions=regions,
                     categories=categories,
-                    concepts=concepts,
+                    topics=topics,
                     for_passages=True,
                 ),
             )
         quotable = [passage for passage in results.results if worth_quoting(passage)]
         kept = dedupe_passages(quotable)
-        titles = await document_titles(kept[:limit], httpx())
+        titles = await document_titles(kept[:limit], httpx)
         return PassageResults(
             results=[
                 PassageHit.from_passage(passage, titles) for passage in kept[:limit]
@@ -222,12 +226,13 @@ def build_server(
 
     @mcp.tool(description=descriptions.GET_PASSAGE, annotations=READ_ONLY)
     async def get_passage(
+        httpx: HttpxDep,
         text_block_id: Annotated[str, Field(description=descriptions.TEXT_BLOCK_ID)],
         context: Annotated[
             int, Field(ge=0, le=MAX_CONTEXT_PASSAGES, description=descriptions.CONTEXT)
         ] = 1,
     ) -> PassageInContext:
-        engine = DevVespaPassageSearchEngine(settings=settings, httpx=httpx())
+        engine = DevVespaPassageSearchEngine(settings=settings, httpx=httpx)
         passages = await engine.aget_with_context(text_block_id, context)
         if passages is None:
             raise ToolError(
@@ -240,7 +245,7 @@ def build_server(
             for index, passage in enumerate(passages)
             if passage.text_block_id == text_block_id
         )
-        titles = await document_titles(passages[position : position + 1], httpx())
+        titles = await document_titles(passages[position : position + 1], httpx)
         hits = [
             PassageHit.from_passage(passage, titles, max_chars=None)
             for passage in passages
@@ -253,9 +258,10 @@ def build_server(
 
     @mcp.tool(description=descriptions.GET_DOCUMENT, annotations=READ_ONLY)
     async def get_document(
+        httpx: HttpxDep,
         document_id: Annotated[str, Field(description=descriptions.DOCUMENT_ID)],
     ) -> DocumentDetail:
-        engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx())
+        engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
         document = await engine.aget(document_id)
         if document is None:
             raise ToolError(
@@ -264,22 +270,23 @@ def build_server(
             )
         return DocumentDetail.from_document(document)
 
-    @mcp.tool(description=descriptions.FIND_CONCEPTS, annotations=READ_ONLY)
-    async def find_concepts(
-        query: Annotated[str, Field(description=descriptions.CONCEPT_QUERY)],
+    @mcp.tool(description=descriptions.SEARCH_TOPICS, annotations=READ_ONLY)
+    async def search_topics(
+        httpx: HttpxDep,
+        query: Annotated[str, Field(description=descriptions.TOPIC_QUERY)],
         limit: Annotated[
-            Limit, Field(description=descriptions.CONCEPT_LIMIT)
+            Limit, Field(description=descriptions.TOPIC_LIMIT)
         ] = DEFAULT_LIMIT,
-    ) -> ConceptResults:
-        engine = DevVespaLabelSearchEngine(settings=settings, httpx=httpx())
+    ) -> TopicResults:
+        engine = DevVespaLabelSearchEngine(settings=settings, httpx=httpx)
         results = await engine.asearch(
             query=query,
             pagination=Pagination(page_token=1, page_size=limit),
             order_by=[],
             label_type="concept",
         )
-        return ConceptResults(
-            results=[ConceptHit.from_label(label) for label in results.results]
+        return TopicResults(
+            results=[TopicHit.from_label(label) for label in results.results]
         )
 
     return mcp

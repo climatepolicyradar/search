@@ -3,7 +3,6 @@
 import os
 from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager
-from typing import cast
 
 import boto3
 import httpx2
@@ -72,7 +71,7 @@ def app(http_client: httpx2.AsyncClient) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-        cast(State, app.state)["httpx"] = http_client
+        app.state.shared = State(httpx=http_client)
         yield
 
     return create_app(lifespan=lifespan)

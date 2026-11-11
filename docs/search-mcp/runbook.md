@@ -21,11 +21,11 @@ The deployed search API keeps the MCP off for now, because the API is public.
 ### Connect (engineers, local)
 
 1. Make sure `api/.env` exists. If not, run `cd api && just gen-env`
-2. Start the server with `cd api && just mcp` and leave it running
+2. Start the API with the MCP on, `cd api && just dev-mcp`, and leave it running
 3. Add it to Claude Code once
 
    ```sh
-   claude mcp add --scope local --transport http cpr-search http://127.0.0.1:8001/mcp
+   claude mcp add --scope local --transport http cpr-search http://127.0.0.1:8000/search/mcp/
    ```
 
 4. Open a new Claude Code chat, since chats that were already open won't see it
@@ -41,31 +41,31 @@ the MCP only reads, but use `just gen-env <instance>` for a dev instance.
 | Name the country, region or kind of document  | "Find Chile's adaptation policies published since 2019"                             |
 | Ask it to quote when you need the exact words | "Quote what the UK Climate Change Act says about carbon budgets"                    |
 | Find a document first, then ask about it      | "Find Germany's Federal Climate Change Act, then what it says about sector budgets" |
-| Mention CPR's concepts for a precise subject  | "Find passages about heat waves in India using CPR's concept tagging"               |
+| Mention CPR's topics for a precise subject    | "Find passages about heat waves in India using CPR's topic tagging"                 |
 
 It's for finding and quoting, not counting. Questions like "how many" or "list
 every" should go to the data lake MCP, and Claude will say so.
 
 ## Tools
 
-| Tool               | Use it to                                                       | Args                                                                                                                  |
-| ------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `search_documents` | Find laws, policies and cases, one result per law               | `query`, `geographies`, `regions`, `categories`, `topics`, `concepts`, `published_after`, `published_before`, `limit` |
-| `search_passages`  | Find text to quote, across everything or inside given documents | `query`, `document_ids`, `geographies`, `regions`, `categories`, `concepts`, `limit`                                  |
-| `get_passage`      | Read a passage in full, with the passages either side           | `text_block_id`, `context` (0 to 3, default 1)                                                                        |
-| `get_document`     | Look up one document by id                                      | `document_id`                                                                                                         |
-| `find_concepts`    | Turn a subject into a concept id for the `concepts` filter      | `query`, `limit`                                                                                                      |
+| Tool               | Use it to                                                       | Args                                                                                                                        |
+| ------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `search_documents` | Find laws, policies and cases, one result per law               | `query`, `geographies`, `regions`, `categories`, `response_areas`, `topics`, `published_after`, `published_before`, `limit` |
+| `search_passages`  | Find text to quote, across everything or inside given documents | `query`, `document_ids`, `geographies`, `regions`, `categories`, `topics`, `limit`                                          |
+| `get_passage`      | Read a passage in full, with the passages either side           | `text_block_id`, `context` (0 to 3, default 1)                                                                              |
+| `get_document`     | Look up one document by id                                      | `document_id`                                                                                                               |
+| `search_topics`    | Turn a subject into a topic id for the `topics` filter          | `query`, `limit`                                                                                                            |
 
 ### Filters
 
-| Arg                                   | Format                                | Example                  |
-| ------------------------------------- | ------------------------------------- | ------------------------ |
-| `geographies`                         | ISO 3166-1 alpha-3 country codes      | `["KEN", "GBR"]`         |
-| `regions`                             | World Bank region names               | `["Sub-Saharan Africa"]` |
-| `categories`                          | One of the 7 categories               | `["Law", "Policy"]`      |
-| `topics`                              | One of 4 broad topics, documents only | `["Adaptation"]`         |
-| `concepts`                            | Ids from `find_concepts`              | `["concept::Q1343"]`     |
-| `published_after`, `published_before` | ISO dates, documents only             | `"2020-01-01"`           |
+| Arg                                   | Format                                         | Example                  |
+| ------------------------------------- | ---------------------------------------------- | ------------------------ |
+| `geographies`                         | ISO 3166-1 alpha-3 country codes               | `["KEN", "GBR"]`         |
+| `regions`                             | World Bank region names                        | `["Sub-Saharan Africa"]` |
+| `categories`                          | One of the 7 categories                        | `["Law", "Policy"]`      |
+| `response_areas`                      | One of 4 policy response areas, documents only | `["Adaptation"]`         |
+| `topics`                              | Ids from `search_topics`                       | `["concept::Q1343"]`     |
+| `published_after`, `published_before` | ISO dates, documents only                      | `"2020-01-01"`           |
 
 - Any value within one filter matches, and different filters must all match
 - `document_ids` can't be combined with other filters, because searching within
@@ -90,13 +90,13 @@ every" should go to the data lake MCP, and Claude will say so.
 ## Call a tool directly
 
 This shows the exact JSON Claude gets, with no model involved. Run from the repo
-root while `just mcp` is running.
+root while `just dev-mcp` is running.
 
 ```bash
-MCP=http://127.0.0.1:8001/mcp
+MCP=http://127.0.0.1:8000/search/mcp/
 
 uv run fastmcp list $MCP
-uv run fastmcp call $MCP find_concepts query="adaptation finance"
+uv run fastmcp call $MCP search_topics query="adaptation finance"
 uv run fastmcp call $MCP search_documents \
   --input-json '{"query": "climate change act", "geographies": ["KEN"], "categories": ["Law"]}'
 uv run fastmcp call $MCP search_passages \
@@ -105,13 +105,9 @@ uv run fastmcp call $MCP search_passages \
 
 Add `--json` for the raw response.
 
-To check the mount works as it will when deployed, run `cd api && just dev-mcp`
-instead. It serves the MCP inside the search API at
-`http://127.0.0.1:8000/search/mcp`.
-
 ## See what it's doing
 
-The `just mcp` terminal logs one line per tool call. The level matches the
+The `just dev-mcp` terminal logs one line per tool call. The level matches the
 outcome, using the same prefixes as the search API's request log.
 
 | Prefix      | Level   | Means                                                             |
@@ -139,18 +135,19 @@ Vespa matches the filters. Check new filters live with `fastmcp call`.
 
 ## Troubleshooting
 
-| Symptom                                    | Likely cause                                          | Fix                                          |
-| ------------------------------------------ | ----------------------------------------------------- | -------------------------------------------- |
-| `/mcp` says `cpr-search` failed to connect | The server isn't running                              | Run `just mcp`, then reconnect               |
-| Claude doesn't see the tools               | The chat was open before the server started           | Open a new chat                              |
-| Claude uses old tool descriptions          | The server wasn't restarted after a change            | Restart `just mcp` and open a new chat       |
-| A filter returns nothing                   | No matches, or the label isn't on that kind of record | Try the call without the filter              |
-| A concept filter misses an obvious result  | Concept tagging isn't complete                        | Try a broader concept, or search without one |
-| "Search is unavailable right now"          | Vespa is down or unreachable                          | Check `api/.env` and the `Error:` log line   |
+| Symptom                                    | Likely cause                                          | Fix                                        |
+| ------------------------------------------ | ----------------------------------------------------- | ------------------------------------------ |
+| `/mcp` says `cpr-search` failed to connect | The server isn't running                              | Run `just dev-mcp`, then reconnect         |
+| Claude doesn't see the tools               | The chat was open before the server started           | Open a new chat                            |
+| Claude uses old tool descriptions          | The server wasn't restarted after a change            | Restart `just dev-mcp` and open a new chat |
+| A filter returns nothing                   | No matches, or the label isn't on that kind of record | Try the call without the filter            |
+| A topic filter misses an obvious result    | Topic tagging isn't complete                          | Try a broader topic, or search without one |
+| "Search is unavailable right now"          | Vespa is down or unreachable                          | Check `api/.env` and the `Error:` log line |
 
 ## Known gaps
 
-- **Topics** only work on `search_documents`, because passages don't carry them
+- **Response areas** only work on `search_documents`, because passages don't
+  carry them
 - **Country groups** like small island states aren't supported, so list their
   codes in `geographies`
 - **Passage country and region filters** miss documents whose label uses a
@@ -168,9 +165,9 @@ api/mcp/
 ├── filters.py       tool args → the engine's filter tree
 ├── models.py        trims engine results for Claude
 ├── descriptions.py  everything Claude reads to pick a tool
-├── middleware.py    the call log and the error messages Claude sees
-└── standalone.py    the server behind `just mcp`
+└── middleware.py    the call log and the error messages Claude sees
 api/main.py          mounts the MCP at /search/mcp when MCP_ENABLED=true
+api/state.py         the shared HTTP client, read by routes and tools with HttpxDep
 tests/api/mcp/       unit tests
 ```
 
