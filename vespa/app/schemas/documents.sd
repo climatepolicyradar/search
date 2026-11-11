@@ -120,6 +120,10 @@ schema documents {
             indexing: attribute | summary
         }
 
+        field distinct_concept_ids type array<string> {
+            indexing: attribute
+        }
+
         field attributes_double type map<string, double> {
             struct-field key { indexing: attribute }
             struct-field value { indexing: attribute }
