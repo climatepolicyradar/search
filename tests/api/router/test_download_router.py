@@ -336,3 +336,38 @@ def test_download_rejects_an_empty_base_url(
     response = _download(test_client, columns=["URL"], base_url="")
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_download_reads_the_collection_url_under_its_cpr_name(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    """`COLLECTION_URL` and `BUNDLE_URL` are one page under two apps' names."""
+    collection = CollectionReference(id="collection-1", title="A Collection", slug="a-collection")
+    stub_engine.add_export_response([_row("doc-1", collection=collection)])
+
+    response = _download(
+        test_client,
+        columns=["COLLECTION_URL", "BUNDLE_URL"],
+        base_url="https://app.climatepolicyradar.org",
+    )
+
+    cell = "https://app.climatepolicyradar.org/collections/a-collection"
+    assert response.text.splitlines()[1] == f"{cell},{cell}"
+
+
+def test_download_asks_for_collections_when_only_the_collection_url_is_wanted(
+        test_client: TestClient,
+        stub_engine: StubDocumentSearchEngine,
+    ) -> None:
+    stub_engine.add_export_response([_row("doc-1")])
+
+    _download(test_client, columns=["COLLECTION_URL"], base_url="https://example.org")
+
+    assert [request.resolve_collections for request in stub_engine.export_requests] == [True]
+
+
+def test_download_rejects_a_collection_url_without_a_base_url(test_client: TestClient) -> None:
+    response = _download(test_client, columns=["COLLECTION_URL"])
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST

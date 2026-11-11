@@ -56,12 +56,12 @@ No authentication — see Limits and etiquette.
   name means the same data whoever asks for it, and the vocabulary is fixed:
   `ID`, `TITLE`, `DESCRIPTION`, `URL`, `GEOGRAPHIES`, `PUBLISHED_DATE`,
   `ENTITY_TYPE`, `CATEGORY`, `PROVIDER`, `COLLECTION_TITLE`,
-  `COLLECTION_DESCRIPTION`, `BUNDLE_ID`, `BUNDLE_TITLE`,
+  `COLLECTION_DESCRIPTION`, `COLLECTION_URL`, `BUNDLE_ID`, `BUNDLE_TITLE`,
   `BUNDLE_DESCRIPTION`, `BUNDLE_URL`, `CASE_STATUS`, `CASE_NUMBER`,
   `AT_ISSUE`, `ORIGINAL_CASE_NAME`, `PRINCIPAL_LAWS`, `CASE_CATEGORIES`,
   `JURISDICTIONS`. Topic and concept labels are never included.
-  `URL` and `BUNDLE_URL` are links into a site that presents this data, so
-  they are built from `base_url` — the origin of the site asking, e.g.
+  `URL`, `COLLECTION_URL` and `BUNDLE_URL` are links into a site that
+  presents this data, so they are built from `base_url` — the origin of the site asking, e.g.
   `base_url=https://app.climatepolicyradar.org`. Asking for either column
   without `base_url` is a `400`. A document with no page to link to gets an
   empty cell, not an error.

@@ -95,6 +95,7 @@ class Column(StrEnum):
     CASE_CATEGORIES = "CASE_CATEGORIES"
     JURISDICTIONS = "JURISDICTIONS"
     URL = "URL"
+    COLLECTION_URL = "COLLECTION_URL"
     BUNDLE_URL = "BUNDLE_URL"
 
 
@@ -102,7 +103,7 @@ class BaseUrlRequired(Exception):
     pass
 
 
-_URL_COLUMNS = (Column.URL, Column.BUNDLE_URL)
+_URL_COLUMNS = (Column.URL, Column.COLLECTION_URL, Column.BUNDLE_URL)
 
 
 def _page_url(base_url: HttpUrl, page: str, slug: str) -> str:
@@ -145,16 +146,12 @@ def read_column(
             return _labels(document, "category")
         case Column.PROVIDER:
             return _labels(document, "provider")
-        case Column.COLLECTION_TITLE:
+        case Column.COLLECTION_TITLE | Column.BUNDLE_TITLE:
             return collection and collection.title or ""
-        case Column.COLLECTION_DESCRIPTION:
+        case Column.COLLECTION_DESCRIPTION | Column.BUNDLE_DESCRIPTION:
             return collection and collection.description or ""
         case Column.BUNDLE_ID:
             return collection and collection.id or ""
-        case Column.BUNDLE_TITLE:
-            return collection and collection.title or ""
-        case Column.BUNDLE_DESCRIPTION:
-            return collection and collection.description or ""
         case Column.CASE_STATUS:
             return document.attributes_string.get("case_status", "")
         case Column.CASE_NUMBER:
@@ -171,7 +168,7 @@ def read_column(
             return _label_type(document, "jurisdiction")
         case Column.URL:
             return _page_url(base_url, "document", document.slug) if base_url and document.slug else ""
-        case Column.BUNDLE_URL:
+        case Column.COLLECTION_URL | Column.BUNDLE_URL:
             return _page_url(base_url, "collections", collection.slug) if base_url and collection and collection.slug else ""
 
 
@@ -220,6 +217,7 @@ async def fetch_csv(
         Column.BUNDLE_TITLE in deduped_columns or
         Column.BUNDLE_DESCRIPTION in deduped_columns or
         Column.BUNDLE_ID in deduped_columns or
+        Column.COLLECTION_URL in deduped_columns or
         Column.BUNDLE_URL in deduped_columns
     )
 
