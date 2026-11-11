@@ -9,6 +9,7 @@ from passages_derived_data import (
     looks_like_short_heading,
     looks_like_table_of_contents,
 )
+from prefect.client.schemas.objects import State
 from slack_notify import SlackNotify
 from task_runner import task_runner
 from vespa_feeder import (
@@ -213,10 +214,10 @@ def passages_feeder_flow(
     batch_size: int = DEFAULT_BATCH_SIZE,
     sample_rate: float = DEFAULT_SAMPLE_RATE,
     s3_export_prefix: str | None = None,
-) -> None:
+) -> State | None:
     bucket = "cpr-prod-snowflake-data-export"
     prefix = "production/published/pipeline_data_in_vespa_passage_updates_v1/"
-    vespa_feeder(
+    return vespa_feeder(
         s3_bucket=bucket,
         s3_prefix=prefix,
         s3_export_prefix=s3_export_prefix,
