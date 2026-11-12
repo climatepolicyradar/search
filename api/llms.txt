@@ -107,7 +107,7 @@ worked examples below show the shape.
 Three things the schema cannot tell you:
 
 - `contains` is index matching, not substring matching.
-- A Label id is always `{type}::{name}`: `geography::USA`, `category::Law`,
+- A Label id is always `{type}::{name}`: `country::USA`, `category::Law`,
   `topic::Adaptation`, `concept::Q1343`.
 - An unrecognised field name is passed to the index rather than rejected,
   which is also the only way to reach an unaliased field — `id`, `title`,
@@ -170,10 +170,10 @@ conditions are always independent of one another.
 
 ### Worked examples
 
-Documents for a geography — URL-encode the JSON in a real request:
+Documents for a country — URL-encode the JSON in a real request:
 
 ```
-GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"geography::USA"}]}
+GET /search/documents?filters={"op":"and","filters":[{"field":"labels.value.id","op":"contains","value":"country::USA"}]}
 ```
 
 Principals only — one result per law, policy or case rather than one per
@@ -203,7 +203,7 @@ concept:
   {"op": "or", "filters": [
     {"field": "labels.value.id", "op": "contains", "value": "category::Law"},
     {"field": "labels.value.id", "op": "contains", "value": "category::Policy"}]},
-  {"field": "labels.value.id", "op": "contains", "value": "geography::USA"},
+  {"field": "labels.value.id", "op": "contains", "value": "country::USA"},
   {"field": "labels.value.id", "op": "not_contains", "value": "concept::Q1343"}]}
 ```
 

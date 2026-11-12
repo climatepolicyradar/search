@@ -1,11 +1,10 @@
 import os
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from http import HTTPStatus
 from pathlib import Path
 from time import perf_counter
 
-import httpx2
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,6 +12,7 @@ from starlette.types import Lifespan
 
 from api.download import BaseUrlRequired
 from api.health import router as health_router
+from api.mcp.server import build_server
 from api.observability.src.api import (
     FastAPITelemetry,
     MetricsService,
@@ -21,7 +21,8 @@ from api.observability.src.api import (
 )
 from api.routers import router
 from api.search_metrics import SearchMetrics
-from api.state import State
+from api.settings import settings
+from api.state import State, build_state
 from api.taxonomy.service import TaxonomyNotLoadedError
 from search.engines import VespaError
 from search.log import get_logger
@@ -37,14 +38,31 @@ HEALTH_ROUTE_PATH = f"{router.prefix}{health_router.prefix}"
 UNMATCHED_ROUTE_LABEL = "unmatched"
 
 
+MCP_PATH = "/search/mcp"
+
+
+@asynccontextmanager
+async def build_mcp(app: FastAPI, state: State) -> AsyncGenerator[None]:
+    if not settings.mcp_enabled:
+        yield
+        return
+
+    server = build_server(lifespan=lambda _: nullcontext(state))
+    # Stateless, so any task can serve any call.
+    mcp_app = server.http_app(path="/", stateless_http=True)
+    # FastAPI doesn't run the startup of apps added with `app.mount`, so the
+    # MCP's is started here. It can't handle requests without it.
+    async with mcp_app.router.lifespan_context(mcp_app):
+        app.mount(MCP_PATH, mcp_app)
+        yield
+
+
 @asynccontextmanager
 async def production_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown events."""
-    async with httpx2.AsyncClient(http2=True) as client:
-        state = State(httpx=client)
+    async with build_state() as state, build_mcp(app=app, state=state):
         app.state.deps = state
-        async with state.taxonomy.run():
-            yield
+        yield
 
 
 # Configure Open Telemetry.
@@ -209,6 +227,10 @@ async def log_request_lifecycle(request: Request, call_next):
     # `api.health.run_probe` - so a lifecycle line anywhere under /health only
     # adds volume. Metrics are still recorded.
     if route_path.startswith(HEALTH_ROUTE_PATH):
+        return response
+    # A failed MCP tool call is still an HTTP 200, so this line would say
+    # "Success". The MCP's own call log has the real outcome.
+    if route_path.startswith(MCP_PATH):
         return response
 
     # An error response logged at INFO as "Success" is invisible to log grepping

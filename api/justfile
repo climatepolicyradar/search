@@ -17,3 +17,7 @@ gen-env instance="":
 
 dev:
     uv run fastapi dev ./main.py --port 8000
+
+# The API with the search MCP mounted at /search/mcp
+dev-mcp:
+    MCP_ENABLED=true uv run fastapi dev ./main.py --port 8000

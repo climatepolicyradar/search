@@ -13,6 +13,8 @@ class EnvSettings(Settings):
         env_file=str(Path(__file__).parent / ".env"), extra="allow"
     )
 
+    mcp_enabled: bool = False
+
 
 # @see: https://github.com/pydantic/pydantic-settings/issues/201
 settings = EnvSettings()  # pyright: ignore[reportCallIssue]

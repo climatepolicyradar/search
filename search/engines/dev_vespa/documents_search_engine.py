@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any, Protocol
+from urllib.parse import quote
 
 import httpx2
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -690,7 +691,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
     async def aget(self, document_id: str) -> Document | None:
         """Fetch a single document by id, parsed from its stored document_source."""
-        endpoint = f"{self.settings.vespa_endpoint}/document/v1/documents/documents/docid/{document_id}"
+        endpoint = (
+            f"{self.settings.vespa_endpoint}/document/v1/documents/documents/docid/"
+            f"{quote(document_id, safe='')}"
+        )
         headers = (
             {"Authorization": f"Bearer {self.settings.vespa_read_token}"}
             if self.settings.vespa_read_token
