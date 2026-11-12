@@ -389,16 +389,13 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         query: str | None,
         filters: Filter | None,
         order_by: list[OrderBy],
-        total_target_hits: int | None = None,
         msm: float | None = None,
     ) -> DocumentQuery:
         free_text, phrases = _parse_query(query) if query else ("", [])
 
         where = "true"
         if free_text:
-            where += self._userQuery(
-                total_target_hits if total_target_hits is not None else self.total_target_hits
-            )
+            where += self._userQuery
         where += _document_phrase_yql(len(phrases))
         where += _build_filter_query(
             filters,
@@ -459,7 +456,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "exact_weight": self.exact_weight,
         }
 
-    def _userQuery(self, total_target_hits: int) -> str:
+    @property
+    def _userQuery(self) -> str:
         """
         The text-matching half of the YQL, carrying the weakAnd retrieval depth.
 
@@ -471,7 +469,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         match.
         """
         match = (
-                       f"(({{totalTargetHits:{total_target_hits}, "
+                       f"(({{totalTargetHits:{self.total_target_hits}, "
             f'grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query)) '
             # As geographies and title_synonyms use different Lucene analyzers
             # to the default fieldset, they're referenced explicitly in the query
@@ -896,7 +894,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             query=query,
             filters=filters,
             order_by=[],
-            total_target_hits=1_000_000,
             msm=msm,
         )
         types = [type for type in label_types if type != "concept"]
