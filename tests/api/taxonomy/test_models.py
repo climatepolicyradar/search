@@ -118,7 +118,49 @@ def test_a_parent_absent_from_the_input_is_still_built_from_the_relationship() -
 def test_subtrees_returns_the_highest_node_of_a_type_not_its_descendants() -> None:
     outer = Label(id="category::Law", type="category", value="Law", labels=[])
     inner = _parented("category::Framework", "category", "Framework", [outer])
-    nodes = select(tree(merge([outer, inner], [])), ["category"])
+    nodes = select(tree(merge([outer, inner], [])), ["category"], None)
+    assert [node.id for node in nodes] == ["category::Law"]
+
+
+def test_an_id_selects_just_that_subtree() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    policy = Label(id="category::Policy", type="category", value="Policy", labels=[])
+    nodes = select(tree(merge([law, policy], [])), None, ["category::Law"])
+    assert [node.id for node in nodes] == ["category::Law"]
+
+
+def test_an_id_and_a_type_select_both() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    flood = Label(id="keyword::Flood", type="keyword", value="Flood", labels=[])
+    nodes = select(tree(merge([law, flood], [])), ["keyword"], ["category::Law"])
+    assert sorted(node.id for node in nodes) == ["category::Law", "keyword::Flood"]
+
+
+def test_an_id_matching_nothing_selects_nothing() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    nodes = select(tree(merge([law], [])), None, ["category::Nonexistent"])
+    assert nodes == []
+
+
+def test_an_id_beneath_a_selected_type_is_not_returned_separately() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    flood = _parented("keyword::Flood", "keyword", "Flood", [law])
+    nodes = select(tree(merge([law, flood], [])), ["category"], ["keyword::Flood"])
+    assert [node.id for node in nodes] == ["category::Law"]
+
+
+def test_neither_types_nor_ids_selects_every_root() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    flood = Label(id="keyword::Flood", type="keyword", value="Flood", labels=[])
+    nodes = select(tree(merge([law, flood], [])), None, None)
+    assert sorted(node.id for node in nodes) == ["category::Law", "keyword::Flood"]
+
+
+def test_a_selection_inside_another_selection_is_dropped() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    climate = Label(id="domain::Climate", type="domain", value="Climate", labels=[])
+    flood = _parented("category::Flood", "category", "Flood", [law, climate])
+    nodes = select(tree(merge([law, climate], [_fetched(flood)])), ["category"], None)
     assert [node.id for node in nodes] == ["category::Law"]
 
 
@@ -126,7 +168,7 @@ def test_subtrees_dedupes_a_node_reachable_from_two_roots() -> None:
     law = Label(id="category::Law", type="category", value="Law", labels=[])
     policy = Label(id="category::Policy", type="category", value="Policy", labels=[])
     shared = _parented("concept::Q1", "concept", "Flooding", [law, policy])
-    nodes = select(tree(merge([law, policy], [_fetched(shared)])), ["concept"])
+    nodes = select(tree(merge([law, policy], [_fetched(shared)])), ["concept"], None)
     assert [node.id for node in nodes] == ["concept::Q1"]
 
 

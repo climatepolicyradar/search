@@ -19,8 +19,10 @@ class AsearchRequest:
 
 @dataclass
 class LabelCountsRequest:
+    query: str | None
     filters: Filter | None
     label_types: list[str]
+    msm: float
 
 
 @dataclass
@@ -104,13 +106,17 @@ class StubDocumentSearchEngine:
 
     async def label_counts(
             self,
+            query: str | None,
             filters: Filter | None,
             label_types: list[str],
+            msm: float,
         ) -> dict[str, int]:
         self.label_counts_requests.append(
             LabelCountsRequest(
+                query=query,
                 filters=filters,
                 label_types=label_types,
+                msm=msm,
             )
         )
         match self._label_counts_responses.pop(0):

@@ -55,13 +55,16 @@ class TaxonomyService:
 
     async def nodes(
         self,
+        query: str | None,
         filters: Filter | None,
         label_types: list[str] | None,
+        label_ids: list[str] | None,
+        msm: float,
     ) -> list[TaxonomyNode]:
-        """Return the requested label subtrees, counted over the documents `filters` matches."""
-        selected = select(self.roots(), label_types)
+        """Return the requested label subtrees, counted over the documents `query` and `filters` match."""
+        selected = select(self.roots(), label_types, label_ids)
         taxonomy_types = sorted({type for node in selected for type in node.types()})
-        counts = await self._documents.label_counts(label_types=taxonomy_types, filters=filters)
+        counts = await self._documents.label_counts(query, filters, taxonomy_types, msm)
         return [node.response(counts) for node in selected]
 
     async def _refresh(self) -> None:

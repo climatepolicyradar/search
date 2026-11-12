@@ -89,6 +89,59 @@ async def test_only_the_selected_subtrees_types_are_counted(
     assert documents.label_counts_requests[0].label_types == ["keyword"]
 
 
+async def test_an_id_selects_just_that_subtree(
+    test_client: TestClient,
+    state: State,
+    labels: StubLabelSearchEngine,
+    documents: StubDocumentSearchEngine,
+) -> None:
+    await _load(state, labels)
+    documents.add_label_counts_response({})
+    response = test_client.get("/search/labels:taxonomy", params={"id": "keyword::Flood"})
+    assert [node["id"] for node in response.json()["data"]] == ["keyword::Flood"]
+
+
+async def test_an_id_under_a_selected_type_stays_nested(
+    test_client: TestClient,
+    state: State,
+    labels: StubLabelSearchEngine,
+    documents: StubDocumentSearchEngine,
+) -> None:
+    await _load(state, labels)
+    documents.add_label_counts_response({})
+    response = test_client.get(
+        "/search/labels:taxonomy",
+        params={"type": "concept", "id": "keyword::Flood"},
+    )
+    nodes = response.json()["data"]
+    assert [node["id"] for node in nodes] == ["concept::Q1"]
+    assert [child["id"] for child in nodes[0]["children"]] == ["keyword::Flood"]
+
+
+async def test_a_query_narrows_the_documents_counted(
+    test_client: TestClient,
+    state: State,
+    labels: StubLabelSearchEngine,
+    documents: StubDocumentSearchEngine,
+) -> None:
+    await _load(state, labels)
+    documents.add_label_counts_response({})
+    test_client.get("/search/labels:taxonomy", params={"query": "flood"})
+    assert documents.label_counts_requests[0].query == "flood"
+
+
+async def test_without_a_query_every_document_is_counted(
+    test_client: TestClient,
+    state: State,
+    labels: StubLabelSearchEngine,
+    documents: StubDocumentSearchEngine,
+) -> None:
+    await _load(state, labels)
+    documents.add_label_counts_response({})
+    test_client.get("/search/labels:taxonomy")
+    assert documents.label_counts_requests[0].query is None
+
+
 async def test_children_are_nested_under_their_parent(
     test_client: TestClient,
     state: State,

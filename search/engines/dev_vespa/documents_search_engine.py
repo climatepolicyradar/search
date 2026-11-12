@@ -44,7 +44,6 @@ from search.engines.vespa_query.filters import (
     _get_label_types_from_filters,
     _prune_filter,
     _topic_ids_from_filters,
-    normalise_topic_id,
 )
 from search.engines.vespa_query.query_text_modifiers import (
     _normalize_currency_symbols,
@@ -121,23 +120,31 @@ _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # See PR #651 for how this was chosen.
 _DEFAULT_EXACT_WEIGHT: float | None = None
 
-# currently fits the whole dataset
-_LABEL_COUNTS_MAX_GROUPS = 10_000
-
-
-def _fix_concept_label_ids(label_id: str) -> str:
-    return (
-        normalise_topic_id(label_id)
-        if label_id.startswith("Q") and label_id[1:].isdecimal()
-        else label_id
-    )
-
+class VespaResponseError(BaseModel):
+    code: int
+    summary: str
+    message: str | None = None
 
 class VespaHit[A: BaseModel](BaseModel):
     fields: A
 
 class VespaRoot[A: BaseModel](BaseModel):
-    children: list[VespaHit[A]] | None = None
+    errors: list[VespaResponseError] = []
+    children: list[A] | None = None
+
+    def raise_if_errors(self, request_context: str) -> None:
+        """Raise when Vespa reported an error in the body of a 200."""
+        if not self.errors:
+            return
+
+        reported = ", ".join(
+            f"{error.summary} {error.message}".strip() for error in self.errors
+        )
+
+        raise VespaError(
+            f"Vespa reported errors [{request_context}]: {reported}",
+            status_code=None,
+        )
 
 class VespaResponse[A: BaseModel](BaseModel):
     root: VespaRoot[A]
@@ -154,12 +161,6 @@ class VespaGroupList(BaseModel):
 
 class VespaGroupingRoot(BaseModel):
     children: list[VespaGroupList] = []
-
-class VespaGroupingHits(BaseModel):
-    children: list[VespaGroupingRoot] = []
-
-class VespaGroupingResponse(BaseModel):
-    root: VespaGroupingHits
 
 class ByNameModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -234,8 +235,10 @@ class DocumentSearchEngine(Protocol):
 
     async def label_counts(
             self,
+            query: str | None,
             filters: Filter | None,
             label_types: list[str],
+            msm: float,
         ) -> dict[str, int]:
         """Count documents per label id, for labels of the given types."""
         ...
@@ -361,7 +364,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         self.total_target_hits = total_target_hits
         self.exact_weight = exact_weight
 
-    def _msm_request_fields(self, free_text: str) -> dict[str, float]:
+    def _msm_request_fields(self, free_text: str, msm: float) -> dict[str, float]:
         """
         The ``query(msm)`` input, for every query that must see the same document set.
 
@@ -377,21 +380,25 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         quoted phrases: they match the `*_not_stemmed` fields, which `coverage()`
         does not measure.
         """
-        if self.msm <= 0.0 or not free_text:
+        if msm <= 0.0 or not free_text:
             return {}
-        return {"input.query(msm)": self.msm}
+        return {"input.query(msm)": msm}
 
     def _document_query(
         self,
         query: str | None,
         filters: Filter | None,
         order_by: list[OrderBy],
+        total_target_hits: int | None = None,
+        msm: float | None = None,
     ) -> DocumentQuery:
         free_text, phrases = _parse_query(query) if query else ("", [])
 
         where = "true"
         if free_text:
-            where += self._userQuery
+            where += self._userQuery(
+                total_target_hits if total_target_hits is not None else self.total_target_hits
+            )
         where += _document_phrase_yql(len(phrases))
         where += _build_filter_query(
             filters,
@@ -404,7 +411,10 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "timeout": "5s",
             "model.language": "en",
             "ranking.profile": self.ranking_profile,
-            **self._msm_request_fields(free_text),
+            **self._msm_request_fields(
+                free_text,
+                msm if msm is not None else self.msm,
+            ),
         }
         request_fields.update(sort_overrides)
         if free_text:
@@ -449,8 +459,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             "exact_weight": self.exact_weight,
         }
 
-    @property
-    def _userQuery(self) -> str:
+    def _userQuery(self, total_target_hits: int) -> str:
         """
         The text-matching half of the YQL, carrying the weakAnd retrieval depth.
 
@@ -462,7 +471,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         match.
         """
         match = (
-                       f"(({{totalTargetHits:{self.total_target_hits}, "
+                       f"(({{totalTargetHits:{total_target_hits}, "
             f'grammar.profile: "{_QUERY_LINGUISTICS_PROFILE}"}}userInput(@query)) '
             # As geographies and title_synonyms use different Lucene analyzers
             # to the default fieldset, they're referenced explicitly in the query
@@ -506,7 +515,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         """
         return {
             hit.fields.id: hit.fields
-            for hit in VespaResponse[CollectionReference].model_validate(
+            for hit in VespaResponse[VespaHit[CollectionReference]].model_validate(
                 await aexecute_vespa_query(
                     endpoint=f"{self.settings.vespa_endpoint}/search",
                     token=self.settings.vespa_read_token,
@@ -550,7 +559,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
         documents = [
             hit.fields
-            for hit in VespaResponse[ExportDocument].model_validate(
+            for hit in VespaResponse[VespaHit[ExportDocument]].model_validate(
                 await aexecute_vespa_query(
                     endpoint=f"{self.settings.vespa_endpoint}/search",
                     token=self.settings.vespa_read_token,
@@ -874,40 +883,66 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
 
     async def label_counts(
         self,
+        query: str | None,
         filters: Filter | None,
         label_types: list[str],
+        msm: float,
     ) -> dict[str, int]:
         """Count documents per label id, for labels of the given types."""
         if not label_types:
             return {}
 
-        where = "true"
-        if filters is not None:
-            where += _build_filter_query(
-                filters,
-                field_map=documents_filter_field_to_vespa_field_map,
-                struct_map=documents_filter_struct_field_to_vespa_field_map,
-            )
+        document_query = self._document_query(
+            query=query,
+            filters=filters,
+            order_by=[],
+            total_target_hits=1_000_000,
+            msm=msm,
+        )
+        types = [type for type in label_types if type != "concept"]
+        branches: list[str] = []
+        fields: list[str] = []
+
+        if types:
+            fields.append("labels.id")
+            branches.append("group(labels.id) filter(in(labels.type, @types))")
+
+        if "concept" in label_types:
+            fields.append("distinct_concept_ids")
+            branches.append("group(distinct_concept_ids)")
+
+        group_branches =  [
+            f"all({branch} each(output(count())))"
+            for branch in branches
+        ]
 
         yql = (
-            f"select labels.id from documents where {where} "
-            "| all(group(labels.id) filter(in(labels.type, @types)) "
-            f"max({_LABEL_COUNTS_MAX_GROUPS}) each(output(count())))"
+            f"select {', '.join(fields)} from documents where {document_query.where} "
+            f"| all({' '.join(group_branches)})"
         )
 
-        response = VespaGroupingResponse.model_validate(
+        request_body: dict[str, Any] = {
+            **({"types": types} if types else {}),
+            **document_query.request_fields,
+            "ranking.profile": "unranked",
+            "yql": yql,
+            "hits": 0,
+        }
+
+        response = VespaResponse[VespaGroupingRoot].model_validate(
             await aexecute_vespa_query(
                 token=self.settings.vespa_read_token,
                 endpoint=f"{self.settings.vespa_endpoint}/search",
-                request_body={"yql": yql, "hits": 0, "types": label_types},
                 request_context="documents.label_counts",
+                request_body=request_body,
                 client=self._httpx,
             )
         )
+        response.root.raise_if_errors("documents.label_counts")
 
         return {
-            _fix_concept_label_ids(group.value): group.fields.count
-            for grouping_root in response.root.children
+            group.value: group.fields.count
+            for grouping_root in response.root.children or []
             for group_list in grouping_root.children
             for group in group_list.children
         }

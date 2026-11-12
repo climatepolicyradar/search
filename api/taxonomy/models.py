@@ -70,15 +70,15 @@ class LabelNode:
         """Does a label with the given ID appear anywhere in this subtree?"""
         return self.id == child_id or any(child.has_child(child_id) for child in self.children)
 
-    def find(self, label_types: set[str]) -> list["LabelNode"]:
-        """Return the highest nodes in this subtree whose type is in `label_types`."""
-        if self.type in label_types:
+    def find(self, label_types: set[str], label_ids: set[str]) -> list["LabelNode"]:
+        """Return the highest nodes in this subtree whose type or id was asked for."""
+        if self.type in label_types or self.id in label_ids:
             return [self]
 
         return [
             found
             for child in self.children
-            for found in child.find(label_types)
+            for found in child.find(label_types, label_ids)
         ]
 
     def response(self, counts: dict[str, int]) -> TaxonomyNode:
@@ -131,13 +131,23 @@ def tree(labels: Sequence[LabelSearchResult]) -> list[LabelNode]:
 def select(
     roots: Sequence[LabelNode],
     subtrees: list[str] | None,
+    ids: list[str] | None,
 ) -> list[LabelNode]:
-    """Return `roots`, or the highest nodes beneath them of the given types."""
-    if subtrees is None:
+    """Return `roots`, or the highest nodes beneath them of the given types or ids."""
+    if subtrees is None and ids is None:
         return list(roots)
 
-    return list({
-        selected.id: selected
+    selected = list({
+        found.id: found
         for root in roots
-        for selected in root.find(set(subtrees))
+        for found in root.find(set(subtrees or []), set(ids or []))
     }.values())
+
+    nested = {
+        descendant
+        for node in selected
+        for descendant in node.ids()
+        if descendant != node.id
+    }
+
+    return [node for node in selected if node.id not in nested]
