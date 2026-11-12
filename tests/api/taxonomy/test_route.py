@@ -65,7 +65,7 @@ async def test_a_label_vespa_counted_nothing_for_is_zero(
     assert _nodes(response.json())["concept::Q1"]["count"] == 0
 
 
-async def test_a_type_selects_the_subtrees_beneath_the_roots(
+async def test_a_pattern_returns_the_minimal_connecting_tree(
     test_client: TestClient,
     state: State,
     labels: StubLabelSearchEngine,
@@ -73,11 +73,13 @@ async def test_a_type_selects_the_subtrees_beneath_the_roots(
 ) -> None:
     await _load(state, labels)
     documents.add_label_counts_response({"keyword::Flood": 3})
-    response = test_client.get("/search/labels:taxonomy", params={"type": "keyword"})
-    assert [node["id"] for node in response.json()["data"]] == ["keyword::Flood"]
+    response = test_client.get("/search/labels:taxonomy", params={"include": "**/keyword::*"})
+    nodes = response.json()["data"]
+    assert [node["id"] for node in nodes] == ["concept::Q1"]
+    assert [child["id"] for child in nodes[0]["children"]] == ["keyword::Flood"]
 
 
-async def test_only_the_selected_subtrees_types_are_counted(
+async def test_the_ancestors_kept_are_counted_too(
     test_client: TestClient,
     state: State,
     labels: StubLabelSearchEngine,
@@ -85,11 +87,11 @@ async def test_only_the_selected_subtrees_types_are_counted(
 ) -> None:
     await _load(state, labels)
     documents.add_label_counts_response({})
-    test_client.get("/search/labels:taxonomy", params={"type": "keyword"})
-    assert documents.label_counts_requests[0].label_types == ["keyword"]
+    test_client.get("/search/labels:taxonomy", params={"include": "**/keyword::*"})
+    assert documents.label_counts_requests[0].label_types == ["concept", "keyword"]
 
 
-async def test_an_id_selects_just_that_subtree(
+async def test_a_pattern_returns_the_tree_leading_to_the_match(
     test_client: TestClient,
     state: State,
     labels: StubLabelSearchEngine,
@@ -97,11 +99,13 @@ async def test_an_id_selects_just_that_subtree(
 ) -> None:
     await _load(state, labels)
     documents.add_label_counts_response({})
-    response = test_client.get("/search/labels:taxonomy", params={"id": "keyword::Flood"})
-    assert [node["id"] for node in response.json()["data"]] == ["keyword::Flood"]
+    response = test_client.get("/search/labels:taxonomy", params={"include": "**/keyword::Flood"})
+    nodes = response.json()["data"]
+    assert [node["id"] for node in nodes] == ["concept::Q1"]
+    assert [child["id"] for child in nodes[0]["children"]] == ["keyword::Flood"]
 
 
-async def test_an_id_under_a_selected_type_stays_nested(
+async def test_a_match_under_another_match_stays_nested(
     test_client: TestClient,
     state: State,
     labels: StubLabelSearchEngine,
@@ -111,7 +115,7 @@ async def test_an_id_under_a_selected_type_stays_nested(
     documents.add_label_counts_response({})
     response = test_client.get(
         "/search/labels:taxonomy",
-        params={"type": "concept", "id": "keyword::Flood"},
+        params={"include": ["**/concept::*", "**/keyword::Flood"]},
     )
     nodes = response.json()["data"]
     assert [node["id"] for node in nodes] == ["concept::Q1"]
