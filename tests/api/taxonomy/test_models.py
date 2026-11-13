@@ -1,3 +1,5 @@
+from pathlib import PurePosixPath
+
 from api.taxonomy.models import LabelNode, merge, select, tree
 from search.data_in_models import Label, LabelRelationship
 from search.label import LabelSearchResult
@@ -115,19 +117,186 @@ def test_a_parent_absent_from_the_input_is_still_built_from_the_relationship() -
     assert [child.id for child in nodes["concept::Q1"].children] == ["concept::Q2"]
 
 
+CLIMATE = Label(id="domain::Climate", type="domain", value="Climate", labels=[])
+
+
+def _climate_tree() -> list[LabelNode]:
+    law = _parented("category::Law", "category", "Law", [CLIMATE])
+    flood = _parented("keyword::Flood", "keyword", "Flood", [law])
+    drought = _parented("keyword::Drought", "keyword", "Drought", [law])
+    slashed = _parented(
+        "activity_status::Amended/Updated",
+        "activity_status",
+        "Amended/Updated",
+        [CLIMATE],
+    )
+    fetched = [_fetched(label) for label in (law, flood, drought, slashed)]
+    return tree(merge([CLIMATE], fetched))
+
+
+def _found(pattern: str) -> list[str]:
+    return [
+        found.ids[-1]
+        for root in _climate_tree()
+        for found in root.find_path(PurePosixPath(pattern))
+    ]
+
+
+def _found_paths(pattern: str) -> list[tuple[str, ...]]:
+    return [
+        found.ids
+        for root in _climate_tree()
+        for found in root.find_path(PurePosixPath(pattern))
+    ]
+
+
+def test_a_match_carries_the_path_it_was_found_at() -> None:
+    assert _found_paths("**/keyword::Flood") == [
+        ("domain::Climate", "category::Law", "keyword::Flood"),
+    ]
+
+
+def test_a_double_star_finds_a_type_at_any_depth() -> None:
+    assert sorted(_found("**/keyword::*")) == ["keyword::Drought", "keyword::Flood"]
+
+
+def test_a_single_star_pins_the_depth() -> None:
+    assert _found("*/keyword::*") == []
+
+
+def test_an_exact_path_finds_one_node() -> None:
+    assert _found("domain::Climate/category::Law/keyword::Flood") == ["keyword::Flood"]
+
+
+def test_a_wrong_first_segment_finds_nothing() -> None:
+    assert _found("domain::Nature/**") == []
+
+
+def test_a_trailing_double_star_includes_the_node_itself() -> None:
+    """
+    `x/**` means x and everything under it.
+
+    This departs from `PurePosixPath.full_match`, where a trailing `**` requires
+    at least one further segment, so `x/**` does not match `x`.
+    """
+    assert sorted(_found("domain::Climate/**")) == [
+        "activity_status::Amended/Updated",
+        "category::Law",
+        "domain::Climate",
+        "keyword::Drought",
+        "keyword::Flood",
+    ]
+
+
+def test_a_double_star_in_the_middle_still_constrains_the_tail() -> None:
+    assert sorted(_found("domain::Climate/**/keyword::*")) == [
+        "keyword::Drought",
+        "keyword::Flood",
+    ]
+
+
+def test_a_leading_double_star_matches_zero_segments() -> None:
+    assert _found("**/domain::Climate") == ["domain::Climate"]
+
+
+def test_an_id_containing_a_slash_is_matched_by_its_type() -> None:
+    """
+    The pattern is split into segments, the data never is.
+
+    Were a node's ancestry joined into a path string, this label's own slash
+    would split it in two and the pattern would silently miss it.
+    """
+    assert _found("**/activity_status::*") == ["activity_status::Amended/Updated"]
+
+
+def test_a_double_star_alone_finds_every_node() -> None:
+    assert sorted(_found("**")) == [
+        "activity_status::Amended/Updated",
+        "category::Law",
+        "domain::Climate",
+        "keyword::Drought",
+        "keyword::Flood",
+    ]
+
+
+def test_a_single_star_alone_finds_only_the_root() -> None:
+    assert _found("*") == ["domain::Climate"]
+
+
+def test_two_double_stars_can_find_the_same_node_twice() -> None:
+    """Deduping is the caller's job: `select` already keys selections by id."""
+    found = _found("**/**")
+    assert len(found) > len(set(found))
+
+
 def test_subtrees_returns_the_highest_node_of_a_type_not_its_descendants() -> None:
     outer = Label(id="category::Law", type="category", value="Law", labels=[])
     inner = _parented("category::Framework", "category", "Framework", [outer])
-    nodes = select(tree(merge([outer, inner], [])), ["category"])
+    nodes = select(tree(merge([outer, inner], [])), ["**/category::*"])
     assert [node.id for node in nodes] == ["category::Law"]
 
 
-def test_subtrees_dedupes_a_node_reachable_from_two_roots() -> None:
+def test_a_pattern_selects_just_that_subtree() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    policy = Label(id="category::Policy", type="category", value="Policy", labels=[])
+    nodes = select(tree(merge([law, policy], [])), ["**/category::Law"])
+    assert [node.id for node in nodes] == ["category::Law"]
+
+
+def test_two_patterns_select_both() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    flood = Label(id="keyword::Flood", type="keyword", value="Flood", labels=[])
+    nodes = select(tree(merge([law, flood], [])), ["**/keyword::*", "**/category::Law"])
+    assert sorted(node.id for node in nodes) == ["category::Law", "keyword::Flood"]
+
+
+def test_a_pattern_matching_nothing_selects_nothing() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    nodes = select(tree(merge([law], [])), ["**/category::Nonexistent"])
+    assert nodes == []
+
+
+def test_a_match_beneath_another_match_is_not_returned_separately() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    flood = _parented("keyword::Flood", "keyword", "Flood", [law])
+    nodes = select(tree(merge([law, flood], [])), ["**/category::*", "**/keyword::Flood"])
+    assert [node.id for node in nodes] == ["category::Law"]
+
+
+def test_no_patterns_selects_every_root() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    flood = Label(id="keyword::Flood", type="keyword", value="Flood", labels=[])
+    nodes = select(tree(merge([law, flood], [])), None)
+    assert sorted(node.id for node in nodes) == ["category::Law", "keyword::Flood"]
+
+
+def test_a_match_keeps_the_ancestors_that_lead_to_it() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    climate = Label(id="domain::Climate", type="domain", value="Climate", labels=[])
+    flood = _parented("category::Flood", "category", "Flood", [law, climate])
+    nodes = select(tree(merge([law, climate], [_fetched(flood)])), ["**/category::*"])
+    assert sorted(node.id for node in nodes) == ["category::Law", "domain::Climate"]
+    climate_node = _by_id(nodes)["domain::Climate"]
+    assert [child.id for child in climate_node.children] == ["category::Flood"]
+
+
+def test_a_node_with_two_parents_is_kept_under_each() -> None:
     law = Label(id="category::Law", type="category", value="Law", labels=[])
     policy = Label(id="category::Policy", type="category", value="Policy", labels=[])
     shared = _parented("concept::Q1", "concept", "Flooding", [law, policy])
-    nodes = select(tree(merge([law, policy], [_fetched(shared)])), ["concept"])
-    assert [node.id for node in nodes] == ["concept::Q1"]
+    nodes = select(tree(merge([law, policy], [_fetched(shared)])), ["**/concept::*"])
+    assert sorted(node.id for node in nodes) == ["category::Law", "category::Policy"]
+    for node in nodes:
+        assert [child.id for child in node.children] == ["concept::Q1"]
+
+
+def test_a_match_is_a_leaf_unless_its_children_matched_too() -> None:
+    law = Label(id="category::Law", type="category", value="Law", labels=[])
+    flood = _parented("keyword::Flood", "keyword", "Flood", [law])
+    roots = tree(merge([law], [_fetched(flood)]))
+    assert [node.id for node in select(roots, ["**/category::*"])] == ["category::Law"]
+    assert select(roots, ["**/category::*"])[0].children == []
+    assert select(roots, ["**/category::*/**"])[0].children[0].id == "keyword::Flood"
 
 
 def test_types_spans_the_whole_subtree() -> None:
@@ -153,3 +322,19 @@ def test_a_count_is_not_written_onto_the_shared_tree() -> None:
     first = roots[0].response({"category::Law": 7})
     second = roots[0].response({})
     assert [first.count, second.count] == [7, 0]
+
+
+def test_a_shared_node_is_kept_only_where_the_pattern_matched() -> None:
+    """
+    A label with two parents sits at two paths, and only one may match.
+
+    Matching by id alone would keep the node under both parents, dragging in the
+    unasked-for parent as a connector.
+    """
+    asked = Label(id="category::Asked", type="category", value="Asked", labels=[])
+    other = Label(id="category::Other", type="category", value="Other", labels=[])
+    shared = _parented("entity_type::NDC", "entity_type", "NDC", [asked, other])
+    roots = tree(merge([asked, other], [_fetched(shared)]))
+    nodes = select(roots, ["category::Asked/**"])
+    assert [node.id for node in nodes] == ["category::Asked"]
+    assert [child.id for child in nodes[0].children] == ["entity_type::NDC"]

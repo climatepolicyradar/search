@@ -5,6 +5,9 @@ import pytest
 from api.taxonomy.service import TaxonomyNotLoadedError, TaxonomyService
 from search.engines import VespaError
 from search.label import LabelSearchResult
+from tests.engines.dev_vespa.stub_documents_search_engine import (
+    StubDocumentSearchEngine,
+)
 from tests.engines.dev_vespa.stub_labels_search_engine import StubLabelSearchEngine
 
 KEYWORD = LabelSearchResult.model_validate(
@@ -21,7 +24,10 @@ VESPA_DOWN = VespaError("Vespa is down", status_code=None)
 
 
 def _service(stub: StubLabelSearchEngine) -> TaxonomyService:
-    return TaxonomyService(labels=stub)
+    return TaxonomyService(
+        labels=stub,
+        documents=StubDocumentSearchEngine(),
+    )
 
 
 async def _wait_for_fetch(stub: StubLabelSearchEngine, calls: int = 1) -> None:

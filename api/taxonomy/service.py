@@ -8,8 +8,17 @@ from datetime import UTC, datetime
 
 from opentelemetry import trace
 
-from api.taxonomy.models import LabelNode, merge, taxonomy, tree
+from api.taxonomy.models import (
+    LabelNode,
+    TaxonomyNode,
+    merge,
+    select,
+    taxonomy,
+    tree,
+)
+from search.engines.dev_vespa.documents_search_engine import DocumentSearchEngine
 from search.engines.dev_vespa.labels_search_engine import LabelSearchEngine
+from search.engines.vespa_query.filters import Filter
 
 tracer = trace.get_tracer(__name__)
 
@@ -26,9 +35,14 @@ class Loaded:
 
 
 class TaxonomyService:
-    def __init__(self, labels: LabelSearchEngine) -> None:
+    def __init__(
+        self,
+        labels: LabelSearchEngine,
+        documents: DocumentSearchEngine,
+    ) -> None:
         self._loaded: Loaded | None = None
         self._labels = labels
+        self._documents = documents
 
     def roots(self) -> list[LabelNode]:
         """Return the roots of the current taxonomy forest."""
@@ -38,6 +52,19 @@ class TaxonomyService:
         age = datetime.now(UTC) - self._loaded.fetched_at
         trace.get_current_span().set_attribute("taxonomy.age_seconds", age.total_seconds())
         return self._loaded.roots
+
+    async def nodes(
+        self,
+        query: str | None,
+        filters: Filter | None,
+        patterns: list[str] | None,
+        msm: float,
+    ) -> list[TaxonomyNode]:
+        """Return the requested label subtrees, counted over the documents `query` and `filters` match."""
+        selected = select(self.roots(), patterns)
+        taxonomy_types = sorted({type for node in selected for type in node.types()})
+        counts = await self._documents.label_counts(query, filters, taxonomy_types, msm)
+        return [node.response(counts) for node in selected]
 
     async def _refresh(self) -> None:
         with tracer.start_as_current_span("taxonomy.refresh") as span:
