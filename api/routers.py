@@ -16,6 +16,7 @@ from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
 from api.responses import ITEM_RESPONSES, SEARCH_RESPONSES
 from api.settings import settings
+from api.sitemap.routes import router as sitemap_router
 from api.state import HttpxDep
 from api.taxonomy.route import router as taxonomy_router
 from api.utils import (
@@ -46,6 +47,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/search")
 router.include_router(health_router)
 router.include_router(taxonomy_router)
+router.include_router(sitemap_router)
 
 AggregationField = Literal["aggregations.labels"]
 FacetField = Literal["facets.labels.value.type", "facets.labels.type"]

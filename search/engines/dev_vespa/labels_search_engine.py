@@ -17,9 +17,10 @@ from search.engines.vespa_query.client import (
     aexecute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
-    ArrayStructField,
     Filter,
-    _build_filter_query,
+    build_filter_query,
+    labels_filter_field_to_vespa_field_map,
+    labels_filter_struct_field_to_vespa_field_map,
 )
 from search.engines.vespa_query.query_text_modifiers import _strip_quotes
 from search.label import LabelSearchResult
@@ -27,14 +28,6 @@ from search.log import get_logger
 
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
-
-labels_filter_field_to_vespa_field_map: dict[str, list[str]] = {}
-labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
-    "labels.type": ArrayStructField("labels", "relationship"),
-    "labels.value.id": ArrayStructField("labels", "id"),
-    "labels.value.value": ArrayStructField("labels", "value"),
-    "labels.value.type": ArrayStructField("labels", "type"),
-}
 
 _ALL_LABELS_HITS = 10_000
 
@@ -132,7 +125,7 @@ class DevVespaLabelSearchEngine(DevVespaInstanceAddIn, SearchEngine[LabelSearchR
         where = ' status contains "active" '
 
         if filters is not None:
-            where += _build_filter_query(
+            where += build_filter_query(
                 filters,
                 field_map=labels_filter_field_to_vespa_field_map,
                 struct_map=labels_filter_struct_field_to_vespa_field_map,

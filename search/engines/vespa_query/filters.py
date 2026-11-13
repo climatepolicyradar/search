@@ -79,6 +79,33 @@ class ArrayStructField(NamedTuple):
     subfield: str
 
 
+documents_filter_field_to_vespa_field_map: dict[str, list[str]] = {
+    "labels.value.id": ["labels.id", "concepts.id"],
+    "labels.value.value": ["labels.value", "concepts.value"],
+    "labels.value.type": ["labels.type", "concepts.type"],
+    "labels.type": ["labels.relationship"],
+}
+documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
+
+labels_filter_field_to_vespa_field_map: dict[str, list[str]] = {}
+labels_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
+    "labels.type": ArrayStructField("labels", "relationship"),
+    "labels.value.id": ArrayStructField("labels", "id"),
+    "labels.value.value": ArrayStructField("labels", "value"),
+    "labels.value.type": ArrayStructField("labels", "type"),
+}
+
+passages_filter_field_to_vespa_field_map: dict[str, list[str]] = {
+    "document_id": ["document_id"],
+    "principal_id": ["principal_id"],
+}
+passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
+    "labels.value.id": ArrayStructField("labels", "id"),
+    "labels.value.value": ArrayStructField("labels", "value"),
+    "labels.value.type": ArrayStructField("labels", "type"),
+}
+
+
 # Simple example: label contains "Romania"
 SimpleExampleFilter = Filter(
     op="and",
@@ -320,7 +347,7 @@ def _build_filter_yql(
     return f"({joined})" if len(parts) > 1 else joined
 
 
-def _build_filter_query(
+def build_filter_query(
     filter_group: Filter | None,
     field_map: dict[str, list[str]],
     struct_map: dict[str, ArrayStructField],
