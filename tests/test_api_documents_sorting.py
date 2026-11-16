@@ -49,6 +49,19 @@ def test_documents_order_by_allows_supported_fields() -> None:
     assert [clause.field for clause in clauses] == ["relevance", "title"]
 
 
+def test_documents_order_by_allows_created() -> None:
+    """
+    Ensure ``/documents`` can sort by when a document was added (latest feed).
+
+    :return: ``None``.
+    :rtype: None
+    """
+    clauses = documents_order_by("attributes.created_at desc")
+    assert [(clause.field, clause.direction) for clause in clauses] == [
+        ("attributes.created_at", "desc")
+    ]
+
+
 def test_documents_order_by_rejects_unsupported_field() -> None:
     """
     Ensure ``/documents`` rejects unknown fields with HTTP 400.

@@ -42,11 +42,13 @@ MsmQuery = Annotated[
 DOCUMENTS_ORDER_BY_DESCRIPTION = (
     "Comma-separated sort clauses: `<field> <direction>` (AIP-132). "
     "Supported fields: `relevance`, `attributes.published_date` "
-    "(from document `published_date`), `title` (document title; lowercased for "
-    "sort). "
+    "(from document `published_date`), `attributes.created_at` (when the "
+    "document was added to CPR's database), `title` (document title; lowercased "
+    "for sort). "
     "Directions: `asc`, `desc`. "
     "Examples: `relevance desc`, `attributes.published_date desc` (most recent), "
     "`attributes.published_date asc` (oldest; undated documents last), "
+    "`attributes.created_at desc` (most recently added), "
     "`title asc` (A-Z), `title desc` (Z-A)."
 )
 
