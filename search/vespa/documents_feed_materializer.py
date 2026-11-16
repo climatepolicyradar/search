@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import NotRequired, TypedDict
 
 from cpr_contracts import Document
@@ -32,6 +32,7 @@ class VespaDocument(TypedDict):
     attributes_boolean: VespaAssign[dict[str, int]]
     attributes_identifiers: VespaAssign[dict[str, str]]
     attributes_published_date: NotRequired[VespaAssign[int]]
+    attributes_created_at: NotRequired[VespaAssign[int]]
     principal_id: NotRequired[VespaAssign[str]]
 
 
@@ -71,6 +72,32 @@ def _published_timestamp_from_attributes(
     return None
 
 
+def _created_timestamp_from_attributes(
+    attributes: dict[str, str | float | bool] | None,
+) -> int | None:
+    """
+    Derive a Unix timestamp for sort from `created` (the RDS row timestamp).
+
+    `created` arrives without a timezone and is UTC, so a naive value is read
+    as UTC rather than local time.
+
+    :param attributes: Document attributes from the data-in payload
+    :type attributes: dict[str, str | float | bool] | None
+    :return: Epoch seconds or ``None`` when not sortable
+    :rtype: int | None
+    """
+    raw = (attributes or {}).get("created")
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        created = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return int(created.timestamp())
+
+
 def _derive_principal_id(document: Document) -> str | None:
     """Return the id of this document's Principal, or None if there is none."""
 
@@ -108,6 +135,7 @@ def _source_document_to_vespa_update(
     attrs = document.attributes or {}
     title_clean = _strip_control_chars(document.title)
     published_ts = _published_timestamp_from_attributes(attrs)
+    created_ts = _created_timestamp_from_attributes(attrs)
     principal_id = _derive_principal_id(document)
     fields: VespaDocument = {
         "title": {"assign": title_clean},
@@ -169,6 +197,9 @@ def _source_document_to_vespa_update(
     }
     if published_ts is not None:
         fields["attributes_published_date"] = {"assign": published_ts}
+
+    if created_ts is not None:
+        fields["attributes_created_at"] = {"assign": created_ts}
 
     if principal_id is not None:
         fields["principal_id"] = {"assign": principal_id}
