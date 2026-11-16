@@ -17,11 +17,11 @@ from fastapi.testclient import TestClient
 
 from api.main import MCP_PATH, build_mcp, create_app
 from api.settings import settings
-from api.state import State
 from search.engines.dev_vespa.passages_search_engine import (
     DEFAULT_PASSAGE_RANK_PROFILE,
 )
 from tests.http import MockHandler
+from tests.state import stub_state
 
 
 @pytest.fixture
@@ -32,8 +32,10 @@ def mcp_client(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        state = State(httpx=http_client)
-        async with build_mcp(app=app, state=state):
+        async with (
+            stub_state(httpx=http_client) as state,
+            build_mcp(app=app, state=state),
+        ):
             app.state.deps = state
             yield
 

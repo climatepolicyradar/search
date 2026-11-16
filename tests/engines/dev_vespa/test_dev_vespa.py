@@ -6,7 +6,7 @@ import httpx2
 import pytest
 from pydantic import AnyHttpUrl
 
-from search.engines import OrderBy, Pagination
+from search.engines import OrderBy, Pagination, VespaError
 from search.engines.dev_vespa import (
     _DEFAULT_DOCUMENT_RANK_PROFILE,
     DevVespaDocumentSearchEngine,
@@ -2025,3 +2025,273 @@ async def test_collection_references_for_ids_that_resolve_to_nothing(
 
     references = await engine.collection_references(["no-such-collection"])
     assert references == {}
+
+
+_LABEL_COUNTS_RESPONSE = {
+    "root": {
+        "id": "toplevel",
+        "children": [
+            {
+                "id": "group:root:0",
+                "children": [
+                    {
+                        "id": "grouplist:labels.id",
+                        "label": "labels.id",
+                        "children": [
+                            {
+                                "id": 'group:string:keyword::Flood',
+                                "value": "keyword::Flood",
+                                "fields": {"count()": 7},
+                            },
+                            {
+                                "id": 'group:string:keyword::Drought',
+                                "value": "keyword::Drought",
+                                "fields": {"count()": 3},
+                            },
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+}
+
+
+async def test_label_counts_reads_a_count_per_group(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    counts = await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=["keyword"],
+        msm=0.0,
+    )
+    assert counts == {"keyword::Flood": 7, "keyword::Drought": 3}
+
+
+async def test_label_counts_groups_by_label_id_for_the_given_types(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=["concept", "keyword"],
+        msm=0.0,
+    )
+    body = handler.last_json()
+    assert "group(labels.id) filter(in(labels.type, @types))" in body["yql"]
+    assert body["types"] == ["keyword"]
+
+
+async def test_label_counts_groups_concepts_off_distinct_concept_ids(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    Concepts are counted off `distinct_concept_ids`, not `labels.id`.
+
+    The copies of them inside `labels` carry bare `Q...` ids and miss the Principal
+    roll-up, so they undercount by ~40% against the filter path, which ORs
+    `labels.id` with `concepts.id`.
+    """
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=["concept", "keyword"],
+        msm=0.0,
+    )
+    yql = handler.last_json()["yql"]
+    assert "group(distinct_concept_ids)" in yql
+
+
+async def test_label_counts_asks_only_for_concepts_when_only_concepts_are_wanted(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=["concept"],
+        msm=0.0,
+    )
+    body = handler.last_json()
+    assert "group(labels.id)" not in body["yql"]
+    assert "types" not in body
+
+
+async def test_label_counts_leaves_concepts_alone_when_they_are_not_wanted(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=["keyword"],
+        msm=0.0,
+    )
+    assert "distinct_concept_ids" not in handler.last_json()["yql"]
+
+
+async def test_label_counts_merges_both_groupings(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_BOTH_GROUPINGS_RESPONSE)
+    counts = await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=["concept", "keyword"],
+        msm=0.0,
+    )
+    assert counts == {"keyword::Flood": 2, "concept::Q708": 4}
+
+
+async def test_label_counts_applies_filters_to_the_document_set(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    filters = Filter(
+        op="and",
+        filters=[FieldFilter(field="labels.value.id", op="contains", value="concept::Q1")],
+    )
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        query=None,
+        filters=filters,
+        label_types=["concept"],
+        msm=0.0,
+    )
+    assert "concept::Q1" in handler.last_json()["yql"].split("|")[0]
+
+
+async def test_label_counts_asks_vespa_nothing_without_types(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    counts = await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=[],
+        msm=0.0,
+    )
+    assert counts == {}
+
+
+async def test_label_counts_on_an_empty_grouping(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response({"root": {"id": "toplevel", "children": [{"id": "group:root:0"}]}})
+    counts = await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=["concept"],
+        msm=0.0,
+    )
+    assert counts == {}
+
+
+async def test_label_counts_counts_only_documents_matching_the_query(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        query="flood defence",
+        filters=None,
+        label_types=["keyword"],
+        msm=0.0,
+    )
+    body = handler.last_json()
+    assert body["query"] == "flood defence"
+    assert "userInput(@query)" in body["yql"]
+
+
+async def test_label_counts_without_a_query_matches_every_document(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        query=None,
+        filters=None,
+        label_types=["keyword"],
+        msm=0.0,
+    )
+    body = handler.last_json()
+    assert "userInput" not in body["yql"]
+    assert "query" not in body
+
+
+async def test_label_counts_does_not_rank_documents_it_only_counts(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    handler.add_response(_LABEL_COUNTS_RESPONSE)
+    await _document_engine(http_client).label_counts(
+        query="flood defence",
+        filters=None,
+        label_types=["keyword"],
+        msm=0.0,
+    )
+    assert handler.last_json()["ranking.profile"] == "unranked"
+
+
+async def test_label_counts_raises_when_vespa_reports_an_error_in_a_200(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+) -> None:
+    """
+    A 200 carrying `root.errors` and no `children` must not read as zero counts.
+
+    That is indistinguishable from "no documents matched", which is the whole
+    failure mode `docs/errors.md` exists to prevent.
+    """
+    errored = {
+        "root": {
+            "id": "toplevel",
+            "errors": [{"code": 17, "summary": "Bad request.", "message": "bad grouping"}],
+        }
+    }
+    handler.add_response(errored)
+    with pytest.raises(VespaError) as raised:
+        await _document_engine(http_client).label_counts(
+            query=None,
+            filters=None,
+            label_types=["keyword"],
+            msm=0.0,
+        )
+    assert str(raised.value).endswith("Bad request. bad grouping")
+
+
+_BOTH_GROUPINGS_RESPONSE = {
+    "root": {
+        "id": "toplevel",
+        "children": [
+            {
+                "id": "group:root:0",
+                "children": [
+                    {
+                        "id": "grouplist:labels.id",
+                        "children": [
+                            {"value": "keyword::Flood", "fields": {"count()": 2}},
+                        ],
+                    },
+                    {
+                        "id": "grouplist:distinct_concept_ids",
+                        "children": [
+                            {"value": "concept::Q708", "fields": {"count()": 4}},
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+}

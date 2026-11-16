@@ -3,6 +3,7 @@
 import os
 from collections.abc import AsyncGenerator, Callable, Generator
 from contextlib import asynccontextmanager
+from typing import cast
 
 import boto3
 import httpx2
@@ -28,7 +29,9 @@ from tests.common_strategies import (
 from tests.engines.dev_vespa.stub_documents_search_engine import (
     StubDocumentSearchEngine,
 )
+from tests.engines.dev_vespa.stub_labels_search_engine import StubLabelSearchEngine
 from tests.http import MockHandler
+from tests.state import stub_state
 
 
 def override_dependency[T](
@@ -60,9 +63,28 @@ async def live_http_client() -> AsyncGenerator[httpx2.AsyncClient, None]:
         yield client
 
 @pytest.fixture(scope="function")
-def app(http_client: httpx2.AsyncClient) -> FastAPI:
+async def state(http_client: httpx2.AsyncClient) -> AsyncGenerator[State, None]:
+    """App state wired to stub engines and `http_client`, instead of the network."""
+    async with stub_state(httpx=http_client) as state:
+        yield state
+
+
+@pytest.fixture(scope="function")
+def labels(state: State) -> StubLabelSearchEngine:
+    """The label engine behind the taxonomy, as the stub it is under test."""
+    return cast(StubLabelSearchEngine, state.labels)
+
+
+@pytest.fixture(scope="function")
+def documents(state: State) -> StubDocumentSearchEngine:
+    """The document engine behind the taxonomy, as the stub it is under test."""
+    return cast(StubDocumentSearchEngine, state.documents)
+
+
+@pytest.fixture(scope="function")
+def app(state: State) -> FastAPI:
     """
-    An app of its own, with Vespa wired to `http_client` instead of the network.
+    An app of its own, over `state`.
 
     `api.main.app` is built once at import and its `app.state` lives for the
     whole process, so a client left there by one test's lifespan is still there
@@ -71,7 +93,7 @@ def app(http_client: httpx2.AsyncClient) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-        app.state.deps = State(httpx=http_client)
+        app.state.deps = state
         yield
 
     return create_app(lifespan=lifespan)

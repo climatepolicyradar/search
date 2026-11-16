@@ -1,5 +1,7 @@
+import fnmatch
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 
 from pydantic import BaseModel
 
@@ -49,6 +51,17 @@ def merge(
     return list(labels_by_id.values())
 
 
+@dataclass(frozen=True)
+class LabelPath:
+    """Where a node sits: the ids from a root down to it."""
+
+    ids: tuple[str, ...] = ()
+
+    def then(self, label_id: str) -> "LabelPath":
+        """Return this path extended by one step."""
+        return LabelPath((*self.ids, label_id))
+
+
 @dataclass
 class LabelNode:
     id: str
@@ -70,16 +83,51 @@ class LabelNode:
         """Does a label with the given ID appear anywhere in this subtree?"""
         return self.id == child_id or any(child.has_child(child_id) for child in self.children)
 
-    def find(self, label_types: set[str]) -> list["LabelNode"]:
-        """Return the highest nodes in this subtree whose type is in `label_types`."""
-        if self.type in label_types:
-            return [self]
+    def _matches(self, glob: str) -> bool:
+        return fnmatch.fnmatchcase(self.id, glob)
+
+    def find_path(
+        self,
+        path: PurePosixPath,
+        ancestry: LabelPath = LabelPath(),
+    ) -> list[LabelPath]:
+        """
+        Return where the nodes beneath here whose path matches `path` sit.
+
+        A node reachable from several parents sits at several paths, and only the
+        matching ones are returned - so the id alone cannot stand in for the path.
+        """
+        parts = path.parts
+        if not parts:
+            return []
+
+        here = ancestry.then(self.id)
+        rest = PurePosixPath(*parts[1:])
+        head = parts[0]
+
+        if head == "**":
+            found = [here] if not rest.parts else self.find_path(rest, ancestry)
+            return found + [
+                match
+                for child in self.children
+                for match in child.find_path(path, here)
+            ]
+
+        if not self._matches(head):
+            return []
+
+        if not rest.parts:
+            return [here]
+
+        if rest.parts[0] == "**":
+            return self.find_path(rest, ancestry)
 
         return [
-            found
+            match
             for child in self.children
-            for found in child.find(label_types)
+            for match in child.find_path(rest, here)
         ]
+
 
     def response(self, counts: dict[str, int]) -> TaxonomyNode:
         """Convert this subtree to the API response model, counted from `counts`."""
@@ -128,16 +176,48 @@ def tree(labels: Sequence[LabelSearchResult]) -> list[LabelNode]:
     return [node for node in nodes_by_id.values() if node.is_root]
 
 
+def _pruned(
+    node: LabelNode,
+    ancestry: LabelPath,
+    selected: set[LabelPath],
+) -> LabelNode | None:
+    here = ancestry.then(node.id)
+    children = [
+        kept
+        for kept in (_pruned(child, here, selected) for child in node.children)
+        if kept is not None
+    ]
+
+    if here not in selected and not children:
+        return None
+
+    return LabelNode(
+        id=node.id,
+        type=node.type,
+        value=node.value,
+        is_root=node.is_root,
+        children=children,
+        alternative_labels=node.alternative_labels,
+    )
+
+
 def select(
     roots: Sequence[LabelNode],
-    subtrees: list[str] | None,
+    patterns: list[str] | None,
 ) -> list[LabelNode]:
-    """Return `roots`, or the highest nodes beneath them of the given types."""
-    if subtrees is None:
+    """Return `roots`, or the smallest tree holding every node matching `patterns`."""
+    if patterns is None:
         return list(roots)
 
-    return list({
-        selected.id: selected
+    selected = {
+        found
+        for pattern in patterns
         for root in roots
-        for selected in root.find(set(subtrees))
-    }.values())
+        for found in root.find_path(PurePosixPath(pattern))
+    }
+
+    return [
+        kept
+        for kept in (_pruned(root, LabelPath(), selected) for root in roots)
+        if kept is not None
+    ]

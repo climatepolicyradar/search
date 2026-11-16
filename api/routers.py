@@ -2,7 +2,7 @@ import asyncio
 import time
 from http import HTTPStatus
 from pathlib import Path
-from typing import Annotated, Any, Literal, get_args
+from typing import Annotated, Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -14,8 +14,10 @@ from api.geographies_taxonomy import geographies_taxonomy
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
 from api.models import Aggregations, Facets, ItemResponse, SearchResponse
+from api.responses import ITEM_RESPONSES, SEARCH_RESPONSES
 from api.settings import settings
 from api.state import HttpxDep
+from api.taxonomy.route import router as taxonomy_router
 from api.utils import (
     DocumentsEngineDep,
     LabelsEngineDep,
@@ -43,38 +45,13 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/search")
 router.include_router(health_router)
+router.include_router(taxonomy_router)
 
 AggregationField = Literal["aggregations.labels"]
 FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
 Fields = AggregationField | FacetField
 
 LLMS_TXT_PATH = Path(__file__).parent / "llms.txt"
-
-_VESPA_UNAVAILABLE_RESPONSE: dict[int | str, dict[str, Any]] = {
-    HTTPStatus.TOO_MANY_REQUESTS: {"description": "Vespa throttled the query."},
-    HTTPStatus.INTERNAL_SERVER_ERROR: {
-        "description": "Vespa refused the query we built."
-    },
-    HTTPStatus.SERVICE_UNAVAILABLE: {
-        "description": (
-            "Vespa was unreachable, answered 5xx, or returned a body we could "
-            "not parse."
-        )
-    },
-}
-SEARCH_RESPONSES: dict[int | str, dict[str, Any]] = {
-    HTTPStatus.BAD_REQUEST: {
-        "description": (
-            "Malformed `filters` JSON, or a URL column was asked for without "
-            "`base_url`."
-        )
-    },
-    **_VESPA_UNAVAILABLE_RESPONSE,
-}
-ITEM_RESPONSES: dict[int | str, dict[str, Any]] = {
-    HTTPStatus.NOT_FOUND: {"description": "Document not found."},
-    **_VESPA_UNAVAILABLE_RESPONSE,
-}
 
 
 @router.get("/llms.txt", response_class=PlainTextResponse)

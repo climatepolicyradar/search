@@ -1,7 +1,6 @@
 from collections.abc import AsyncGenerator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, nullcontext
 from dataclasses import dataclass
-from functools import cached_property
 from typing import Annotated, cast
 
 import httpx2
@@ -12,31 +11,43 @@ from fastmcp.server.dependencies import get_context
 
 from api.settings import settings
 from api.taxonomy.service import TaxonomyService
-from search.engines.dev_vespa import DevVespaLabelSearchEngine
+from search.engines.dev_vespa import (
+    DevVespaDocumentSearchEngine,
+    DevVespaLabelSearchEngine,
+)
+from search.engines.dev_vespa.documents_search_engine import DocumentSearchEngine
 from search.engines.dev_vespa.labels_search_engine import LabelSearchEngine
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True)
 class State:
     httpx: httpx2.AsyncClient
+    labels: LabelSearchEngine
+    documents: DocumentSearchEngine
+    taxonomy: TaxonomyService
 
-    @cached_property
-    def labels_engine(self) -> LabelSearchEngine:
-        """The label engine backing the taxonomy."""
-        return DevVespaLabelSearchEngine(settings=settings, httpx=self.httpx)
+    @classmethod
+    @asynccontextmanager
+    async def create(cls) -> AsyncGenerator["State", None]:
+        """
+        Build the dependency tree of long-lived (not per request) application dependencies.
 
-    @cached_property
-    def taxonomy(self) -> TaxonomyService:
-        """The polled taxonomy. Its `run()` must be entered by the lifespan."""
-        return TaxonomyService(labels=self.labels_engine)
+        This is a context manager so anything that needs background tasks also is set up to run in here.
+        """
+        async with httpx2.AsyncClient(http2=True) as client:
+            labels = DevVespaLabelSearchEngine(settings=settings, httpx=client)
+            documents = DevVespaDocumentSearchEngine(settings=settings, httpx=client)
+            taxonomy = TaxonomyService(labels=labels, documents=documents)
 
+            state = cls(
+                httpx=client,
+                labels=labels,
+                documents=documents,
+                taxonomy=taxonomy,
+            )
 
-@asynccontextmanager
-async def build_state() -> AsyncGenerator[State]:
-    async with httpx2.AsyncClient(http2=True) as client:
-        state = State(httpx=client)
-        async with state.taxonomy.run():
-            yield state
+            async with state.taxonomy.run():
+                yield state
 
 
 def _api_state(request: Request) -> State:
@@ -53,6 +64,7 @@ StateDep = Annotated[
     ApiDepends(_api_state),
     McpDepends(_mcp_state),
 ]
+
 
 def httpx(state: StateDep) -> httpx2.AsyncClient:
     """Retrieve the shared http client from app state"""

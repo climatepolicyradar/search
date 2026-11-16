@@ -8,7 +8,6 @@ what reaches the model, not search quality.
 import asyncio
 import logging
 from collections.abc import Iterator
-from contextlib import nullcontext
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx2
@@ -17,11 +16,11 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
 from api.mcp.server import build_server, document_titles
-from api.state import State
 from search.engines import ListResponse, VespaError
 from search.label import LabelSearchResult
 from search.passage import Passage
 from tests.api.mcp.test_models import make_document
+from tests.state import stub_state
 
 EXPECTED_TOOLS = {
     "search_documents",
@@ -99,7 +98,7 @@ def label_engine() -> Iterator[MagicMock]:
 
 def server():
     """The MCP with a stand-in client. The engines are mocked, so it's never used."""
-    return build_server(lifespan=lambda _: nullcontext(State(httpx=MagicMock())))
+    return build_server(lifespan=lambda _: stub_state(httpx=MagicMock()))
 
 
 def call(tool: str, arguments: dict):

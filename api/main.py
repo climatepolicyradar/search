@@ -22,7 +22,7 @@ from api.observability.src.api import (
 from api.routers import router
 from api.search_metrics import SearchMetrics
 from api.settings import settings
-from api.state import State, build_state
+from api.state import State
 from api.taxonomy.service import TaxonomyNotLoadedError
 from search.engines import VespaError
 from search.log import get_logger
@@ -60,7 +60,7 @@ async def build_mcp(app: FastAPI, state: State) -> AsyncGenerator[None]:
 @asynccontextmanager
 async def production_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan context manager for startup and shutdown events."""
-    async with build_state() as state, build_mcp(app=app, state=state):
+    async with State.create() as state, build_mcp(app=app, state=state):
         app.state.deps = state
         yield
 
