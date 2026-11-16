@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Any
 
 import orjson
@@ -104,6 +105,7 @@ def derive_document_data(record: dict[str, Any]) -> dict[str, Any]:
         record = derive_collection_id(record, document_source)
         record = derive_id_if_missing(record, document_source)
     record = derive_hoisted_attributes(record)
+    record = derive_created_timestamp(record)
     record = derive_distinct_concept_ids(record)
 
     return record
@@ -123,6 +125,33 @@ def derive_hoisted_attributes(record: dict[str, Any]) -> dict[str, Any]:
 
     for key in _HOISTED_ATTRIBUTE_KEYS:
         record["fields"][key] = {"assign": attributes.get(key, "")}
+
+    return record
+
+
+def derive_created_timestamp(record: dict[str, Any]) -> dict[str, Any]:
+    """
+    Set `attributes_created_at` to epoch seconds from the record's own `attributes_string`.
+
+    `created` is the RDS row timestamp, which arrives without a timezone and is
+    UTC. Needed so documents can be sorted by when they were added. Left unset
+    when missing or unparsable, so the document sorts last rather than at 1970.
+    """
+    attributes = record.get("fields", {}).get("attributes_string", {}).get("assign")
+    raw = (attributes or {}).get("created")
+
+    if not raw:
+        return record
+
+    try:
+        created = datetime.fromisoformat(raw)
+    except ValueError:
+        return record
+
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+
+    record["fields"]["attributes_created_at"] = {"assign": int(created.timestamp())}
 
     return record
 

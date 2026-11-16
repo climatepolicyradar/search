@@ -5,6 +5,7 @@ from typing import Any
 
 from documents_flow import (
     derive_collection_id,
+    derive_created_timestamp,
     derive_distinct_concept_ids,
     derive_document_data,
     derive_hoisted_attributes,
@@ -63,6 +64,39 @@ def test_absent_key_is_assigned_empty() -> None:
 def test_record_without_attributes_string_is_unchanged() -> None:
     record = derive_hoisted_attributes({"update": "id:documents:documents::doc-0", "fields": {}})
     assert record["fields"] == {}
+
+
+def test_created_is_hoisted_as_epoch_seconds() -> None:
+    record = derive_created_timestamp(_record({"created": "2019-05-01T09:00:00Z"}))
+    assert record["fields"]["attributes_created_at"] == {"assign": 1556701200}
+
+
+def test_created_without_a_timezone_is_read_as_utc() -> None:
+    """RDS timestamps arrive naive (e.g. `2023-02-03T04:05:06.789000`) and are UTC."""
+    record = derive_created_timestamp(_record({"created": "2023-02-03T04:05:06.789000"}))
+    assert record["fields"]["attributes_created_at"] == {"assign": 1675397106}
+
+
+def test_created_stays_in_attributes_string() -> None:
+    record = derive_created_timestamp(_record({"created": "2019-05-01T09:00:00Z"}))
+    assert record["fields"]["attributes_string"] == {"assign": {"created": "2019-05-01T09:00:00Z"}}
+
+
+def test_missing_or_unparsable_created_is_not_assigned() -> None:
+    """Leaving the field unset sorts the document last, rather than at 1970."""
+    for attributes in ({}, {"created": ""}, {"created": "not-a-date"}):
+        record = derive_created_timestamp(_record(attributes))
+        assert "attributes_created_at" not in record["fields"]
+
+
+def test_record_without_attributes_string_has_no_created() -> None:
+    record = derive_created_timestamp({"update": "id:documents:documents::doc-0", "fields": {}})
+    assert record["fields"] == {}
+
+
+def test_derive_document_data_sets_created() -> None:
+    record = derive_document_data(_record({"created": "2019-05-01T09:00:00Z"}))
+    assert record["fields"]["attributes_created_at"] == {"assign": 1556701200}
 
 
 def _derive(document_source: dict[str, Any]) -> dict[str, Any]:
