@@ -178,7 +178,7 @@ schema documents {
             indexing: attribute | summary
         }
 
-        field attributes_created type long {
+        field attributes_created_at type long {
             indexing: attribute | summary
         }
 
