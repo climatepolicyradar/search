@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 
 sort_field_to_vespa_field_map = {
     "attributes.published_date": ["attributes_published_date"],
+    "attributes.created_at": ["attributes_created_at"],
     "title": ["title_sort"],
 }
 
@@ -45,6 +46,8 @@ def _document_sort_ranking_string(vespa_attr: str, direction: str) -> str:
     sign = "+" if direction == "asc" else "-"
     if vespa_attr == "attributes_published_date":
         return f"{sign}missing(attributes_published_date,last)"
+    if vespa_attr == "attributes_created_at":
+        return f"{sign}missing(attributes_created_at,last)"
     if vespa_attr == "title_sort":
         return f"{sign}missing(title_sort,last)"
     raise AssertionError(f"unexpected Vespa sort attribute {vespa_attr!r}")

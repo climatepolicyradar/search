@@ -55,6 +55,11 @@ def test_parse_label_type_id_value(s, expected):
             "desc",
             "-missing(attributes_published_date,last)",
         ),
+        (
+            "attributes_created_at",
+            "desc",
+            "-missing(attributes_created_at,last)",
+        ),
         ("title_sort", "asc", "+missing(title_sort,last)"),
         ("title_sort", "desc", "-missing(title_sort,last)"),
     ],
