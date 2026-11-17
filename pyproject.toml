@@ -5,21 +5,21 @@ description = "Tests for measuring the relevance of our search results"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-  "boto3>=1.43.126",
+  "boto3>=1.44.2",
   "fastapi[standard]>=0.143.3",
   "httpx2>=2.16.0",
-  "posthog>=7.86.0",
+  "posthog>=7.91.1",
   # @related: PREFECT_VERSION
   # This should match the Dockerfiles using prefect as that's what we deploy to prefect
   # which can cause unexpected results.
   "prefect[slack]==3.9.2",
   "pydantic>=2.14.3",
-  "pydantic-settings>=2.16.2",
+  "pydantic-settings>=2.16.3",
   "python-dotenv>=1.2.4",
   "pyvespa>=1.2.10",
   "requests>=2.34.2",
   "rich>=15.0.0",
-  "typer>=0.28.0",
+  "typer>=0.29.1",
   "uvicorn>=0.54.0",
   "components>=1.0.5",
   "polyfactory>=3.5.0",
@@ -38,23 +38,23 @@ dependencies = [
   "pandas>=3.1.1",
   "scikit-learn>=1.9.1",
   "cpr-contracts",
-  "fastmcp>=4.1.6",
+  "fastmcp>=4.2.0",
 ]
 
 [dependency-groups]
 research = ["snowflake-connector-python>=5.2.0", "openpyxl>=3.1.5"]
 dev = [
-  "pulumi-aws>=7.54.0,<8.0.0",
-  "pulumi-docker>=5.2.2,<6.0.0",
+  "pulumi-aws>=7.55.0,<8.0.0",
+  "pulumi-docker>=5.3.0,<6.0.0",
   "pulumi-docker-build>=0.0.23,<1.0.0",
   "pulumi-pulumiservice>=1.7.0",
-  "pulumi>=3.274.1,<4.0.0",
+  "pulumi>=3.276.0,<4.0.0",
   "pytest>=9.2.0",
-  "pytest-asyncio>=1.4.1",
+  "pytest-asyncio>=1.5.0",
   "hypothesis>=6.170.15",
-  "boto3-stubs[s3,ssm]>=1.43.126",
-  "pulumiverse-grafana>=2.44.0",
-  "pydantic-evals>=2.66.0",
+  "boto3-stubs[s3,ssm]>=1.44.2",
+  "pulumiverse-grafana>=2.45.0",
+  "pydantic-evals>=2.68.0",
   "wandb[eval-table]>=0.31.0",
 ]
 
