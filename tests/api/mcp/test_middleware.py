@@ -40,6 +40,10 @@ def make_server() -> FastMCP:
     def paged() -> dict[str, Any]:
         return {"results": ["a", "b", "c"], "has_more": True}
 
+    @mcp.tool
+    def searches(query: str) -> dict[str, Any]:
+        return {"results": ["a", "b"], "has_more": False}
+
     return mcp
 
 
@@ -143,3 +147,51 @@ def test_success_log_counts_results(caplog: pytest.LogCaptureFixture):
         call("paged", {})
     [record] = call_log_records(caplog)
     assert record.getMessage().endswith("results=3")
+
+
+def call_fields(record: logging.LogRecord) -> dict[str, Any]:
+    """The structured fields on a call log record, which reach Grafana as attributes."""
+    return {
+        name: value for name, value in vars(record).items() if name.startswith("mcp_")
+    }
+
+
+def test_successful_call_carries_structured_fields(caplog: pytest.LogCaptureFixture):
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        call("searches", {"query": "adaptation finance"})
+    [record] = call_log_records(caplog)
+
+    fields = call_fields(record)
+    assert isinstance(fields.pop("mcp_duration_ms"), int)
+    assert fields == {
+        "mcp_tool": "searches",
+        "mcp_outcome": "success",
+        "mcp_query": "adaptation finance",
+        "mcp_results": 2,
+    }
+
+
+@pytest.mark.parametrize(
+    ("kind", "outcome", "error_type"),
+    [("vespa", "error", "VespaError"), ("filter", "rejected", "FilterArgError")],
+)
+def test_failed_call_carries_its_outcome_and_error_type(
+    caplog: pytest.LogCaptureFixture, kind: str, outcome: str, error_type: str
+):
+    with caplog.at_level(logging.INFO, logger=LOGGER), pytest.raises(ToolError):
+        call("fails", {"kind": kind})
+    [record] = call_log_records(caplog)
+
+    fields = call_fields(record)
+    assert fields["mcp_outcome"] == outcome
+    assert fields["mcp_error_type"] == error_type
+
+
+def test_unset_fields_are_left_out_rather_than_none(caplog: pytest.LogCaptureFixture):
+    # OpenTelemetry drops None attributes with a warning.
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        call("capped", {"limit": 5})
+    [record] = call_log_records(caplog)
+
+    assert "mcp_query" not in call_fields(record)
+    assert "mcp_results" not in call_fields(record)

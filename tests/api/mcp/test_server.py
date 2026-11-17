@@ -22,13 +22,14 @@ from search.passage import Passage
 from tests.api.mcp.test_models import make_document
 from tests.state import stub_state
 
-EXPECTED_TOOLS = {
+SEARCH_TOOLS = {
     "search_documents",
     "search_passages",
     "get_document",
     "search_topics",
     "get_passage",
 }
+EXPECTED_TOOLS = SEARCH_TOOLS | {"send_feedback"}
 
 
 def make_passage(**overrides) -> Passage:
@@ -117,16 +118,34 @@ def list_tools():
     return asyncio.run(run())
 
 
-def test_exposes_exactly_the_five_tools():
+def test_exposes_exactly_the_expected_tools():
     # Tool names are a contract with every connected client: renaming one
     # should be a deliberate change to this test.
     assert {tool.name for tool in list_tools()} == EXPECTED_TOOLS
 
 
-def test_every_tool_is_read_only():
+def test_every_search_tool_is_read_only():
     for tool in list_tools():
-        assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        if tool.name in SEARCH_TOOLS:
+            assert tool.annotations is not None
+            assert tool.annotations.read_only_hint is True
+
+
+def test_send_feedback_is_not_read_only_so_clients_ask_first():
+    (tool,) = [tool for tool in list_tools() if tool.name == "send_feedback"]
+    assert tool.annotations is not None
+    assert tool.annotations.read_only_hint is False
+    assert tool.annotations.destructive_hint is False
+
+
+def test_feedback_tool_filter_lists_every_search_tool():
+    (tool,) = [tool for tool in list_tools() if tool.name == "send_feedback"]
+    (choices,) = [
+        option["enum"]
+        for option in tool.input_schema["properties"]["tool"]["anyOf"]
+        if "enum" in option
+    ]
+    assert set(choices) == SEARCH_TOOLS
 
 
 def test_shared_client_is_injected_not_an_argument_for_the_model():
@@ -619,3 +638,81 @@ def test_impossible_date_range_reaches_the_model(document_engine: MagicMock):
             },
         )
     document_engine.asearch.assert_not_awaited()
+
+
+FEEDBACK_LOGGER = "api.mcp.server"
+MIDDLEWARE_LOGGER = "api.mcp.middleware"
+
+
+def feedback_records(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [
+        record
+        for record in caplog.records
+        if record.name == FEEDBACK_LOGGER
+        and record.getMessage().startswith("Feedback:")
+    ]
+
+
+def test_feedback_is_logged_with_its_fields(caplog: pytest.LogCaptureFixture):
+    with caplog.at_level(logging.INFO, logger=FEEDBACK_LOGGER):
+        result = call(
+            "send_feedback",
+            {
+                "comment": "Missed the 2016 Climate Change Act",
+                "search_query": "health in Kenya",
+                "tool": "search_passages",
+            },
+        )
+
+    assert result.structured_content == {
+        "message": "Recorded for Climate Policy Radar. Thank you."
+    }
+    (record,) = feedback_records(caplog)
+    assert record.levelno == logging.INFO
+    assert vars(record)["mcp_feedback"] == "Missed the 2016 Climate Change Act"
+    assert vars(record)["mcp_feedback_query"] == "health in Kenya"
+    assert vars(record)["mcp_feedback_tool"] == "search_passages"
+
+
+def test_feedback_without_a_query_or_tool_leaves_those_fields_out(
+    caplog: pytest.LogCaptureFixture,
+):
+    # OpenTelemetry drops None attributes with a warning.
+    with caplog.at_level(logging.INFO, logger=FEEDBACK_LOGGER):
+        call("send_feedback", {"comment": "  Really useful, thanks  "})
+
+    (record,) = feedback_records(caplog)
+    assert vars(record)["mcp_feedback"] == "Really useful, thanks"
+    assert "mcp_feedback_query" not in vars(record)
+    assert "mcp_feedback_tool" not in vars(record)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"comment": ""},
+        {"comment": "   "},
+        {"comment": "x" * 2001},
+        {"comment": "ok", "search_query": "x" * 2001},
+        {"comment": "ok", "tool": "delete_everything"},
+    ],
+)
+def test_bad_feedback_is_rejected(arguments: dict):
+    with pytest.raises(ToolError):
+        call("send_feedback", arguments)
+
+
+def test_feedback_is_not_counted_as_a_search_in_the_call_log(
+    caplog: pytest.LogCaptureFixture,
+):
+    with caplog.at_level(logging.INFO, logger=MIDDLEWARE_LOGGER):
+        call(
+            "send_feedback",
+            {"comment": "Missed a law", "search_query": "health in Kenya"},
+        )
+
+    (record,) = [
+        record for record in caplog.records if record.name == MIDDLEWARE_LOGGER
+    ]
+    assert vars(record)["mcp_tool"] == "send_feedback"
+    assert "mcp_query" not in vars(record)

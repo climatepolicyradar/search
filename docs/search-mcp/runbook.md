@@ -1,7 +1,8 @@
 # Search MCP runbook
 
 The search MCP lets Claude search CPR's documents and passages with the same
-engines and ranking as the website. It's read-only.
+engines and ranking as the website. Its search tools are read-only, and people
+can send feedback to Climate Policy Radar through it.
 
 ```text
 You ask Claude ──▶ Claude picks a tool ──▶ search MCP (api/mcp) ──▶ search engines ──▶ Vespa
@@ -29,7 +30,7 @@ The deployed search API keeps the MCP off for now, because the API is public.
    ```
 
 4. Open a new Claude Code chat, since chats that were already open won't see it
-5. Type `/mcp` and check `cpr-search` is connected with 5 tools
+5. Type `/mcp` and check `cpr-search` is connected with 6 tools
 
 `just gen-env` with no instance points at production Vespa. That's safe because
 the MCP only reads, but use `just gen-env <instance>` for a dev instance.
@@ -55,6 +56,7 @@ every" should go to the data lake MCP, and Claude will say so.
 | `get_passage`      | Read a passage in full, with the passages either side           | `text_block_id`, `context` (0 to 3, default 1)                                                                                      |
 | `get_document`     | Look up one document by id                                      | `document_id`                                                                                                                       |
 | `search_topics`    | Turn a subject into a topic id for the `topics` filter          | `query`, `limit`                                                                                                                    |
+| `send_feedback`    | Send feedback to Climate Policy Radar, only when the user asks  | `comment`, `search_query`, `tool`                                                                                                   |
 
 ### Filters
 
@@ -127,6 +129,20 @@ Rejected: tool call surface=mcp tool=search_documents args={'geographies': ['Ken
 An `Error:` line logs the real cause, while Claude only gets a fixed message
 like "Search is unavailable right now".
 
+Each line also carries fields Grafana can filter and group on: `mcp_tool`,
+`mcp_outcome` (`success`, `rejected` or `error`), `mcp_query`, `mcp_results`,
+`mcp_duration_ms` and, on failures, `mcp_error_type`.
+
+Feedback sent through `send_feedback` gets its own line, with the comment in
+`mcp_feedback` (plus `mcp_feedback_query` and `mcp_feedback_tool` when given):
+
+```text
+Feedback: search MCP feedback tool=search_passages query='health in Kenya' comment='Missed the 2016 Climate Change Act'
+```
+
+Feedback is only a log line, so nobody sees it unless they look for it. Logs
+from `just dev-mcp` go to the staging OpenTelemetry collector, not production.
+
 ## Run the tests
 
 ```bash
@@ -164,7 +180,7 @@ Vespa matches the filters. Check new filters live with `fastmcp call`.
 
 ```text
 api/mcp/
-├── server.py        build_server() and the 5 tools
+├── server.py        build_server() and the 6 tools
 ├── filters.py       tool args → the engine's filter tree
 ├── models.py        trims engine results for Claude
 ├── descriptions.py  everything Claude reads to pick a tool
