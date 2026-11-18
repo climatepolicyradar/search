@@ -8,7 +8,7 @@ from typing import Annotated, Literal, assert_never, get_args
 from fastapi import Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
-from search.engines.dev_vespa import (
+from search.engines.vespa_query.filters import (
     ArrayStructField,
     AttributesCondition,
     FieldFilter,

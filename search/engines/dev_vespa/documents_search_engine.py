@@ -11,7 +11,7 @@ from typing import Any, Protocol
 from urllib.parse import quote
 
 import httpx2
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter
 from vespa.querybuilder import Grouping as G
 
 from search.bolding import (
@@ -36,19 +36,25 @@ from search.engines.vespa_query.client import (
     aexecute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
-    ArrayStructField,
     FieldFilter,
     Filter,
-    _build_filter_query,
     _facet_filter_label_type,
     _get_label_types_from_filters,
     _prune_filter,
     _topic_ids_from_filters,
+    build_filter_query,
+    documents_filter_field_to_vespa_field_map,
+    documents_filter_struct_field_to_vespa_field_map,
 )
 from search.engines.vespa_query.query_text_modifiers import (
     _normalize_currency_symbols,
     _parse_query,
     _resolve_geography_aliases,
+)
+from search.engines.vespa_query.response import (
+    ByNameModel,
+    VespaHit,
+    VespaResponse,
 )
 from search.engines.vespa_query.sorting import _ranking_overrides_for_document_order_by
 from search.label import Label
@@ -56,14 +62,6 @@ from search.log import get_logger
 from search.query_rewrites import expansion_patterns
 
 logger = get_logger(__name__)
-
-documents_filter_field_to_vespa_field_map = {
-    "labels.value.id": ["labels.id", "concepts.id"],
-    "labels.value.value": ["labels.value", "concepts.value"],
-    "labels.value.type": ["labels.type", "concepts.type"],
-    "labels.type": ["labels.relationship"],
-}
-documents_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {}
 
 _DEFAULT_TOPIC_WEIGHT = 1.0
 
@@ -120,35 +118,6 @@ _QUERY_LINGUISTICS_PROFILE = "passage_analysis_kstem"
 # See PR #651 for how this was chosen.
 _DEFAULT_EXACT_WEIGHT: float | None = None
 
-class VespaResponseError(BaseModel):
-    code: int
-    summary: str
-    message: str | None = None
-
-class VespaHit[A: BaseModel](BaseModel):
-    fields: A
-
-class VespaRoot[A: BaseModel](BaseModel):
-    errors: list[VespaResponseError] = []
-    children: list[A] | None = None
-
-    def raise_if_errors(self, request_context: str) -> None:
-        """Raise when Vespa reported an error in the body of a 200."""
-        if not self.errors:
-            return
-
-        reported = ", ".join(
-            f"{error.summary} {error.message}".strip() for error in self.errors
-        )
-
-        raise VespaError(
-            f"Vespa reported errors [{request_context}]: {reported}",
-            status_code=None,
-        )
-
-class VespaResponse[A: BaseModel](BaseModel):
-    root: VespaRoot[A]
-
 class VespaGroupCount(BaseModel):
     count: int = Field(validation_alias="count()")
 
@@ -161,9 +130,6 @@ class VespaGroupList(BaseModel):
 
 class VespaGroupingRoot(BaseModel):
     children: list[VespaGroupList] = []
-
-class ByNameModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
 
 
 class CollectionReference(ByNameModel):
@@ -397,7 +363,7 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         if free_text:
             where += self._userQuery
         where += _document_phrase_yql(len(phrases))
-        where += _build_filter_query(
+        where += build_filter_query(
             filters,
             field_map=documents_filter_field_to_vespa_field_map,
             struct_map=documents_filter_struct_field_to_vespa_field_map,

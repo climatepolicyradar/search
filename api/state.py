@@ -10,6 +10,7 @@ from fastmcp.dependencies import Depends as McpDepends
 from fastmcp.server.dependencies import get_context
 
 from api.settings import settings
+from api.sitemap.storage import SitemapStorage
 from api.taxonomy.service import TaxonomyService
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
@@ -25,6 +26,7 @@ class State:
     labels: LabelSearchEngine
     documents: DocumentSearchEngine
     taxonomy: TaxonomyService
+    sitemap: SitemapStorage
 
     @classmethod
     @asynccontextmanager
@@ -38,12 +40,14 @@ class State:
             labels = DevVespaLabelSearchEngine(settings=settings, httpx=client)
             documents = DevVespaDocumentSearchEngine(settings=settings, httpx=client)
             taxonomy = TaxonomyService(labels=labels, documents=documents)
+            sitemap = SitemapStorage(settings=settings, httpx=client)
 
             state = cls(
                 httpx=client,
                 labels=labels,
                 documents=documents,
                 taxonomy=taxonomy,
+                sitemap=sitemap,
             )
 
             async with state.taxonomy.run():
