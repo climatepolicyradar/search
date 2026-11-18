@@ -15,6 +15,7 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
+from api.mcp.middleware import FILTER_ARGS
 from api.mcp.server import build_server, document_titles
 from search.engines import ListResponse, VespaError
 from search.label import LabelSearchResult
@@ -146,6 +147,20 @@ def test_feedback_tool_filter_lists_every_search_tool():
         if "enum" in option
     ]
     assert set(choices) == SEARCH_TOOLS
+
+
+def test_call_log_filter_fields_match_the_search_tools_filters():
+    # FILTER_ARGS is a hand-kept list, so a new filter would otherwise never
+    # reach the mcp_filters log field.
+    not_filters = {"query", "limit", "page"}
+    filters = {
+        name
+        for tool in list_tools()
+        if tool.name in {"search_documents", "search_passages"}
+        for name in tool.input_schema["properties"]
+        if name not in not_filters
+    }
+    assert filters == set(FILTER_ARGS)
 
 
 def test_shared_client_is_injected_not_an_argument_for_the_model():
@@ -716,3 +731,4 @@ def test_feedback_is_not_counted_as_a_search_in_the_call_log(
     ]
     assert vars(record)["mcp_tool"] == "send_feedback"
     assert "mcp_query" not in vars(record)
+    assert "Missed a law" not in record.getMessage()

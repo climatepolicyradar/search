@@ -333,22 +333,19 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
             SearchTool | None, Field(description=descriptions.FEEDBACK_TOOL)
         ] = None,
     ) -> FeedbackSent:
+        fields = {"mcp_feedback": comment}
+        # OpenTelemetry drops None attributes with a warning.
+        if search_query is not None:
+            fields["mcp_feedback_query"] = search_query
+        if tool is not None:
+            fields["mcp_feedback_tool"] = tool
         # Its own line, so feedback can be picked out of the logs.
         logger.info(
             "Feedback: search MCP feedback tool=%s query=%r comment=%r",
             tool,
             search_query,
             comment,
-            extra={
-                name: value
-                for name, value in {
-                    "mcp_feedback": comment,
-                    "mcp_feedback_query": search_query,
-                    "mcp_feedback_tool": tool,
-                }.items()
-                # OpenTelemetry drops None attributes with a warning.
-                if value is not None
-            },
+            extra=fields,
         )
         return FeedbackSent(message="Recorded for Climate Policy Radar. Thank you.")
 

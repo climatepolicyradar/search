@@ -5,6 +5,7 @@ One log line per call, and fixed messages for known failures. Errors and
 logging live here, so no tool catches anything.
 """
 
+import json
 from collections.abc import Mapping
 from time import perf_counter
 from typing import Any, Literal
@@ -39,7 +40,11 @@ class CallLogMiddleware(Middleware):
         start = perf_counter()
         tool = context.message.name
         arguments = context.message.arguments or {}
-        log_args = (tool, context.message.arguments)
+        # The feedback tool logs its own comment, up to 2000 chars, so don't repeat it.
+        log_args = (
+            tool,
+            None if tool == "send_feedback" else context.message.arguments,
+        )
         try:
             result = await call_next(context)
         except Exception as exc:
@@ -146,6 +151,19 @@ def _is_caller_mistake(exc: Exception) -> bool:
 
 Outcome = Literal["success", "rejected", "error"]
 
+# Listed rather than "everything but the query", so ids, paging and feedback
+# text never land in the filters field.
+FILTER_ARGS = (
+    "document_ids",
+    "geographies",
+    "regions",
+    "categories",
+    "response_areas",
+    "topics",
+    "published_after",
+    "published_before",
+)
+
 
 def _call_fields(
     tool: str,
@@ -169,6 +187,10 @@ def _call_fields(
     query = arguments.get("query")
     if isinstance(query, str):
         fields["mcp_query"] = query
+    filters = {name: arguments[name] for name in FILTER_ARGS if arguments.get(name)}
+    if filters:
+        # A string, because OpenTelemetry attributes can't hold a dict.
+        fields["mcp_filters"] = json.dumps(filters, sort_keys=True)
     if results is not None:
         fields["mcp_results"] = results
     if error_type is not None:

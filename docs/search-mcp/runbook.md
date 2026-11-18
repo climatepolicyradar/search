@@ -130,7 +130,8 @@ An `Error:` line logs the real cause, while Claude only gets a fixed message
 like "Search is unavailable right now".
 
 Each line also carries fields Grafana can filter and group on: `mcp_tool`,
-`mcp_outcome` (`success`, `rejected` or `error`), `mcp_query`, `mcp_results`,
+`mcp_outcome` (`success`, `rejected` or `error`), `mcp_query`, `mcp_filters`
+(the filters as JSON, e.g. `{"geographies": ["KEN"]}`), `mcp_results`,
 `mcp_duration_ms` and, on failures, `mcp_error_type`.
 
 Feedback sent through `send_feedback` gets its own line, with the comment in

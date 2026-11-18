@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from typing import Any
 
@@ -41,7 +42,12 @@ def make_server() -> FastMCP:
         return {"results": ["a", "b", "c"], "has_more": True}
 
     @mcp.tool
-    def searches(query: str) -> dict[str, Any]:
+    def searches(
+        query: str,
+        geographies: list[str] | None = None,
+        categories: list[str] | None = None,
+        limit: int = 10,
+    ) -> dict[str, Any]:
         return {"results": ["a", "b"], "has_more": False}
 
     return mcp
@@ -171,6 +177,27 @@ def test_successful_call_carries_structured_fields(caplog: pytest.LogCaptureFixt
     }
 
 
+def test_filters_are_logged_apart_from_the_query(caplog: pytest.LogCaptureFixture):
+    with caplog.at_level(logging.INFO, logger=LOGGER):
+        call(
+            "searches",
+            {
+                "query": "adaptation finance",
+                "geographies": ["KEN"],
+                "categories": ["Law"],
+                "limit": 5,
+            },
+        )
+    [record] = call_log_records(caplog)
+
+    fields = call_fields(record)
+    assert fields["mcp_query"] == "adaptation finance"
+    assert json.loads(fields["mcp_filters"]) == {
+        "geographies": ["KEN"],
+        "categories": ["Law"],
+    }
+
+
 @pytest.mark.parametrize(
     ("kind", "outcome", "error_type"),
     [("vespa", "error", "VespaError"), ("filter", "rejected", "FilterArgError")],
@@ -194,4 +221,5 @@ def test_unset_fields_are_left_out_rather_than_none(caplog: pytest.LogCaptureFix
     [record] = call_log_records(caplog)
 
     assert "mcp_query" not in call_fields(record)
+    assert "mcp_filters" not in call_fields(record)
     assert "mcp_results" not in call_fields(record)
