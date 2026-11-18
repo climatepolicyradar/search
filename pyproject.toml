@@ -39,6 +39,7 @@ dependencies = [
   "scikit-learn>=1.9.1",
   "cpr-contracts",
   "fastmcp>=4.2.0",
+  "pycountry>=26.2.16",
 ]
 
 [dependency-groups]
