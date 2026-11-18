@@ -8,6 +8,7 @@ from fastapi import Depends as ApiDepends
 from fastapi import Request
 from fastmcp.dependencies import Depends as McpDepends
 from fastmcp.server.dependencies import get_context
+from opentelemetry.instrumentation.httpx import HTTPX2ClientInstrumentor
 
 from api.settings import settings
 from api.sitemap.storage import SitemapStorage
@@ -37,6 +38,8 @@ class State:
         This is a context manager so anything that needs background tasks also is set up to run in here.
         """
         async with httpx2.AsyncClient(http2=True) as client:
+            HTTPX2ClientInstrumentor.instrument_client(client)  # pyright: ignore[reportArgumentType]
+
             labels = DevVespaLabelSearchEngine(settings=settings, httpx=client)
             documents = DevVespaDocumentSearchEngine(settings=settings, httpx=client)
             taxonomy = TaxonomyService(labels=labels, documents=documents)
