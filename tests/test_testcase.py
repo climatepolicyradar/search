@@ -3,7 +3,7 @@
 import pytest
 
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine
-from search.engines.dev_vespa import (
+from search.engines.vespa_query.filters import (
     Filter,
     _build_filter_yql,
     passages_filter_field_to_vespa_field_map,

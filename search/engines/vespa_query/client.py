@@ -7,12 +7,14 @@ import time
 from typing import Any, Protocol
 
 import httpx2
+from opentelemetry import trace
 from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings
 
 from search.log import get_logger
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 API_TIMEOUT = 5  # seconds
 HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS = 512
@@ -131,66 +133,100 @@ async def aexecute_vespa_query(
     headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     started = time.perf_counter()
-    try:
-        response = await client.post(
-            endpoint,
-            json=request_body,
-            timeout=API_TIMEOUT,
-            headers=headers,
+    with tracer.start_as_current_span(f"vespa {request_context}") as span:
+        span.set_attributes(
+            {
+                "vespa.yql": str(request_body.get("yql", "")),
+                "vespa.ranking_profile": str(request_body.get("ranking.profile", "")),
+                "vespa.summary": str(request_body.get("presentation.summary", "default")),
+            }
         )
-    except Exception as exc:
-        logger.exception(
-            "Error: Vespa request failed before a response was received [%s] "
-            "(elapsed_ms=%d)",
+
+        try:
+            try:
+                response = await client.post(
+                    url=endpoint,
+                    json=request_body,
+                    timeout=API_TIMEOUT,
+                    headers=headers,
+                )
+            except (httpx2.RemoteProtocolError, httpx2.WriteError) as exc:
+                span.add_event("vespa.connection_retry")
+                logger.warning(
+                    "Vespa connection was torn down, retrying once [%s] (%s: %s)",
+                    request_context,
+                    type(exc).__name__,
+                    exc,
+                )
+                response = await client.post(
+                    url=endpoint,
+                    json=request_body,
+                    timeout=API_TIMEOUT,
+                    headers=headers,
+                )
+        except Exception as exc:
+            logger.exception(
+                "Error: Vespa request failed before a response was received [%s] "
+                "(elapsed_ms=%d)",
+                request_context,
+                (time.perf_counter() - started) * 1000,
+            )
+            raise VespaError(
+                f"Vespa request failed before a response was received [{request_context}]",
+                status_code=None,
+            ) from exc
+
+        if response.status_code >= 400:
+            body_preview = (response.text or "")[:HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS]
+            logger.error(
+                "Error: Vespa returned a non-success status code [%s] "
+                "(status=%s, body_preview=%r)",
+                request_context,
+                response.status_code,
+                body_preview,
+            )
+            raise VespaError(
+                f"Vespa returned status {response.status_code} [{request_context}]: "
+                f"{body_preview}",
+                status_code=response.status_code,
+            )
+
+        try:
+            response_json = response.json()
+        except ValueError as exc:
+            logger.exception("Error: Vespa returned invalid JSON [%s]", request_context)
+            raise VespaError(
+                f"Vespa returned invalid JSON [{request_context}] "
+                f"(status={response.status_code})",
+                status_code=None,
+            ) from exc
+
+        _warn_if_degraded(response_json, request_context)
+
+        hit_count = len(response_json.get("root", {}).get("children", []) or [])
+        timing = response_json.get("timing") or {}
+        logger.info(
+            "Success: Vespa request completed [%s] (hits=%s, total_count=%s, "
+            "elapsed_ms=%d, vespa_querytime_ms=%d, vespa_summaryfetchtime_ms=%d, "
+            "vespa_searchtime_ms=%d, bytes=%d, summary=%s)",
             request_context,
+            hit_count,
+            _get_total_count(response_json),
             (time.perf_counter() - started) * 1000,
+            timing.get("querytime", 0) * 1000,
+            timing.get("summaryfetchtime", 0) * 1000,
+            timing.get("searchtime", 0) * 1000,
+            len(response.content),
+            request_body.get("presentation.summary", "default"),
         )
-        raise VespaError(
-            f"Vespa request failed before a response was received [{request_context}]",
-            status_code=None,
-        ) from exc
-
-    if response.status_code >= 400:
-        body_preview = (response.text or "")[:HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS]
-        logger.error(
-            "Error: Vespa returned a non-success status code [%s] "
-            "(status=%s, body_preview=%r)",
-            request_context,
-            response.status_code,
-            body_preview,
+        span.set_attributes(
+            {
+                "vespa.hits": hit_count,
+                "vespa.total_count": _get_total_count(response_json) or 0,
+                "vespa.querytime_ms": timing.get("querytime", 0) * 1000,
+                "vespa.summaryfetchtime_ms": timing.get("summaryfetchtime", 0) * 1000,
+                "vespa.searchtime_ms": timing.get("searchtime", 0) * 1000,
+                "vespa.response_bytes": len(response.content),
+            }
         )
-        raise VespaError(
-            f"Vespa returned status {response.status_code} [{request_context}]: "
-            f"{body_preview}",
-            status_code=response.status_code,
-        )
-
-    try:
-        response_json = response.json()
-    except ValueError as exc:
-        logger.exception("Error: Vespa returned invalid JSON [%s]", request_context)
-        raise VespaError(
-            f"Vespa returned invalid JSON [{request_context}] "
-            f"(status={response.status_code})",
-            status_code=None,
-        ) from exc
-
-    _warn_if_degraded(response_json, request_context)
-
-    hit_count = len(response_json.get("root", {}).get("children", []) or [])
-    timing = response_json.get("timing") or {}
-    logger.info(
-        "Success: Vespa request completed [%s] (hits=%s, total_count=%s, "
-        "elapsed_ms=%d, vespa_querytime_ms=%d, vespa_summaryfetchtime_ms=%d, "
-        "vespa_searchtime_ms=%d, bytes=%d, summary=%s)",
-        request_context,
-        hit_count,
-        _get_total_count(response_json),
-        (time.perf_counter() - started) * 1000,
-        timing.get("querytime", 0) * 1000,
-        timing.get("summaryfetchtime", 0) * 1000,
-        timing.get("searchtime", 0) * 1000,
-        len(response.content),
-        request_body.get("presentation.summary", "default"),
-    )
-    return response_json
+        return response_json

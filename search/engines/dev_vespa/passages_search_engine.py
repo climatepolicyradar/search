@@ -21,11 +21,12 @@ from search.engines.vespa_query.client import (
     aexecute_vespa_query,
 )
 from search.engines.vespa_query.filters import (
-    ArrayStructField,
     Filter,
-    _build_filter_query,
     _build_filter_yql,
     _topic_ids_from_filters,
+    build_filter_query,
+    passages_filter_field_to_vespa_field_map,
+    passages_filter_struct_field_to_vespa_field_map,
 )
 from search.engines.vespa_query.query_text_modifiers import (
     _normalize_currency_symbols,
@@ -38,16 +39,6 @@ from search.query_rewrites import expansion_patterns
 from search.vespa.passage import VespaPassage
 
 logger = get_logger(__name__)
-
-passages_filter_field_to_vespa_field_map: dict[str, list[str]] = {
-    "document_id": ["document_id"],
-    "principal_id": ["principal_id"],
-}
-passages_filter_struct_field_to_vespa_field_map: dict[str, ArrayStructField] = {
-    "labels.value.id": ArrayStructField("labels", "id"),
-    "labels.value.value": ArrayStructField("labels", "value"),
-    "labels.value.type": ArrayStructField("labels", "type"),
-}
 
 
 _DEFAULT_TOPIC_WEIGHT = 1.0
@@ -169,7 +160,7 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
         filter_query = (
             ""
             if filters is None
-            else _build_filter_query(
+            else build_filter_query(
                 filter_group=filters,
                 field_map=passages_filter_field_to_vespa_field_map,
                 struct_map=passages_filter_struct_field_to_vespa_field_map,

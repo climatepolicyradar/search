@@ -1,7 +1,7 @@
 """Unit tests for corpus -> Vespa filter construction."""
 
 from search.corpora import CORPUS_PROVIDERS, build_corpus_filter
-from search.engines.dev_vespa import (
+from search.engines.vespa_query.filters import (
     FieldFilter,
     _build_filter_yql,
     documents_filter_field_to_vespa_field_map,

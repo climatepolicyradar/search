@@ -23,19 +23,13 @@ from search.engines.dev_vespa.documents_search_engine import (
     _DEFAULT_MSM,
     DevVespaDocumentSearchEngine,
     DevVespaPrincipalDocumentSearchEngine,
-    documents_filter_field_to_vespa_field_map,
-    documents_filter_struct_field_to_vespa_field_map,
 )
 from search.engines.dev_vespa.labels import CountAggregation
 from search.engines.dev_vespa.labels_search_engine import (
     DevVespaLabelSearchEngine,
-    labels_filter_field_to_vespa_field_map,
-    labels_filter_struct_field_to_vespa_field_map,
 )
 from search.engines.dev_vespa.passages_search_engine import (
     DevVespaPassageSearchEngine,
-    passages_filter_field_to_vespa_field_map,
-    passages_filter_struct_field_to_vespa_field_map,
 )
 from search.engines.vespa_query.client import (
     HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS,
@@ -49,7 +43,6 @@ from search.engines.vespa_query.filters import (
     Condition,
     FieldFilter,
     Filter,
-    _build_filter_query,
     _build_filter_yql,
     _facet_filter_label_type,
     _get_label_types_from_filters,
@@ -83,7 +76,6 @@ __all__ = [
     "TOPIC_FILTER_FIELD",
     "_DEFAULT_DOCUMENT_RANK_PROFILE",
     "_DEFAULT_MSM",
-    "_build_filter_query",
     "_build_filter_yql",
     "_facet_filter_label_type",
     "_get_label_types_from_filters",
@@ -92,12 +84,6 @@ __all__ = [
     "_ranking_overrides_for_passage_order_by",
     "_topic_ids_from_filters",
     "aexecute_vespa_query",
-    "documents_filter_field_to_vespa_field_map",
-    "documents_filter_struct_field_to_vespa_field_map",
-    "labels_filter_field_to_vespa_field_map",
-    "labels_filter_struct_field_to_vespa_field_map",
     "normalise_topic_id",
-    "passages_filter_field_to_vespa_field_map",
-    "passages_filter_struct_field_to_vespa_field_map",
     "sort_field_to_vespa_field_map",
 ]

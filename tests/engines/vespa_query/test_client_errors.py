@@ -95,6 +95,39 @@ def test_execute_raises_on_a_timeout() -> None:
         _execute(MagicMock(side_effect=requests.Timeout("timed out")))
 
 
+@pytest.mark.parametrize(
+    "error",
+    [httpx2.RemoteProtocolError("goaway"), httpx2.WriteError("broken pipe")],
+)
+def test_a_torn_down_connection_is_retried_once(error: Exception) -> None:
+    """Vespa Cloud recycles connections on a timer; that is not a user-visible failure."""
+    body = {"root": {"children": []}}
+    post_fn = MagicMock(side_effect=[error, _response(200, json_value=body)])
+
+    assert _execute(post_fn) == body
+    assert post_fn.call_count == 2
+
+
+def test_a_retry_that_also_fails_raises() -> None:
+    goaway = httpx2.RemoteProtocolError("goaway")
+    post_fn = MagicMock(side_effect=[goaway, goaway])
+
+    with pytest.raises(VespaError):
+        _execute(post_fn)
+
+    assert post_fn.call_count == 2
+
+
+def test_a_refused_connection_is_not_retried() -> None:
+    """Re-sending this would double the load on a Vespa that is already struggling."""
+    post_fn = MagicMock(side_effect=httpx2.ConnectError("refused"))
+
+    with pytest.raises(VespaError):
+        _execute(post_fn)
+
+    assert post_fn.call_count == 1
+
+
 @pytest.mark.parametrize("status_code", [400, 401, 429, 500, 502, 504])
 def test_execute_raises_on_a_non_success_status_code(status_code: int) -> None:
     """Any 4xx/5xx from Vespa is raised, with the status in the message."""

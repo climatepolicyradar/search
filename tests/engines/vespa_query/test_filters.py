@@ -2,14 +2,6 @@
 
 import pytest
 
-from search.engines.dev_vespa import (
-    documents_filter_field_to_vespa_field_map,
-    documents_filter_struct_field_to_vespa_field_map,
-    labels_filter_field_to_vespa_field_map,
-    labels_filter_struct_field_to_vespa_field_map,
-    passages_filter_field_to_vespa_field_map,
-    passages_filter_struct_field_to_vespa_field_map,
-)
 from search.engines.vespa_query.filters import (
     AttributesCondition,
     Condition,
@@ -20,6 +12,12 @@ from search.engines.vespa_query.filters import (
     _facet_filter_label_type,
     _get_label_types_from_filters,
     _prune_filter,
+    documents_filter_field_to_vespa_field_map,
+    documents_filter_struct_field_to_vespa_field_map,
+    labels_filter_field_to_vespa_field_map,
+    labels_filter_struct_field_to_vespa_field_map,
+    passages_filter_field_to_vespa_field_map,
+    passages_filter_struct_field_to_vespa_field_map,
 )
 
 
