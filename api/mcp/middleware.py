@@ -5,7 +5,10 @@ One log line per call, and fixed messages for known failures. Errors and
 logging live here, so no tool catches anything.
 """
 
+import json
+from collections.abc import Mapping
 from time import perf_counter
+from typing import Any, Literal
 
 import httpx2
 import mcp_types as mt
@@ -35,24 +38,48 @@ class CallLogMiddleware(Middleware):
     ) -> ToolResult:
         """Log the call at a level matching its outcome."""
         start = perf_counter()
-        log_args = (context.message.name, context.message.arguments)
+        tool = context.message.name
+        arguments = context.message.arguments or {}
+        # The feedback tool logs its own comment, up to 2000 chars, so don't repeat it.
+        log_args = (
+            tool,
+            None if tool == "send_feedback" else context.message.arguments,
+        )
         try:
             result = await call_next(context)
         except Exception as exc:
             rejected = _is_caller_mistake(exc)
+            cause = exc.__cause__ or exc
+            duration_ms = _elapsed_ms(start)
             (logger.warning if rejected else logger.error)(
                 "%s: tool call surface=mcp tool=%s args=%r duration_ms=%s error=%r",
                 "Rejected" if rejected else "Error",
                 *log_args,
-                _elapsed_ms(start),
-                exc.__cause__ or exc,
+                duration_ms,
+                cause,
+                extra=_call_fields(
+                    tool,
+                    arguments,
+                    outcome="rejected" if rejected else "error",
+                    duration_ms=duration_ms,
+                    error_type=type(cause).__name__,
+                ),
             )
             raise
+        duration_ms = _elapsed_ms(start)
+        results = _result_count(result)
         logger.info(
             "Success: tool call surface=mcp tool=%s args=%r duration_ms=%s results=%s",
             *log_args,
-            _elapsed_ms(start),
-            _result_count(result),
+            duration_ms,
+            results,
+            extra=_call_fields(
+                tool,
+                arguments,
+                outcome="success",
+                duration_ms=duration_ms,
+                results=results,
+            ),
         )
         return result
 
@@ -120,6 +147,55 @@ def _is_caller_mistake(exc: Exception) -> bool:
     return isinstance(exc, ToolError) and (
         exc.__cause__ is None or isinstance(exc.__cause__, FilterArgError)
     )
+
+
+Outcome = Literal["success", "rejected", "error"]
+
+# Listed rather than "everything but the query", so ids, paging and feedback
+# text never land in the filters field.
+FILTER_ARGS = (
+    "document_ids",
+    "geographies",
+    "regions",
+    "categories",
+    "response_areas",
+    "topics",
+    "published_after",
+    "published_before",
+)
+
+
+def _call_fields(
+    tool: str,
+    arguments: Mapping[str, Any],
+    *,
+    outcome: Outcome,
+    duration_ms: int,
+    results: int | None = None,
+    error_type: str | None = None,
+) -> dict[str, str | int]:
+    """
+    The call as log attributes, so Grafana can filter and group on them.
+
+    OpenTelemetry drops `None` attributes with a warning, so unset ones are left out.
+    """
+    fields: dict[str, str | int] = {
+        "mcp_tool": tool,
+        "mcp_outcome": outcome,
+        "mcp_duration_ms": duration_ms,
+    }
+    query = arguments.get("query")
+    if isinstance(query, str):
+        fields["mcp_query"] = query
+    filters = {name: arguments[name] for name in FILTER_ARGS if arguments.get(name)}
+    if filters:
+        # A string, because OpenTelemetry attributes can't hold a dict.
+        fields["mcp_filters"] = json.dumps(filters, sort_keys=True)
+    if results is not None:
+        fields["mcp_results"] = results
+    if error_type is not None:
+        fields["mcp_error_type"] = error_type
+    return fields
 
 
 def _elapsed_ms(start: float) -> int:

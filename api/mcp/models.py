@@ -250,3 +250,9 @@ def _cut(text: str, max_chars: int | None) -> str:
         space = window.rfind(" ", earliest)
         end = space if space != -1 else max_chars
     return window[:end].rstrip() + " …"
+
+
+class FeedbackSent(BaseModel):
+    """What the model tells the user after sending feedback."""
+
+    message: str
