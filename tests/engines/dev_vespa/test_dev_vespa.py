@@ -1,6 +1,5 @@
 import json
-from http import HTTPStatus
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import patch
 
 import httpx2
 import pytest
@@ -766,6 +765,7 @@ def test_passage_search_engine_omits_topic_inputs_under_a_sort_override(
 
 def test_document_get_renders_labels_and_concepts(
     http_client: httpx2.AsyncClient,
+    handler: MockHandler,
 ) -> None:
     """`get` renders a document like a search hit with labels with concepts."""
     settings = Settings(
@@ -792,25 +792,25 @@ def test_document_get_renders_labels_and_concepts(
         }
     )
     # Concepts are fed as a partial update, so they are only ever in `fields`.
-    response = Mock(status_code=HTTPStatus.OK)
-    response.json.return_value = {
-        "fields": {
-            "document_source": document_source,
-            "concepts": [
-                {
-                    "id": "concept::Q1343",
-                    "type": "concept",
-                    "value": "climate finance",
-                    "count": 42,
-                    "passages_id": "passages-0",
-                    "document_id": "doc-1",
-                }
-            ],
-        }
-    }
+    handler.add_response(
+        {
+            "fields": {
+                "document_source": document_source,
+                "concepts": [
+                    {
+                        "id": "concept::Q1343",
+                        "type": "concept",
+                        "value": "climate finance",
+                        "count": 42,
+                        "passages_id": "passages-0",
+                        "document_id": "doc-1",
+                    }
+                ],
+            }
+        },
+    )
 
-    with patch.object(httpx2.AsyncClient, "get", new=AsyncMock(return_value=response)):
-        document = engine.get("doc-0")
+    document = engine.get("doc-0")
 
     assert document is not None
     source_label, concept_label = document.labels
