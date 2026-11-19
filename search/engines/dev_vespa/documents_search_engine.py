@@ -34,6 +34,7 @@ from search.engines.vespa_query.client import (
     Settings,
     _get_total_count,
     aexecute_vespa_query,
+    send_with_retry,
 )
 from search.engines.vespa_query.filters import (
     FieldFilter,
@@ -711,15 +712,15 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             else {}
         )
         logger.info("Vespa request started [documents.get]")
+        request = self._httpx.build_request(
+            params={"fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"},
+            timeout=API_TIMEOUT,
+            headers=headers,
+            method="GET",
+            url=endpoint,
+        )
         try:
-            response = await self._httpx.get(
-                endpoint,
-                params={
-                    "fieldSet": f"documents:{_DOCUMENT_GET_FIELDS_WITHOUT_PASSAGES}"
-                },
-                timeout=API_TIMEOUT,
-                headers=headers,
-            )
+            response = await send_with_retry(client=self._httpx, request=request)
         except Exception as exc:
             raise VespaError("Vespa request failed", status_code=None) from exc
         if response.status_code == HTTPStatus.NOT_FOUND:

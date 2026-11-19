@@ -19,6 +19,7 @@ from search.engines.vespa_query.client import (
     VespaError,
     _get_total_count,
     aexecute_vespa_query,
+    send_with_retry,
 )
 from search.engines.vespa_query.filters import (
     Filter,
@@ -358,13 +359,15 @@ class DevVespaPassageSearchEngine(DevVespaInstanceAddIn, SearchEngine[Passage]):
             else {}
         )
         logger.info("Vespa request started [passages.get]")
+        request = self._httpx.build_request(
+            params={"fieldSet": "passages:document_id,idx"},
+            timeout=API_TIMEOUT,
+            headers=headers,
+            method="GET",
+            url=endpoint,
+        )
         try:
-            response = await self._httpx.get(
-                endpoint,
-                params={"fieldSet": "passages:document_id,idx"},
-                timeout=API_TIMEOUT,
-                headers=headers,
-            )
+            response = await send_with_retry(client=self._httpx, request=request)
         except httpx2.HTTPError as exc:
             raise VespaError("Vespa request failed", status_code=None) from exc
         if response.status_code == HTTPStatus.NOT_FOUND:
