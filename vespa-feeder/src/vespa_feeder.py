@@ -455,17 +455,12 @@ def vespa_feeder(
 
             s3_export_prefix_pinned = s3_export_prefix is not None
 
-            if s3_prefix.endswith(".jsonl"):
-                # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
-                s3_keys = [s3_prefix]
-                s3_prefix_full = s3_prefix
-            else:
-                if s3_export_prefix is None:
-                    s3_export_prefix = get_latest_s3_export_prefix(
-                        bucket=s3_bucket, prefix=s3_prefix
-                    )
-                s3_prefix_full = f"{s3_prefix}{s3_export_prefix}"
-                s3_keys = list_s3_keys(bucket=s3_bucket, prefix=s3_prefix_full)
+            if s3_export_prefix is None:
+                s3_export_prefix = get_latest_s3_export_prefix(
+                    bucket=s3_bucket, prefix=s3_prefix
+                )
+            s3_prefix_full = f"{s3_prefix}{s3_export_prefix}"
+            s3_keys = list_s3_keys(bucket=s3_bucket, prefix=s3_prefix_full)
 
             if sample_rate < 1:
                 # Every nth key from the sorted listing, rather than the first n. Both
