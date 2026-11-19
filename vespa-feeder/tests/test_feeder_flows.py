@@ -83,6 +83,35 @@ def test_labels_flow_feeds_the_materializer_file_with_no_deriver(
     assert "s3_export_prefix" not in call
 
 
+def test_labels_fusion_flow_feeds_the_fusion_export_with_no_deriver(
+    prefect_db, recorded_feeder_calls
+) -> None:
+    """
+    Labels from Fusion feed the dated `vespa_labels` export folder as-is.
+
+    Each Fusion row is already a Vespa update operation, so no deriver is
+    passed. A folder prefix (not a `.jsonl` key) makes `vespa_feeder` pick the
+    newest timestamped snapshot, and `s3_export_prefix` is passed through so a
+    run can be pinned to one.
+    """
+    labels_flow.labels_fusion_feeder_flow()
+
+    (call,) = recorded_feeder_calls
+    assert call["s3_bucket"] == "cpr-production-data-lake-fusion"
+    assert call["s3_prefix"] == "vespa/vespa_labels/"
+    assert call["s3_export_prefix"] is None
+    assert "derive_data_from_source" not in call
+
+
+def test_labels_fusion_flow_passes_a_pinned_export_prefix_through(
+    prefect_db, recorded_feeder_calls
+) -> None:
+    labels_flow.labels_fusion_feeder_flow(s3_export_prefix="20261119T100000Z")
+
+    (call,) = recorded_feeder_calls
+    assert call["s3_export_prefix"] == "20261119T100000Z"
+
+
 # `_max_workers` is private, but `ThreadPoolTaskRunner` exposes the cap nowhere
 # else, and the cap is the whole reason `task_runner()` exists - see its
 # docstring and the submit loop in `vespa_feeder`. Reading the private attribute
@@ -93,6 +122,7 @@ def test_labels_flow_feeds_the_materializer_file_with_no_deriver(
         (passages_flow.passages_feeder_flow, 8),
         (documents_flow.documents_feeder_flow, 4),
         (labels_flow.labels_feeder_flow, 4),
+        (labels_flow.labels_fusion_feeder_flow, 4),
     ],
 )
 def test_flow_bounds_its_task_runner(flow, expected_max_workers: int) -> None:
@@ -105,6 +135,7 @@ def test_flow_bounds_its_task_runner(flow, expected_max_workers: int) -> None:
         passages_flow.passages_feeder_flow,
         documents_flow.documents_feeder_flow,
         labels_flow.labels_feeder_flow,
+        labels_flow.labels_fusion_feeder_flow,
     ],
 )
 def test_flow_notifies_slack_on_every_terminal_state(flow) -> None:
