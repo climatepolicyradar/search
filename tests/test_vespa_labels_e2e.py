@@ -876,8 +876,9 @@ def test_label_upserted_without_label_source_keeps_the_existing_one(vespa_app: V
     _feed_label(vespa_app, with_source)
     _feed_label(vespa_app, _taxonomy_vespa_label("geography::Atlantis", "geography", "Atlantis", with_label_source=False))
 
+    docid = _vespa_label_to_vespa_update(with_source)["update"]
     response = req.get(
-        f"{vespa_app.end_point}/document/v1/labels/labels/docid/{quote('geography::Atlantis', safe='')}",
+        f"{vespa_app.end_point}/document/v1/labels/labels/docid/{quote(docid, safe='')}",
         timeout=5,
     )
     response.raise_for_status()
