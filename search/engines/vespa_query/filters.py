@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
 from typing import Literal, NamedTuple
 
@@ -357,60 +356,3 @@ def build_filter_query(
         return ""
     yql = _build_filter_yql(filter_group, field_map, struct_map)
     return f" and {yql}" if yql is not None else ""
-
-
-def _facet_filter_label_type(condition: Condition) -> str | None:
-    """Returns the label.type parsed label.id"""
-    if (
-        isinstance(condition, FieldFilter)
-        and condition.field in ("labels.value.id", "concepts.value.id")
-        and isinstance(condition.value, str)
-    ):
-        prefix, sep, _ = condition.value.partition("::")
-        return prefix if sep else None
-    if (
-        isinstance(condition, FieldFilter)
-        and condition.field == "labels.type"
-        and isinstance(condition.value, str)
-    ):
-        return condition.value
-    return None
-
-
-def _prune_filter(
-    filter_group: Filter | None,
-    filter_method: Callable[[Condition], bool],
-) -> Filter | None:
-    """Return a copy of `filter_group` with a filter_method applied"""
-    if filter_group is None:
-        return None
-    new_filters: list[Condition | Filter] = []
-    for item in filter_group.filters:
-        if isinstance(item, Filter):
-            pruned = _prune_filter(item, filter_method)
-            if pruned is not None:
-                new_filters.append(pruned)
-        elif not filter_method(item):
-            new_filters.append(item)
-    if not new_filters:
-        return None
-    return Filter(op=filter_group.op, filters=new_filters)
-
-
-def _get_label_types_from_filters(filter_group: Filter | None) -> set[str]:
-    """Returns a set of `labels.types` recursively from the `filter_group`"""
-    if filter_group is None:
-        return set()
-
-    label_types: set[str] = set()
-    for filter_item in filter_group.filters:
-        # If this is a `Filter`, recurse
-        if isinstance(filter_item, Filter):
-            label_types |= _get_label_types_from_filters(filter_item)
-        # Otherwise get the `label_type` from the condition
-        else:
-            label_type = _facet_filter_label_type(filter_item)
-            if label_type is not None:
-                label_types.add(label_type)
-
-    return label_types

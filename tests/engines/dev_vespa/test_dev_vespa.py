@@ -25,23 +25,6 @@ from tests.http import MockHandler
 
 
 @pytest.mark.parametrize(
-    "s, expected",
-    [
-        (
-            "geography::geography::USA::United States of America",
-            ("geography", "geography::USA", "United States of America"),
-        ),
-        (
-            "geography::geography::USA_west::United States of America",
-            ("geography", "geography::USA_west", "United States of America"),
-        ),
-    ],
-)
-def test_parse_label_type_id_value(s, expected):
-    assert DevVespaDocumentSearchEngine.parse_label_type_id_value(s) == expected
-
-
-@pytest.mark.parametrize(
     ("field", "direction", "expected"),
     [
         (
@@ -1038,31 +1021,6 @@ def test_msm_survives_a_sort(http_client: httpx2.AsyncClient) -> None:
     assert body["ranking.sorting"]
 
 
-def test_msm_reaches_aggregations_and_facets(
-    http_client: httpx2.AsyncClient,
-) -> None:
-    """
-    Facet counts and results have to describe the same document set.
-
-    These run as separate Vespa queries; a facet counted over a wider set than
-    the results is the inconsistency FUS-475 was about.
-    """
-    engine = _document_engine(http_client, msm=0.6)
-
-    with patch.object(
-        documents_search_engine,
-        "aexecute_vespa_query",
-        return_value={"root": {"children": []}},
-    ) as mock_execute:
-        engine.aggregations(query="parametric insurance act")
-        engine.labels_type_facets(query="parametric insurance act")
-
-    for call in mock_execute.call_args_list:
-        body = call.kwargs["request_body"]
-        assert body["input.query(msm)"] == 0.6
-        assert body["ranking.profile"] == _DEFAULT_DOCUMENT_RANK_PROFILE
-
-
 def test_msm_is_off_for_a_phrase_only_query(
     http_client: httpx2.AsyncClient,
 ) -> None:
@@ -1077,17 +1035,6 @@ def test_msm_is_off_for_a_phrase_only_query(
     body = _document_search_request_body(engine, query='"net zero"')
 
     assert "input.query(msm)" not in body
-
-    with patch.object(
-        documents_search_engine,
-        "aexecute_vespa_query",
-        return_value={"root": {"children": []}},
-    ) as mock_execute:
-        engine.aggregations(query='"net zero"')
-        engine.labels_type_facets(query='"net zero"')
-
-    for call in mock_execute.call_args_list:
-        assert "input.query(msm)" not in call.kwargs["request_body"]
 
 
 def test_msm_still_applies_to_free_text_beside_a_phrase(

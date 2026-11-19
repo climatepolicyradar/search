@@ -122,6 +122,14 @@ experience; only a `bust` run measures what the origin must survive.**
 **1. `/search/documents` returns 785 KB — 1.4 MB per request.** At
 `page_size=10`. Measured:
 
+> **Stale as of 2026-11-19.** The `fields=` read mask and the facet and
+> aggregation groupings these figures are about have since been removed from
+> `/documents`, which is now a single Vespa query. The numbers below, and the
+> `api/routers.py` line references in them, describe the API as it was when
+> measured and are kept for that record. **Re-measure before relying on them** —
+> the bandwidth ceiling this finding sets on laptop-run tests is expected to
+> have moved substantially.
+
 | route                             | bytes     |
 | --------------------------------- | --------- |
 | `/documents?query=…`              | 785,599   |
