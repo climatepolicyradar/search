@@ -9,9 +9,12 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 INITIALIZE = textwrap.dedent(
     """
     import logging
+    import sys
 
     from fastapi.testclient import TestClient
     from api.main import app, logger
@@ -23,7 +26,7 @@ INITIALIZE = textwrap.dedent(
 
     with TestClient(app) as client:
         response = client.post(
-            "/search/mcp/",
+            sys.argv[1],
             json={
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -35,6 +38,7 @@ INITIALIZE = textwrap.dedent(
                 },
             },
             headers={"Accept": "application/json, text/event-stream"},
+            follow_redirects=False,
         )
         print(response.status_code)
     print(sum("Request completed" in line for line in lifecycle_lines))
@@ -42,10 +46,10 @@ INITIALIZE = textwrap.dedent(
 )
 
 
-def initialize(mcp_enabled: str) -> tuple[int, int]:
+def initialize(mcp_enabled: str, path: str = "/search/mcp/") -> tuple[int, int]:
     """The initialize call's status, and how many lifecycle lines it logged."""
     result = subprocess.run(
-        [sys.executable, "-c", INITIALIZE],
+        [sys.executable, "-c", INITIALIZE, path],
         env={**os.environ, "MCP_ENABLED": mcp_enabled},
         capture_output=True,
         text=True,
@@ -61,11 +65,14 @@ def test_mcp_is_not_mounted_by_default():
     assert status == 404
 
 
-def test_mcp_answers_when_enabled():
-    status, _ = initialize("true")
+@pytest.mark.parametrize("path", ["/search/mcp/", "/search/mcp"])
+def test_mcp_answers_when_enabled(path: str):
+    # Not a redirect, since clients like claude.ai drop the trailing slash.
+    status, _ = initialize("true", path)
     assert status == 200
 
 
-def test_mcp_calls_skip_the_request_lifecycle_log():
-    _, lifecycle_line_count = initialize("true")
+@pytest.mark.parametrize("path", ["/search/mcp/", "/search/mcp"])
+def test_mcp_calls_skip_the_request_lifecycle_log(path: str):
+    _, lifecycle_line_count = initialize("true", path)
     assert lifecycle_line_count == 0
