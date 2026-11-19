@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import boto3
 from documents_flow import documents_feeder_flow
-from labels_flow import labels_feeder_flow
+from labels_flow import labels_feeder_flow, labels_fusion_feeder_flow
 from passages_flow import (
     passages_feeder_flow,
 )
@@ -88,6 +88,10 @@ class VespaFeederDeployment:
 _FEEDS: list[VespaFeederDeployment] = [
     # Labels
     VespaFeederDeployment(flow=labels_feeder_flow, cron="30 8 * * *"),
+    # Labels from fusion.published.vespa_labels. Deliberately unscheduled: it
+    # upserts the same label ids as the feeder above, so it is triggered by hand
+    # until we have confirmed it matches, then it replaces the one above.
+    VespaFeederDeployment(flow=labels_fusion_feeder_flow),
     # Documents
     VespaFeederDeployment(
         flow=documents_feeder_flow,
