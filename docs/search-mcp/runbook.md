@@ -10,14 +10,33 @@ You ask Claude ──▶ Claude picks a tool ──▶ search MCP (api/mcp) ─�
 
 ## Who can use it
 
-| Who       | How                                     | Status                |
-| --------- | --------------------------------------- | --------------------- |
-| Engineers | Run it locally and connect Claude Code  | Available now         |
-| CPR staff | Add it to Claude like the data lake MCP | Coming in a follow-up |
+| Who       | How                                          | Status        |
+| --------- | -------------------------------------------- | ------------- |
+| CPR staff | Connect the `cpr-search` connector in Claude | Available now |
+| Engineers | Run it locally and connect Claude Code       | Available now |
 
-The deployed search API keeps the MCP off for now, because the API is public.
+The production search API serves the MCP with no sign-in. The data is already
+public through the API and the search tools only read. The URL isn't announced
+yet, so only share it inside CPR.
 
 ## Use it from Claude
+
+### Connect (CPR staff)
+
+- **claude.ai or Claude Desktop** → Settings → Connectors, find `cpr-search` and
+  click Connect. An org Owner adds it once, as a custom connector with the MCP
+  URL and "No sign-in"
+- **Claude Code** → add it once, then open a new chat
+
+  ```sh
+  claude mcp add --scope user --transport http cpr-search <MCP URL>
+  ```
+
+The MCP URL is the production ECS service URL plus `/search/mcp/`.
+
+```sh
+cd infra && pulumi stack output ecs_express_service_url -s production
+```
 
 ### Connect (engineers, local)
 
@@ -175,7 +194,8 @@ Vespa matches the filters. Check new filters live with `fastmcp call`.
   Bolivia, Moldova and Micronesia, and needs a data fix
 - **One fund** (e.g. GCF only) can't be picked, since Multilateral Climate Fund
   project is a single category
-- **Sign in** isn't built yet, which is why the MCP is off when deployed
+- **No sign-in or rate limit**, so anyone with the URL can use it. Rate limits
+  come with the public launch
 
 ## Where the code is
 
