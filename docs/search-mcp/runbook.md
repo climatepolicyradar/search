@@ -32,7 +32,8 @@ yet, so only share it inside CPR.
   claude mcp add --scope user --transport http cpr-search <MCP URL>
   ```
 
-The MCP URL is the production ECS service URL plus `/search/mcp/`.
+The MCP URL is the production ECS service URL plus `/search/mcp`. It works with
+or without the trailing slash, since claude.ai drops it.
 
 ```sh
 cd infra && pulumi stack output ecs_express_service_url -s production
