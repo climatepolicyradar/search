@@ -4,8 +4,12 @@ import asyncio
 from unittest.mock import MagicMock
 
 import httpx2
+import pytest
 
+from search.engines import VespaError
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine
+from search.engines.vespa_query.client import Settings
+from tests.http import MockHandler
 
 
 def test_id_cannot_change_the_lookup_path():
@@ -28,3 +32,47 @@ def test_id_cannot_change_the_lookup_path():
         b"/document/v1/documents/documents/docid/"
         b"..%2F..%2Fpassages%2Fx%3FfieldSet%3D%5Ball%5D?"
     )
+
+
+def test_a_torn_down_connection_is_retried_once(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+    settings: Settings,
+) -> None:
+    """Vespa Cloud recycles connections on a timer; that is not a user-visible failure."""
+    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    handler.add_error(httpx2.RemoteProtocolError("goaway"))
+    handler.add_text_response(404, "")
+
+    assert asyncio.run(engine.aget("d_1")) is None
+    assert handler.request_count == 2
+
+
+def test_a_retry_that_also_fails_raises(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+    settings: Settings,
+) -> None:
+    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    handler.add_error(httpx2.RemoteProtocolError("goaway"))
+    handler.add_error(httpx2.RemoteProtocolError("goaway"))
+
+    with pytest.raises(VespaError):
+        asyncio.run(engine.aget("d_1"))
+
+    assert handler.request_count == 2
+
+
+def test_a_refused_connection_is_not_retried(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+    settings: Settings,
+) -> None:
+    """Re-sending this would double the load on a Vespa that is already struggling."""
+    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
+    handler.add_error(httpx2.ConnectError("refused"))
+
+    with pytest.raises(VespaError):
+        asyncio.run(engine.aget("d_1"))
+
+    assert handler.request_count == 1

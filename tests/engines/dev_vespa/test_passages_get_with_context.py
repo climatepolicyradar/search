@@ -8,7 +8,9 @@ import pytest
 
 from search.engines import ListResponse, VespaError
 from search.engines.dev_vespa import DevVespaPassageSearchEngine
+from search.engines.vespa_query.client import Settings
 from search.passage import Passage
+from tests.http import MockHandler
 
 
 def engine_with(
@@ -119,3 +121,47 @@ def test_context_without_the_passage_raises():
 
     with pytest.raises(VespaError):
         asyncio.run(engine.aget_with_context("d::71", context=1))
+
+
+def test_a_torn_down_connection_is_retried_once(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+    settings: Settings,
+) -> None:
+    """Vespa Cloud recycles connections on a timer; that is not a user-visible failure."""
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_error(httpx2.RemoteProtocolError("goaway"))
+    handler.add_text_response(404, "")
+
+    assert asyncio.run(engine.aget_with_context("p_1_b_1", context=1)) is None
+    assert handler.request_count == 2
+
+
+def test_a_retry_that_also_fails_raises(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+    settings: Settings,
+) -> None:
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_error(httpx2.RemoteProtocolError("goaway"))
+    handler.add_error(httpx2.RemoteProtocolError("goaway"))
+
+    with pytest.raises(VespaError):
+        asyncio.run(engine.aget_with_context("p_1_b_1", context=1))
+
+    assert handler.request_count == 2
+
+
+def test_a_refused_connection_is_not_retried(
+    http_client: httpx2.AsyncClient,
+    handler: MockHandler,
+    settings: Settings,
+) -> None:
+    """Re-sending this would double the load on a Vespa that is already struggling."""
+    engine = DevVespaPassageSearchEngine(settings=settings, httpx=http_client)
+    handler.add_error(httpx2.ConnectError("refused"))
+
+    with pytest.raises(VespaError):
+        asyncio.run(engine.aget_with_context("p_1_b_1", context=1))
+
+    assert handler.request_count == 1

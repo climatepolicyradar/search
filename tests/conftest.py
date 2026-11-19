@@ -13,12 +13,14 @@ from fastapi.testclient import TestClient
 from hypothesis import find
 from hypothesis import strategies as st
 from moto import mock_aws
+from pydantic import AnyHttpUrl
 
 from api.main import create_app
 from api.state import State
 from api.utils import documents_engine
 from relevance_tests import TestResult
 from search import Primitive
+from search.engines.vespa_query.client import Settings
 from search.identifiers import generate_id
 from search.testcase import RecallTestCase
 from tests.common_strategies import (
@@ -44,6 +46,14 @@ def override_dependency[T](
         yield value
     finally:
         del app.dependency_overrides[key]
+
+
+@pytest.fixture(scope="function")
+def settings() -> Settings:
+    return Settings(
+        vespa_endpoint=AnyHttpUrl("http://localhost:8080"),
+        vespa_read_token="test-read-token",  # nosec B106
+    )
 
 
 @pytest.fixture(scope="function")

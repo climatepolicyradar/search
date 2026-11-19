@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Protocol
+from typing import Any
 
 import httpx2
 from opentelemetry import trace
@@ -20,19 +20,23 @@ API_TIMEOUT = 5  # seconds
 HTTP_ERROR_PREVIEW_LIMIT_CHARACTERS = 512
 
 
-class AsyncPostClient(Protocol):
-    """The slice of ``httpx.AsyncClient`` this module needs, for fake injection in tests."""
-
-    async def post(
-        self,
-        url: str,
-        *,
-        json: dict[str, Any],
-        timeout: float,
-        headers: dict[str, str],
-    ) -> httpx2.Response:
-        """Send a POST request."""
-        ...
+async def send_with_retry(
+    *,
+    client: httpx2.AsyncClient,
+    request: httpx2.Request,
+) -> httpx2.Response:
+    try:
+        return await client.send(request)
+    except (httpx2.RemoteProtocolError, httpx2.WriteError) as exc:
+        trace.get_current_span().add_event("vespa.connection_retry")
+        logger.warning(
+            "Vespa connection was torn down, retrying once (%s %s) (%s: %s)",
+            request.method,
+            request.url,
+            type(exc).__name__,
+            exc,
+        )
+        return await client.send(request)
 
 
 class Settings(BaseSettings):
@@ -95,7 +99,7 @@ async def aexecute_vespa_query(
     token: str,
     request_body: dict[str, Any],
     request_context: str,
-    client: AsyncPostClient,
+    client: httpx2.AsyncClient,
 ) -> dict[str, Any]:
     """
     Execute a Vespa query and emit contextual logs.
@@ -109,7 +113,7 @@ async def aexecute_vespa_query(
     :param request_context: Context label for logs.
     :type request_context: str
     :param client: HTTP client to send the request with.
-    :type client: AsyncPostClient
+    :type client: httpx2.AsyncClient
     :return: Decoded JSON response.
     :rtype: dict[str, Any]
     :raises VespaError: if the request never reached Vespa, Vespa returned a
@@ -142,28 +146,15 @@ async def aexecute_vespa_query(
             }
         )
 
+        request = client.build_request(
+            timeout=API_TIMEOUT,
+            json=request_body,
+            headers=headers,
+            method="POST",
+            url=endpoint,
+        )
         try:
-            try:
-                response = await client.post(
-                    url=endpoint,
-                    json=request_body,
-                    timeout=API_TIMEOUT,
-                    headers=headers,
-                )
-            except (httpx2.RemoteProtocolError, httpx2.WriteError) as exc:
-                span.add_event("vespa.connection_retry")
-                logger.warning(
-                    "Vespa connection was torn down, retrying once [%s] (%s: %s)",
-                    request_context,
-                    type(exc).__name__,
-                    exc,
-                )
-                response = await client.post(
-                    url=endpoint,
-                    json=request_body,
-                    timeout=API_TIMEOUT,
-                    headers=headers,
-                )
+            response = await send_with_retry(client=client, request=request)
         except Exception as exc:
             logger.exception(
                 "Error: Vespa request failed before a response was received [%s] "
