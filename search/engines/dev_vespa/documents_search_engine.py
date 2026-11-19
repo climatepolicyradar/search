@@ -12,7 +12,6 @@ from urllib.parse import quote
 
 import httpx2
 from pydantic import BaseModel, Field, TypeAdapter
-from vespa.querybuilder import Grouping as G
 
 from search.bolding import (
     add_boldings,
@@ -24,7 +23,6 @@ from search.data_in_models import Document, DocumentRelationship
 from search.engines import ListResponse, OrderBy, Pagination, SearchEngine, VespaError
 from search.engines.dev_vespa.labels import (
     MISSING_PLACEHOLDER,
-    CountAggregation,
     DevVespaInstanceAddIn,
     get_labels_from_vespa_response,
 )
@@ -39,9 +37,6 @@ from search.engines.vespa_query.client import (
 from search.engines.vespa_query.filters import (
     FieldFilter,
     Filter,
-    _facet_filter_label_type,
-    _get_label_types_from_filters,
-    _prune_filter,
     _topic_ids_from_filters,
     build_filter_query,
     documents_filter_field_to_vespa_field_map,
@@ -58,7 +53,6 @@ from search.engines.vespa_query.response import (
     VespaResponse,
 )
 from search.engines.vespa_query.sorting import _ranking_overrides_for_document_order_by
-from search.label import Label
 from search.log import get_logger
 from search.query_rewrites import expansion_patterns
 
@@ -74,9 +68,9 @@ _DEFAULT_PASSAGES_BREADTH_WEIGHT: float | None = None
 # PDFs with many passage hits can crowd out a short exact title match and that document
 # is then never scored at all.
 # Vespa's own default is max(hits, 100), which ties retrieval depth to the page
-# size - so a page_size=500 search matched 5872 documents where the facet query
-# for the same terms, running at hits=0, matched 1801. Results and facet counts
-# were describing different candidate sets, and `total_count` moved with the
+# size - so a page_size=500 search matched 5872 documents where the label-count
+# query for the same terms, running at hits=0, matched 1801. Results and label
+# counts were describing different candidate sets, and `total_count` moved with the
 # requested page size. Pinning it here decouples the two. See FUS-475.
 _DEFAULT_DOCUMENT_TOTAL_TARGET_HITS = 2000
 
@@ -336,8 +330,8 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         The ``query(msm)`` input, for every query that must see the same document set.
 
         Empty when MSM is off, so the request body is unchanged from before this
-        parameter existed. Searches, aggregations and facets all carry it: they
-        are separate Vespa queries, and a facet counted over a wider set than the
+        parameter existed. Searches and `label_counts` both carry it: they are
+        separate Vespa queries, and a count taken over a wider set than the
         results is the inconsistency FUS-475 was about.
 
         Also empty when there is no free text. MSM is a rule about how many of
@@ -744,108 +738,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
         document.labels = get_labels_from_vespa_response(source, fields)
         return document
 
-    @staticmethod
-    def parse_label_type_id_value(s: str) -> tuple[str, str, str]:
-        """
-        Parse a `{type}::{id}::{value}` string into its three components.
-
-        {id} may contain `::`
-        e.g: `geography::geography::USA::United States of America`
-        """
-        label_type, _, label_id_value = s.partition("::")
-        label_id, _, label_value = label_id_value.rpartition("::")
-        return label_type, label_id, label_value
-
-    def aggregations(
-        self,
-        query: str | None,
-        filters: Filter | None = None,
-    ) -> list[CountAggregation[Label]]:
-        """Return aggregations (label/concept groups with counts) filtered by the search query."""
-        return asyncio.run(self.aaggregations(query=query, filters=filters))
-
-    async def aaggregations(
-        self,
-        query: str | None,
-        filters: Filter | None = None,
-    ) -> list[CountAggregation[Label]]:
-        """Return aggregations (label/concept groups with counts) filtered by the search query."""
-        # Build the top-level where clause from the search query and any filters,
-        # mirroring how `search()` constructs its YQL.
-        document_query = self._document_query(query, filters, order_by=[])
-        where = document_query.where
-
-        # Group labels and concepts across all documents matching the search query.
-        # The top-level `where` already scopes the document set.
-        # per-bucket filtering is not needed here.
-        grouping = G.all(
-            G.all(
-                G.group("labels_type_id_value_attribute"),
-                # This is the max we expect to see
-                # TODO: Pagination on groups if we hit this limit
-                G.max(5000),
-                G.order(-G.count()),
-                G.each(G.output(G.count())),
-            ),
-            G.all(
-                G.group("concepts_type_id_value_attribute"),
-                # This is the max we expect to see
-                # TODO: Pagination on groups if we hit this limit
-                G.max(5000),
-                G.order(-G.count()),
-                G.each(G.output(G.count())),
-            ),
-        )
-
-        # Build a raw YQL string, the same way `search()` does, because the query
-        # builder's `.where()` only accepts Condition/bool objects, not raw strings.
-        select_fields = (
-            "labels_type_id_value_attribute, concepts_type_id_value_attribute"
-        )
-        groupby_str = str(grouping)
-        yql = f"select {select_fields} from documents where {where} | {groupby_str}"
-
-        request_body: dict[str, Any] = {
-            "yql": yql,
-            "hits": 0,
-            **document_query.request_fields,
-        }
-        response = await aexecute_vespa_query(
-            endpoint=f"{self.settings.vespa_endpoint}/search",
-            token=self.settings.vespa_read_token,
-            request_body=request_body,
-            request_context="documents.aggregations",
-            client=self._httpx,
-        )
-
-        root = response.get("root", {})
-        root_children: list[dict] = root.get("children") or []
-        groups: list[dict] = (
-            root_children[0].get("children", []) if root_children else []
-        )
-
-        group_values = []
-        for group in groups:
-            group_values.extend(group.get("children", []))
-
-        count_aggregations: list[CountAggregation[Label]] = []
-        for group_value in group_values:
-            label_type_id_value = group_value.get("value", "")
-            label_type, label_id, label_value = self.parse_label_type_id_value(
-                label_type_id_value
-            )
-            count_aggregations.append(
-                CountAggregation(
-                    count=group_value.get("fields", {}).get("count()", 0),
-                    value=Label(
-                        id=label_id,
-                        value=label_value,
-                        type=label_type or MISSING_PLACEHOLDER,
-                    ),
-                )
-            )
-        return count_aggregations
-
     async def label_counts(
         self,
         query: str | None,
@@ -910,191 +802,6 @@ class DevVespaDocumentSearchEngine(DevVespaInstanceAddIn, SearchEngine[Document]
             for group_list in grouping_root.children
             for group in group_list.children
         }
-
-    async def _arun_facet_query(
-        self,
-        query: str | None,
-        where_filter: Filter | None,
-        group_attributes: list[str],
-    ) -> dict[str, dict[tuple[str, str], tuple[Label, int]]]:
-        """Run a Vespa grouping query and return label/concept buckets partitioned by attribute."""
-        document_query = self._document_query(query, where_filter, order_by=[])
-        where = document_query.where
-
-        inner_groups = [
-            G.all(
-                G.group(attr),
-                # TODO: Pagination on groups if we hit this limit
-                G.max(5000),
-                G.order(-G.count()),
-                G.each(G.output(G.count())),
-            )
-            for attr in group_attributes
-        ]
-        grouping = G.all(*inner_groups)
-        yql = f"select {', '.join(group_attributes)} from documents where {where} | {grouping}"
-
-        request_body: dict[str, Any] = {
-            "yql": yql,
-            "hits": 0,
-            **document_query.request_fields,
-        }
-        response = await aexecute_vespa_query(
-            endpoint=f"{self.settings.vespa_endpoint}/search",
-            token=self.settings.vespa_read_token,
-            request_body=request_body,
-            request_context="documents.facets",
-            client=self._httpx,
-        )
-
-        root_children: list[dict] = response.get("root", {}).get("children") or []
-        groups: list[dict] = (
-            root_children[0].get("children", []) if root_children else []
-        )
-        group_values: list[dict] = []
-        for group in groups:
-            group_values.extend(group.get("children", []))
-
-        by_type: dict[str, dict[tuple[str, str], tuple[Label, int]]] = {}
-        for gv in group_values:
-            label_type, label_id, label_value = self.parse_label_type_id_value(
-                gv.get("value", "")
-            )
-            label_type = label_type or MISSING_PLACEHOLDER
-            count = gv.get("fields", {}).get("count()", 0)
-            label = Label(id=label_id, value=label_value, type=label_type)
-            by_type.setdefault(label_type, {})[(label_id, label_value)] = (
-                label,
-                count,
-            )
-        return by_type
-
-    def labels_value_type_facets(
-        self,
-        query: str | None,
-        filters: Filter | None = None,
-    ) -> dict[str, list[CountAggregation[Label]]]:
-        """
-        Compute disjunctive facet counts partitioned by `label.type`. AKA faceted search.
-
-        The query generally coming across is
-        - grouped by `label.type`
-        - each filter within that is joined by `OR`
-        - each group is joined by `AND`
-
-        Example:
-        - (category::1 OR category::2) OR (geography::USA OR geography::GBR)
-        """
-        return asyncio.run(
-            self.alabels_value_type_facets(query=query, filters=filters)
-        )
-
-    async def alabels_value_type_facets(
-        self,
-        query: str | None,
-        filters: Filter | None = None,
-    ) -> dict[str, list[CountAggregation[Label]]]:
-        """
-        Compute disjunctive facet counts partitioned by `label.type`. AKA faceted search.
-
-        The query generally coming across is
-        - grouped by `label.type`
-        - each filter within that is joined by `OR`
-        - each group is joined by `AND`
-
-        Example:
-        - (category::1 OR category::2) OR (geography::USA OR geography::GBR)
-        """
-        facet_label_types = _get_label_types_from_filters(filters)
-        facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
-        for label_type in facet_label_types:
-            facet_requests[f"filter_{label_type}"] = _prune_filter(
-                filters,
-                lambda c, t=label_type: _facet_filter_label_type(c) == t,
-            )
-
-        names = list(facet_requests.keys())
-        facet_results = await asyncio.gather(
-            *(
-                self._arun_facet_query(
-                    query,
-                    facet_requests[name],
-                    [
-                        "labels_type_id_value_attribute",
-                        "concepts_type_id_value_attribute",
-                    ],
-                )
-                for name in names
-            )
-        )
-        responses = dict(zip(names, facet_results))
-
-        result: dict[str, list[CountAggregation[Label]]] = {}
-        for label_type, labels_for_type in responses["filtered_labels"].items():
-            if label_type in facet_label_types:
-                counts_for_type = responses[f"filter_{label_type}"].get(label_type, {})
-            else:
-                counts_for_type = labels_for_type
-
-            entries: list[CountAggregation[Label]] = [
-                CountAggregation(count=count, value=label)
-                for label, count in counts_for_type.values()
-            ]
-            entries.sort(key=lambda c: -c.count)
-            result[label_type] = entries
-
-        return result
-
-    def labels_type_facets(
-        self,
-        query: str | None,
-        filters: Filter | None = None,
-    ) -> dict[str, list[CountAggregation[Label]]]:
-        """Compute disjunctive facet counts partitioned by `label.relationship`."""
-        return asyncio.run(self.alabels_type_facets(query=query, filters=filters))
-
-    async def alabels_type_facets(
-        self,
-        query: str | None,
-        filters: Filter | None = None,
-    ) -> dict[str, list[CountAggregation[Label]]]:
-        """Compute disjunctive facet counts partitioned by `label.relationship`."""
-        facet_label_types = _get_label_types_from_filters(filters)
-        facet_requests: dict[str, Filter | None] = {"filtered_labels": filters}
-        for label_type in facet_label_types:
-            facet_requests[f"filter_{label_type}"] = _prune_filter(
-                filters,
-                lambda c, t=label_type: _facet_filter_label_type(c) == t,
-            )
-
-        names = list(facet_requests.keys())
-        facet_results = await asyncio.gather(
-            *(
-                self._arun_facet_query(
-                    query,
-                    facet_requests[name],
-                    ["labels_relationship_id_value_attribute"],
-                )
-                for name in names
-            )
-        )
-        responses = dict(zip(names, facet_results))
-
-        result: dict[str, list[CountAggregation[Label]]] = {}
-        for label_type, labels_for_type in responses["filtered_labels"].items():
-            if label_type in facet_label_types:
-                counts_for_type = responses[f"filter_{label_type}"].get(label_type, {})
-            else:
-                counts_for_type = labels_for_type
-
-            entries: list[CountAggregation[Label]] = [
-                CountAggregation(count=count, value=label)
-                for label, count in counts_for_type.values()
-            ]
-            entries.sort(key=lambda c: -c.count)
-            result[label_type] = entries
-
-        return result
 
     def count(self, query: str) -> int:
         """Return hit count"""

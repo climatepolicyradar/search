@@ -4,19 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
-
 from search.data_in_models import Label as DataInLabel
 from search.data_in_models import LabelRelationship
 from search.engines.vespa_query.client import Settings
 
 # We make this very obvious as it is used for values that should exist
 MISSING_PLACEHOLDER = "MISSING"
-
-
-class CountAggregation[T](BaseModel):
-    count: int
-    value: T
 
 
 def get_labels_from_vespa_response(

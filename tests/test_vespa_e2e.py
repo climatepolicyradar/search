@@ -1,8 +1,8 @@
 """
 E2E tests for document search: attributes, field filters, linguistics, sorting.
 
-Label-specific tests live in ``test_vespa_labels_e2e.py``; facets in
-``test_vespa_facets_e2e.py``; passages in ``test_vespa_passages_e2e.py``.
+Label-specific tests live in ``test_vespa_labels_e2e.py``; passages in
+``test_vespa_passages_e2e.py``.
 
 Spins up an isolated Vespa container on port 8089 (reused if already running).
 Set TEST_VESPA_REMOVE_CONTAINER=1 to remove the container after the test.

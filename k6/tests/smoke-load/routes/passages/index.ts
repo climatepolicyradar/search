@@ -100,9 +100,8 @@ const PROFILES = {
     //
     // /search/passages is a single Vespa query with a 5s timeout
     // (DevVespaPassageSearchEngine.search() in
-    // search/engines/dev_vespa/passages_search_engine.py) — no fan-out, unlike
-    // /documents?fields=, so this profile doesn't need a worst-case-
-    // combination fixed request the way fields-combinations.ts does;
+    // search/engines/dev_vespa/passages_search_engine.py) — no fan-out, so
+    // this profile doesn't need a worst-case-combination fixed request;
     // sweeping the smoke test's query fixture is representative enough on
     // its own.
     scenarios: {

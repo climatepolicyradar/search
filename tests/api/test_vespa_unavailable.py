@@ -31,8 +31,6 @@ def document_engine() -> Generator[MagicMock, None]:
         mock_engine.last_debug_info = None
         mock_engine.aget = AsyncMock()
         mock_engine.asearch = AsyncMock()
-        mock_engine.aaggregations = AsyncMock()
-        mock_engine.alabels_value_type_facets = AsyncMock()
         mock_engine_cls.return_value = mock_engine
         yield mock_engine
 
@@ -80,46 +78,6 @@ def test_search_documents_returns_503(
     document_engine.asearch.side_effect = VespaError("Vespa is down", status_code=None)
 
     _assert_unavailable(test_client.get("/search/documents", params={"query": "toxic"}))
-
-
-def test_search_documents_returns_503_when_only_aggregations_fail(
-    test_client: TestClient,
-    document_engine: MagicMock,
-) -> None:
-    """Search and aggregations are fanned out together; either failing is a 503."""
-    document_engine.asearch.return_value = ListResponse(
-        results=[], total_size=0, next_page_token=None
-    )
-    document_engine.aaggregations.side_effect = VespaError(
-        "Vespa is down", status_code=None
-    )
-
-    _assert_unavailable(
-        test_client.get(
-            "/search/documents",
-            params={"query": "toxic", "fields": "aggregations.labels"},
-        )
-    )
-
-
-def test_search_documents_returns_503_when_only_facets_fail(
-    test_client: TestClient,
-    document_engine: MagicMock,
-) -> None:
-    document_engine.asearch.return_value = ListResponse(
-        results=[], total_size=0, next_page_token=None
-    )
-    document_engine.aaggregations.return_value = []
-    document_engine.alabels_value_type_facets.side_effect = VespaError(
-        "Vespa is down", status_code=None
-    )
-
-    _assert_unavailable(
-        test_client.get(
-            "/search/documents",
-            params={"query": "toxic", "fields": "facets.labels.value.type"},
-        )
-    )
 
 
 def test_search_passages_returns_503(

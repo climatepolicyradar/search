@@ -101,11 +101,6 @@ LOAD_TESTS: list[LoadTestSpec] = [
     ),
     LoadTestSpec(
         resource="documents",
-        script_path="tests/smoke-load/routes/documents/fields-combinations.ts",
-        name="documents: fields combinations",
-    ),
-    LoadTestSpec(
-        resource="documents",
         script_path="tests/smoke-load/routes/documents/filter-combinations.ts",
         name="documents: filter combinations",
         cron="0 4 * * 1",  # Monday 04:00 UTC

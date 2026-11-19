@@ -53,7 +53,7 @@ One tension worth knowing about: **"log and throw" is widely considered an
 anti-pattern** (it produces the same failure logged several times on the way
 up). We do it deliberately in `execute_vespa_query` anyway, because the engine
 is the only layer that has the traceback and knows _which_ of the fanned-out
-queries died (`documents.search` vs `documents.aggregations`), while the
+queries died (`documents.search` vs `documents.label_counts`), while the
 boundary is the only layer that knows the request. Two logs, two different
 facts. If you find yourself adding a third for the same failure, that is the
 anti-pattern and you should drop one.

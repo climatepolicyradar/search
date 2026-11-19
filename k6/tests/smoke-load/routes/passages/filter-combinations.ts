@@ -220,8 +220,7 @@ const PROFILES = {
     // (DevVespaPassageSearchEngine.search() in
     // search/engines/dev_vespa/passages_search_engine.py) — a `filters` clause adds YQL
     // predicates to that same query rather than triggering extra Vespa
-    // calls (unlike /documents?fields=), so there is no fan-out-maximising
-    // combination to chase the way fields-combinations.ts does. Load mode
+    // calls, so there is no fan-out-maximising combination to chase. Load mode
     // instead fixes the request to the fixture's most structurally complex
     // real shape (the nested or-in-and) as the closest available proxy for
     // "most expensive single query", rather than sweeping all combinations,
