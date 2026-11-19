@@ -164,9 +164,12 @@ async def _login(
     )
     login_resp.raise_for_status()
     result = login_resp.json()
-    if result.get("login", {}).get("result") != "Success":
+    login = result.get("login", {})
+    if login.get("result") != "Success":
+        # Never include credentials (or the raw response) in the message.
         raise RuntimeError(
-            f"Wikibase login failed: {result}, api_url: {api_url}, username: {username}, password: {password}"
+            f"Wikibase login failed: result={login.get('result')!r}, "
+            f"reason={login.get('reason')!r}, api_url={api_url}"
         )
 
 
