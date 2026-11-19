@@ -66,7 +66,7 @@ const isLoadProfile = (__ENV.PROFILE || "load") === "load";
 // (src/api/search.ts, src/utils/search/filterPathsToQueryGroup.ts). Covers a
 // single filter, multiple filters `and`-ed (incl. an AttributesCondition
 // date range), a top-level `or` and a nested `or`-in-`and` (both matching
-// navigator-frontend's multi-select-within-a-facet shape), and a zero-result
+// navigator-frontend's multi-select-within-a-category shape), and a zero-result
 // combination — worth testing explicitly since empty-result queries can
 // behave very differently under load than populated ones.
 type TFilterCombination = {
@@ -222,9 +222,9 @@ const PROFILES = {
     // spike on top of whatever task count phase 1 left behind.
     //
     // A `filters` clause adds YQL predicates to /documents' single search
-    // query rather than triggering extra Vespa calls the way `fields=`
-    // does (see fields-combinations.ts), so there is no fan-out-maximising
-    // combination to chase here. Load mode instead fixes the request to
+    // query rather than triggering extra Vespa calls, so there is no
+    // fan-out-maximising combination to chase here. Load mode instead
+    // fixes the request to
     // the fixture's most structurally complex real shape (the nested
     // or-in-and) as the closest available proxy for "most expensive single
     // query", rather than sweeping all combinations, so a threshold breach

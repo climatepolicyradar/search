@@ -1,8 +1,7 @@
-import asyncio
 import time
 from http import HTTPStatus
 from pathlib import Path
-from typing import Annotated, Literal, get_args
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -13,7 +12,7 @@ from api.filters import DocumentsFilterDep, LabelsFilterDep, PassagesFilterDep
 from api.geographies_taxonomy import geographies_taxonomy
 from api.health import router as health_router
 from api.labels_taxonomy import labels_taxonomy
-from api.models import Aggregations, Facets, ItemResponse, SearchResponse
+from api.models import ItemResponse, SearchResponse
 from api.responses import ITEM_RESPONSES, SEARCH_RESPONSES
 from api.settings import settings
 from api.sitemap.routes import router as sitemap_router
@@ -34,10 +33,9 @@ from search.data_in_models import Label as DataInLabel
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     _DEFAULT_MSM,
-    CountAggregation,
     DevVespaDocumentSearchEngine,
 )
-from search.label import Label, LabelSearchResult
+from search.label import LabelSearchResult
 from search.log import get_logger
 from search.passage import Passage
 
@@ -48,10 +46,6 @@ router = APIRouter(prefix="/search")
 router.include_router(health_router)
 router.include_router(taxonomy_router)
 router.include_router(sitemap_router)
-
-AggregationField = Literal["aggregations.labels"]
-FacetField = Literal["facets.labels.value.type", "facets.labels.type"]
-Fields = AggregationField | FacetField
 
 LLMS_TXT_PATH = Path(__file__).parent / "llms.txt"
 
@@ -149,8 +143,6 @@ async def read_documents(
     filters: DocumentsFilterDep,
     httpx: HttpxDep,
     query: str | None = Query(None, description="What are you looking for?"),
-    # @see: https://google.aip.dev/157#read-masks-as-a-request-field
-    fields: list[Fields] | None = Query(None),
     pagination: Pagination = Depends(pagination),
     order_by: list[OrderBy] = Depends(documents_order_by),
     debug: bool = False,
@@ -171,52 +163,13 @@ async def read_documents(
         msm,
     )
 
-    requested_fields = set(fields or [])
-
     engine = DevVespaDocumentSearchEngine(
         settings=settings, httpx=httpx, debug=debug, bolding=bolding, msm=msm
     )
-    aggregation_engines = {
-        "aggregations.labels": engine.aaggregations,
-    }
-    facet_engines = {
-        "facets.labels.value.type": engine.alabels_value_type_facets,
-        "facets.labels.type": engine.alabels_type_facets,
-    }
-    # Iterate the dispatch maps rather than `requested_fields` so the order is
-    # deterministic and an unrecognised field cannot reach a lookup.
-    requested_aggregation_fields = [
-        field for field in aggregation_engines if field in requested_fields
-    ]
-    requested_facet_fields = [
-        field for field in facet_engines if field in requested_fields
-    ]
     try:
-        results, extra_results = await asyncio.gather(
-            engine.asearch(
-                query=query, pagination=pagination, order_by=order_by, filters=filters
-            ),
-            asyncio.gather(
-                *(
-                    aggregation_engines[field](query=query, filters=filters)
-                    for field in requested_aggregation_fields
-                ),
-                *(
-                    facet_engines[field](query=query, filters=filters)
-                    for field in requested_facet_fields
-                ),
-            ),
+        results = await engine.asearch(
+            query=query, pagination=pagination, order_by=order_by, filters=filters
         )
-        aggregation_results = extra_results[: len(requested_aggregation_fields)]
-        facet_results = extra_results[len(requested_aggregation_fields) :]
-        aggregations_data = {
-            field.removeprefix("aggregations."): result
-            for field, result in zip(requested_aggregation_fields, aggregation_results)
-        }
-        facets_data = {
-            field.removeprefix("facets."): result
-            for field, result in zip(requested_facet_fields, facet_results)
-        }
     except Exception:
         logger.exception(
             "Error: document search request failed "
@@ -247,12 +200,6 @@ async def read_documents(
         previous_page=None,
         results=results.results,
         debug_info=engine.last_debug_info if debug else None,
-        aggregations=(
-            Aggregations.model_validate(aggregations_data)
-            if aggregations_data
-            else None
-        ),
-        facets=Facets.model_validate(facets_data) if facets_data else None,
     )
 
 
@@ -316,7 +263,6 @@ async def read_labels(
         next_page=None,
         previous_page=None,
         results=results.results,
-        aggregations=None,
     )
 
 
@@ -337,7 +283,6 @@ def read_labels_taxonomy():
         next_page=None,
         previous_page=None,
         results=labels_taxonomy,
-        aggregations=None,
     )
 
 
@@ -369,73 +314,7 @@ def read_geographies_taxonomy(
         next_page=None,
         previous_page=None,
         results=results,
-        aggregations=None,
     )
-
-
-@router.get(
-    "/geographies:aggregate",
-    response_model=ItemResponse[list[CountAggregation[Label]]],
-    responses=SEARCH_RESPONSES,
-)
-async def aggregate_geographies(
-    filters: DocumentsFilterDep,
-    httpx: HttpxDep,
-    geography_type: list[GeographyType] | None = Query(
-        None,
-        alias="labels.value.type",
-        description=(
-            "Restrict the aggregation to these geography label types. "
-            "Omit to return every geography type."
-        ),
-    ),
-    query: str | None = Query(None, description="What are you looking for?"),
-):
-    """
-    Count documents per geography label, scoped by `filters`.
-
-    Answers "which geographies have data here?" - a caller passes the same
-    filters it sends to `/documents`, so the list it builds and the results
-    it shows describe the same document set (@see FUS-475).
-
-    Only geographies that match are returned: the counts come from a Vespa
-    grouping query, and a group cannot exist without a document in it.
-
-    Returns counts only. The region/country/subdivision hierarchy lives in
-    `/geographies-taxonomy`; callers join the two on label id.
-    """
-    logger.info(
-        "Aggregating geographies (query=%r, geography_type=%r, filters_present=%s)",
-        query,
-        geography_type,
-        filters is not None,
-    )
-
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
-    try:
-        aggregations = await engine.aaggregations(query=query, filters=filters)
-    except Exception:
-        logger.exception(
-            "Error: geography aggregation request failed (query=%r, geography_type=%r)",
-            query,
-            geography_type,
-        )
-        raise
-
-    # `aggregations()` groups every label and concept on the matching documents,
-    # not just geographies, so the fallback is a whitelist rather than a no-op.
-    wanted = set(geography_type) if geography_type else set(get_args(GeographyType))
-    results = [
-        aggregation for aggregation in aggregations if aggregation.value.type in wanted
-    ]
-
-    logger.info(
-        "Success: geography aggregation completed (query=%r, results=%s)",
-        query,
-        len(results),
-    )
-
-    return ItemResponse(data=results)
 
 
 @router.get(
@@ -496,7 +375,6 @@ async def read_passages(
         next_page=None,
         previous_page=None,
         results=results.results,
-        aggregations=None,
     )
 
 
@@ -588,5 +466,4 @@ async def read_passages_within(
         next_page=None,
         previous_page=None,
         results=results.results,
-        aggregations=None,
     )

@@ -200,42 +200,6 @@ def test_document_search_propagates_vespa_error(
         )
 
 
-def test_document_aggregations_propagates_vespa_error(
-    http_client: httpx2.AsyncClient,
-    handler: MockHandler,
-    settings: Settings,
-) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
-    handler.add_error(httpx2.ConnectError("Vespa is down"))
-
-    with pytest.raises(VespaError):
-        engine.aggregations(query="needle")
-
-
-def test_labels_value_type_facets_propagates_vespa_error(
-    http_client: httpx2.AsyncClient,
-    handler: MockHandler,
-    settings: Settings,
-) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
-    handler.add_error(httpx2.ConnectError("Vespa is down"))
-
-    with pytest.raises(VespaError):
-        engine.labels_value_type_facets(query="needle")
-
-
-def test_labels_type_facets_propagates_vespa_error(
-    http_client: httpx2.AsyncClient,
-    handler: MockHandler,
-    settings: Settings,
-) -> None:
-    engine = DevVespaDocumentSearchEngine(settings=settings, httpx=http_client)
-    handler.add_error(httpx2.ConnectError("Vespa is down"))
-
-    with pytest.raises(VespaError):
-        engine.labels_type_facets(query="needle")
-
-
 def test_passage_search_propagates_vespa_error(settings: Settings) -> None:
 
     def handler(_request: httpx2.Request) -> httpx2.Response:
