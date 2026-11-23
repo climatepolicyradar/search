@@ -48,7 +48,6 @@ from search.passage import (
     looks_like_short_heading,
     looks_like_table_of_contents,
 )
-from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.models import VespaUpdate
 from search.vespa.passage import (
     VespaLabel,
@@ -57,6 +56,7 @@ from search.vespa.passage import (
     VespaPassageUpdate,
 )
 from search.vespa.sources.embeddings_input_v2 import TextBlock
+from tests.vespa_e2e import _source_document_to_vespa_update
 
 VESPA_APP_DIR = Path(__file__).resolve().parents[1] / "vespa" / "app"
 _PORT = 8089
@@ -265,7 +265,7 @@ def _feed_passage_with_labels(
     looks_like_table_of_contents: bool = False,
     is_page_header_or_footer: bool = False,
 ) -> None:
-    """Feed a passage with `labels` set - the legacy materializer path doesn't set these."""
+    """Feed a passage with `labels` set - `_source_document_to_vespa_update` does not set these."""
     passage = VespaPassage(
         id=block_id,
         idx=0,

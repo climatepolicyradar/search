@@ -11,8 +11,7 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 
 from api.main import create_app, production_lifespan
-from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from tests.vespa_e2e import _TEST_SETTINGS
+from tests.vespa_e2e import _source_document_to_vespa_update, _TEST_SETTINGS
 
 pytest_plugins = ["tests.vespa_e2e"]
 
