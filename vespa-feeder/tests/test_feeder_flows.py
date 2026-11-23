@@ -64,26 +64,7 @@ def test_documents_flow_feeds_the_documents_export_with_the_documents_deriver(
     assert call["derive_data_from_source"] is documents_flow.derive_document_data
 
 
-def test_labels_flow_feeds_the_materializer_file_with_no_deriver(
-    prefect_db, recorded_feeder_calls
-) -> None:
-    """
-    Labels feeds a single pre-materialized file and passes no deriver at all.
-
-    `derive_data_from_source` is absent from the call rather than passed as
-    None, and there is no `s3_export_prefix` either - labels reads one fixed
-    key, not a dated export directory.
-    """
-    labels_flow.labels_feeder_flow()
-
-    (call,) = recorded_feeder_calls
-    assert call["s3_bucket"] == "cpr-cache"
-    assert call["s3_prefix"] == "search/vespa/labels_feed_materializer.jsonl"
-    assert "derive_data_from_source" not in call
-    assert "s3_export_prefix" not in call
-
-
-def test_labels_fusion_flow_feeds_the_fusion_export_with_no_deriver(
+def test_labels_flow_feeds_the_fusion_export_with_no_deriver(
     prefect_db, recorded_feeder_calls
 ) -> None:
     """
@@ -94,7 +75,7 @@ def test_labels_fusion_flow_feeds_the_fusion_export_with_no_deriver(
     newest timestamped snapshot, and `s3_export_prefix` is passed through so a
     run can be pinned to one.
     """
-    labels_flow.labels_fusion_feeder_flow()
+    labels_flow.labels_feeder_flow()
 
     (call,) = recorded_feeder_calls
     assert call["s3_bucket"] == "cpr-production-data-lake-fusion"
@@ -103,10 +84,10 @@ def test_labels_fusion_flow_feeds_the_fusion_export_with_no_deriver(
     assert "derive_data_from_source" not in call
 
 
-def test_labels_fusion_flow_passes_a_pinned_export_prefix_through(
+def test_labels_flow_passes_a_pinned_export_prefix_through(
     prefect_db, recorded_feeder_calls
 ) -> None:
-    labels_flow.labels_fusion_feeder_flow(s3_export_prefix="20261119T100000Z")
+    labels_flow.labels_feeder_flow(s3_export_prefix="20261119T100000Z")
 
     (call,) = recorded_feeder_calls
     assert call["s3_export_prefix"] == "20261119T100000Z"
@@ -122,7 +103,6 @@ def test_labels_fusion_flow_passes_a_pinned_export_prefix_through(
         (passages_flow.passages_feeder_flow, 8),
         (documents_flow.documents_feeder_flow, 4),
         (labels_flow.labels_feeder_flow, 4),
-        (labels_flow.labels_fusion_feeder_flow, 4),
     ],
 )
 def test_flow_bounds_its_task_runner(flow, expected_max_workers: int) -> None:
@@ -135,7 +115,6 @@ def test_flow_bounds_its_task_runner(flow, expected_max_workers: int) -> None:
         passages_flow.passages_feeder_flow,
         documents_flow.documents_feeder_flow,
         labels_flow.labels_feeder_flow,
-        labels_flow.labels_fusion_feeder_flow,
     ],
 )
 def test_flow_notifies_slack_on_every_terminal_state(flow) -> None:

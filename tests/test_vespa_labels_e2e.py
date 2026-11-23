@@ -8,7 +8,7 @@ Run against a real Vespa instance via the shared ``vespa_e2e`` fixtures
 (port 8089). Run with: uv run pytest tests/test_vespa_labels_e2e.py
 """
 
-from typing import Any
+from typing import Any, Literal, NotRequired, TypedDict
 from urllib.parse import quote
 
 import httpx2
@@ -31,15 +31,73 @@ from search.engines.dev_vespa import (
     Filter,
 )
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from search.vespa.labels_feed_materializer import (
-    VespaLabel,
-    VespaLabelLabelRelationship,
-    VespaLabelStatus,
-    _vespa_label_to_vespa_update,
-)
+from search.vespa.models import VespaAssign, VespaUpdate
 from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids, rule_cases
 
 pytest_plugins = ["tests.vespa_e2e"]
+
+type VespaLabelStatus = Literal["active", "inactive"]
+
+
+class VespaLabelLabelRelationship(TypedDict):
+    id: str
+    type: str
+    value: str
+    timestamp: int | None
+    relationship: str | None
+
+
+class VespaLabel(TypedDict):
+    id: str
+    type: str
+    value: str
+    alternative_labels: list[str]
+    subconcept_labels: list[str]
+    description: str
+    negative_labels: list[str]
+    label_source: NotRequired[str]
+    labels: list[VespaLabelLabelRelationship]
+    status: VespaLabelStatus
+
+
+class VespaLabelUpdate(TypedDict):
+    id: VespaAssign[str]
+    type: VespaAssign[str]
+    value: VespaAssign[str]
+    alternative_labels: VespaAssign[list[str]]
+    subconcept_labels: VespaAssign[list[str]]
+    description: VespaAssign[str]
+    negative_labels: VespaAssign[list[str]]
+    label_source: NotRequired[VespaAssign[str]]
+    labels: VespaAssign[list[VespaLabelLabelRelationship]]
+    status: VespaAssign[VespaLabelStatus]
+
+
+def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpdate]:
+    """
+    Convert a Vespa label to a Vespa update operation.
+
+    ``label_source`` is optional: Fusion rows do not carry it, so it is only
+    assigned when the label has one.
+    """
+    fields: VespaLabelUpdate = {
+        "id": {"assign": label["id"]},
+        "type": {"assign": label["type"]},
+        "value": {"assign": label["value"]},
+        "alternative_labels": {"assign": label["alternative_labels"]},
+        "subconcept_labels": {"assign": label["subconcept_labels"]},
+        "description": {"assign": label["description"]},
+        "negative_labels": {"assign": label["negative_labels"]},
+        "labels": {"assign": label["labels"]},
+        "status": {"assign": label["status"]},
+    }
+    if "label_source" in label:
+        fields["label_source"] = {"assign": label["label_source"]}
+    return {
+        "update": f"id:labels:labels::{label['id']}",
+        "create": True,
+        "fields": fields,
+    }
 
 
 class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
@@ -68,7 +126,7 @@ def _make_label(label_id: str) -> DocumentLabelRelationship:
 
 
 def _label_source_from_taxonomy(label_id: str, label_type: str, value: str) -> str:
-    """Serialise a taxonomy/concept label (see labels_feed_materializer)."""
+    """Serialise a taxonomy/concept label."""
     return DataInLabel(id=label_id, type=label_type, value=value).model_dump_json()
 
 
@@ -78,9 +136,10 @@ def _taxonomy_vespa_label(
     value: str,
     labels: list[VespaLabelLabelRelationship] | None = None,
     status: VespaLabelStatus = "active",
+    with_label_source: bool = True,
 ) -> VespaLabel:
     """Build a ``VespaLabel`` for direct feed to the labels schema in e2e tests."""
-    return VespaLabel(
+    vespa_label = VespaLabel(
         id=label_id,
         type=label_type,
         value=value,
@@ -89,9 +148,13 @@ def _taxonomy_vespa_label(
         description="",
         negative_labels=[],
         labels=labels or [],
-        label_source=_label_source_from_taxonomy(label_id, label_type, value),
         status=status,
     )
+    if with_label_source:
+        vespa_label["label_source"] = _label_source_from_taxonomy(
+            label_id, label_type, value
+        )
+    return vespa_label
 
 
 def _relationship(parent_id: str, relationship: str) -> VespaLabelLabelRelationship:
@@ -791,6 +854,36 @@ async def test_label_search_returns_non_empty_label_source(vespa_app: Vespa, liv
     assert isinstance(results[0], DataInLabel)
     assert results[0] is not None
     assert results[0] != ""
+
+
+async def test_label_search_returns_label_fed_without_label_source(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
+    """Fusion rows carry no ``label_source``, so a label must be feedable and searchable without one."""
+    label = _taxonomy_vespa_label("geography::Narnia", "geography", "Narnia", with_label_source=False)
+    assert "label_source" not in label
+    _feed_label(vespa_app, label)
+    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
+    results = (await engine.asearch(
+        query="Narnia",
+        pagination=Pagination(page_token=1, page_size=10),
+        order_by=[OrderBy(field="relevance", direction="desc")],
+    )).results
+    assert [result.id for result in results] == ["geography::Narnia"]
+
+
+def test_label_upserted_without_label_source_keeps_the_existing_one(vespa_app: Vespa):
+    """A Fusion feed over a label that already has a ``label_source`` must neither fail nor wipe it."""
+    with_source = _taxonomy_vespa_label("geography::Atlantis", "geography", "Atlantis")
+    original_label_source = _label_source_from_taxonomy("geography::Atlantis", "geography", "Atlantis")
+    _feed_label(vespa_app, with_source)
+    _feed_label(vespa_app, _taxonomy_vespa_label("geography::Atlantis", "geography", "Atlantis", with_label_source=False))
+
+    docid = _vespa_label_to_vespa_update(with_source)["update"]
+    response = req.get(
+        f"{vespa_app.end_point}/document/v1/labels/labels/docid/{quote(docid, safe='')}",
+        timeout=5,
+    )
+    response.raise_for_status()
+    assert response.json()["fields"]["label_source"] == original_label_source
 
 
 @pytest.mark.xfail(
