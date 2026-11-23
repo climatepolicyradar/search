@@ -1,7 +1,7 @@
 config:
   relevance:slack_webhook_url:
-    secure: AAABAE36NMa19P8HP8fgouZWCNVBljWwrwCuTsuf1wL5Lj3b3LTOIAr07spM32TxoTTzzJD8tQq1/odhpIHXhDTAOSOsoO/uHbOEFE5r27m8TnfvqUsaphbdoKqOhIEQN4/kL2Ec6lU41CN8if425jE=,
+    secure: AAABAE36NMa19P8HP8fgouZWCNVBljWwrwCuTsuf1wL5Lj3b3LTOIAr07spM32TxoTTzzJD8tQq1/odhpIHXhDTAOSOsoO/uHbOEFE5r27m8TnfvqUsaphbdoKqOhIEQN4/kL2Ec6lU41CN8if425jE=
   relevance:grafana_auth:
-    secure: AAABABy+RdxBRjokugVzonwt/APERJ8MW2roGYQOl3iuV+ihsr20EPLDZz+iuJ4Y5oyEy5ZGyEE2eOfQYlzrYuugyfgbn3Iu4E24/vZQ,
+    secure: AAABABy+RdxBRjokugVzonwt/APERJ8MW2roGYQOl3iuV+ihsr20EPLDZz+iuJ4Y5oyEy5ZGyEE2eOfQYlzrYuugyfgbn3Iu4E24/vZQ
   relevance:prometheus_data_source_name: grafanacloud-climatepolicyradar-prom
   relevance:grafana_url: https://climatepolicyradar.grafana.net

@@ -19,7 +19,7 @@ def pair(narrower: int | None, broader: int | None) -> Pair:
 def test_narrows(narrower: int, broader: int, passed: bool) -> None:
     outcome = Narrows().evaluate(context(pair(narrower=narrower, broader=broader)))
     assert outcome == {
-        "Narrows passed": EvaluationReason(
+        "narrows passed": EvaluationReason(
             value=passed,
             reason=f"{narrower:,} hits vs 1,000 for the broader query",
         ),

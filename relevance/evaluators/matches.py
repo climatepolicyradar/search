@@ -19,6 +19,10 @@ class Matches[I, T](Evaluator[I, HasResults[T], object]):
         """The text of a result to match the pattern against."""
         ...
 
+    def get_default_evaluation_name(self) -> str:
+        """Name the metric after the cutoff it scores."""
+        return f"matches@{self.k}"
+
     def evaluate(
         self,
         ctx: EvaluatorContext[I, HasResults[T], object],
@@ -35,9 +39,10 @@ class Matches[I, T](Evaluator[I, HasResults[T], object]):
             score = 0.0
             passed = False
 
+        name = self.get_default_evaluation_name()
         return {
-            "Matches": EvaluationReason(value=score, reason=reason),
-            "Matches passed": EvaluationReason(
+            name: EvaluationReason(value=score, reason=reason),
+            f"{name} passed": EvaluationReason(
                 value=passed,
                 reason=reason,
             ),

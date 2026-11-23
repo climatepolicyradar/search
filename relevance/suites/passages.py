@@ -48,6 +48,10 @@ class NoArtefacts[I](Evaluator[I, HasResults[Passage], object]):
     artefact: Artefact
     k: int = 20
 
+    def get_default_evaluation_name(self) -> str:
+        """Name the metric after the artefact and the cutoff it scores."""
+        return f"no_{self.artefact}@{self.k}"
+
     def found(self, passage: Passage) -> bool:
         """Whether the passage looks like the artefact."""
         match self.artefact:
@@ -73,9 +77,10 @@ class NoArtefacts[I](Evaluator[I, HasResults[Passage], object]):
             reason = "no results"
             score = 0.0
 
+        name = self.get_default_evaluation_name()
         return {
-            "NoArtefacts": EvaluationReason(value=score, reason=reason),
-            "NoArtefacts passed": EvaluationReason(
+            name: EvaluationReason(value=score, reason=reason),
+            f"{name} passed": EvaluationReason(
                 value=score == 1.0,
                 reason=reason,
             ),

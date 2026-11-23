@@ -27,6 +27,22 @@ folder = oss.Folder(
     opts=grafana_opts,
 )
 
+message_template = alerting.MessageTemplate(
+    resource_name="relevance",
+    opts=grafana_opts,
+    name="relevance",
+    template=(
+        '{{ define "relevance.title" }}'
+        "Relevance regression in {{ len .Alerts.Firing }} metric(s)"
+        "{{ end }}\n"
+        '{{ define "relevance.text" }}'
+        "{{ range .Alerts.Firing }}"
+        "• *{{ .Labels.suite }}* `{{ .Labels.metric }}`: {{ .Annotations.summary }}\n"
+        "{{ end }}"
+        "{{ end }}"
+    ),
+)
+
 contact_point = alerting.ContactPoint(
     resource_name="relevance",
     opts=grafana_opts,
@@ -34,6 +50,11 @@ contact_point = alerting.ContactPoint(
     slacks=[
         alerting.ContactPointSlackArgs(
             url=config.require_secret("slack_webhook_url"),
+            title=pulumi.Output.concat('{{ template "', message_template.name, '.title" . }}'),
+            text=pulumi.Output.concat('{{ template "', message_template.name, '.text" . }}'),
+            icon_emoji=":chart_with_downwards_trend:",
+            disable_resolve_message=True,
+            username="Relevance tests",
         ),
     ],
 )
@@ -48,12 +69,17 @@ alerting.RuleGroup(
         alerting.RuleGroupRuleArgs(
             name="metric-degradation",
             condition="drop_too_large",
+            no_data_state="OK",
+            annotations={
+                "summary": '{{ $labels.suite }} {{ $labels.metric }} dropped by {{ printf "%.3f" $values.score_drop.Value }}',
+                "description": "Latest run is that far below the previous 7-day average.",
+            },
             notification_settings=alerting.RuleGroupRuleNotificationSettingsArgs(
                 contact_point=contact_point.name,
             ),
             datas=[
                 alerting.RuleGroupRuleDataArgs(
-                    ref_id="pass_rate_drop",
+                    ref_id="score_drop",
                     datasource_uid=prometheus.uid,
                     relative_time_range=alerting.RuleGroupRuleDataRelativeTimeRangeArgs(
                         from_=600,
@@ -61,11 +87,11 @@ alerting.RuleGroup(
                     ),
                     model=json.dumps(
                         {
-                            "refId": "pass_rate_drop",
+                            "refId": "score_drop",
                             "instant": True,
                             "expr": (
-                                'max by (suite) (avg_over_time(relevance_score_ratio{metric="pass_rate"}[7d] offset 1d)) - '
-                                'max by (suite) (last_over_time(relevance_score_ratio{metric="pass_rate"}[1d]))'
+                                'max by (suite, metric) (avg_over_time(relevance_score_ratio[7d] offset 1d)) - '
+                                'max by (suite, metric) (last_over_time(relevance_score_ratio[1d]))'
                             ),
                         }
                     ),
@@ -81,7 +107,7 @@ alerting.RuleGroup(
                         {
                             "type": "threshold",
                             "refId": "drop_too_large",
-                            "expression": "pass_rate_drop",
+                            "expression": "score_drop",
                             "conditions": [{"evaluator": {"type": "gt", "params": [0.02]}}],
                         }
                     ),
