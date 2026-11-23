@@ -25,7 +25,6 @@ from pathlib import Path
 import pycountry
 
 from api.geographies_taxonomy import snowflake_geographies
-from api.iso_geographies import LEGACY_SUBDIVISION_IDS
 
 OUTPUT = Path(__file__).parents[2] / "api" / "iso_geographies_data.py"
 WORLD_BANK_COUNTRIES = "https://api.worldbank.org/v2/country?format=json&per_page=400"
@@ -68,7 +67,6 @@ def subdivision_rows(known_ids: set[str]) -> list[tuple[str, str, str]]:
     """Every ISO subdivision not already known, each listed after its parent."""
     subdivisions = {s.code: s for s in pycountry.subdivisions}
     parents = {code: s.parent_code for code, s in subdivisions.items()}
-    skipped = known_ids | set(LEGACY_SUBDIVISION_IDS)
 
     def parent_id(code: str) -> str:
         parent = parents[code]
@@ -83,7 +81,7 @@ def subdivision_rows(known_ids: set[str]) -> list[tuple[str, str, str]]:
             parent_id(code),
         )
         for code in sorted(subdivisions, key=lambda c: (depth(c, parents), c))
-        if f"subdivision::{code}" not in skipped
+        if f"subdivision::{code}" not in known_ids
     ]
 
 

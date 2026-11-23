@@ -16,15 +16,19 @@ from collections.abc import Sequence
 from api.iso_geographies_data import ISO_COUNTRIES, ISO_SUBDIVISIONS
 from search.data_in_models import Label, LabelRelationship
 
-# ISO subdivisions that the documents are tagged with under another id. The tagged
-# id stays, and the ISO one is left out so a subdivision is not listed twice. Drop
-# an entry once its documents have been retagged with the ISO code.
+# Subdivisions that the documents are tagged with under an id that is not their ISO
+# code, mapped to the ISO code. Both are in the taxonomy for now, so each of these
+# appears twice and the ISO one counts no documents.
+#
+# TODO: once enrichment has retagged these documents with the ISO code, remove the
+# legacy labels from `snowflake_geographies` (in `geographies_taxonomy.py`), and
+# remove them from here.
 LEGACY_SUBDIVISION_IDS = {
-    "subdivision::ES-AN": "subdivision::ES-19572",
-    "subdivision::ES-CN": "subdivision::ES-19574",
-    "subdivision::IN-TS": "subdivision::IN-TG",
-    "subdivision::IN-UK": "subdivision::IN-UT",
-    "subdivision::ZA-KZN": "subdivision::ZA-NL",
+    "subdivision::ES-19572": "subdivision::ES-AN",
+    "subdivision::ES-19574": "subdivision::ES-CN",
+    "subdivision::IN-TG": "subdivision::IN-TS",
+    "subdivision::IN-UT": "subdivision::IN-UK",
+    "subdivision::ZA-NL": "subdivision::ZA-KZN",
 }
 
 
@@ -53,7 +57,6 @@ def with_iso_geographies(existing: Sequence[Label]) -> list[Label]:
 
         parent = None
         if parent_id is not None:
-            parent_id = LEGACY_SUBDIVISION_IDS.get(parent_id, parent_id)
             if parent_id not in labels_by_id:
                 raise UnknownParentError(label_id, parent_id)
             parent = labels_by_id[parent_id]

@@ -65,8 +65,8 @@ def test_new_top_level_subdivision_hangs_under_its_country():
 
 
 def test_nested_subdivision_hangs_under_its_parent_subdivision():
-    # Almería is a province of Andalucía (ISO ES-AN), which the data calls ES-19572.
-    assert parent_ids("subdivision::ES-AL") == ["subdivision::ES-19572"]
+    # Almería is a province of Andalucía, whose ISO code is ES-AN.
+    assert parent_ids("subdivision::ES-AL") == ["subdivision::ES-AN"]
 
 
 def test_every_subdivision_reaches_a_country_through_subdivisions_only():
@@ -82,20 +82,14 @@ def test_every_subdivision_reaches_a_country_through_subdivisions_only():
         assert current.type == "country", label.id
 
 
-@pytest.mark.parametrize(("iso_id", "legacy_id"), LEGACY_SUBDIVISION_IDS.items())
-def test_legacy_subdivision_ids_are_kept_and_their_iso_twins_are_not_added(
-    iso_id: str, legacy_id: str
+@pytest.mark.parametrize(("legacy_id", "iso_id"), LEGACY_SUBDIVISION_IDS.items())
+def test_legacy_subdivision_ids_are_kept_alongside_their_iso_codes(
+    legacy_id: str, iso_id: str
 ):
+    """Until the documents are retagged, both are listed, and the ISO one is the one with no documents."""
     assert legacy_id in BY_ID
-    assert iso_id not in BY_ID
-
-
-def test_a_legacy_subdivision_is_not_listed_twice():
-    andalucia = [
-        label.id for label in geographies_taxonomy if label.value.startswith("Andaluc")
-    ]
-
-    assert andalucia == ["subdivision::ES-19572"]
+    assert iso_id in BY_ID
+    assert parent_ids(legacy_id) == parent_ids(iso_id)
 
 
 def test_pycountry_name_artefacts_are_stripped():
