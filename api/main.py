@@ -42,6 +42,14 @@ UNMATCHED_ROUTE_LABEL = "unmatched"
 MCP_PATH = "/search/mcp"
 
 
+async def serve_mcp_without_trailing_slash(request: Request, call_next):
+    # claude.ai drops the trailing slash from connector URLs, and Starlette's
+    # redirect would point at http, since TLS ends at the load balancer.
+    if request.url.path == MCP_PATH:
+        request.scope["path"] = f"{MCP_PATH}/"
+    return await call_next(request)
+
+
 @asynccontextmanager
 async def build_mcp(app: FastAPI, state: State) -> AsyncGenerator[None]:
     if not settings.mcp_enabled:
@@ -314,6 +322,7 @@ def create_app(lifespan: Lifespan[FastAPI]) -> FastAPI:
     app.exception_handler(BaseUrlRequired)(handle_base_url_required)
     app.exception_handler(TaxonomyNotLoadedError)(handle_taxonomy_not_loaded)
     app.middleware("http")(log_request_lifecycle)
+    app.middleware("http")(serve_mcp_without_trailing_slash)
     app.get("/")(root)
     app.include_router(router)
     telemetry.instrument_fastapi(app)

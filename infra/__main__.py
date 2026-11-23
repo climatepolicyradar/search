@@ -589,6 +589,10 @@ elif stack != "review":
                     name="ENV",
                     value=stack,
                 ),
+                ExpressGatewayServicePrimaryContainerEnvironmentArgs(
+                    name="MCP_ENABLED",
+                    value="true",
+                ),
             ],
             secrets=[
                 ExpressGatewayServicePrimaryContainerSecretArgs(

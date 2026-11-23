@@ -625,16 +625,6 @@ def test_vespa_feeder_flushes_telemetry_when_the_run_fails(
             "an/export/prefix/20260922T190625Z/part.jsonl",
             id="export-pinned",
         ),
-        # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST - labels feeds one fixed
-        # JSONL from cpr-cache: the prefix is already the whole key, so there
-        # is no export to resolve and nothing to list.
-        pytest.param(
-            "search/vespa/labels_feed_materializer.jsonl",
-            None,
-            False,
-            "search/vespa/labels_feed_materializer.jsonl",
-            id="single-jsonl",
-        ),
     ],
 )
 def test_vespa_feeder_resolves_the_export_prefix_only_when_there_is_one(

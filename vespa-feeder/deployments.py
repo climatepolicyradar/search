@@ -51,8 +51,6 @@ class VespaFeederDeployment:
     # e.g. parameters.s3_export_prefix = "20260922T190625Z" will ensure you always
     # have the same
     # data across tests.
-    # This will not work for labels
-    # @related: LABEL_RELATIONSHIPS_DO_NOT_EXIST
     parameters: dict | None = None
     # an example of an a/b test could be
     # VespaFeederDeployment(

@@ -8,7 +8,7 @@ Run against a real Vespa instance via the shared ``vespa_e2e`` fixtures
 (port 8089). Run with: uv run pytest tests/test_vespa_labels_e2e.py
 """
 
-from typing import Any
+from typing import Any, Literal, TypedDict
 from urllib.parse import quote
 
 import httpx2
@@ -22,7 +22,6 @@ from cpr_contracts import (
 from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 
-from search.data_in_models import Label as DataInLabel
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
@@ -31,15 +30,64 @@ from search.engines.dev_vespa import (
     Filter,
 )
 from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
-from search.vespa.labels_feed_materializer import (
-    VespaLabel,
-    VespaLabelLabelRelationship,
-    VespaLabelStatus,
-    _vespa_label_to_vespa_update,
-)
+from search.vespa.models import VespaAssign, VespaUpdate
 from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids, rule_cases
 
 pytest_plugins = ["tests.vespa_e2e"]
+
+type VespaLabelStatus = Literal["active", "inactive"]
+
+
+class VespaLabelLabelRelationship(TypedDict):
+    id: str
+    type: str
+    value: str
+    timestamp: int | None
+    relationship: str | None
+
+
+class VespaLabel(TypedDict):
+    id: str
+    type: str
+    value: str
+    alternative_labels: list[str]
+    subconcept_labels: list[str]
+    description: str
+    negative_labels: list[str]
+    labels: list[VespaLabelLabelRelationship]
+    status: VespaLabelStatus
+
+
+class VespaLabelUpdate(TypedDict):
+    id: VespaAssign[str]
+    type: VespaAssign[str]
+    value: VespaAssign[str]
+    alternative_labels: VespaAssign[list[str]]
+    subconcept_labels: VespaAssign[list[str]]
+    description: VespaAssign[str]
+    negative_labels: VespaAssign[list[str]]
+    labels: VespaAssign[list[VespaLabelLabelRelationship]]
+    status: VespaAssign[VespaLabelStatus]
+
+
+def _vespa_label_to_vespa_update(label: VespaLabel) -> VespaUpdate[VespaLabelUpdate]:
+    """Convert a Vespa label to a Vespa update operation."""
+    fields: VespaLabelUpdate = {
+        "id": {"assign": label["id"]},
+        "type": {"assign": label["type"]},
+        "value": {"assign": label["value"]},
+        "alternative_labels": {"assign": label["alternative_labels"]},
+        "subconcept_labels": {"assign": label["subconcept_labels"]},
+        "description": {"assign": label["description"]},
+        "negative_labels": {"assign": label["negative_labels"]},
+        "labels": {"assign": label["labels"]},
+        "status": {"assign": label["status"]},
+    }
+    return {
+        "update": f"id:labels:labels::{label['id']}",
+        "create": True,
+        "fields": fields,
+    }
 
 
 class DocumentLabelRelationshipFactory(ModelFactory[DocumentLabelRelationship]):
@@ -67,11 +115,6 @@ def _make_label(label_id: str) -> DocumentLabelRelationship:
     )
 
 
-def _label_source_from_taxonomy(label_id: str, label_type: str, value: str) -> str:
-    """Serialise a taxonomy/concept label (see labels_feed_materializer)."""
-    return DataInLabel(id=label_id, type=label_type, value=value).model_dump_json()
-
-
 def _taxonomy_vespa_label(
     label_id: str,
     label_type: str,
@@ -89,7 +132,6 @@ def _taxonomy_vespa_label(
         description="",
         negative_labels=[],
         labels=labels or [],
-        label_source=_label_source_from_taxonomy(label_id, label_type, value),
         status=status,
     )
 
@@ -777,20 +819,6 @@ async def test_label_filter_same_element_excludes_split_relationships(vespa_app:
     )).results
 
     assert "category::Split" not in {label.id for label in results}
-
-
-async def test_label_search_returns_non_empty_label_source(vespa_app: Vespa, live_http_client: httpx2.AsyncClient):
-    label = _taxonomy_vespa_label("geography::Romania", "geography", "Romania")
-    _feed_label(vespa_app, label)
-    engine = DevVespaLabelSearchEngine(settings=_TEST_SETTINGS, httpx=live_http_client)
-    results = (await engine.asearch(
-        query="Romania",
-        pagination=Pagination(page_token=1, page_size=10),
-        order_by=[OrderBy(field="relevance", direction="desc")],
-    )).results
-    assert isinstance(results[0], DataInLabel)
-    assert results[0] is not None
-    assert results[0] != ""
 
 
 @pytest.mark.xfail(

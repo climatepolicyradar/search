@@ -1,20 +1,21 @@
 """
-The search MCP: five read-only tools over the same engines as the REST API.
+The search MCP: five read-only search tools, and a feedback tool.
 
-Each tool checks its args, builds a filter, calls one engine method and trims
-the result.
+The search tools use the same engines as the REST API. Each checks its args,
+builds a filter, calls one engine method and trims the result. send_feedback
+logs what the user wants Climate Policy Radar to know.
 """
 
 from collections.abc import Iterable
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx2
 import mcp_types
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.server import LifespanCallable
-from pydantic import Field
+from pydantic import Field, StringConstraints
 
 from api.mcp import descriptions
 from api.mcp.filters import (
@@ -29,6 +30,7 @@ from api.mcp.models import (
     DocumentDetail,
     DocumentHit,
     DocumentResults,
+    FeedbackSent,
     PassageHit,
     PassageInContext,
     PassageResults,
@@ -47,6 +49,7 @@ from search.engines.dev_vespa import (
     DevVespaPassageSearchEngine,
 )
 from search.engines.vespa_query.filters import FieldFilter, Filter
+from search.log import get_logger
 from search.passage import Passage
 
 DEFAULT_LIMIT = 10
@@ -63,6 +66,30 @@ BY_RELEVANCE = [OrderBy(field="relevance", direction="desc")]
 READ_ONLY = mcp_types.ToolAnnotations(
     read_only_hint=True, idempotent_hint=True, open_world_hint=False
 )
+# Not read-only, so Claude apps ask the user to approve sending it.
+SENDS_FEEDBACK = mcp_types.ToolAnnotations(
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=False,
+    open_world_hint=False,
+)
+SearchTool = Literal[
+    "search_documents",
+    "search_passages",
+    "get_passage",
+    "get_document",
+    "search_topics",
+]
+# Long enough for a detailed report, short enough to keep a log line readable.
+MAX_FEEDBACK_CHARS = 2000
+FeedbackText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=MAX_FEEDBACK_CHARS
+    ),
+]
+
+logger = get_logger(__name__)
 
 
 async def document_titles(
@@ -293,5 +320,33 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
         return TopicResults(
             results=[TopicHit.from_label(label) for label in results.results]
         )
+
+    @mcp.tool(description=descriptions.SEND_FEEDBACK, annotations=SENDS_FEEDBACK)
+    async def send_feedback(
+        comment: Annotated[
+            FeedbackText, Field(description=descriptions.FEEDBACK_COMMENT)
+        ],
+        search_query: Annotated[
+            FeedbackText | None, Field(description=descriptions.FEEDBACK_QUERY)
+        ] = None,
+        tool: Annotated[
+            SearchTool | None, Field(description=descriptions.FEEDBACK_TOOL)
+        ] = None,
+    ) -> FeedbackSent:
+        fields = {"mcp_feedback": comment}
+        # OpenTelemetry drops None attributes with a warning.
+        if search_query is not None:
+            fields["mcp_feedback_query"] = search_query
+        if tool is not None:
+            fields["mcp_feedback_tool"] = tool
+        # Its own line, so feedback can be picked out of the logs.
+        logger.info(
+            "Feedback: search MCP feedback tool=%s query=%r comment=%r",
+            tool,
+            search_query,
+            comment,
+            extra=fields,
+        )
+        return FeedbackSent(message="Recorded for Climate Policy Radar. Thank you.")
 
     return mcp

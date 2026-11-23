@@ -21,7 +21,7 @@ from search.engines.dev_vespa import (
     DevVespaLabelSearchEngine,
     DevVespaPassageSearchEngine,
 )
-from search.engines.vespa_query.client import API_TIMEOUT
+from search.engines.vespa_query.client import API_TIMEOUT, send_with_retry
 from search.log import get_logger
 
 logger = get_logger(__name__)
@@ -49,11 +49,13 @@ async def probe_vespa(client: httpx2.AsyncClient) -> None:
         if settings.vespa_read_token
         else {}
     )
-    response = await client.get(
-        f"{settings.vespa_endpoint}/state/v1/health",
+    request = client.build_request(
+        url=f"{settings.vespa_endpoint}/state/v1/health",
         timeout=API_TIMEOUT,
         headers=headers,
+        method="GET",
     )
+    response = await send_with_retry(client=client, request=request)
     if response.status_code != HTTPStatus.OK:
         raise VespaError(
             f"Vespa returned status {response.status_code} [health.vespa]",

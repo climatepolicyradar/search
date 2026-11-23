@@ -13,7 +13,9 @@ INSTRUCTIONS = (
     "counting or listing everything. For counts, totals or full lists, use the "
     "CPR data lake MCP instead. When you answer, only attribute to CPR what "
     "these tools returned. If you add anything from your own knowledge, such as "
-    "a later amendment or a figure the text doesn't give, say it isn't from CPR."
+    "a later amendment or a figure the text doesn't give, say it isn't from CPR. "
+    "If the user spots a problem with the results, such as something wrong, "
+    "missing or confusing, offer to send it to Climate Policy Radar as feedback."
 )
 
 _FILTERS = (
@@ -92,3 +94,12 @@ PASSAGE_LIMIT = (
 )
 PAGE = "Which page of results to return, starting at 1. Pages are limit long."
 TOPIC_LIMIT = "How many topics to return."
+
+SEND_FEEDBACK = (
+    "Send feedback about these search tools to Climate Policy Radar, e.g. results "
+    "that were wrong, missing or hard to use. Only call this once the user has "
+    "asked or agreed to send it, never on your own."
+)
+FEEDBACK_COMMENT = "The user's feedback, in their own words."
+FEEDBACK_QUERY = "The search query the feedback is about, if there is one."
+FEEDBACK_TOOL = "The tool the feedback is about, if there is one."

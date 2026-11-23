@@ -64,23 +64,33 @@ def test_documents_flow_feeds_the_documents_export_with_the_documents_deriver(
     assert call["derive_data_from_source"] is documents_flow.derive_document_data
 
 
-def test_labels_flow_feeds_the_materializer_file_with_no_deriver(
+def test_labels_flow_feeds_the_fusion_export_with_no_deriver(
     prefect_db, recorded_feeder_calls
 ) -> None:
     """
-    Labels feeds a single pre-materialized file and passes no deriver at all.
+    Labels from Fusion feed the dated `vespa_labels` export folder as-is.
 
-    `derive_data_from_source` is absent from the call rather than passed as
-    None, and there is no `s3_export_prefix` either - labels reads one fixed
-    key, not a dated export directory.
+    Each Fusion row is already a Vespa update operation, so no deriver is
+    passed. A folder prefix (not a `.jsonl` key) makes `vespa_feeder` pick the
+    newest timestamped snapshot, and `s3_export_prefix` is passed through so a
+    run can be pinned to one.
     """
     labels_flow.labels_feeder_flow()
 
     (call,) = recorded_feeder_calls
-    assert call["s3_bucket"] == "cpr-cache"
-    assert call["s3_prefix"] == "search/vespa/labels_feed_materializer.jsonl"
+    assert call["s3_bucket"] == "cpr-production-data-lake-fusion"
+    assert call["s3_prefix"] == "vespa/vespa_labels/"
+    assert call["s3_export_prefix"] is None
     assert "derive_data_from_source" not in call
-    assert "s3_export_prefix" not in call
+
+
+def test_labels_flow_passes_a_pinned_export_prefix_through(
+    prefect_db, recorded_feeder_calls
+) -> None:
+    labels_flow.labels_feeder_flow(s3_export_prefix="20261119T100000Z")
+
+    (call,) = recorded_feeder_calls
+    assert call["s3_export_prefix"] == "20261119T100000Z"
 
 
 # `_max_workers` is private, but `ThreadPoolTaskRunner` exposes the cap nowhere

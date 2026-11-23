@@ -7,6 +7,10 @@ from relevance.evaluators.evaluator import HasSearchPair, HasTotalSize
 
 @dataclass
 class Narrows[I](Evaluator[I, HasSearchPair[HasTotalSize], object]):
+    def get_default_evaluation_name(self) -> str:
+        """Name the assertion after what it checks."""
+        return "narrows"
+
     def evaluate(
         self,
         ctx: EvaluatorContext[I, HasSearchPair[HasTotalSize], object],
@@ -22,7 +26,7 @@ class Narrows[I](Evaluator[I, HasSearchPair[HasTotalSize], object]):
         reason = f"{narrower:,} hits vs {broader:,} for the broader query"
 
         return {
-            "Narrows passed": EvaluationReason(
+            f"{self.get_default_evaluation_name()} passed": EvaluationReason(
                 value=narrower <= broader,
                 reason=reason,
             ),
