@@ -32,9 +32,45 @@ OUTPUT = Path(__file__).parents[2] / "api" / "iso_geographies_data.py"
 WORLD_BANK_COUNTRIES = "https://api.worldbank.org/v2/country?format=json&per_page=400"
 REGION_IDS = {label.id for label in snowflake_geographies if label.type == "region"}
 
-# Territories the World Bank does not classify, awaiting a decision from policy.
-# Map an ISO alpha-3 code to a region id, e.g. {"REU": "region::SSF"}.
-REGION_OVERRIDES: dict[str, str] = {}
+# Territories the World Bank does not classify. Each takes the World Bank region closest
+# to its UN M49 region (ENRI-1968). Antarctica has no M49 region, so it stays without one.
+REGION_OVERRIDES: dict[str, str] = {
+    # Latin America & Caribbean
+    "AIA": "region::LCN",
+    "BES": "region::LCN",
+    "BLM": "region::LCN",
+    "BVT": "region::LCN",
+    "FLK": "region::LCN",
+    "GLP": "region::LCN",
+    "GUF": "region::LCN",
+    "MSR": "region::LCN",
+    "MTQ": "region::LCN",
+    "SGS": "region::LCN",
+    # East Asia & Pacific
+    "CCK": "region::EAS",
+    "CXR": "region::EAS",
+    "HMD": "region::EAS",
+    "NFK": "region::EAS",
+    "PCN": "region::EAS",
+    "TKL": "region::EAS",
+    "UMI": "region::EAS",
+    "WLF": "region::EAS",
+    # Sub-Saharan Africa
+    "ATF": "region::SSF",
+    "IOT": "region::SSF",
+    "MYT": "region::SSF",
+    "REU": "region::SSF",
+    "SHN": "region::SSF",
+    # Europe & Central Asia
+    "ALA": "region::ECS",
+    "GGY": "region::ECS",
+    "JEY": "region::ECS",
+    "SJM": "region::ECS",
+    # North America
+    "SPM": "region::NAC",
+    # Middle East & North Africa
+    "ESH": "region::MEA",
+}
 
 BRACKETED_SUFFIX = re.compile(r"\s*\[.*\]\s*$")
 
