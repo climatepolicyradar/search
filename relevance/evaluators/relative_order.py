@@ -11,6 +11,10 @@ class RanksAbove[I](Evaluator[I, HasResults[HasId], object]):
     lower: str
     k: int = 20
 
+    def get_default_evaluation_name(self) -> str:
+        """Name the metric after the cutoff it scores."""
+        return f"ranks_above@{self.k}"
+
     def evaluate(
         self,
         ctx: EvaluatorContext[I, HasResults[HasId], object],
@@ -24,7 +28,8 @@ class RanksAbove[I](Evaluator[I, HasResults[HasId], object]):
             lower_rank is None or higher_rank < lower_rank
         )
 
+        name = self.get_default_evaluation_name()
         return {
-            "RanksAbove": EvaluationReason(value=float(passed), reason=reason),
-            "RanksAbove passed": EvaluationReason(value=passed, reason=reason),
+            name: EvaluationReason(value=float(passed), reason=reason),
+            f"{name} passed": EvaluationReason(value=passed, reason=reason),
         }

@@ -1,0 +1,6 @@
+name: relevance
+description: Grafana alerts for relevance tests
+runtime:
+  name: python
+  options:
+    toolchain: uv
