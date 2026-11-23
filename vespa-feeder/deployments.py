@@ -7,7 +7,7 @@ Run with: `just deploy` from vespa-feeder/ (it sets PYTHONPATH=src)
 from dataclasses import dataclass
 
 import boto3
-from documents_flow import documents_feeder_flow, documents_fusion_feeder_flow
+from documents_flow import documents_feeder_flow
 from labels_flow import labels_feeder_flow
 from passages_flow import (
     passages_feeder_flow,
@@ -90,14 +90,6 @@ _FEEDS: list[VespaFeederDeployment] = [
     VespaFeederDeployment(
         flow=documents_feeder_flow,
         cron="30 8 * * *",
-        job_variables={"cpu": 1024, "memory": 4096},
-    ),
-    # Documents from fusion.published.vespa_documents. Deliberately unscheduled:
-    # it is triggered manually to check the Fusion source feeds the same
-    # documents as the feeder above, before that is swapped over. Same sizing as
-    # the documents feeder, as the rows carry the same passages.
-    VespaFeederDeployment(
-        flow=documents_fusion_feeder_flow,
         job_variables={"cpu": 1024, "memory": 4096},
     ),
     # Passages

@@ -50,20 +50,6 @@ def test_passages_flow_feeds_the_passages_export_with_the_passages_deriver(
     assert call["derive_data_from_source"] is passages_flow.derive_passage_data
 
 
-def test_documents_flow_feeds_the_documents_export_with_the_documents_deriver(
-    prefect_db, recorded_feeder_calls
-) -> None:
-    documents_flow.documents_feeder_flow()
-
-    (call,) = recorded_feeder_calls
-    assert call["s3_bucket"] == SNOWFLAKE_EXPORT_BUCKET
-    assert (
-        call["s3_prefix"]
-        == "production/published/pipeline_data_in_vespa_documents_updates_v1/"
-    )
-    assert call["derive_data_from_source"] is documents_flow.derive_document_data
-
-
 def test_labels_flow_feeds_the_fusion_export_with_no_deriver(
     prefect_db, recorded_feeder_calls
 ) -> None:
@@ -84,30 +70,28 @@ def test_labels_flow_feeds_the_fusion_export_with_no_deriver(
     assert "derive_data_from_source" not in call
 
 
-def test_documents_fusion_flow_feeds_the_fusion_export_with_the_fusion_deriver(
+def test_documents_flow_feeds_the_fusion_export_with_the_fusion_deriver(
     prefect_db, recorded_feeder_calls
 ) -> None:
     """
-    Test correct source for new flow.
+    Documents from Fusion feed the dated `vespa_documents` export folder.
 
-    Fusion documents are flat rows, so they need their own deriver to become
-    Vespa updates - the legacy documents deriver would find no `fields`.
+    Fusion rows are flat objects keyed by field name, not Vespa updates, so the
+    flow passes the deriver that wraps each one in an update operation.
     """
-    documents_flow.documents_fusion_feeder_flow()
+    documents_flow.documents_feeder_flow()
 
     (call,) = recorded_feeder_calls
     assert call["s3_bucket"] == "cpr-production-data-lake-fusion"
     assert call["s3_prefix"] == "vespa/vespa_documents/"
     assert call["s3_export_prefix"] is None
-    assert (
-        call["derive_data_from_source"] is documents_flow.derive_fusion_document_data
-    )
+    assert call["derive_data_from_source"] is documents_flow.derive_fusion_document_data
 
 
-def test_documents_fusion_flow_passes_a_pinned_export_prefix_through(
+def test_documents_flow_passes_a_pinned_export_prefix_through(
     prefect_db, recorded_feeder_calls
 ) -> None:
-    documents_flow.documents_fusion_feeder_flow(s3_export_prefix="20261119T100000Z")
+    documents_flow.documents_feeder_flow(s3_export_prefix="20261119T100000Z")
 
     (call,) = recorded_feeder_calls
     assert call["s3_export_prefix"] == "20261119T100000Z"
@@ -131,7 +115,6 @@ def test_labels_flow_passes_a_pinned_export_prefix_through(
     [
         (passages_flow.passages_feeder_flow, 8),
         (documents_flow.documents_feeder_flow, 4),
-        (documents_flow.documents_fusion_feeder_flow, 4),
         (labels_flow.labels_feeder_flow, 4),
     ],
 )
@@ -144,7 +127,6 @@ def test_flow_bounds_its_task_runner(flow, expected_max_workers: int) -> None:
     [
         passages_flow.passages_feeder_flow,
         documents_flow.documents_feeder_flow,
-        documents_flow.documents_fusion_feeder_flow,
         labels_flow.labels_feeder_flow,
     ],
 )

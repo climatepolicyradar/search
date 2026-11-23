@@ -123,33 +123,31 @@ Test it by deploying to a local Vespa (`cd vespa && just up && just deploy`).
 The e2e tests do this too. Nothing in the unit tests parses the schema, so a
 mistake there only shows up at deploy.
 
-### 3. Populate it: dbt or feeder
+### 3. Populate it: in the Fusion dbt models
 
-A new field is empty until something writes it. There are two places to do that.
+A new field is empty until something writes it. The documents feeder is a
+pass-through: every column of `fusion.published.vespa_documents` is assigned to
+the Vespa field of the same name, so the value has to be computed in the Fusion
+dbt project (`data-lake`, `fusion/models/transform/stg_vespa_documents.sql`).
 
-| Derive it in                                                                                                  | When                                                                                                         | Example                                                    |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| **dbt** (`data-lake`, `snowflake_models/models/transform/vespa/pipeline_data_in_vespa_documents_updates.sql`) | It needs a join or aggregation over other tables                                                             | `attributes_published_date`, `concepts`, `passages`        |
-| **The feeder** (`search`, `vespa-feeder/src/documents_flow.py`)                                               | It can be computed from the record alone: copied out of `attributes_string` or parsed from `document_source` | `deprecated_slug`, `principal_id`, `attributes_created_at` |
+- Add the column to `stg_vespa_documents` and select it in
+  `fusion/models/published/vespa_documents.sql`, in the position the field has
+  in `documents.sd`
+- Document it with a `data_type` in both `schema.yml` files. The contract is
+  enforced, so CI fails without it
+- Extend the `test_vespa_documents_routes_principal_vs_member` unit test and its
+  fixtures
+- Derive it as Vespa expects it. A column derived from another one (like
+  `distinct_concept_ids` or `attributes_created_at`) belongs in the final select
+  of `stg_vespa_documents`, not in the feeder
+- For a value that can be missing, decide between `''` (clears a stale value, as
+  `deprecated_slug` does) and null (as `attributes_created_at` does, so the
+  sort's `missing(...,last)` puts those documents last, rather than at 1970 or
+  0). Parse timestamps with a timezone (`try_to_timestamp_tz`) rather than
+  reading a timezone-less value as local time
 
-Prefer the feeder when either would work. It ships with the schema in one PR,
-has fast unit tests, and needs no dbt run.
-
-In the feeder:
-
-- Add a `derive_*` function that sets
-  `record["fields"]["<field>"] = {"assign": value}`, and call it from
-  `derive_document_data`
-- For a plain string copy, add the key to `_HOISTED_ATTRIBUTE_KEYS` instead.
-  That assigns `""` when the key is missing, which clears stale values
-- For anything that is parsed, such as a date or a number, leave the field unset
-  when the value is missing or unparsable. The sort's `missing(...,last)` then
-  puts those documents last, rather than at 1970 or 0. Follow `docs/errors.md`
-  if a bad value should fail the run instead
-- Read a timestamp with no timezone as UTC (`replace(tzinfo=UTC)`), not as local
-  time
-- Unit-test it in `vespa-feeder/tests/test_documents_flow.py`, including the
-  missing and unparsable cases
+The feeder needs no change: `derive_fusion_document_data` in
+`vespa-feeder/src/documents_flow.py` only wraps each row in an update operation.
 
 #### The e2e test helper
 
@@ -165,12 +163,12 @@ as local time.
 
 ### 4. Deploy the schema and feeder, then re-feed
 
-Merge PR 1 and wait for the Vespa and feeder deploys to finish. If the field is
-derived in dbt, merge that PR now and let dbt run.
+Merge PR 1 and wait for the Vespa deploy to finish. Merge the data-lake PR that
+adds the column too, and let the Fusion run export it.
 
 Then re-feed so every document gets the value. The documents feed runs daily
 (the `search-vespa-feeder-documents` Prefect deployment, 08:30 UTC). To get it
-sooner, run that deployment by hand once the new feeder image is deployed.
+sooner, run that deployment by hand once the Fusion export has the column.
 
 Check it worked:
 
