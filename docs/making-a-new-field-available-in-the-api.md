@@ -151,15 +151,14 @@ The feeder needs no change: `derive_fusion_document_data` in
 
 #### The e2e test helper
 
-`search/vespa/documents_feed_materializer.py` no longer feeds production.
-Nothing runs it, and the `vespa/justfile` `extract-documents` recipe downloads a
-stale snapshot. The e2e tests still use its `_source_document_to_vespa_update`
-to turn a test `Document` into a Vespa update.
+The e2e tests turn a test `Document` into a Vespa update with
+`_source_document_to_vespa_update` in `tests/vespa_e2e.py`. It is separate from
+the Fusion export, so the two can drift: it writes `document_source`, which the
+API reads back, and builds the other fields itself.
 
-So: if an e2e test needs the new field, populate it there too, and unit-test it
-in `tests/vespa/test_documents_feed_materializer.py`. If not, leave it alone.
-Note that it has its own `_to_unix_timestamp`, which reads timezone-less values
-as local time.
+So: if an e2e test needs the new field, populate it there too. If not, leave it
+alone. Note that it has its own `_to_unix_timestamp`, which reads timezone-less
+values as local time.
 
 ### 4. Deploy the schema and feeder, then re-feed
 
@@ -217,7 +216,7 @@ results by eye.
 [ ] Schema field: type, attribute / fast-search / summary chosen     (search: documents.sd)
 [ ] Added to each document-summary that returns it                   (search: documents.sd)
 [ ] Populated in the Fusion dbt models, with a unit test             (data-lake: fusion)
-[ ] E2e test helper populates it, if an e2e test needs it            (search: documents_feed_materializer.py)
+[ ] E2e test helper populates it, if an e2e test needs it            (search: tests/vespa_e2e.py)
 [ ] Schema and feeder deployed, then re-fed and checked              (search: Prefect)
 [ ] Engine and API: sort / filter / response model, with tests       (search, separate PR)
 [ ] Frontend behind `new-search`, merged after the API is deployed   (navigator-frontend)
