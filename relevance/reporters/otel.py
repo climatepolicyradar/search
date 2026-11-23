@@ -1,5 +1,7 @@
+from collections import defaultdict
 from collections.abc import Generator
 from contextlib import contextmanager
+from statistics import mean
 
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.metrics import Meter
@@ -31,29 +33,42 @@ def init(dataset_name: str) -> Generator[Meter]:
         provider.shutdown()
 
 
+def score_averages[I, O, M](
+    report: EvaluationReport[I, O, M],
+) -> dict[str, float]:
+    """Average scores by evaluation name, merging the copies pydantic_evals suffixes with _2."""
+    scores: dict[str, list[float]] = defaultdict(list)
+    for case in report.cases:
+        for result in case.scores.values():
+            scores[result.name].append(result.value)
+
+    return {name: mean(values) for name, values in scores.items()}
+
+
 def report[I, O](
     meter: Meter,
     dataset_name: str,
     report: EvaluationReport[I, O, dict[str, str]],
 ) -> None:
+    branch = common.branch()
+
     score_gauge = meter.create_gauge(
         description="Per-suite average evaluator scores",
         name="relevance_score",
         unit="1",
     )
 
-    if averages := report.averages():
-        for name, value in averages.scores.items():
-            score_gauge.set(
-                attributes={"suite": dataset_name, "metric": name},
-                amount=value,
-            )
+    for name, value in score_averages(report).items():
+        score_gauge.set(
+            attributes={"suite": dataset_name, "metric": name, "branch": branch},
+            amount=value,
+        )
 
-        if averages.assertions is not None:
-            score_gauge.set(
-                attributes={"suite": dataset_name, "metric": "pass_rate"},
-                amount=averages.assertions,
-            )
+    if (averages := report.averages()) and averages.assertions is not None:
+        score_gauge.set(
+            attributes={"suite": dataset_name, "metric": "pass_rate", "branch": branch},
+            amount=averages.assertions,
+        )
 
     error_counter = meter.create_counter(
         description="Evaluator cases that errored",
@@ -62,6 +77,6 @@ def report[I, O](
     )
 
     error_counter.add(
-        attributes={"suite": dataset_name},
+        attributes={"suite": dataset_name, "branch": branch},
         amount=len(report.failures),
     )
