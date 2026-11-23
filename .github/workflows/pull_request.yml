@@ -20,6 +20,7 @@ jobs:
       run-warn-linguistics-reindex: ${{ steps.filter.outputs.run-warn-linguistics-reindex }}
       run-search-pulumi-preview: ${{ steps.filter.outputs.run-search-pulumi-preview }}
       run-k6-pulumi-preview: ${{ steps.filter.outputs.run-k6-pulumi-preview }}
+      run-relevance-pulumi-preview: ${{ steps.filter.outputs.run-relevance-pulumi-preview }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -52,6 +53,8 @@ jobs:
               - 'infra/**'
             run-k6-pulumi-preview:
               - 'k6/**'
+            run-relevance-pulumi-preview:
+              - 'relevance/infra/**'
 
   lint:
     permissions:
@@ -230,6 +233,23 @@ jobs:
       - uses: pulumi/actions@v7
       - working-directory: ./k6/infra
         run: pulumi preview --stack climatepolicyradar/search-k6/${{ matrix.environment }} --suppress-outputs
+
+  relevance-pulumi-preview:
+    runs-on: ubuntu-latest
+    name: Pulumi Preview (relevance)
+    if: needs.changes.outputs.run-relevance-pulumi-preview == 'true'
+    environment: production
+    needs: [changes]
+    env:
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: extractions/setup-just@v4
+      - run: just install
+      - uses: pulumi/actions@v7
+      - working-directory: ./relevance/infra
+        run: pulumi preview --stack climatepolicyradar/relevance/production --suppress-outputs
 
   dependabot:
     name: Dependabot Auto-pilot

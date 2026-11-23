@@ -26,6 +26,7 @@ jobs:
       run-search-pulumi-up: ${{ steps.filter.outputs.run-search-pulumi-up }}
       run-k6-pulumi-up: ${{ steps.filter.outputs.run-k6-pulumi-up }}
       run-observability-pulumi-up: ${{ steps.filter.outputs.run-observability-pulumi-up }}
+      run-relevance-pulumi-up: ${{ steps.filter.outputs.run-relevance-pulumi-up }}
       run-deploy: ${{ steps.filter.outputs.run-deploy }}
       run-vespa-deploy: ${{ steps.filter.outputs.run-vespa-deploy }}
       run-prefect-deploy: ${{ steps.filter.outputs.run-prefect-deploy }}
@@ -50,6 +51,8 @@ jobs:
               - 'infra/**'
             run-k6-pulumi-up:
               - 'k6/**'
+            run-relevance-pulumi-up:
+              - 'relevance/infra/**'
             run-observability-pulumi-up:
               - 'observability/**'
             run-deploy:
@@ -183,6 +186,17 @@ jobs:
       stack: climatepolicyradar/search-k6
       # No AWS resources here (Grafana Cloud only) - skip the AWS credentials
       # step entirely rather than requiring an unused IAM role.
+      aws-role: ""
+
+  relevance-pulumi-up:
+    uses: ./.github/workflows/pulumi_up.yml
+    secrets: inherit
+    needs: [changes]
+    if: needs.changes.outputs.run-relevance-pulumi-up == 'true'
+    with:
+      environment: production
+      working-directory: ./relevance/infra
+      stack: climatepolicyradar/relevance
       aws-role: ""
 
   observability-pulumi-up:
