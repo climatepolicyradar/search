@@ -95,4 +95,4 @@ venvPath = "."
 venv = ".venv"
 # vespa-feeder keeps its modules under `src` and installs nothing as a package,
 # so without this every intra-package import there reads as unresolved.
-extraPaths = ["vespa-feeder/src"]
+extraPaths = ["vespa-feeder/src", "vespa-feeder/tests/stream"]
