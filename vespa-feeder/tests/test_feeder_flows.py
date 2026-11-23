@@ -84,6 +84,33 @@ def test_labels_flow_feeds_the_fusion_export_with_no_deriver(
     assert "derive_data_from_source" not in call
 
 
+def test_documents_fusion_flow_feeds_the_fusion_export_with_the_fusion_deriver(
+    prefect_db, recorded_feeder_calls
+) -> None:
+    """
+    Fusion documents are flat rows, so they need their own deriver to become
+    Vespa updates - the legacy documents deriver would find no `fields`.
+    """
+    documents_flow.documents_fusion_feeder_flow()
+
+    (call,) = recorded_feeder_calls
+    assert call["s3_bucket"] == "cpr-production-data-lake-fusion"
+    assert call["s3_prefix"] == "vespa/vespa_documents/"
+    assert call["s3_export_prefix"] is None
+    assert (
+        call["derive_data_from_source"] is documents_flow.derive_fusion_document_data
+    )
+
+
+def test_documents_fusion_flow_passes_a_pinned_export_prefix_through(
+    prefect_db, recorded_feeder_calls
+) -> None:
+    documents_flow.documents_fusion_feeder_flow(s3_export_prefix="20261119T100000Z")
+
+    (call,) = recorded_feeder_calls
+    assert call["s3_export_prefix"] == "20261119T100000Z"
+
+
 def test_labels_flow_passes_a_pinned_export_prefix_through(
     prefect_db, recorded_feeder_calls
 ) -> None:
@@ -102,6 +129,7 @@ def test_labels_flow_passes_a_pinned_export_prefix_through(
     [
         (passages_flow.passages_feeder_flow, 8),
         (documents_flow.documents_feeder_flow, 4),
+        (documents_flow.documents_fusion_feeder_flow, 4),
         (labels_flow.labels_feeder_flow, 4),
     ],
 )
@@ -114,6 +142,7 @@ def test_flow_bounds_its_task_runner(flow, expected_max_workers: int) -> None:
     [
         passages_flow.passages_feeder_flow,
         documents_flow.documents_feeder_flow,
+        documents_flow.documents_fusion_feeder_flow,
         labels_flow.labels_feeder_flow,
     ],
 )
