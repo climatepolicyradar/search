@@ -87,7 +87,8 @@ def test_labels_flow_feeds_the_fusion_export_with_no_deriver(
 def test_documents_fusion_flow_feeds_the_fusion_export_with_the_fusion_deriver(
     prefect_db, recorded_feeder_calls
 ) -> None:
-    """Test correct source for new flow.
+    """
+    Test correct source for new flow.
 
     Fusion documents are flat rows, so they need their own deriver to become
     Vespa updates - the legacy documents deriver would find no `fields`.
