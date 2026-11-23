@@ -873,6 +873,7 @@ async def test_label_search_returns_label_fed_without_label_source(vespa_app: Ve
 def test_label_upserted_without_label_source_keeps_the_existing_one(vespa_app: Vespa):
     """A Fusion feed over a label that already has a ``label_source`` must neither fail nor wipe it."""
     with_source = _taxonomy_vespa_label("geography::Atlantis", "geography", "Atlantis")
+    original_label_source = _label_source_from_taxonomy("geography::Atlantis", "geography", "Atlantis")
     _feed_label(vespa_app, with_source)
     _feed_label(vespa_app, _taxonomy_vespa_label("geography::Atlantis", "geography", "Atlantis", with_label_source=False))
 
@@ -882,7 +883,7 @@ def test_label_upserted_without_label_source_keeps_the_existing_one(vespa_app: V
         timeout=5,
     )
     response.raise_for_status()
-    assert response.json()["fields"]["label_source"] == with_source["label_source"]
+    assert response.json()["fields"]["label_source"] == original_label_source
 
 
 @pytest.mark.xfail(
