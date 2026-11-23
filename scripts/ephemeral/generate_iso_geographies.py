@@ -1,5 +1,7 @@
 """
-Regenerate `api/iso_geographies_data.py`: the ISO countries and subdivisions that
+Regenerate `api/iso_geographies_data.py` from pycountry and the World Bank API.
+
+The output holds the ISO countries and subdivisions that
 `api/geographies_taxonomy.py` does not already hold.
 
     PYTHONPATH=. uv run --with pycountry python scripts/ephemeral/generate_iso_geographies.py
@@ -38,7 +40,8 @@ BRACKETED_SUFFIX = re.compile(r"\s*\[.*\]\s*$")
 
 
 def world_bank_regions() -> dict[str, str]:
-    with urllib.request.urlopen(WORLD_BANK_COUNTRIES, timeout=30) as response:
+    # WORLD_BANK_COUNTRIES is a constant https URL, so the scheme is not user-controlled.
+    with urllib.request.urlopen(WORLD_BANK_COUNTRIES, timeout=30) as response:  # nosec B310
         _, countries = json.load(response)
 
     regions = {c["id"]: f"region::{c['region']['id']}" for c in countries}
@@ -72,7 +75,11 @@ def subdivision_rows(known_ids: set[str]) -> list[tuple[str, str, str]]:
         parent = parents[code]
         if parent is not None:
             return f"subdivision::{parent}"
-        return f"country::{pycountry.countries.get(alpha_2=subdivisions[code].country_code).alpha_3}"
+        country_code = subdivisions[code].country_code
+        country = pycountry.countries.get(alpha_2=country_code)
+        if country is None:
+            raise ValueError(f"No ISO country for {country_code} ({code})")
+        return f"country::{country.alpha_3}"
 
     return [
         (
