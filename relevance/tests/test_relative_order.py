@@ -29,6 +29,6 @@ from relevance.tests.fakes import context, results
 def test_ranks_above(ids: list[str], passed: bool, reason: str) -> None:
     outcome = RanksAbove(higher="h", lower="l", k=2).evaluate(context(results(*ids)))
     assert outcome == {
-        "RanksAbove": EvaluationReason(value=float(passed), reason=reason),
-        "RanksAbove passed": EvaluationReason(value=passed, reason=reason),
+        "ranks_above@2": EvaluationReason(value=float(passed), reason=reason),
+        "ranks_above@2 passed": EvaluationReason(value=passed, reason=reason),
     }

@@ -11,6 +11,10 @@ class Recall[I](Evaluator[I, HasResults[HasId], object]):
     k: int = 10
     threshold: float = 1.0
 
+    def get_default_evaluation_name(self) -> str:
+        """Name the metric after the cutoff it scores."""
+        return f"recall@{self.k}"
+
     def evaluate(
         self,
         ctx: EvaluatorContext[I, HasResults[HasId], object],
@@ -21,9 +25,10 @@ class Recall[I](Evaluator[I, HasResults[HasId], object]):
         reason = f"missing from top {self.k}: {missing}" if missing else None
         score = (len(self.expected) - len(missing)) / len(self.expected)
 
+        name = self.get_default_evaluation_name()
         return {
-            "Recall": EvaluationReason(value=score, reason=reason),
-            "Recall passed": EvaluationReason(
+            name: EvaluationReason(value=score, reason=reason),
+            f"{name} passed": EvaluationReason(
                 value=score >= self.threshold,
                 reason=reason,
             ),
