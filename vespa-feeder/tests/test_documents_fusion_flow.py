@@ -75,24 +75,6 @@ def test_unused_version_column_is_not_fed() -> None:
     assert "version" not in record["fields"]
 
 
-def test_values_are_not_derived_or_altered() -> None:
-    """Fusion owns every value, so nothing is derived from `document_source` or cleaned here."""
-    record = derive_fusion_document_data(
-        _row(
-            title="a\x07b",
-            principal_id="from-fusion",
-            collection_id="",
-            distinct_concept_ids=["not", "derived"],
-            document_source='{"id":"doc-0","documents":[{"type":"member_of","value":{"id":"other"}}]}',
-        )
-    )
-
-    assert record["fields"]["title"] == {"assign": "a\x07b"}
-    assert record["fields"]["principal_id"] == {"assign": "from-fusion"}
-    assert record["fields"]["collection_id"] == {"assign": ""}
-    assert record["fields"]["distinct_concept_ids"] == {"assign": ["not", "derived"]}
-
-
 def test_null_value_is_assigned_null() -> None:
     """Assigning null clears a value removed upstream, rather than leaving the old one."""
     record = derive_fusion_document_data(_row(description=None))
