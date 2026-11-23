@@ -29,9 +29,8 @@ from search.engines.dev_vespa import (
     FieldFilter,
     Filter,
 )
-from search.vespa.documents_feed_materializer import _source_document_to_vespa_update
 from search.vespa.models import VespaAssign, VespaUpdate
-from tests.vespa_e2e import _TEST_SETTINGS, get_search_ids, rule_cases
+from tests.vespa_e2e import get_search_ids, rule_cases, _source_document_to_vespa_update, _TEST_SETTINGS
 
 pytest_plugins = ["tests.vespa_e2e"]
 
