@@ -29,9 +29,6 @@ from search.config import (
     vespa_private_key_read_only_ssm_key,
     vespa_public_cert_read_only_ssm_key,
     vespa_url_ssm_key,
-    wikibase_password_ssm_key,
-    wikibase_url_ssm_key,
-    wikibase_username_ssm_key,
 )
 
 # pulumi config
@@ -413,27 +410,6 @@ elif stack != "review":
         name=vespa_public_cert_read_only_ssm_key,
         type=ssm.ParameterType.SECURE_STRING,
         value=config.get("VESPA_PUBLIC_CERT_READ_ONLY"),
-    )
-
-    wikibase_url_ssm = ssm.Parameter(
-        wikibase_url_ssm_key,
-        name=wikibase_url_ssm_key,
-        type=ssm.ParameterType.SECURE_STRING,
-        value=config.get("WIKIBASE_URL"),
-    )
-
-    wikibase_username_ssm = ssm.Parameter(
-        wikibase_username_ssm_key,
-        name=wikibase_username_ssm_key,
-        type=ssm.ParameterType.SECURE_STRING,
-        value=config.get("WIKIBASE_USERNAME"),
-    )
-
-    wikibase_password_ssm = ssm.Parameter(
-        wikibase_password_ssm_key,
-        name=wikibase_password_ssm_key,
-        type=ssm.ParameterType.SECURE_STRING,
-        value=config.get("WIKIBASE_PASSWORD"),
     )
 
     # -----

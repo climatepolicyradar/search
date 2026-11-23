@@ -11,12 +11,6 @@ config:
     secure: AAABAG9zVvGc81u1tFZ7EtU/7XN5YllAORGTrjcBZaP/fgaeo08mkPyY79NmJimia+ym6mwoTMJLIEcvhLRj4DhtAsNhC8n1PlAS2w==
   search:vespa_read_token:
     secure: AAABAJqwZ2M3S1jgvaMVTGefH4rpLhJ3JGzm9da4lPiz6/PfLGw7LobD82AGWqraQbIsWDqu6W4t66eKU9OyNDucM1u+6/olMPuunaWme/bgzSvsoqQB
-  search:WIKIBASE_URL:
-    secure: AAABAIB9+gpmmW8hItrDRUByc9wjMsrlpDK0JDwjCM0H6DyZbR1zai6NDuxE4vrJUWFOve8DpUYxmExxmIWQmgbYDJsSUfNFjw==
-  search:WIKIBASE_USERNAME:
-    secure: AAABAJrB8xohmU2+XrdirAvjQb5ncF2EnSS+uwHvw37QM1fW2ZdYsBz5VgBl3dVuSxhp
-  search:WIKIBASE_PASSWORD:
-    secure: AAABALWz9R+J13C89TPkxNnWXDRBbqLuXSNPUOfcfKSW7j1S+WrdmHD+Az0ewI58pZxXFlEm0/O1ymVd/+sFKw==
   search:vespa_dev_read_token:
     secure: AAABAPB1HCdeACsUocIQ/4M3sH/jp+vxtLJLmcxkVzrpSonrOqwtMUaHH4JLI/tUG8NIozpCfe160F/D0Gh+Sj+JgKNku5rzJWkZVWloCDO/iwkHJsVe
   search:vespa_dev_write_token:
