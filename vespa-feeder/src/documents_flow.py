@@ -1,4 +1,3 @@
-import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -178,65 +177,31 @@ def derive_collection_id(
     return record
 
 
-# The C0 control characters other than tab, newline and carriage return. The
-# legacy export stripped these in SQL (`pipeline_data_in_vespa_documents_updates`),
-# so Fusion rows have to be cleaned here to feed the same text.
-_CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
-
-
-def _without_control_characters(text: str | None) -> str | None:
-    return None if text is None else _CONTROL_CHARACTERS.sub("", text)
-
-
 def derive_fusion_document_data(row: dict[str, Any]) -> dict[str, Any]:
     """
     Turn a `fusion.published.vespa_documents` row into a Vespa update.
 
     A Fusion row is one flat object keyed by the Vespa field names, unlike the
-    legacy export whose rows are already `{update, create, fields}`. So every
-    column is assigned to the field of the same name, with three exceptions:
-
-    - `version` is always null upstream and is not fed.
-    - `title` and `description` have control characters stripped, as the legacy
-      export did.
-    - `document_source` is a nested object in the export but a string in Vespa.
-
-    `principal_id` is taken from the row: Fusion owns it, so it is not derived
-    again from `document_source`. `collection_id`, the hoisted attributes,
-    `attributes_created_at` and `distinct_concept_ids` are not in Fusion, so
-    they are derived here exactly as for the legacy export.
+    legacy export whose rows are already `{update, create, fields}`. Fusion
+    owns every value, including the derived ones (`principal_id`,
+    `collection_id`, the hoisted attributes, `attributes_created_at` and
+    `distinct_concept_ids`), so each column is assigned as-is to the field of
+    the same name. The one exception is `version`, which is always null
+    upstream and not fed.
     """
     document_id = row.get("id")
     if not document_id:
         raise ValueError(f"Fusion document row has no id: columns={sorted(row)}")
 
-    fields: dict[str, Any] = {
-        column: {"assign": value} for column, value in row.items() if column != "version"
-    }
-    fields["title"] = {"assign": _without_control_characters(row.get("title"))}
-    fields["description"] = {
-        "assign": _without_control_characters(row.get("description"))
-    }
-
-    document_source = row.get("document_source")
-    if document_source is not None and not isinstance(document_source, str):
-        fields["document_source"] = {
-            "assign": orjson.dumps(document_source).decode()
-        }
-
-    record: dict[str, Any] = {
+    return {
         "update": f"id:documents:documents::{document_id}",
         "create": True,
-        "fields": fields,
+        "fields": {
+            column: {"assign": value}
+            for column, value in row.items()
+            if column != "version"
+        },
     }
-
-    if (parsed_source := _document_source(record)) is not None:
-        record = derive_collection_id(record, parsed_source)
-    record = derive_hoisted_attributes(record)
-    record = derive_created_timestamp(record)
-    record = derive_distinct_concept_ids(record)
-
-    return record
 
 
 # max_workers bounds disk, Vespa connections and - critically - the number of
