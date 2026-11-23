@@ -33,11 +33,11 @@ message_template = alerting.MessageTemplate(
     name="relevance",
     template=(
         '{{ define "relevance.title" }}'
-        "Relevance regression in {{ len .Alerts.Firing }} metric(s)"
+        "Relevance {{ .CommonLabels.alertname }}: {{ len .Alerts.Firing }} firing"
         "{{ end }}\n"
         '{{ define "relevance.text" }}'
         "{{ range .Alerts.Firing }}"
-        "• *{{ .Labels.suite }}* `{{ .Labels.metric }}`: {{ .Annotations.summary }}\n"
+        "• {{ .Annotations.summary }}\n"
         "{{ end }}"
         "{{ end }}"
     ),
@@ -69,13 +69,20 @@ alerting.RuleGroup(
         alerting.RuleGroupRuleArgs(
             name="metric-degradation",
             condition="drop_too_large",
-            no_data_state="OK",
+            no_data_state="NoData",
             annotations={
-                "summary": '{{ $labels.suite }} {{ $labels.metric }} dropped by {{ printf "%.3f" $values.score_drop.Value }}',
+                "summary": (
+                    "{{ if $labels.suite }}"
+                    '{{ $labels.suite }} {{ $labels.metric }} dropped by {{ printf "%.3f" $values.score_drop.Value }}'
+                    "{{ else }}"
+                    "No relevance scores from main in the last day"
+                    "{{ end }}"
+                ),
                 "description": "Latest run is that far below the previous 7-day average.",
             },
             notification_settings=alerting.RuleGroupRuleNotificationSettingsArgs(
                 contact_point=contact_point.name,
+                repeat_interval="24h",
             ),
             datas=[
                 alerting.RuleGroupRuleDataArgs(
@@ -90,8 +97,8 @@ alerting.RuleGroup(
                             "refId": "score_drop",
                             "instant": True,
                             "expr": (
-                                'max by (suite, metric) (avg_over_time(relevance_score_ratio[7d] offset 1d)) - '
-                                'max by (suite, metric) (last_over_time(relevance_score_ratio[1d]))'
+                                'max by (suite, metric) (avg_over_time(relevance_score_ratio{branch="main"}[7d] offset 1d)) - '
+                                'max by (suite, metric) (last_over_time(relevance_score_ratio{branch="main"}[1d]))'
                             ),
                         }
                     ),
@@ -109,6 +116,52 @@ alerting.RuleGroup(
                             "refId": "drop_too_large",
                             "expression": "score_drop",
                             "conditions": [{"evaluator": {"type": "gt", "params": [0.02]}}],
+                        }
+                    ),
+                ),
+            ],
+        ),
+        alerting.RuleGroupRuleArgs(
+            name="run-errors",
+            condition="has_errors",
+            no_data_state="OK",
+            annotations={
+                "summary": "{{ $labels.suite }} had {{ $values.errors.Value }} erroring case(s)",
+                "description": "Cases that errored are left out of the score averages.",
+            },
+            notification_settings=alerting.RuleGroupRuleNotificationSettingsArgs(
+                contact_point=contact_point.name,
+                repeat_interval="24h",
+            ),
+            datas=[
+                alerting.RuleGroupRuleDataArgs(
+                    ref_id="errors",
+                    datasource_uid=prometheus.uid,
+                    relative_time_range=alerting.RuleGroupRuleDataRelativeTimeRangeArgs(
+                        from_=600,
+                        to=0,
+                    ),
+                    model=json.dumps(
+                        {
+                            "refId": "errors",
+                            "instant": True,
+                            "expr": 'max by (suite) (last_over_time(relevance_errors_total{branch="main"}[1d]))',
+                        }
+                    ),
+                ),
+                alerting.RuleGroupRuleDataArgs(
+                    ref_id="has_errors",
+                    datasource_uid="__expr__",
+                    relative_time_range=alerting.RuleGroupRuleDataRelativeTimeRangeArgs(
+                        from_=0,
+                        to=0,
+                    ),
+                    model=json.dumps(
+                        {
+                            "type": "threshold",
+                            "refId": "has_errors",
+                            "expression": "errors",
+                            "conditions": [{"evaluator": {"type": "gt", "params": [0]}}],
                         }
                     ),
                 ),

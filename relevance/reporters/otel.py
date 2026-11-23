@@ -50,6 +50,8 @@ def report[I, O](
     dataset_name: str,
     report: EvaluationReport[I, O, dict[str, str]],
 ) -> None:
+    branch = common.branch()
+
     score_gauge = meter.create_gauge(
         description="Per-suite average evaluator scores",
         name="relevance_score",
@@ -58,13 +60,13 @@ def report[I, O](
 
     for name, value in score_averages(report).items():
         score_gauge.set(
-            attributes={"suite": dataset_name, "metric": name},
+            attributes={"suite": dataset_name, "metric": name, "branch": branch},
             amount=value,
         )
 
     if (averages := report.averages()) and averages.assertions is not None:
         score_gauge.set(
-            attributes={"suite": dataset_name, "metric": "pass_rate"},
+            attributes={"suite": dataset_name, "metric": "pass_rate", "branch": branch},
             amount=averages.assertions,
         )
 
@@ -75,6 +77,6 @@ def report[I, O](
     )
 
     error_counter.add(
-        attributes={"suite": dataset_name},
+        attributes={"suite": dataset_name, "branch": branch},
         amount=len(report.failures),
     )
