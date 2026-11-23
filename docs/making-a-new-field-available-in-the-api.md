@@ -6,7 +6,7 @@ sort on, filter on, return in results, or group into facets.
 
 ```text
 data-in-pipeline ──▶ Snowflake (dbt) ──▶ S3 export ──▶ vespa-feeder ──▶ Vespa ──▶ engine ──▶ API ──▶ frontend
-   (attributes)       (feed rows)                     (derived fields)  (schema)
+   (attributes)     (derived fields)                  (pass-through)   (schema)
 ```
 
 The worked example throughout is FUS-961, which added `attributes_created_at` so
@@ -20,7 +20,7 @@ Answer these first. They decide which steps you need.
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Is the value already in the document?       | Most document metadata is already in `attributes`, and so in `attributes_string`, `attributes_double` or `attributes_boolean` in Vespa. If not, start at step 1 |
 | What does the API need to do with it?       | Sort, range-filter, exact-filter, return, facet or rank. See [Do you need a new field?](#do-you-need-a-new-field)                                               |
-| Where should the value be derived?          | In dbt or in the feeder. See step 3                                                                                                                             |
+| Where should the value be derived?          | In the Fusion dbt models. The feeder only passes it through. See step 3                                                                                         |
 | Which document summaries need it?           | A field outside a summary is never returned. Vespa's `default` summary is not used. See step 2                                                                  |
 | Does it change a field that already exists? | Changing a type or how a field is indexed needs a validation override, and every document needs re-feeding before the field is trustworthy                      |
 
@@ -57,8 +57,8 @@ another. So the order has to come from separate PRs. Two rules decide it:
 | PR  | Repo                 | Contains                                                         | Merge when                                                                  |
 | --- | -------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | 0   | `navigator-backend`  | The value in data-in `attributes` (step 1), only if it's missing | Any time. Then wait for it to reach the Snowflake export                    |
-| 1   | `search`             | Schema field, feeder derivation, e2e test helper (steps 2 and 3) | After PR 0's value is in the export                                         |
-| 1b  | `data-lake`          | dbt derivation (step 3), only if the field is derived in dbt     | After PR 1's schema is deployed, because the feed must not write it earlier |
+| 1   | `search`             | Schema field, e2e test helper (steps 2 and 3)                    | After PR 0's value is in the export                                         |
+| 1b  | `data-lake`          | The Fusion dbt column (step 3)                                   | After PR 1's schema is deployed, because the feed must not write it earlier |
 | 2   | `search`             | Engine and API (step 5)                                          | After the re-feed (step 4) has finished and been checked                    |
 | 3   | `navigator-frontend` | Using the field (step 6)                                         | After PR 2 is deployed                                                      |
 
@@ -67,9 +67,9 @@ When you can combine them:
 - **No engine or API change needed** (e.g. the value is returned through
   `attributes`): PR 1 is the whole job, or you need no schema change at all. See
   [Do you need a new field?](#do-you-need-a-new-field)
-- **Schema and feeder together in PR 1** is fine. They deploy at the same time,
-  and the feeder only runs at 08:30 UTC. Don't run the feeder by hand until the
-  Vespa deploy has finished
+- **The Fusion column can follow the schema straight away.** Fusion exports at
+  01:00 UTC and the feeder runs at 08:30 UTC, so merging PR 1b once the Vespa
+  deploy has finished is enough. Don't run the feeder by hand before then
 - **PR 1 and PR 2 together** only if no client will call the new field until the
   re-feed is done. It saves a PR but loses the check that the data is right
   before anything relies on it. Prefer keeping them separate
@@ -216,7 +216,7 @@ results by eye.
 [ ] Value is in data-in `attributes` and arrives in production       (navigator-backend)
 [ ] Schema field: type, attribute / fast-search / summary chosen     (search: documents.sd)
 [ ] Added to each document-summary that returns it                   (search: documents.sd)
-[ ] Populated in the feeder or in dbt, with unit tests               (search: vespa-feeder | data-lake)
+[ ] Populated in the Fusion dbt models, with a unit test             (data-lake: fusion)
 [ ] E2e test helper populates it, if an e2e test needs it            (search: documents_feed_materializer.py)
 [ ] Schema and feeder deployed, then re-fed and checked              (search: Prefect)
 [ ] Engine and API: sort / filter / response model, with tests       (search, separate PR)
