@@ -1592,18 +1592,6 @@ subdivision_EC_Y = Label(
     value="Pastaza",
     labels=[LabelRelationship(type="subconcept_of", value=country_ECU)],
 )
-subdivision_ES_19572 = Label(
-    type="subdivision",
-    id="subdivision::ES-19572",
-    value="Andalucía",
-    labels=[LabelRelationship(type="subconcept_of", value=country_ESP)],
-)
-subdivision_ES_19574 = Label(
-    type="subdivision",
-    id="subdivision::ES-19574",
-    value="Canarias",
-    labels=[LabelRelationship(type="subconcept_of", value=country_ESP)],
-)
 subdivision_ES_CT = Label(
     type="subdivision",
     id="subdivision::ES-CT",
@@ -1820,12 +1808,6 @@ subdivision_IN_SK = Label(
     value="Sikkim",
     labels=[LabelRelationship(type="subconcept_of", value=country_IND)],
 )
-subdivision_IN_TG = Label(
-    type="subdivision",
-    id="subdivision::IN-TG",
-    value="Telangana",
-    labels=[LabelRelationship(type="subconcept_of", value=country_IND)],
-)
 subdivision_IN_TN = Label(
     type="subdivision",
     id="subdivision::IN-TN",
@@ -1836,12 +1818,6 @@ subdivision_IN_UP = Label(
     type="subdivision",
     id="subdivision::IN-UP",
     value="Uttar Pradesh",
-    labels=[LabelRelationship(type="subconcept_of", value=country_IND)],
-)
-subdivision_IN_UT = Label(
-    type="subdivision",
-    id="subdivision::IN-UT",
-    value="Uttarakhand",
     labels=[LabelRelationship(type="subconcept_of", value=country_IND)],
 )
 subdivision_IN_WB = Label(
@@ -2330,12 +2306,6 @@ subdivision_ZA_GP = Label(
     value="Gauteng",
     labels=[LabelRelationship(type="subconcept_of", value=country_ZAF)],
 )
-subdivision_ZA_NL = Label(
-    type="subdivision",
-    id="subdivision::ZA-NL",
-    value="Kwazulu-Natal",
-    labels=[LabelRelationship(type="subconcept_of", value=country_ZAF)],
-)
 subdivision_ZA_WC = Label(
     type="subdivision",
     id="subdivision::ZA-WC",
@@ -2641,8 +2611,6 @@ snowflake_geographies = [
     subdivision_DE_NW,
     subdivision_DE_TH,
     subdivision_EC_Y,
-    subdivision_ES_19572,
-    subdivision_ES_19574,
     subdivision_ES_CT,
     subdivision_ES_GA,
     subdivision_ES_NA,
@@ -2679,10 +2647,8 @@ snowflake_geographies = [
     subdivision_IN_PY,
     subdivision_IN_RJ,
     subdivision_IN_SK,
-    subdivision_IN_TG,
     subdivision_IN_TN,
     subdivision_IN_UP,
-    subdivision_IN_UT,
     subdivision_IN_WB,
     subdivision_IT_21,
     subdivision_IT_25,
@@ -2764,7 +2730,6 @@ snowflake_geographies = [
     subdivision_US_WV,
     subdivision_US_WY,
     subdivision_ZA_GP,
-    subdivision_ZA_NL,
     subdivision_ZA_WC,
     subdivision_BR_RN,
     subdivision_CA_NS,

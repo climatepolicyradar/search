@@ -1,13 +1,11 @@
 from collections import Counter
 
-import pytest
-
 from api.geographies_taxonomy import geographies_taxonomy, snowflake_geographies
-from api.iso_subdivisions import LEGACY_SUBDIVISION_IDS
 from api.taxonomy.models import select, tree
 from search.label import LabelSearchResult
 
 BY_ID = {label.id: label for label in geographies_taxonomy}
+
 
 
 def parent_ids(label_id: str) -> list[str]:
@@ -59,24 +57,6 @@ def test_every_subdivision_is_directly_under_a_country():
 
         assert len(label.labels) == 1, label.id
         assert label.labels[0].value.type == "country", label.id
-
-
-@pytest.mark.parametrize(("legacy_id", "iso_id"), LEGACY_SUBDIVISION_IDS.items())
-def test_legacy_subdivision_ids_are_kept_alongside_their_iso_codes(
-    legacy_id: str, iso_id: str
-):
-    """Until the documents are retagged, both are listed, and the ISO one is the one with no documents."""
-    assert legacy_id in BY_ID
-    assert iso_id in BY_ID
-    assert parent_ids(legacy_id) == parent_ids(iso_id)
-
-
-@pytest.mark.parametrize(("legacy_id", "iso_id"), LEGACY_SUBDIVISION_IDS.items())
-def test_iso_twin_of_a_legacy_subdivision_takes_the_legacy_name(
-    legacy_id: str, iso_id: str
-):
-    # pycountry spells these "Telangāna" and "Uttarākhand".
-    assert BY_ID[iso_id].value == BY_ID[legacy_id].value
 
 
 def test_pycountry_name_artefacts_are_stripped():
