@@ -15,6 +15,10 @@ project = pulumi_config.require("project")
 cloudwatch_namespace = pulumi_config.require("cloudwatch_namespace")
 metric_collection_rate = pulumi_config.require("metric_collection_rate")
 lambda_timeout_seconds = pulumi_config.require("lambda_timeout_seconds")
+# When false, the schedule rule is disabled so the lambda is no longer invoked.
+# Resources are kept so the stack can be re-enabled by flipping this flag.
+enabled = pulumi_config.get_bool("enabled")
+enabled = True if enabled is None else enabled
 
 # SSM parameter names default to the original values so existing stacks are unaffected.
 # These are needed to avoid collisions as the prod stack and the search-production stack
@@ -114,6 +118,7 @@ rule = aws.cloudwatch.EventRule(
     f"event-rule-{project}",
     description="Schedule to declare the schedule of metric collection",
     schedule_expression=metric_collection_rate,
+    state="ENABLED" if enabled else "DISABLED",
 )
 pulumi.export("event_rule_arn", rule.arn)
 
