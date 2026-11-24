@@ -19,3 +19,5 @@ config:
     tags:
       Team: fusion
       Environment: production
+  search:posthog_api_key:
+    secure: AAABALmNdTZ5sL8Rihvz9sKdwRR5pU7Qw1vh8+Ojz3ktP1UPWiFlTdaxpE7w4gBckLnyZEdLLz6yxgvMH+0ZCoZYofb2hOqO60P3ZqOsEw==
