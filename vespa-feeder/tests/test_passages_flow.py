@@ -1,6 +1,6 @@
 """Unit tests for the passages feeder's record derivers."""
 
-from passages_flow import derive_heading_text, derive_passage_data
+from vespa_feeder.passages_flow import derive_heading_text, derive_passage_data
 
 
 def _record_with_topics() -> dict:

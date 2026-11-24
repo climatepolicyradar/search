@@ -1,14 +1,14 @@
 from prefect.client.schemas.objects import State
-from slack_notify import SlackNotify
-from task_runner import task_runner
-from vespa_feeder import (
+
+from prefect import flow
+from vespa_feeder.feeder import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_SAMPLE_RATE,
     RUN_TIMEOUT_SECONDS,
     vespa_feeder,
 )
-
-from prefect import flow
+from vespa_feeder.slack_notify import SlackNotify
+from vespa_feeder.task_runner import task_runner
 
 
 @flow(

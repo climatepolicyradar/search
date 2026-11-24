@@ -4,12 +4,13 @@ import logging
 import os
 from pathlib import Path
 
-from feeder_metrics import FeederMetrics
-from observability.metrics import MetricsService
-from observability.prefect_telemetry import PrefectTelemetry
-from observability.service_manifest import ServiceManifest
-from observability.telemetry_config import TelemetryConfig
 from opentelemetry import trace
+
+from vespa_feeder.feeder_metrics import FeederMetrics
+from vespa_feeder.observability.metrics import MetricsService
+from vespa_feeder.observability.prefect_telemetry import PrefectTelemetry
+from vespa_feeder.observability.service_manifest import ServiceManifest
+from vespa_feeder.observability.telemetry_config import TelemetryConfig
 
 # Inside `src` so it travels with the flow code. Prefect runs that code from
 # a temp directory, where a path resolved above `__file__` does not exist.

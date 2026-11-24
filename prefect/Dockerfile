@@ -1,4 +1,4 @@
-# trunk-ignore-all(checkov,terrascan,hadolint)
+# trunk-ignore-all(checkov,hadolint)
 # 👆all are optimisations which is not the phase of work we are in at the moment
 
 # This file needs to be built from the root of the repo

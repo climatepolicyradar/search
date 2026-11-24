@@ -12,7 +12,7 @@ friends keep resolving for the tests that reach for them.
 
 import re
 
-from errors import FailedDocument, FeedResult
+from vespa_feeder.errors import FailedDocument, FeedResult
 
 # The CLI's `logResult` drops a line only when it is a retry or a success, so
 # these survive without `--verbose` - which would log every successful op too,

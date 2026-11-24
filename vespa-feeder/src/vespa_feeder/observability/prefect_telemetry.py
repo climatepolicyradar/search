@@ -27,8 +27,8 @@ from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 from pydantic import BaseModel
 
 import prefect
-from observability.base_telemetry import BaseTelemetry
-from observability.telemetry_config import TelemetryConfig
+from vespa_feeder.observability.base_telemetry import BaseTelemetry
+from vespa_feeder.observability.telemetry_config import TelemetryConfig
 
 _LOGGER = logging.getLogger(__name__)
 

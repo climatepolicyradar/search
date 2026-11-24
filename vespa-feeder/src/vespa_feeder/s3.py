@@ -19,7 +19,8 @@ import orjson
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from mypy_boto3_s3 import S3Client
-from telemetry import tracer
+
+from vespa_feeder.telemetry import tracer
 
 # Socket-level bounds for every S3/SSM call.
 #

@@ -50,7 +50,6 @@ deployments.py
 
 # Local tooling
 justfile
-uv.lock
 
 # IDE
 .vscode

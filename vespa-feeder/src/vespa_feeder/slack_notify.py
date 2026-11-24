@@ -7,7 +7,8 @@ from prefect.flows import Flow
 from prefect.runtime import deployment
 from prefect.settings import PREFECT_UI_URL
 from prefect_slack.credentials import SlackCredentials
-from telemetry import feeder_metrics, force_flush, get_feed_stats
+
+from vespa_feeder.telemetry import feeder_metrics, force_flush, get_feed_stats
 
 logger = logging.getLogger(__name__)
 

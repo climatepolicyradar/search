@@ -7,9 +7,10 @@ feed-specific metrics like record counts and durations.
 
 from typing import Optional
 
-from observability.metrics import MetricsService
 from opentelemetry.metrics import Counter, Histogram
 from opentelemetry.metrics import _Gauge as Gauge
+
+from vespa_feeder.observability.metrics import MetricsService
 
 
 class FeederMetrics:

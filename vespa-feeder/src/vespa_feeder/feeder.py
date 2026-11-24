@@ -7,7 +7,7 @@ flow, per batch of S3 keys:
 - feed them to Vespa via the `vespa feed` CLI.
 
 Domain-specific flows (labels_flow.py, documents_flow.py, passages_flow.py)
-import `vespa_feeder` and compose it with their own S3 source and (if any)
+import `vespa_feeder.feeder` and compose it with their own S3 source and (if any)
 deriver function. Nothing in this module is domain-specific.
 """
 
@@ -24,14 +24,6 @@ from pathlib import Path
 from types import FrameType
 
 import orjson
-from errors import (
-    BatchAbandoned,
-    FeedResult,
-    VespaError,
-    VespaFeedError,
-    VespaFeedResponse,
-    VespaResponseError,
-)
 from prefect.artifacts import create_markdown_artifact
 from prefect.cache_policies import NO_CACHE
 from prefect.client.schemas.objects import State
@@ -39,12 +31,22 @@ from prefect.exceptions import MissingContextError
 from prefect.futures import PrefectFuture
 from prefect.runtime import deployment, flow_run
 from prefect.states import Failed
-from run_summary import (
+
+from prefect import get_run_logger, task
+from vespa_feeder.errors import (
+    BatchAbandoned,
+    FeedResult,
+    VespaError,
+    VespaFeedError,
+    VespaFeedResponse,
+    VespaResponseError,
+)
+from vespa_feeder.run_summary import (
     _build_failure_message,
     _build_run_summary_markdown,
     _parse_failed_documents,
 )
-from s3 import (
+from vespa_feeder.s3 import (
     delete_materialised_s3_files,
     get_latest_s3_export_prefix,
     get_ssm_parameter,
@@ -52,7 +54,7 @@ from s3 import (
     materialise_derived_files,
     materialise_s3_files,
 )
-from telemetry import (
+from vespa_feeder.telemetry import (
     feeder_metrics,
     force_flush,
     set_feed_stats,
@@ -60,8 +62,6 @@ from telemetry import (
     trace,
     tracer,
 )
-
-from prefect import get_run_logger, task
 
 logger = logging.getLogger(__name__)
 

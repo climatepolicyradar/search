@@ -4,9 +4,10 @@ import logging
 import subprocess
 
 import pytest
-import s3 as s3_module
-import vespa_feeder as feeder
-from helpers import FakeVespaFeed, put_s3_objects, vespa_feed_stdout
+from vespa_feeder import feeder
+from vespa_feeder import s3 as s3_module
+
+from tests.helpers import FakeVespaFeed, put_s3_objects, vespa_feed_stdout
 
 
 @pytest.mark.parametrize(

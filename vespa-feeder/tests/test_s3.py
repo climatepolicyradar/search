@@ -3,9 +3,10 @@
 from pathlib import Path
 
 import pytest
-import s3 as s3_module
-import vespa_feeder as feeder
-from helpers import put_s3_objects, read_jsonl, write_jsonl
+from vespa_feeder import feeder
+from vespa_feeder import s3 as s3_module
+
+from tests.helpers import put_s3_objects, read_jsonl, write_jsonl
 
 
 def _put_export_prefixes(s3_client, bucket: str, prefix: str, names: list[str]) -> None:

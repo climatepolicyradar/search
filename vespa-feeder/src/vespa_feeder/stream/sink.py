@@ -9,8 +9,9 @@ from typing import IO, Any, cast
 
 import orjson
 from pydantic import BaseModel, ConfigDict, Field
-from s3 import get_ssm_parameter
-from telemetry import feeder_metrics, set_feed_stats
+
+from vespa_feeder.s3 import get_ssm_parameter
+from vespa_feeder.telemetry import feeder_metrics, set_feed_stats
 
 VESPA_FEED_SETTINGS = [
     # Controls throughput, ~16 matches the old feeders, could maybe push higher

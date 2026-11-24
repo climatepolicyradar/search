@@ -1,24 +1,25 @@
 """
 Prefect deployment for the vespa-feeder flows.
 
-Run with: `just deploy` from vespa-feeder/ (it sets PYTHONPATH=src)
+Run with: `just deploy` from vespa-feeder/
 """
 
 from dataclasses import dataclass
 
 import boto3
-from documents_flow import documents_feeder_flow
-from labels_flow import labels_feeder_flow
-from passages_flow import (
-    passages_feeder_flow,
-)
 from prefect.client.schemas.objects import (
     ConcurrencyLimitConfig,
     ConcurrencyLimitStrategy,
 )
 from prefect.docker import DockerImage
 from prefect.schedules import Cron
+from prefect.types.entrypoint import EntrypointType
 from prefect.variables import Variable
+from vespa_feeder.documents_flow import documents_feeder_flow
+from vespa_feeder.labels_flow import labels_feeder_flow
+from vespa_feeder.passages_flow import (
+    passages_feeder_flow,
+)
 
 from prefect import Flow
 
@@ -139,5 +140,6 @@ if __name__ == "__main__":
             schedule=Cron(feed.cron, slug=deployment_name) if feed.cron else None,
             build=False,
             push=False,
+            entrypoint_type=EntrypointType.MODULE_PATH,
         )
         print(f"Deployed {deployment_name}")
