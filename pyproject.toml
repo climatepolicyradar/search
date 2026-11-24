@@ -8,7 +8,7 @@ dependencies = [
   "boto3>=1.44.9",
   "fastapi[standard]>=0.143.3",
   "httpx2>=2.16.2",
-  "posthog>=7.91.1",
+  "posthog>=8.1.0",
   # @related: PREFECT_VERSION
   # This should match the Dockerfiles using prefect as that's what we deploy to prefect
   # which can cause unexpected results.
