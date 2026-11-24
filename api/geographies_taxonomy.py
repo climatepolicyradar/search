@@ -15,7 +15,7 @@ data-lake is not available.
 Claude used to build the relationships.
 """
 
-from api.iso_geographies import with_iso_geographies
+from api.iso_subdivisions import with_iso_subdivisions
 from search.data_in_models import (
     Label,
     LabelRelationship,
@@ -2771,5 +2771,5 @@ snowflake_geographies = [
     country_XKX,
 ]
 
-# The labels above are only the geographies that have documents. @see: ./iso_geographies.py
-geographies_taxonomy = with_iso_geographies(snowflake_geographies)
+# The labels above are only the geographies that have documents. @see: ./iso_subdivisions.py
+geographies_taxonomy = with_iso_subdivisions(snowflake_geographies)
