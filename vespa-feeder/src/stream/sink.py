@@ -12,15 +12,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from s3 import get_ssm_parameter
 from telemetry import feeder_metrics, set_feed_stats
 
-# connections: Controls throughput, ~16 matches the old feeders, could maybe push higher
-# deadline: Fails if imports keep failing for 10 minutes without a success
-# progress: Logs stats out to stderr for debugging
-
 VESPA_FEED_SETTINGS = [
+    # Controls throughput, ~16 matches the old feeders, could maybe push higher
     "--connections",
     "16",
+    # Fails if imports keep failing for 10 minutes without a success
     "--deadline",
     "600",
+    # Log stats out to stderr every 60s for debugging
     "--progress",
     "60",
 ]
