@@ -1,25 +1,30 @@
-# trunk-ignore-all(checkov,terrascan,hadolint)
-# @related: PREFECT_VERSION
-FROM prefecthq/prefect:3.8.6-python3.13
+# syntax=docker/dockerfile:1
+# trunk-ignore-all(checkov)
+FROM ghcr.io/astral-sh/uv:0.13.0-python3.13-trixie-slim
 
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends "tini=0.19.0-*" \
+    && rm -rf /var/lib/apt/lists/*
 
-ARG VESPA_CLI_VERSION=8.675.23
-RUN curl -fsSL "https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz" \
-    | tar -xzf - -C /usr/local/bin --strip-components=2 "vespa-cli_${VESPA_CLI_VERSION}_linux_amd64/bin/vespa"
+ARG VESPA_CLI_VERSION=8.788.13
+ARG VESPA_CLI_SHA256=a76a15b632fdd35a8cefe281d26581ba29ed049f9b7d5658d2c11c8fe8e4df96
 
+ADD --unpack=true --checksum=sha256:${VESPA_CLI_SHA256} \
+    https://github.com/vespa-engine/vespa/releases/download/v${VESPA_CLI_VERSION}/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64.tar.gz /opt/
+
+RUN ln -s /opt/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64/bin/vespa /usr/local/bin/vespa
 WORKDIR /opt/prefect/vespa-feeder
-# `src` so the flow modules keep importing as `vespa_feeder`, `errors` and so
-# on - Prefect stores a deployment's entrypoint as a module name, not a path,
-# so those names have to resolve exactly as they did before the move.
-ENV PYTHONPATH=/opt/prefect/vespa-feeder/src
 
-# Install Python deps first so this layer is cached independently of source changes.
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+# https://docs.astral.sh/uv/guides/integration/docker/
+ENV UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1 UV_NO_DEV=1 UV_PYTHON_DOWNLOADS=0 UV_PROJECT_ENVIRONMENT=/usr/local
 
-# The whole source tree, rather than a line per module. Listing files
-# individually meant a new module built a working image that crashed on import
-# at run time - `errors.py` was added and missed, and nothing caught it until
-# the feeder ran. A directory copy cannot drift from what the code imports.
-COPY src/ ./src/
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project
+
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=src,target=src \
+    uv sync --locked --no-editable
+
+ENTRYPOINT ["tini", "-g", "--"]

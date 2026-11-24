@@ -9,7 +9,7 @@ the Vespa operation itself. Fusion owns every value, so that is all it does.
 from typing import Any
 
 import pytest
-from documents_flow import derive_fusion_document_data
+from vespa_feeder.documents_flow import derive_fusion_document_data
 
 
 def _row(**overrides: Any) -> dict[str, Any]:

@@ -5,9 +5,9 @@ import signal
 import subprocess
 
 import pytest
-import run_summary
-import vespa_feeder as feeder
-from helpers import (
+from vespa_feeder import feeder, run_summary
+
+from tests.helpers import (
     FakeVespaFeed,
     FakeVespaFeedProcess,
     vespa_feed_stdout,

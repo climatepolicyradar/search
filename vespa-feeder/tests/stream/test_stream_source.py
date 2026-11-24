@@ -1,7 +1,8 @@
 import pytest
-from helpers import put_s3_objects
 from mypy_boto3_s3 import S3Client
-from stream.source import S3Source
+from vespa_feeder.stream.source import S3Source
+
+from tests.helpers import put_s3_objects
 
 
 def test_s3_source_reads_only_the_newest_export(

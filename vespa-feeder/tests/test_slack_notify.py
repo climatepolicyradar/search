@@ -4,11 +4,10 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-import slack_notify
-import telemetry
 from prefect.client.schemas.objects import FlowRun, State, StateType
 from prefect.runtime import deployment
-from slack_notify import SlackNotify
+from vespa_feeder import slack_notify, telemetry
+from vespa_feeder.slack_notify import SlackNotify
 
 from prefect import flow
 

@@ -19,20 +19,10 @@ dependencies = [
 dev = ["pytest", "moto>=5.2.5"]
 
 [build-system]
-requires = ["setuptools>=61"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
 
-# No Python packages to bundle — this pyproject.toml exists only to declare
-# dependencies so the Dockerfile can run `pip install .` rather than listing
-# them inline.
-[tool.setuptools]
-packages = []
-
-# `packages = []` above means nothing here is installed as a package, so the
-# modules under test are importable by path alone. `pythonpath` keeps `src` on
-# sys.path so `import vespa_feeder` still resolves from tests/.
 # Declaring any pytest config here also makes this directory pytest's rootdir,
 # rather than it falling through to the repo root's pyproject.toml.
 [tool.pytest.ini_options]
-pythonpath = ["src"]
 testpaths = ["tests"]

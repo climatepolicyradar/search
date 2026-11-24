@@ -14,7 +14,7 @@ fails loudly.
 """
 
 import pytest
-from passages_derived_data import (
+from vespa_feeder.passages_derived_data import (
     is_page_header_or_footer,
     looks_like_demoted_section,
     looks_like_reference_list,

@@ -2,24 +2,24 @@ import re
 from collections import Counter
 from typing import TypedDict
 
-from passages_derived_data import (
+from prefect.client.schemas.objects import State
+
+from prefect import flow
+from vespa_feeder.feeder import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_SAMPLE_RATE,
+    RUN_TIMEOUT_SECONDS,
+    vespa_feeder,
+)
+from vespa_feeder.passages_derived_data import (
     is_page_header_or_footer,
     looks_like_demoted_section,
     looks_like_reference_list,
     looks_like_short_heading,
     looks_like_table_of_contents,
 )
-from prefect.client.schemas.objects import State
-from slack_notify import SlackNotify
-from task_runner import task_runner
-from vespa_feeder import (
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_SAMPLE_RATE,
-    RUN_TIMEOUT_SECONDS,
-    vespa_feeder,
-)
-
-from prefect import flow
+from vespa_feeder.slack_notify import SlackNotify
+from vespa_feeder.task_runner import task_runner
 
 # `topic["value"]`` arrives as a classifier's repr, e.g. `BertBasedClassifier("procedural` justice")`
 # The classifier name varies, but the label text is always the sole quoted argument.

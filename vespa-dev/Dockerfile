@@ -1,4 +1,4 @@
-# trunk-ignore-all(checkov,terrascan,hadolint)
+# trunk-ignore-all(checkov,hadolint)
 # @related: PREFECT_VERSION
 FROM prefecthq/prefect:3.8.6-python3.13
 

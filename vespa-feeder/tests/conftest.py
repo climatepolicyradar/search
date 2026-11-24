@@ -5,10 +5,10 @@ from unittest.mock import create_autospec
 
 import boto3
 import pytest
-import vespa_feeder as feeder
-from feeder_metrics import FeederMetrics
 from moto import mock_aws
 from prefect.testing.utilities import prefect_test_harness
+from vespa_feeder import feeder
+from vespa_feeder.feeder_metrics import FeederMetrics
 
 
 def pytest_configure() -> None:
@@ -83,7 +83,7 @@ def prefect_run_identity(monkeypatch):
     name like `tuscan-elephant`, and the dashboard groups by it. Patching them
     here lets the tests assert the production shape instead.
     """
-    import vespa_feeder as feeder
+    from vespa_feeder import feeder
 
     monkeypatch.setattr(feeder.deployment, "name", "search-vespa-feeder-passages")
     monkeypatch.setattr(feeder.flow_run, "name", "tuscan-elephant")

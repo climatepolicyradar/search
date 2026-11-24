@@ -4,7 +4,7 @@ from io import BytesIO
 import orjson
 import pytest
 from pydantic import ValidationError
-from stream.sink import VespaFeedSummary, VespaSink, VespaStoppedReading
+from vespa_feeder.stream.sink import VespaFeedSummary, VespaSink, VespaStoppedReading
 
 
 def vespa_summary(operations: int, ok: int) -> bytes:

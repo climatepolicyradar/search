@@ -10,8 +10,7 @@ one file per batch, where a batch count and a file count look identical.
 from pathlib import Path
 
 import pytest
-import run_summary
-import vespa_feeder as feeder
+from vespa_feeder import feeder, run_summary
 
 
 def _result(

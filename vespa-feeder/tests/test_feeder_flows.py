@@ -8,11 +8,9 @@ another flow's deriver. These run the real flows under `prefect_test_harness`
 with `vespa_feeder` replaced, and assert on the arguments it received.
 """
 
-import documents_flow
-import labels_flow
-import passages_flow
 import pytest
-from slack_notify import SlackNotify
+from vespa_feeder import documents_flow, labels_flow, passages_flow
+from vespa_feeder.slack_notify import SlackNotify
 
 SNOWFLAKE_EXPORT_BUCKET = "cpr-prod-snowflake-data-export"
 

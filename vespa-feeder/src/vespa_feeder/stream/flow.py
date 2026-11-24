@@ -1,5 +1,5 @@
-from stream.sink import Sink
-from stream.source import Source
+from vespa_feeder.stream.sink import Sink
+from vespa_feeder.stream.source import Source
 
 
 class Flow[A]:
