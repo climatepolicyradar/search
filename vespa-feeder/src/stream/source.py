@@ -11,6 +11,7 @@ from mypy_boto3_s3 import S3Client
 from s3transfer.utils import S3_RETRYABLE_DOWNLOAD_ERRORS
 
 logger = logging.getLogger(__name__)
+MAX_ATTEMPTS = 5
 
 
 class Source[A](ABC):
@@ -65,14 +66,14 @@ class S3Source(Source[dict[str, Any]]):
     def lines(self) -> Generator[dict[str, Any]]:
         """Yield every JSON line of the latest export."""
         for key in self._bucket_keys(max(self._export_prefixes())):
-            for attempt in range(1, 6):
+            for attempt in range(1, MAX_ATTEMPTS + 1):
                 try:
                     yield from self._object_lines(key)
                     break
                 except S3_RETRYABLE_DOWNLOAD_ERRORS:
-                    if attempt == 5:
+                    if attempt == MAX_ATTEMPTS:
                         raise
                     logger.warning(
                         f"Re-reading s3://{self._bucket}/{key} after a broken stream "
-                        f"(attempt {attempt}/5)"
+                        f"(attempt {attempt}/{MAX_ATTEMPTS})"
                     )
