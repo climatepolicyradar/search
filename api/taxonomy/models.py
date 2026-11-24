@@ -15,6 +15,7 @@ class TaxonomyNode(BaseModel):
     id: str
     type: str
     value: str
+    description: str | None
     alternative_labels: list[str]
     count: int
     children: list["TaxonomyNode"]
@@ -67,6 +68,7 @@ class LabelNode:
     id: str
     type: str
     value: str
+    description: str | None
     is_root: bool
     children: list["LabelNode"]
     alternative_labels: list[str]
@@ -138,6 +140,7 @@ class LabelNode:
             count=counts.get(self.id, 0),
             alternative_labels=self.alternative_labels,
             children=[child.response(counts) for child in self.children],
+            description=self.description,
         )
 
 
@@ -150,6 +153,7 @@ def tree(labels: Sequence[LabelSearchResult]) -> list[LabelNode]:
        if label.id in nodes_by_id:
            existing = nodes_by_id[label.id]
            alternatives = [*existing.alternative_labels, *label.alternative_labels]
+           existing.description = existing.description or label.description
            existing.alternative_labels = list(dict.fromkeys(alternatives))
            return existing
 
@@ -158,6 +162,7 @@ def tree(labels: Sequence[LabelSearchResult]) -> list[LabelNode]:
            type=label.type,
            value=label.value,
            alternative_labels=list(dict.fromkeys(label.alternative_labels)),
+           description=label.description,
            is_root=True,
            children=[],
         )
@@ -197,6 +202,7 @@ def _pruned(
         value=node.value,
         is_root=node.is_root,
         children=children,
+        description=node.description,
         alternative_labels=node.alternative_labels,
     )
 

@@ -72,6 +72,7 @@ def test_labels_endpoint_serialises_data_in_label_results(
         "type": "concept",
         "value": "indigenous people",
         "alternative_labels": ["first nations", "aboriginal peoples"],
+        "description": None,
         "labels": [],
     }
 
