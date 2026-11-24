@@ -626,6 +626,7 @@ elif stack != "review":
                 max_task_count=8,
             ),
         ],
+        # so we don't race permissions to read SSM against the app deploying
         opts=pulumi.ResourceOptions(depends_on=[ecs_execution_ssm_policy]),
     )
     pulumi.export(
