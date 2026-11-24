@@ -29,9 +29,6 @@ from search.config import (
     vespa_private_key_read_only_ssm_key,
     vespa_public_cert_read_only_ssm_key,
     vespa_url_ssm_key,
-    wikibase_password_ssm_key,
-    wikibase_url_ssm_key,
-    wikibase_username_ssm_key,
 )
 
 # pulumi config
@@ -225,6 +222,13 @@ elif stack != "review":
         value=config.get("vespa_read_token"),
     )
 
+    posthog_api_key = ssm.Parameter(
+        "posthog-api-key",
+        name="/search/posthog/api_key",
+        type=ssm.ParameterType.SECURE_STRING,
+        value=config.require_secret("posthog_api_key"),
+    )
+
     # Used by vespa-dev/feed_from_production.py's feed_and_remove_shard task, run on the
     # Prefect ECS work pool (mvp-prod-ecs) - not provisioned by this stack, so its
     # task role isn't granted read access here. See vespa/app/services.xml for the
@@ -415,27 +419,6 @@ elif stack != "review":
         value=config.get("VESPA_PUBLIC_CERT_READ_ONLY"),
     )
 
-    wikibase_url_ssm = ssm.Parameter(
-        wikibase_url_ssm_key,
-        name=wikibase_url_ssm_key,
-        type=ssm.ParameterType.SECURE_STRING,
-        value=config.get("WIKIBASE_URL"),
-    )
-
-    wikibase_username_ssm = ssm.Parameter(
-        wikibase_username_ssm_key,
-        name=wikibase_username_ssm_key,
-        type=ssm.ParameterType.SECURE_STRING,
-        value=config.get("WIKIBASE_USERNAME"),
-    )
-
-    wikibase_password_ssm = ssm.Parameter(
-        wikibase_password_ssm_key,
-        name=wikibase_password_ssm_key,
-        type=ssm.ParameterType.SECURE_STRING,
-        value=config.get("WIKIBASE_PASSWORD"),
-    )
-
     # -----
     # ECS Express Mode
     # -----
@@ -499,13 +482,14 @@ elif stack != "review":
             "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
         ],
     )
-    iam.RolePolicy(
+    ecs_execution_ssm_policy = iam.RolePolicy(
         f"{application_name}-ecs-execution-ssm-policy",
         name=f"{application_name}-ecs-execution-ssm-policy",
         role=ecs_task_execution_role.name,
         policy=pulumi.Output.all(
             vespa_endpoint_arn=vespa_endpoint.arn,
             vespa_read_token_arn=vespa_read_token.arn,
+            posthog_api_key_arn=posthog_api_key.arn,
         ).apply(
             lambda args: json.dumps(
                 {
@@ -517,6 +501,7 @@ elif stack != "review":
                             "Resource": [
                                 args["vespa_endpoint_arn"],
                                 args["vespa_read_token_arn"],
+                                args["posthog_api_key_arn"],
                             ],
                         }
                     ],
@@ -601,6 +586,9 @@ elif stack != "review":
                 ExpressGatewayServicePrimaryContainerSecretArgs(
                     name="VESPA_READ_TOKEN", value_from=vespa_read_token.arn
                 ),
+                ExpressGatewayServicePrimaryContainerSecretArgs(
+                    name="POSTHOG_API_KEY", value_from=posthog_api_key.arn
+                ),
             ],
         ),
         health_check_path=HEALTH_CHECK_PATH,
@@ -638,6 +626,8 @@ elif stack != "review":
                 max_task_count=8,
             ),
         ],
+        # so we don't race permissions to read SSM against the app deploying
+        opts=pulumi.ResourceOptions(depends_on=[ecs_execution_ssm_policy]),
     )
     pulumi.export(
         "ecs_express_service_url",

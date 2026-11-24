@@ -6,7 +6,7 @@ sort on, filter on, return in results, or group into facets.
 
 ```text
 data-in-pipeline ──▶ Snowflake (dbt) ──▶ S3 export ──▶ vespa-feeder ──▶ Vespa ──▶ engine ──▶ API ──▶ frontend
-   (attributes)       (feed rows)                     (derived fields)  (schema)
+   (attributes)     (derived fields)                  (pass-through)   (schema)
 ```
 
 The worked example throughout is FUS-961, which added `attributes_created_at` so
@@ -20,7 +20,7 @@ Answer these first. They decide which steps you need.
 | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Is the value already in the document?       | Most document metadata is already in `attributes`, and so in `attributes_string`, `attributes_double` or `attributes_boolean` in Vespa. If not, start at step 1 |
 | What does the API need to do with it?       | Sort, range-filter, exact-filter, return, facet or rank. See [Do you need a new field?](#do-you-need-a-new-field)                                               |
-| Where should the value be derived?          | In dbt or in the feeder. See step 3                                                                                                                             |
+| Where should the value be derived?          | In the Fusion dbt models. The feeder only passes it through. See step 3                                                                                         |
 | Which document summaries need it?           | A field outside a summary is never returned. Vespa's `default` summary is not used. See step 2                                                                  |
 | Does it change a field that already exists? | Changing a type or how a field is indexed needs a validation override, and every document needs re-feeding before the field is trustworthy                      |
 
@@ -57,8 +57,8 @@ another. So the order has to come from separate PRs. Two rules decide it:
 | PR  | Repo                 | Contains                                                         | Merge when                                                                  |
 | --- | -------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | 0   | `navigator-backend`  | The value in data-in `attributes` (step 1), only if it's missing | Any time. Then wait for it to reach the Snowflake export                    |
-| 1   | `search`             | Schema field, feeder derivation, e2e test helper (steps 2 and 3) | After PR 0's value is in the export                                         |
-| 1b  | `data-lake`          | dbt derivation (step 3), only if the field is derived in dbt     | After PR 1's schema is deployed, because the feed must not write it earlier |
+| 1   | `search`             | Schema field, e2e test helper (steps 2 and 3)                    | After PR 0's value is in the export                                         |
+| 1b  | `data-lake`          | The Fusion dbt column (step 3)                                   | After PR 1's schema is deployed, because the feed must not write it earlier |
 | 2   | `search`             | Engine and API (step 5)                                          | After the re-feed (step 4) has finished and been checked                    |
 | 3   | `navigator-frontend` | Using the field (step 6)                                         | After PR 2 is deployed                                                      |
 
@@ -67,9 +67,9 @@ When you can combine them:
 - **No engine or API change needed** (e.g. the value is returned through
   `attributes`): PR 1 is the whole job, or you need no schema change at all. See
   [Do you need a new field?](#do-you-need-a-new-field)
-- **Schema and feeder together in PR 1** is fine. They deploy at the same time,
-  and the feeder only runs at 08:30 UTC. Don't run the feeder by hand until the
-  Vespa deploy has finished
+- **The Fusion column can follow the schema straight away.** Fusion exports at
+  01:00 UTC and the feeder runs at 08:30 UTC, so merging PR 1b once the Vespa
+  deploy has finished is enough. Don't run the feeder by hand before then
 - **PR 1 and PR 2 together** only if no client will call the new field until the
   re-feed is done. It saves a PR but loses the check that the data is right
   before anything relies on it. Prefer keeping them separate
@@ -123,54 +123,51 @@ Test it by deploying to a local Vespa (`cd vespa && just up && just deploy`).
 The e2e tests do this too. Nothing in the unit tests parses the schema, so a
 mistake there only shows up at deploy.
 
-### 3. Populate it: dbt or feeder
+### 3. Populate it: in the Fusion dbt models
 
-A new field is empty until something writes it. There are two places to do that.
+A new field is empty until something writes it. The documents feeder is a
+pass-through: every column of `fusion.published.vespa_documents` is assigned to
+the Vespa field of the same name, so the value has to be computed in the Fusion
+dbt project (`data-lake`, `fusion/models/transform/stg_vespa_documents.sql`).
 
-| Derive it in                                                                                                  | When                                                                                                         | Example                                                    |
-| ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| **dbt** (`data-lake`, `snowflake_models/models/transform/vespa/pipeline_data_in_vespa_documents_updates.sql`) | It needs a join or aggregation over other tables                                                             | `attributes_published_date`, `concepts`, `passages`        |
-| **The feeder** (`search`, `vespa-feeder/src/documents_flow.py`)                                               | It can be computed from the record alone: copied out of `attributes_string` or parsed from `document_source` | `deprecated_slug`, `principal_id`, `attributes_created_at` |
+- Add the column to `stg_vespa_documents` and select it in
+  `fusion/models/published/vespa_documents.sql`, in the position the field has
+  in `documents.sd`
+- Document it with a `data_type` in both `schema.yml` files. The contract is
+  enforced, so CI fails without it
+- Extend the `test_vespa_documents_routes_principal_vs_member` unit test and its
+  fixtures
+- Derive it as Vespa expects it. A column derived from another one (like
+  `distinct_concept_ids` or `attributes_created_at`) belongs in the final select
+  of `stg_vespa_documents`, not in the feeder
+- For a value that can be missing, decide between `''` (clears a stale value, as
+  `deprecated_slug` does) and null (as `attributes_created_at` does, so the
+  sort's `missing(...,last)` puts those documents last, rather than at 1970 or
+  0). Parse timestamps with a timezone (`try_to_timestamp_tz`) rather than
+  reading a timezone-less value as local time
 
-Prefer the feeder when either would work. It ships with the schema in one PR,
-has fast unit tests, and needs no dbt run.
-
-In the feeder:
-
-- Add a `derive_*` function that sets
-  `record["fields"]["<field>"] = {"assign": value}`, and call it from
-  `derive_document_data`
-- For a plain string copy, add the key to `_HOISTED_ATTRIBUTE_KEYS` instead.
-  That assigns `""` when the key is missing, which clears stale values
-- For anything that is parsed, such as a date or a number, leave the field unset
-  when the value is missing or unparsable. The sort's `missing(...,last)` then
-  puts those documents last, rather than at 1970 or 0. Follow `docs/errors.md`
-  if a bad value should fail the run instead
-- Read a timestamp with no timezone as UTC (`replace(tzinfo=UTC)`), not as local
-  time
-- Unit-test it in `vespa-feeder/tests/test_documents_flow.py`, including the
-  missing and unparsable cases
+The feeder needs no change: `derive_fusion_document_data` in
+`vespa-feeder/src/documents_flow.py` only wraps each row in an update operation.
 
 #### The e2e test helper
 
-`search/vespa/documents_feed_materializer.py` no longer feeds production.
-Nothing runs it, and the `vespa/justfile` `extract-documents` recipe downloads a
-stale snapshot. The e2e tests still use its `_source_document_to_vespa_update`
-to turn a test `Document` into a Vespa update.
+The e2e tests turn a test `Document` into a Vespa update with
+`_source_document_to_vespa_update` in `tests/vespa_e2e.py`. It is separate from
+the Fusion export, so the two can drift: it writes `document_source`, which the
+API reads back, and builds the other fields itself.
 
-So: if an e2e test needs the new field, populate it there too, and unit-test it
-in `tests/vespa/test_documents_feed_materializer.py`. If not, leave it alone.
-Note that it has its own `_to_unix_timestamp`, which reads timezone-less values
-as local time.
+So: if an e2e test needs the new field, populate it there too. If not, leave it
+alone. Note that it has its own `_to_unix_timestamp`, which reads timezone-less
+values as local time.
 
 ### 4. Deploy the schema and feeder, then re-feed
 
-Merge PR 1 and wait for the Vespa and feeder deploys to finish. If the field is
-derived in dbt, merge that PR now and let dbt run.
+Merge PR 1 and wait for the Vespa deploy to finish. Merge the data-lake PR that
+adds the column too, and let the Fusion run export it.
 
 Then re-feed so every document gets the value. The documents feed runs daily
 (the `search-vespa-feeder-documents` Prefect deployment, 08:30 UTC). To get it
-sooner, run that deployment by hand once the new feeder image is deployed.
+sooner, run that deployment by hand once the Fusion export has the column.
 
 Check it worked:
 
@@ -218,8 +215,8 @@ results by eye.
 [ ] Value is in data-in `attributes` and arrives in production       (navigator-backend)
 [ ] Schema field: type, attribute / fast-search / summary chosen     (search: documents.sd)
 [ ] Added to each document-summary that returns it                   (search: documents.sd)
-[ ] Populated in the feeder or in dbt, with unit tests               (search: vespa-feeder | data-lake)
-[ ] E2e test helper populates it, if an e2e test needs it            (search: documents_feed_materializer.py)
+[ ] Populated in the Fusion dbt models, with a unit test             (data-lake: fusion)
+[ ] E2e test helper populates it, if an e2e test needs it            (search: tests/vespa_e2e.py)
 [ ] Schema and feeder deployed, then re-fed and checked              (search: Prefect)
 [ ] Engine and API: sort / filter / response model, with tests       (search, separate PR)
 [ ] Frontend behind `new-search`, merged after the API is deployed   (navigator-frontend)
