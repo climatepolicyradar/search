@@ -37,6 +37,7 @@ class LabelSearchResult(DataInLabel):
     """
 
     alternative_labels: list[str] = Field(default=[])
+    description: str | None = None
 
 
 # ``DataInLabel`` is declared with ``from __future__ import annotations``, so

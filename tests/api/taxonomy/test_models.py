@@ -95,6 +95,26 @@ def test_alternative_labels_are_deduped() -> None:
     assert nodes["concept::Q1"].alternative_labels == ["inundation", "flood"]
 
 
+FLOODING = Label(id="concept::Q1", type="concept", value="Flooding", labels=[])
+FLASH_FLOOD = _parented("concept::Q2", "concept", "Flash flood", [FLOODING])
+
+
+def _described(label: Label, description: str) -> LabelSearchResult:
+    return LabelSearchResult.model_validate({**label.model_dump(), "description": description})
+
+
+def test_a_parent_seen_first_as_a_relationship_keeps_its_description() -> None:
+    fetched = [_fetched(FLASH_FLOOD), _described(FLOODING, "Water on dry land")]
+    node = _by_id(tree(merge([], fetched)))["concept::Q1"]
+    assert node.response({}).description == "Water on dry land"
+
+
+def test_a_description_survives_pruning() -> None:
+    fetched = [_described(FLOODING, "Water on dry land"), _fetched(FLASH_FLOOD)]
+    nodes = select(tree(merge([], fetched)), ["**/concept::Q2"])
+    assert nodes[0].response({}).description == "Water on dry land"
+
+
 def test_a_label_with_two_parents_hangs_under_both() -> None:
     law = Label(id="category::Law", type="category", value="Law", labels=[])
     policy = Label(id="category::Policy", type="category", value="Policy", labels=[])

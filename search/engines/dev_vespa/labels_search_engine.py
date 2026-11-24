@@ -44,6 +44,7 @@ def _label_from_hit(hit: dict[str, Any]) -> LabelSearchResult:
             "id": fields.get("id"),
             "type": fields.get("type"),
             "value": fields.get("value"),
+            "description": fields.get("description") or None,
             "alternative_labels": alternative_labels,
             "labels": [
                 {
