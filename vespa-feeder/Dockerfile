@@ -3,7 +3,7 @@
 FROM ghcr.io/astral-sh/uv:0.13.0-python3.13-trixie-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tini \
+    && apt-get install -y --no-install-recommends "tini=0.19.0-*" \
     && rm -rf /var/lib/apt/lists/*
 
 ARG VESPA_CLI_VERSION=8.788.13
@@ -16,15 +16,13 @@ RUN ln -s /opt/vespa-cli_${VESPA_CLI_VERSION}_linux_amd64/bin/vespa /usr/local/b
 WORKDIR /opt/prefect/vespa-feeder
 
 # https://docs.astral.sh/uv/guides/integration/docker/
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_NO_DEV=1 UV_PYTHON_DOWNLOADS=0 UV_PROJECT_ENVIRONMENT=/usr/local
+ENV UV_COMPILE_BYTECODE=1 UV_NO_CACHE=1 UV_NO_DEV=1 UV_PYTHON_DOWNLOADS=0 UV_PROJECT_ENVIRONMENT=/usr/local
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=src,target=src \
     uv sync --locked --no-editable
