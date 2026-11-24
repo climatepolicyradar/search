@@ -85,6 +85,12 @@ lint:
         # ISO 3166-1/3166-2 country and subdivision codes were being corrected from
         # (CAF, LSO, NAM, SOM, SUR, ...) => (CAFE, ALSO, NAME, SOME, SURE, ...)
         - api/geographies_taxonomy.py
+    - linters: [ruff, bandit, pyright]
+      paths:
+        # Adapted from Vespa's own cloudwatch metrics-emitter (Apache 2.0), kept
+        # close to upstream so it can be diffed against it. pyright flags its
+        # direct indexing of boto3-stubs' NotRequired SSM parameter keys.
+        - vespa/vespa-grafana-metrics-relay/infra/lambda_code/**
 
   enabled:
     - pyright@1.1.408
