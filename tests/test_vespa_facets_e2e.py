@@ -14,7 +14,7 @@ from polyfactory.factories.pydantic_factory import ModelFactory
 from vespa.application import Vespa
 
 from search.engines.dev_vespa import DevVespaDocumentSearchEngine, FieldFilter, Filter
-from tests.vespa_e2e import rule_cases, _source_document_to_vespa_update, _TEST_SETTINGS
+from tests.vespa_e2e import _TEST_SETTINGS, _source_document_to_vespa_update, rule_cases
 
 pytest_plugins = ["tests.vespa_e2e"]
 

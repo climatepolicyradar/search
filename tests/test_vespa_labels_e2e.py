@@ -30,7 +30,12 @@ from search.engines.dev_vespa import (
     Filter,
 )
 from search.vespa.models import VespaAssign, VespaUpdate
-from tests.vespa_e2e import get_search_ids, rule_cases, _source_document_to_vespa_update, _TEST_SETTINGS
+from tests.vespa_e2e import (
+    _TEST_SETTINGS,
+    _source_document_to_vespa_update,
+    get_search_ids,
+    rule_cases,
+)
 
 pytest_plugins = ["tests.vespa_e2e"]
 
