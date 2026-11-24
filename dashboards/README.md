@@ -21,7 +21,7 @@ snapshot.
 ## About
 
 Metrics are sourced from the `vespa` CloudWatch namespace via the
-[`search_vespa_metrics`](../../navigator-infra/vespa/metrics_infra/) Lambda
+[`search_vespa_metrics`](../vespa/vespa-grafana-metrics-relay/infra/) Lambda
 stack. On import, select the CloudWatch data source when prompted by the
 `datasource` template variable.
 

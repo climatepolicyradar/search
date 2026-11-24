@@ -2,7 +2,7 @@
 Poll Vespa container-node metrics during a load test, to JSONL.
 
 Why this exists rather than reading the `vespa` CloudWatch namespace: that is
-emitted on `rate(5 minutes)` by the navigator-infra metrics Lambda, which is
+emitted on `rate(5 minutes)` by the vespa-grafana-metrics-relay Lambda, which is
 too coarse to attribute anything to a 5-minute load step. This polls the data
 plane directly, so we get ~30 samples per step instead of one.
 
