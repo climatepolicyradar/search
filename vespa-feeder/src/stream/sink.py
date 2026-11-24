@@ -12,6 +12,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from s3 import get_ssm_parameter
 from telemetry import feeder_metrics, set_feed_stats
 
+# connections: Controls throughput, ~16 matches the old feeders, could maybe push higher
+# deadline: Fails if imports keep failing for 10 minutes without a success
+# progress: Logs stats out to stderr for debugging
+
+VESPA_FEED_SETTINGS = [
+    "--connections",
+    "16",
+    "--deadline",
+    "600",
+    "--progress",
+    "60",
+]
+
 
 class RecordsLost(Exception):
     def __init__(self, summary: VespaFeedSummary) -> None:
@@ -131,12 +144,7 @@ class VespaSink(Sink[dict[str, Any]]):
             application,
             "--target",
             target,
-            "--connections",
-            "16",
-            "--deadline",
-            "600",
-            "--progress",
-            "60",
+            *VESPA_FEED_SETTINGS,
             "-",
         ]
 
@@ -160,7 +168,7 @@ class VespaSink(Sink[dict[str, Any]]):
             stdin = cast(IO[bytes], process.stdin)
             stdout = cast(IO[bytes], process.stdout)
             try:
-                with (sink := cls(stdin=stdin))._feeding(process), closing(sink):
+                with closing(sink := cls(stdin=stdin)), sink._feeding(process):
                     yield sink
 
                 output = stdout.read()
