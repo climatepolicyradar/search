@@ -34,5 +34,5 @@ packages = []
 # Declaring any pytest config here also makes this directory pytest's rootdir,
 # rather than it falling through to the repo root's pyproject.toml.
 [tool.pytest.ini_options]
-pythonpath = ["src", "tests/stream"]
+pythonpath = ["src"]
 testpaths = ["tests"]
