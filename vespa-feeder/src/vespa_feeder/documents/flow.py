@@ -8,7 +8,7 @@ from vespa_feeder.stream.metrics import MetricsSink
 from vespa_feeder.stream.progress import parse_stats
 from vespa_feeder.stream.s3 import S3Source
 from vespa_feeder.stream.stream import RUN_TIMEOUT_SECONDS, skip_failures
-from vespa_feeder.stream.vespa import VespaFeed
+from vespa_feeder.stream.vespa import VespaFeed, only_if_changed
 from vespa_feeder.telemetry import force_flush, shutdown, tracer
 
 
@@ -43,7 +43,7 @@ def feed_documents(feed: VespaFeed, metrics: MetricsSink) -> None:
     """Feed the latest documents export into Vespa."""
     # Exported by `fusion_run` in the data-lake repo.
     source = S3Source(bucket="cpr-production-data-lake-fusion", prefix="vespa/vespa_documents/")
-    updates = source.chain(skip_failures(document_update))
+    updates = source.chain(skip_failures(document_update)).chain(only_if_changed)
     updates.chain(feed.feed).chain(parse_stats).run(metrics.drain)
 
 

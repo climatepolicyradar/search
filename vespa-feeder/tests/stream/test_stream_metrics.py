@@ -51,3 +51,9 @@ def test_metrics_sink_keeps_the_latest_counts_for_slack_when_the_stream_fails() 
     with pytest.raises(ValueError):
         sink.drain(failing_after_three_of_five())
     assert get_feed_stats() == {"input": 5, "ok": 3, "errors": 2}
+
+
+def test_metrics_sink_completes_when_updates_were_skipped_as_unchanged() -> None:
+    sink = MetricsSink(deployment_name="deployment", run_name="run")
+    unchanged = vespa_stats(operations=3, ok=1).model_copy(update={"response_codes": {200: 1, 412: 2}})
+    sink.drain(snapshots([unchanged]))
