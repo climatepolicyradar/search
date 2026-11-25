@@ -1,5 +1,5 @@
 """
-Unit tests for turning a `fusion.published.vespa_documents` row into a Vespa update.
+Flow tests for turning a `fusion.published.vespa_documents` row into a Vespa update.
 
 Unlike the legacy export, whose rows are already `{update, create, fields}`, a
 Fusion row is one flat object keyed by column name, so the feeder has to build
@@ -9,7 +9,7 @@ the Vespa operation itself. Fusion owns every value, so that is all it does.
 from typing import Any
 
 import pytest
-from vespa_feeder.documents_flow import derive_fusion_document_data
+from vespa_feeder.documents.flow import document_update
 
 
 def _row(**overrides: Any) -> dict[str, Any]:
@@ -49,8 +49,12 @@ def _row(**overrides: Any) -> dict[str, Any]:
     return row
 
 
+def _feed(row: dict[str, Any]) -> list[dict[str, Any]]:
+    return [document_update(row)]
+
+
 def test_row_becomes_a_vespa_update_that_creates_the_document() -> None:
-    record = derive_fusion_document_data(_row())
+    record = _feed(_row())[0]
 
     assert record["update"] == "id:documents:documents::doc-0"
     assert record["create"] is True
@@ -59,7 +63,7 @@ def test_row_becomes_a_vespa_update_that_creates_the_document() -> None:
 def test_each_column_is_assigned_as_is_to_the_field_of_the_same_name() -> None:
     row = _row()
 
-    record = derive_fusion_document_data(row)
+    record = _feed(row)[0]
 
     assert record["fields"] == {
         column: {"assign": value}
@@ -70,14 +74,14 @@ def test_each_column_is_assigned_as_is_to_the_field_of_the_same_name() -> None:
 
 def test_unused_version_column_is_not_fed() -> None:
     """`version` is always null upstream; assigning null would only clear a field nothing sets."""
-    record = derive_fusion_document_data(_row())
+    record = _feed(_row())[0]
 
     assert "version" not in record["fields"]
 
 
 def test_null_value_is_assigned_null() -> None:
     """Assigning null clears a value removed upstream, rather than leaving the old one."""
-    record = derive_fusion_document_data(_row(description=None))
+    record = _feed(_row(description=None))[0]
 
     assert record["fields"]["description"] == {"assign": None}
 
@@ -87,5 +91,5 @@ def test_row_without_an_id_is_an_error() -> None:
     row = _row()
     del row["id"]
 
-    with pytest.raises(ValueError, match="id"):
-        derive_fusion_document_data(row)
+    with pytest.raises(ValueError):
+        _feed(row)

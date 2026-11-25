@@ -1,17 +1,11 @@
 import re
 from collections import Counter
-from typing import TypedDict
+from typing import Any, TypedDict
 
-from prefect.client.schemas.objects import State
+from prefect.runtime import deployment, flow_run
 
 from prefect import flow
-from vespa_feeder.feeder import (
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_SAMPLE_RATE,
-    RUN_TIMEOUT_SECONDS,
-    vespa_feeder,
-)
-from vespa_feeder.passages_derived_data import (
+from vespa_feeder.passages.derived_data import (
     is_page_header_or_footer,
     looks_like_demoted_section,
     looks_like_reference_list,
@@ -19,17 +13,20 @@ from vespa_feeder.passages_derived_data import (
     looks_like_table_of_contents,
 )
 from vespa_feeder.slack_notify import SlackNotify
-from vespa_feeder.task_runner import task_runner
+from vespa_feeder.stream.metrics import MetricsSink
+from vespa_feeder.stream.progress import parse_stats
+from vespa_feeder.stream.s3 import S3Source
+from vespa_feeder.stream.stream import RUN_TIMEOUT_SECONDS, skip_failures
+from vespa_feeder.stream.vespa import VespaFeed
+from vespa_feeder.telemetry import force_flush, shutdown, tracer
 
 # `topic["value"]`` arrives as a classifier's repr, e.g. `BertBasedClassifier("procedural` justice")`
 # The classifier name varies, but the label text is always the sole quoted argument.
 # TODO: This is gnarly and should be fixed upstream
 _CLASSIFIER_VALUE_RE = re.compile(r'^\w+\("(.*)"\)$')
 
-
-def _parse_classifier_value(value: str) -> str:
-    match = _CLASSIFIER_VALUE_RE.match(value)
-    return match.group(1) if match else value
+_SECTION_CONTEXT_PREFIX = "Section context: this excerpt is from the section titled '"
+_SECTION_CONTEXT_SUFFIX = "'. "
 
 
 class DataLakeTopic(TypedDict):
@@ -60,7 +57,21 @@ class VespaPassageLabel(TypedDict):
     timestamps: list[str]
 
 
-def derive_labels_from_topics(record: dict) -> dict:
+def passage_update(record: dict[str, Any]) -> dict[str, Any]:
+    """Apply all passages derivers to a record, in sequence."""
+    record = _derive_labels_from_topics(record)
+    record = _derive_document_ref(record)
+    record = _derive_heading_text(record)
+    record = _derive_passage_type_flags(record)
+    return record
+
+
+def _parse_classifier_value(value: str) -> str:
+    match = _CLASSIFIER_VALUE_RE.match(value)
+    return match.group(1) if match else value
+
+
+def _derive_labels_from_topics(record: dict[str, Any]) -> dict[str, Any]:
     """
     Set `labels` and `concept_counts` on a passages update record from its `topics`.
 
@@ -94,7 +105,56 @@ def derive_labels_from_topics(record: dict) -> dict:
     return record
 
 
-def derive_passage_type_flags(record: dict) -> dict:
+def _derive_document_ref(record: dict[str, Any]) -> dict[str, Any]:
+    """
+    Set `document_ref` on a passages update record, manufactured from its own `document_id`.
+
+    Pure string formatting, no lookup - once this resolves, `principal_id`
+    (imported in passages.sd via `import field document_ref.principal_id`)
+    follows automatically at query time, with no passage-side work needed for it.
+    """
+    document_id = record.get("fields", {}).get("document_id", {}).get("assign")
+    if document_id is None:
+        return record
+
+    record["fields"]["document_ref"] = {
+        "assign": f"id:documents:documents::{document_id}"
+    }
+    return record
+
+
+def _derive_heading_text(record: dict[str, Any]) -> dict[str, Any]:
+    """
+    Set `heading_text` on a passages update record, parsed out of `serialised_text`.
+
+    The snowflake export has no `heading_text` column, only `heading_id`, so this uses
+    `serialised_text`: "Section context: ... titled '<HEADING>'. <content>".
+
+    Left untouched unless the record carries that whole shape - the prefix, and a
+    `content` that is exactly the tail of `serialised_text`. A partial update without
+    `content`, a null, or a whitespace mismatch is skipped; a bad parse would index a
+    full passage body as `heading_text` and overwrite the stored value.
+    """
+    fields = record.get("fields", {})
+    serialised_text = fields.get("serialised_text", {}).get("assign") or ""
+    if not serialised_text.startswith(_SECTION_CONTEXT_PREFIX):
+        return record
+
+    content = fields.get("content", {}).get("assign") or ""
+    if not content or not serialised_text.endswith(content):
+        return record
+
+    heading = serialised_text[len(_SECTION_CONTEXT_PREFIX) : -len(content)]
+    if not heading.endswith(_SECTION_CONTEXT_SUFFIX):
+        return record
+
+    heading = heading.removesuffix(_SECTION_CONTEXT_SUFFIX).strip()
+    if heading:
+        fields["heading_text"] = {"assign": heading}
+    return record
+
+
+def _derive_passage_type_flags(record: dict[str, Any]) -> dict[str, Any]:
     """
     Set the `looks_like_*` bools and `is_page_header_or_footer`.
 
@@ -129,99 +189,35 @@ def derive_passage_type_flags(record: dict) -> dict:
     return record
 
 
-def derive_passage_data(record: dict) -> dict:
-    """Apply all passages derivers to a record, in sequence."""
-    record = derive_labels_from_topics(record)
-    record = derive_document_ref(record)
-    record = derive_heading_text(record)
-    record = derive_passage_type_flags(record)
-    return record
+def feed_passages(feed: VespaFeed, metrics: MetricsSink) -> None:
+    """Feed the latest passages export into Vespa."""
+    source = S3Source(
+        bucket="cpr-prod-snowflake-data-export",
+        prefix="production/published/pipeline_data_in_vespa_passage_updates_v1/",
+    )
+    updates = source.chain(skip_failures(passage_update))
+    updates.chain(feed.feed).chain(parse_stats).run(metrics.drain)
 
 
-def derive_document_ref(record: dict) -> dict:
-    """
-    Set `document_ref` on a passages update record, manufactured from its own `document_id`.
-
-    Pure string formatting, no lookup - once this resolves, `principal_id`
-    (imported in passages.sd via `import field document_ref.principal_id`)
-    follows automatically at query time, with no passage-side work needed for it.
-    """
-    document_id = record.get("fields", {}).get("document_id", {}).get("assign")
-    if document_id is None:
-        return record
-
-    record["fields"]["document_ref"] = {
-        "assign": f"id:documents:documents::{document_id}"
-    }
-    return record
-
-
-_SECTION_CONTEXT_PREFIX = "Section context: this excerpt is from the section titled '"
-_SECTION_CONTEXT_SUFFIX = "'. "
-
-
-def derive_heading_text(record: dict) -> dict:
-    """
-    Set `heading_text` on a passages update record, parsed out of `serialised_text`.
-
-    The snowflake export has no `heading_text` column, only `heading_id`, so this uses
-    `serialised_text`: "Section context: ... titled '<HEADING>'. <content>".
-
-    Left untouched unless the record carries that whole shape - the prefix, and a
-    `content` that is exactly the tail of `serialised_text`. A partial update without
-    `content`, a null, or a whitespace mismatch is skipped; a bad parse would index a
-    full passage body as `heading_text` and overwrite the stored value.
-    """
-    fields = record.get("fields", {})
-    serialised_text = fields.get("serialised_text", {}).get("assign") or ""
-    if not serialised_text.startswith(_SECTION_CONTEXT_PREFIX):
-        return record
-
-    content = fields.get("content", {}).get("assign") or ""
-    if not content or not serialised_text.endswith(content):
-        return record
-
-    heading = serialised_text[len(_SECTION_CONTEXT_PREFIX) : -len(content)]
-    if not heading.endswith(_SECTION_CONTEXT_SUFFIX):
-        return record
-
-    heading = heading.removesuffix(_SECTION_CONTEXT_SUFFIX).strip()
-    if heading:
-        fields["heading_text"] = {"assign": heading}
-    return record
-
-
-# max_workers=8 rather than the 4 the other feeders use: data-lake export files
-# are ~100x smaller than the old materializer's (~2-2.5k records/~16MB chunks),
-# so disk isn't the binding constraint here, and 8 x _DEFAULT_CONNECTIONS=2 is
-# the 16 connections Vespa's feedapi-handler can take. This flow submits ~5.9k
-# tasks in one burst, so it is the one that actually depends on the cap being
-# on the task runner - see the submit loop in vespa_feeder for what happens
-# without it.
 @flow(
     name="search-vespa-feeder-passages",
     description="Feed passages JSONL from the data-lake Snowflake export into Vespa, deriving document_ref per record",
-    # Paired with the drain's own budget - see RUN_TIMEOUT_SECONDS.
     timeout_seconds=RUN_TIMEOUT_SECONDS,
-    task_runner=task_runner(max_workers=8),
     log_prints=True,
     on_completion=[SlackNotify.on_success],
     on_failure=[SlackNotify.on_failure],
     on_crashed=[SlackNotify.on_crashed],
     on_cancellation=[SlackNotify.on_cancellation],
 )
-def passages_feeder_flow(
-    batch_size: int = DEFAULT_BATCH_SIZE,
-    sample_rate: float = DEFAULT_SAMPLE_RATE,
-    s3_export_prefix: str | None = None,
-) -> State | None:
-    bucket = "cpr-prod-snowflake-data-export"
-    prefix = "production/published/pipeline_data_in_vespa_passage_updates_v1/"
-    return vespa_feeder(
-        s3_bucket=bucket,
-        s3_prefix=prefix,
-        s3_export_prefix=s3_export_prefix,
-        derive_data_from_source=derive_passage_data,
-        batch_size=batch_size,
-        sample_rate=sample_rate,
-    )
+def passages_feeder_flow() -> None:
+    try:
+        with tracer.start_as_current_span("vespa_feeder"):
+            feed = VespaFeed.create_from_ssm()
+            metrics = MetricsSink(
+                deployment_name=deployment.name or "local",
+                run_name=flow_run.name or "unknown",
+            )
+            feed_passages(feed=feed, metrics=metrics)
+    finally:
+        force_flush()
+        shutdown()

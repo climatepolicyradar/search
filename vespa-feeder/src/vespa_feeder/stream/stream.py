@@ -1,12 +1,56 @@
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
 from contextlib import closing
 
+# Bounds a hung run inside the 24h gap to the next schedule, so it fails rather
+# than queueing tomorrow's run behind it.
+RUN_TIMEOUT_SECONDS = 20 * 60 * 60
+
 type Stream[A] = Generator[A]
 type Pipe[A, B] = Callable[[Stream[A]], Stream[B]]
 type Sink[A] = Callable[[Stream[A]], None]
+
+
+def run_logger() -> logging.Logger | logging.LoggerAdapter[logging.Logger]:
+    """Return the Prefect run logger inside a flow run, and a plain logger outside one."""
+    from prefect.exceptions import MissingContextError
+
+    from prefect import get_run_logger
+
+    try:
+        return get_run_logger()
+    except MissingContextError:
+        return logging.getLogger("vespa_feeder")
+
+
+class TransformFailures(Exception):
+    def __init__(self, failures: int) -> None:
+        super().__init__(f"{failures} records failed to transform")
+
+
+def skip_failures[A, B](transform: Callable[[A], B]) -> Pipe[A, B]:
+    """Make a pipe that skips items the transform fails on, raising once it ends."""
+
+    def pipe(items: Stream[A]) -> Stream[B]:
+        failures = 0
+        for item in items:
+            try:
+                transformed = transform(item)
+            except Exception as error:
+                run_logger().warning("transform failed on a record", exc_info=True)
+                failures += 1
+                if failures > 500:
+                    raise TransformFailures(failures) from error
+                continue
+            yield transformed
+
+        if failures > 0:
+            raise TransformFailures(failures)
+
+    return pipe
 
 
 class Source[A](ABC):

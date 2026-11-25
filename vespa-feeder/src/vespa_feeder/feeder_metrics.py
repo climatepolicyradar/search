@@ -25,16 +25,12 @@ class FeederMetrics:
         self._records_error: Optional[Counter] = None
         self._run_duration: Optional[Histogram] = None
         self._last_run_duration: Optional[Gauge] = None
-        self._task_duration: Optional[Histogram] = None
         self._runs_completed: Optional[Counter] = None
         self._runs_failed: Optional[Counter] = None
         self._runs_crashed: Optional[Counter] = None
-        self._batches_expected: Optional[Gauge] = None
-        self._batches_completed: Optional[Counter] = None
         self._feeder_errors: Optional[Counter] = None
         self._throttled: Optional[Counter] = None
         self._other_http_errors: Optional[Counter] = None
-        self._files_fed: Optional[Counter] = None
 
         if not self._disabled:
             self._create_instruments()
@@ -65,11 +61,6 @@ class FeederMetrics:
             description="Duration of the most recently completed flow run in seconds",
             unit="s",
         )
-        self._task_duration = self._metrics_service.create_histogram(
-            name="task.duration",
-            description="Task duration in seconds",
-            unit="s",
-        )
         self._runs_completed = self._metrics_service.create_counter(
             name="runs.completed",
             description="Flow runs that completed successfully",
@@ -85,16 +76,6 @@ class FeederMetrics:
             description="Flow runs that crashed (the process died, e.g. OOM/SIGKILL)",
             unit="1",
         )
-        self._batches_expected = self._metrics_service.create_gauge(
-            name="run.batches_expected",
-            description="Batches queued for this run, emitted before any feeding starts",
-            unit="1",
-        )
-        self._batches_completed = self._metrics_service.create_counter(
-            name="run.batches_completed",
-            description="Batches that finished feeding in this run",
-            unit="1",
-        )
         self._feeder_errors = self._metrics_service.create_counter(
             name="records.feeder_errors",
             description="Transport-layer failures with no HTTP response received",
@@ -108,11 +89,6 @@ class FeederMetrics:
         self._other_http_errors = self._metrics_service.create_counter(
             name="records.other_http_errors",
             description="Non-2xx responses other than 429, e.g. 5xx",
-            unit="1",
-        )
-        self._files_fed = self._metrics_service.create_counter(
-            name="run.files_fed",
-            description="Files fed to Vespa in this run",
             unit="1",
         )
 
@@ -140,12 +116,11 @@ class FeederMetrics:
         feeder_error_count: int,
         throttled_count: int,
         other_http_error_count: int,
-        file_count: int,
         deployment_name: str,
         run_name: str = "",
     ) -> None:
         """
-        Record a batch's retry attempts and the files it fed.
+        Record a feed's retry attempts.
 
         Retries mostly self-heal and are not record loss - `records.error`
         is. Kept apart from `record_feed_stats` for that reason.
@@ -159,8 +134,6 @@ class FeederMetrics:
             self._throttled.add(throttled_count, attrs)
         if self._other_http_errors is not None:
             self._other_http_errors.add(other_http_error_count, attrs)
-        if self._files_fed is not None:
-            self._files_fed.add(file_count, attrs)
 
     def record_run_duration(
         self, duration_s: float, deployment_name: str, run_name: str = ""
@@ -201,38 +174,6 @@ class FeederMetrics:
             return
         self._runs_crashed.add(
             1, {"deployment_name": deployment_name, "run_name": run_name}
-        )
-
-    def record_batches_expected(
-        self, batch_count: int, deployment_name: str, run_name: str
-    ) -> None:
-        """
-        Record how many batches this run queued.
-
-        The denominator for `run.batches_completed`.
-        """
-        if self._disabled or self._batches_expected is None:
-            return
-        self._batches_expected.set(
-            batch_count, {"deployment_name": deployment_name, "run_name": run_name}
-        )
-
-    def record_batch_completed(self, deployment_name: str, run_name: str) -> None:
-        """Increment the completed batches counter for a deployment run."""
-        if self._disabled or self._batches_completed is None:
-            return
-        self._batches_completed.add(
-            1, {"deployment_name": deployment_name, "run_name": run_name}
-        )
-
-    def record_task_duration(
-        self, task_name: str, duration_s: float, deployment_name: str
-    ) -> None:
-        """Record the duration of an individual task in seconds."""
-        if self._disabled or self._task_duration is None:
-            return
-        self._task_duration.record(
-            duration_s, {"deployment_name": deployment_name, "task_name": task_name}
         )
 
     def save_metrics(self, timeout_ms: int = 10000) -> bool:

@@ -15,11 +15,7 @@ from tests.stream.vespa_stats import vespa_stats, vespa_stats_json
 
 class StandInFeed(VespaFeed):
     def __init__(self, args: list[str]) -> None:
-        super().__init__(
-            target="http://localhost",
-            application="tenant.app",
-            token="token",  # nosec B106
-        )
+        super().__init__(target="http://localhost", application="tenant.app")
         self._args = args
 
     def vespa_feed_args(self) -> list[str]:

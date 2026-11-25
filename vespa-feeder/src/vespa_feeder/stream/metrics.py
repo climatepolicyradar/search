@@ -21,11 +21,12 @@ class MetricsSink:
                 self._record_progress(change=snapshot.since(final), latest=snapshot)
                 final = snapshot
         except Exception:
+            self._record_final(final=final)
             self._record_run_failed()
             raise
 
+        self._record_final(final=final)
         lost = final.operation_count - final.ok_count
-        self._record_final(final=final, lost=lost)
 
         if lost > 0:
             self._record_run_failed()
@@ -53,7 +54,6 @@ class MetricsSink:
             deployment_name=self._deployment_name,
             throttled_count=throttled,
             run_name=self._run_name,
-            file_count=0,
         )
 
         set_feed_stats(
@@ -62,11 +62,11 @@ class MetricsSink:
             ok_count=latest.ok_count,
         )
 
-    def _record_final(self, final: VespaFeedStats, lost: int) -> None:
+    def _record_final(self, final: VespaFeedStats) -> None:
         feeder_metrics.record_feed_stats(
+            total_errors=final.operation_count - final.ok_count,
             deployment_name=self._deployment_name,
             run_name=self._run_name,
-            total_errors=lost,
             input_count=0,
             ok_count=0,
         )

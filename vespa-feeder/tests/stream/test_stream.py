@@ -1,5 +1,5 @@
 import pytest
-from vespa_feeder.stream.stream import Source, Stream
+from vespa_feeder.stream.stream import Source, Stream, TransformFailures, skip_failures
 
 from tests.stream.list_source import ListSource
 
@@ -67,3 +67,34 @@ def test_run_closes_the_stream_when_the_sink_fails() -> None:
         source.run(failing_after_one)
     assert source.closed
     assert raised.type is ValueError
+
+
+def halved(number: int) -> int:
+    if number % 2 == 1:
+        raise ValueError(f"{number} is odd")
+    return number // 2
+
+
+def test_skip_failures_yields_the_items_either_side_of_a_failure() -> None:
+    halves = ListSource(items=[2, 3, 4]).chain(skip_failures(halved)).lines()
+    assert [next(halves), next(halves)] == [1, 2]
+    with pytest.raises(TransformFailures, match="1 records"):
+        next(halves)
+
+
+def test_skip_failures_does_not_raise_when_nothing_failed() -> None:
+    halves = ListSource(items=[2, 4]).chain(skip_failures(halved)).lines()
+    assert list(halves) == [1, 2]
+
+
+def test_skip_failures_tolerates_five_hundred_failures_until_the_end() -> None:
+    halves = ListSource(items=[1] * 500 + [2]).chain(skip_failures(halved)).lines()
+    assert next(halves) == 1
+    with pytest.raises(TransformFailures, match="500 records"):
+        next(halves)
+
+
+def test_skip_failures_stops_after_more_than_five_hundred_failures() -> None:
+    halves = ListSource(items=[1] * 501 + [2]).chain(skip_failures(halved)).lines()
+    with pytest.raises(TransformFailures, match="501 records"):
+        next(halves)

@@ -7,9 +7,9 @@ from subprocess import PIPE, CalledProcessError, Popen, TimeoutExpired
 from tempfile import NamedTemporaryFile
 from typing import IO, Any, cast
 
+import boto3
 import orjson
 
-from vespa_feeder.s3 import get_ssm_parameter
 from vespa_feeder.stream.progress import VespaFeedStats
 from vespa_feeder.stream.stream import Stream
 
@@ -29,8 +29,13 @@ VESPA_FEED_SETTINGS = [
 EXIT_LIMIT_SECONDS = 15 * 60
 
 
+def get_ssm_parameter(name: str) -> str:
+    response = boto3.client("ssm").get_parameter(Name=name, WithDecryption=True)
+    return response["Parameter"]["Value"].strip()  # pyright: ignore[reportTypedDictNotRequiredAccess]
+
+
 class VespaFeed:
-    def __init__(self, target: str, application: str, token: str) -> None:
+    def __init__(self, target: str, application: str, token: str = "") -> None:  # nosec B107
         self._target = target
         self._application = application
         self._token = token

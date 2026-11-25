@@ -146,8 +146,9 @@ dbt project (`data-lake`, `fusion/models/transform/stg_vespa_documents.sql`).
   0). Parse timestamps with a timezone (`try_to_timestamp_tz`) rather than
   reading a timezone-less value as local time
 
-The feeder needs no change: `derive_fusion_document_data` in
-`vespa-feeder/src/documents_flow.py` only wraps each row in an update operation.
+The feeder needs no change: `document_update` in
+`vespa-feeder/src/vespa_feeder/documents/flow.py` only wraps each row in an
+update operation.
 
 #### The e2e test helper
 

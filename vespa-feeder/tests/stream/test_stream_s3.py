@@ -2,7 +2,10 @@ import pytest
 from mypy_boto3_s3 import S3Client
 from vespa_feeder.stream.s3 import S3Source
 
-from tests.helpers import put_s3_objects
+
+def put_s3_objects(s3_client: S3Client, bucket: str, objects: dict[str, bytes]) -> None:
+    for key, body in objects.items():
+        s3_client.put_object(Bucket=bucket, Key=key, Body=body)
 
 
 def test_s3_source_reads_only_the_newest_export(
