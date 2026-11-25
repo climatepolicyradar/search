@@ -4,9 +4,18 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
 from contextlib import closing
 
+# Bounds a hung run inside the 24h gap to the next schedule, so it fails rather
+# than queueing tomorrow's run behind it.
+RUN_TIMEOUT_SECONDS = 20 * 60 * 60
+
 type Stream[A] = Generator[A]
 type Pipe[A, B] = Callable[[Stream[A]], Stream[B]]
 type Sink[A] = Callable[[Stream[A]], None]
+
+
+class TransformFailures(Exception):
+    def __init__(self, failures: int) -> None:
+        super().__init__(f"{failures} records failed to transform")
 
 
 class Source[A](ABC):

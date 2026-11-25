@@ -53,7 +53,6 @@ class MetricsSink:
             deployment_name=self._deployment_name,
             throttled_count=throttled,
             run_name=self._run_name,
-            file_count=0,
         )
 
         set_feed_stats(

@@ -1,33 +1,14 @@
 import os
-import tempfile
-from pathlib import Path
-from unittest.mock import create_autospec
 
 import boto3
 import pytest
 from moto import mock_aws
-from prefect.testing.utilities import prefect_test_harness
-from vespa_feeder import feeder
-from vespa_feeder.feeder_metrics import FeederMetrics
 
 
 def pytest_configure() -> None:
     # Before any test module imports telemetry, which otherwise builds real
     # OTLP exporters and retries against localhost:4318 for the whole session.
     os.environ.setdefault("DISABLE_OTEL_LOGGING", "true")
-
-
-@pytest.fixture(scope="session")
-def prefect_db():
-    """
-    A throwaway Prefect database, for tests that actually run a flow.
-
-    Session-scoped deliberately: the harness starts a SQLite database and an
-    ephemeral server, which costs seconds. Per-test it would cost that per
-    test; once per session it is paid a single time.
-    """
-    with prefect_test_harness():
-        yield
 
 
 @pytest.fixture
@@ -55,36 +36,3 @@ def s3_bucket(s3_client):
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
     return "bucket"
-
-
-@pytest.fixture
-def recording_metrics(monkeypatch):
-    """A FeederMetrics stand-in that enforces the real method signatures."""
-    metrics = create_autospec(FeederMetrics, instance=True)
-    monkeypatch.setattr(feeder, "feeder_metrics", metrics)
-    return metrics
-
-
-@pytest.fixture
-def temp_workspace(monkeypatch, tmp_path: Path) -> Path:
-    """Point the feeder's `tempfile.gettempdir()` at a per-test directory."""
-    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
-    return tmp_path
-
-
-@pytest.fixture
-def prefect_run_identity(monkeypatch):
-    """
-    Give the feeder the deployment and run names a real Prefect run would.
-
-    Outside a run context `prefect.runtime` returns `None` for both, and
-    `vespa_feeder` falls back to "local"/"unknown". Asserting those fallbacks
-    pins values that never occur in production - a run always has a generated
-    name like `tuscan-elephant`, and the dashboard groups by it. Patching them
-    here lets the tests assert the production shape instead.
-    """
-    from vespa_feeder import feeder
-
-    monkeypatch.setattr(feeder.deployment, "name", "search-vespa-feeder-passages")
-    monkeypatch.setattr(feeder.flow_run, "name", "tuscan-elephant")
-    return "search-vespa-feeder-passages", "tuscan-elephant"

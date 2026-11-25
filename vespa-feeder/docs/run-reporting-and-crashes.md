@@ -1,79 +1,64 @@
-# Run reporting: what survives a crash
+# Run reporting: what survives a failed or crashed run
 
-The feeder reports a run through four channels. They do not fail together, and
-the difference matters most in exactly the case you care about: a run that died
-without finishing.
-
-Read this before concluding anything from a missing artifact.
+Each feeder streams its S3 export into a single `vespa feed` process. That
+process prints a stats snapshot every 60 seconds and a final summary when it
+exits. `MetricsSink` records each one as it arrives, so a run that dies keeps
+what it had reported up to its last snapshot.
 
 ## What survives what
 
-| Channel                                                     | Clean finish | Cancel / timeout (SIGTERM) | Crash (SIGKILL, OOM) |
-| ----------------------------------------------------------- | ------------ | -------------------------- | -------------------- |
-| Markdown run summary artifact                               | yes          | yes                        | **no**               |
-| Slack "Records fed" counts                                  | yes          | yes                        | **no**               |
-| `runs.completed` / `runs.failed`                            | yes          | neither, by design         | **no**               |
-| `run.duration` / `last_run.duration`                        | yes          | yes                        | **no**               |
-| `records.fed` / `records.ok` / `records.error`              | yes          | yes                        | **yes**              |
-| `records.feeder_errors` / `throttled` / `other_http_errors` | yes          | yes                        | **yes**              |
-| `run.batches_expected` / `run.batches_completed`            | yes          | yes                        | **yes**              |
-| `run.files_fed`                                             | yes          | yes                        | **yes**              |
-| `runs.crashed`                                              | n/a          | n/a                        | **yes**              |
+| Channel                                                     | Clean finish | Failure (exception) | Cancel / timeout | Crash (SIGKILL, OOM) |
+| ----------------------------------------------------------- | ------------ | ------------------- | ---------------- | -------------------- |
+| `records.fed` / `records.ok`                                | yes          | to last snapshot    | to last snapshot | to last snapshot     |
+| `records.feeder_errors` / `throttled` / `other_http_errors` | yes          | to last snapshot    | to last snapshot | to last snapshot     |
+| `records.error`                                             | yes          | from last snapshot  | **no**           | **no**               |
+| `run.duration` / `last_run.duration`                        | yes          | from last snapshot  | **no**           | **no**               |
+| `runs.completed` / `runs.failed`                            | yes          | `runs.failed`       | neither          | **no**               |
+| Slack "Records fed" counts                                  | yes          | from last snapshot  | not verified     | **no**               |
+| `runs.crashed`                                              | n/a          | n/a                 | n/a              | **yes**              |
 
 ## Why
 
-Everything in the first four rows is written in the drain's `finally` in
-`vespa_feeder()`, which runs **inside the flow process**. SIGTERM is catchable,
-so a cancel or a flow-level timeout still runs it. SIGKILL is not, so on an OOM
-the process dies mid-drain and none of it happens.
+`records.fed`, `records.ok` and the retry counters are Vespa's own running
+counts. `MetricsSink` adds the change since the previous snapshot each minute,
+and metrics are exported every 5 seconds, so they survive anything.
 
-The metrics rows survive for a different reason: they are not written at the end
-of the run at all. `METRICS_EXPORT_INTERVAL_MS=5000` in `telemetry.py` means
-OTel exports whatever has accumulated roughly every 5 seconds, so a crashed run
-has already published everything up to its last ~5s.
+`records.error` is the number of operations Vespa did not report as ok. Mid-run
+that includes documents still waiting on a retry, so it is only recorded once:
+from the final summary on a clean finish, or from the last snapshot when the
+stream raises. The duration is recorded at the same point, from Vespa's own feed
+time. A cancel or timeout is not an `Exception`, so it records neither.
 
-`runs.crashed` is the exception that proves the rule. It is emitted from
-`SlackNotify.on_crashed`, which Prefect runs in a **separate process** that is
-still alive after the flow's has died. It flushes explicitly, because that
-process exits as soon as the hook returns -- too soon for the periodic export.
+When the source or a transform fails, `vespa feed` is not killed. It is left to
+finish what it was sent and print its summary first, so a failed run usually
+reports its true final counts. A cancel, a timeout, or a failure in a later
+stage kills it straight away.
+
+`runs.crashed` is emitted from `SlackNotify.on_crashed`, which Prefect runs in a
+**separate process** that is still alive after the flow's has died. It flushes
+explicitly, because that process exits as soon as the hook returns. That process
+cannot see the counts, so a crash message says progress is unknown.
 
 ## Reading a crashed run
 
 A crash gives you a Prefect "Crashed" state, a Slack message saying progress is
-unknown, and these metrics. There is no artifact. That is expected, not a second
-fault.
-
-To see how far it got, open the dashboard (the Slack message links to it,
-pre-filtered to the deployment) and compare, for that `run_name`:
-
-- `run.batches_completed` against `run.batches_expected` -- the fraction of the
-  run that finished
-- `records.ok` -- records Vespa actually accepted before the kill
-
-`batches_expected` is set before any feeding starts, so it is present even for a
-run that died before its first batch. Without it the completed count has no
-denominator and a crash at 80% is indistinguishable from one at 5%.
-
-These are short-lived runs emitting roughly one observation a day, so query them
-by grouping on `run_name`. `rate()` and `increase()` are meaningless here.
-
-The dashboard's Runs table shows all of this as one row per run. It is built on
-these metrics rather than on logs: it previously parsed a `vespa feed stats:`
-line that the v1 removal deleted, and sat empty for six weeks before anyone
-noticed. A regex over logs can stop matching silently, and logs die with the
-process, so a log-backed table could never report a crashed run at all.
+unknown, and `runs.crashed`. How far it got is in `records.fed` and
+`records.ok`, to within a minute.
 
 ## Partial application in Vespa
 
-A crashed run has usually applied some of its data. `records.ok` is the count
-Vespa accepted, and those writes stand -- there is no rollback. The next
-scheduled run re-feeds from the current export, so the gap closes on its own
-unless the crash is reproducible.
+A crashed run has usually applied some of its data. Those writes stand -- there
+is no rollback. The next scheduled run re-feeds from the current export, so the
+gap closes on its own unless the crash is reproducible.
 
-## What this deliberately does not do
+## A failed run
 
-The artifact is not written incrementally. Making it crash-proof would mean a
-Prefect API call per batch -- roughly 5,900 on a passages run -- to publish a
-summary the metrics already carry, and better. The artifact is an end-of-run
-document; treat its absence as "the run did not finish", not as "the run did
-nothing".
+Records Vespa did not accept raise `RecordsLost` once the feed has finished. A
+`vespa feed` that exits non-zero raises `CalledProcessError`, and one whose
+summary cannot be read raises a validation error. Either way the run fails with
+the traceback in its logs and `runs.failed` is recorded.
+
+A record whose transform raises is logged as a warning with its traceback and
+skipped. The feed carries on, and once every other record has been sent the run
+fails with `TransformFailures`. After more than 500 such records the feeder
+stops sending straight away.

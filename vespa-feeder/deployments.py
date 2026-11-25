@@ -15,11 +15,9 @@ from prefect.docker import DockerImage
 from prefect.schedules import Cron
 from prefect.types.entrypoint import EntrypointType
 from prefect.variables import Variable
-from vespa_feeder.documents_flow import documents_feeder_flow
-from vespa_feeder.labels_flow import labels_feeder_flow
-from vespa_feeder.passages_flow import (
-    passages_feeder_flow,
-)
+from vespa_feeder.documents.flow import documents_feeder_flow
+from vespa_feeder.labels.flow import labels_feeder_flow
+from vespa_feeder.passages.flow import passages_feeder_flow
 
 from prefect import Flow
 
@@ -42,68 +40,13 @@ class VespaFeederDeployment:
     """Prefect deployment for the vespa-feeder flows"""
 
     flow: Flow
-    cron: str | None = None
-    job_variables: dict | None = None
-    # Adding a `variant` will deploy to `{flow.name}/{flow.name}::{variant}`
-    # which will allow you to a/b test flows.
-    variant: str | None = None
-    # e.g. parameters.sample_rate = 0.1 will get a determanist sample
-    # to avoid long running tests.
-    # e.g. parameters.s3_export_prefix = "20260922T190625Z" will ensure you always
-    # have the same
-    # data across tests.
-    parameters: dict | None = None
-    # an example of an a/b test could be
-    # VespaFeederDeployment(
-    #     flow=passages_feeder_flow,
-    #     variant="batch-1",
-    #     job_variables={
-    #         "cpu": 1024,
-    #         "memory": 4096,
-    #         "ephemeralStorage": {"sizeInGiB": 50},
-    #     },
-    #     parameters={
-    #         "batch_size": 1,
-    #         "sample_rate": 0.1,
-    #         "s3_export_prefix": "20260922T190625Z",
-    #     },
-    # ),
-    # VespaFeederDeployment(
-    #     flow=passages_feeder_flow,
-    #     variant="batch-5",
-    #     job_variables={
-    #         "cpu": 2048,
-    #         "memory": 8192,
-    #         "ephemeralStorage": {"sizeInGiB": 50},
-    #     },
-    #     parameters={
-    #         "batch_size": 5,
-    #         "sample_rate": 0.1,
-    #         "s3_export_prefix": "20260922T190625Z",
-    #     },
-    # )
+    cron: str
 
 
 _FEEDS: list[VespaFeederDeployment] = [
-    # Labels
     VespaFeederDeployment(flow=labels_feeder_flow, cron="30 8 * * *"),
-    # Documents
-    VespaFeederDeployment(
-        flow=documents_feeder_flow,
-        cron="30 8 * * *",
-        job_variables={"cpu": 1024, "memory": 4096},
-    ),
-    # Passages
-    VespaFeederDeployment(
-        flow=passages_feeder_flow,
-        cron="30 8 * * *",
-        # 8 x 10 x 47MB x 2 = 7.5GB worst case.
-        job_variables={
-            "cpu": 2048,
-            "memory": 16384,
-            "ephemeralStorage": {"sizeInGiB": 50},
-        },
-    ),
+    VespaFeederDeployment(flow=documents_feeder_flow, cron="30 8 * * *"),
+    VespaFeederDeployment(flow=passages_feeder_flow, cron="30 8 * * *"),
 ]
 
 _DEFAULT_JOB_VARIABLES_NAME = "ecs-default-job-variables-prefect-mvp-prod"
@@ -125,21 +68,18 @@ if __name__ == "__main__":
         # at 3am
         # TODO: actual data flows based on events
         flow = feed.flow
-        deployment_name = f"{flow.name}:{feed.variant}" if feed.variant else flow.name
-        job_variables = {**default_job_variables, **(feed.job_variables or {})}
         flow.deploy(
-            name=deployment_name,
+            name=flow.name,
             work_pool_name=_WORK_POOL,
             image=DockerImage(
                 name=image_name,
                 tag="latest",
             ),
-            job_variables=job_variables,
-            parameters=feed.parameters,
+            job_variables=default_job_variables,
             concurrency_limit=_CONCURRENCY_LIMIT,
-            schedule=Cron(feed.cron, slug=deployment_name) if feed.cron else None,
+            schedule=Cron(feed.cron, slug=flow.name),
             build=False,
             push=False,
             entrypoint_type=EntrypointType.MODULE_PATH,
         )
-        print(f"Deployed {deployment_name}")
+        print(f"Deployed {flow.name}")

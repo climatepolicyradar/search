@@ -3,7 +3,7 @@ Tests for the vendored `looks_like_*` and `is_*` passage heuristics.
 
 Vendored from tests/test_passage_tables_of_contents.py and
 tests/test_passage_reference_lists.py in the repo root, for the same reason
-`passages_derived_data` itself is - see that module's docstring. Kept verbatim
+`derived_data` itself is - see that module's docstring. Kept verbatim
 apart from calling the detectors with `text` / `page_numbers` instead of a
 `Passage`, so the files stay diffable: **change both, or neither**.
 
@@ -14,7 +14,7 @@ fails loudly.
 """
 
 import pytest
-from vespa_feeder.passages_derived_data import (
+from vespa_feeder.passages.derived_data import (
     is_page_header_or_footer,
     looks_like_demoted_section,
     looks_like_reference_list,
