@@ -1,6 +1,6 @@
 import pytest
 from mypy_boto3_s3 import S3Client
-from vespa_feeder.stream.source import S3Source
+from vespa_feeder.stream.s3 import S3Source
 
 from tests.helpers import put_s3_objects
 
