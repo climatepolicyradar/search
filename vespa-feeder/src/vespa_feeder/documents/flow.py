@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 from prefect.runtime import deployment, flow_run
@@ -8,11 +7,9 @@ from vespa_feeder.slack_notify import SlackNotify
 from vespa_feeder.stream.metrics import MetricsSink
 from vespa_feeder.stream.progress import parse_stats
 from vespa_feeder.stream.s3 import S3Source
-from vespa_feeder.stream.stream import RUN_TIMEOUT_SECONDS, Stream, TransformFailures
+from vespa_feeder.stream.stream import RUN_TIMEOUT_SECONDS, skip_failures
 from vespa_feeder.stream.vespa import VespaFeed
 from vespa_feeder.telemetry import force_flush, shutdown, tracer
-
-logger = logging.getLogger(__name__)
 
 
 def document_update(row: dict[str, Any]) -> dict[str, Any]:
@@ -42,29 +39,12 @@ def document_update(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def documents(rows: Stream[dict[str, Any]]) -> Stream[dict[str, Any]]:
-    """Yield a Vespa update for each row, raising at the end if any row failed."""
-    failures = 0
-    for row in rows:
-        try:
-            update = document_update(row)
-        except Exception as error:
-            logger.warning("Failed to transform a document row", exc_info=True)
-            failures += 1
-            if failures > 500:
-                raise TransformFailures(failures) from error
-            continue
-        yield update
-
-    if failures > 0:
-        raise TransformFailures(failures)
-
-
 def feed_documents(feed: VespaFeed, metrics: MetricsSink) -> None:
     """Feed the latest documents export into Vespa."""
     # Exported by `fusion_run` in the data-lake repo.
     source = S3Source(bucket="cpr-production-data-lake-fusion", prefix="vespa/vespa_documents/")
-    source.chain(documents).chain(feed.feed).chain(parse_stats).run(metrics.drain)
+    updates = source.chain(skip_failures(document_update))
+    updates.chain(feed.feed).chain(parse_stats).run(metrics.drain)
 
 
 @flow(

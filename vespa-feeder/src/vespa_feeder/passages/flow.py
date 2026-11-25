@@ -1,4 +1,3 @@
-import logging
 import re
 from collections import Counter
 from typing import Any, TypedDict
@@ -17,11 +16,9 @@ from vespa_feeder.slack_notify import SlackNotify
 from vespa_feeder.stream.metrics import MetricsSink
 from vespa_feeder.stream.progress import parse_stats
 from vespa_feeder.stream.s3 import S3Source
-from vespa_feeder.stream.stream import RUN_TIMEOUT_SECONDS, Stream, TransformFailures
+from vespa_feeder.stream.stream import RUN_TIMEOUT_SECONDS, skip_failures
 from vespa_feeder.stream.vespa import VespaFeed
 from vespa_feeder.telemetry import force_flush, shutdown, tracer
-
-logger = logging.getLogger(__name__)
 
 # `topic["value"]`` arrives as a classifier's repr, e.g. `BertBasedClassifier("procedural` justice")`
 # The classifier name varies, but the label text is always the sole quoted argument.
@@ -192,31 +189,14 @@ def _derive_passage_type_flags(record: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-def passages(rows: Stream[dict[str, Any]]) -> Stream[dict[str, Any]]:
-    """Yield a Vespa update for each row, raising at the end if any row failed."""
-    failures = 0
-    for row in rows:
-        try:
-            update = passage_update(row)
-        except Exception as error:
-            logger.warning("Failed to transform a passage row", exc_info=True)
-            failures += 1
-            if failures > 500:
-                raise TransformFailures(failures) from error
-            continue
-        yield update
-
-    if failures > 0:
-        raise TransformFailures(failures)
-
-
 def feed_passages(feed: VespaFeed, metrics: MetricsSink) -> None:
     """Feed the latest passages export into Vespa."""
     source = S3Source(
         bucket="cpr-prod-snowflake-data-export",
         prefix="production/published/pipeline_data_in_vespa_passage_updates_v1/",
     )
-    source.chain(passages).chain(feed.feed).chain(parse_stats).run(metrics.drain)
+    updates = source.chain(skip_failures(passage_update))
+    updates.chain(feed.feed).chain(parse_stats).run(metrics.drain)
 
 
 @flow(

@@ -2,15 +2,11 @@
 
 from typing import Any
 
-import pytest
-from vespa_feeder.passages.flow import passages
-from vespa_feeder.stream.stream import TransformFailures
-
-from tests.stream.list_source import ListSource
+from vespa_feeder.passages.flow import passage_update
 
 
 def _feed(record: dict[str, Any]) -> dict[str, Any]:
-    return list(ListSource(items=[record]).chain(passages).lines())[0]
+    return passage_update(record)
 
 
 def _record_with_topics() -> dict:
@@ -382,9 +378,3 @@ def test_heading_text_skips_content_that_is_not_the_exact_tail() -> None:
     )
 
     assert "heading_text" not in record["fields"]
-
-
-def test_passages_flow_fails_at_the_end_for_a_record_it_cannot_transform() -> None:
-    record = {"fields": {"topics": {"assign": [{"concept_id": "finance flow"}]}}}
-    with pytest.raises(TransformFailures, match="1 records"):
-        _feed(record)

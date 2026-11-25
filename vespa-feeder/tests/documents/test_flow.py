@@ -9,10 +9,7 @@ the Vespa operation itself. Fusion owns every value, so that is all it does.
 from typing import Any
 
 import pytest
-from vespa_feeder.documents.flow import documents
-from vespa_feeder.stream.stream import TransformFailures
-
-from tests.stream.list_source import ListSource
+from vespa_feeder.documents.flow import document_update
 
 
 def _row(**overrides: Any) -> dict[str, Any]:
@@ -53,13 +50,7 @@ def _row(**overrides: Any) -> dict[str, Any]:
 
 
 def _feed(row: dict[str, Any]) -> list[dict[str, Any]]:
-    return list(ListSource(items=[row]).chain(documents).lines())
-
-
-def _row_without_an_id() -> dict[str, Any]:
-    row = _row()
-    del row["id"]
-    return row
+    return [document_update(row)]
 
 
 def test_row_becomes_a_vespa_update_that_creates_the_document() -> None:
@@ -100,29 +91,5 @@ def test_row_without_an_id_is_an_error() -> None:
     row = _row()
     del row["id"]
 
-    with pytest.raises(TransformFailures):
+    with pytest.raises(ValueError):
         _feed(row)
-
-
-def test_rows_either_side_of_a_bad_row_are_still_fed() -> None:
-    rows = [_row(id="a"), _row_without_an_id(), _row(id="b")]
-    updates = ListSource(items=rows).chain(documents).lines()
-    fed = [next(updates)["update"], next(updates)["update"]]
-    assert fed == ["id:documents:documents::a", "id:documents:documents::b"]
-    with pytest.raises(TransformFailures, match="1 records"):
-        next(updates)
-
-
-def test_five_hundred_bad_rows_are_tolerated_until_the_end() -> None:
-    rows = [_row_without_an_id() for _ in range(500)] + [_row(id="a")]
-    updates = ListSource(items=rows).chain(documents).lines()
-    assert next(updates)["update"] == "id:documents:documents::a"
-    with pytest.raises(TransformFailures, match="500 records"):
-        next(updates)
-
-
-def test_more_than_five_hundred_bad_rows_stop_the_feed() -> None:
-    rows = [_row_without_an_id() for _ in range(501)] + [_row(id="a")]
-    updates = ListSource(items=rows).chain(documents).lines()
-    with pytest.raises(TransformFailures, match="501 records"):
-        next(updates)
