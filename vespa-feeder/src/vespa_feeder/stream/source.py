@@ -1,6 +1,5 @@
 import logging
 import re
-from abc import ABC, abstractmethod
 from collections.abc import Generator
 from contextlib import closing
 from typing import Any
@@ -10,15 +9,10 @@ import orjson
 from mypy_boto3_s3 import S3Client
 from s3transfer.utils import S3_RETRYABLE_DOWNLOAD_ERRORS
 
+from vespa_feeder.stream.stream import Source, Stream
+
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 5
-
-
-class Source[A](ABC):
-    @abstractmethod
-    def lines(self) -> Generator[A]:
-        """Yield every item in the source."""
-        ...
 
 
 class S3Source(Source[dict[str, Any]]):
@@ -63,7 +57,7 @@ class S3Source(Source[dict[str, Any]]):
                 if line.strip():
                     yield orjson.loads(line)
 
-    def lines(self) -> Generator[dict[str, Any]]:
+    def lines(self) -> Stream[dict[str, Any]]:
         """Yield every JSON line of the latest export."""
         for key in self._bucket_keys(max(self._export_prefixes())):
             for attempt in range(1, MAX_ATTEMPTS + 1):
