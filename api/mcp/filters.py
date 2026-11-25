@@ -14,6 +14,7 @@ from pydantic import AfterValidator, WithJsonSchema
 
 from api.geographies_taxonomy import geographies_taxonomy
 from api.labels_taxonomy import labels_taxonomy
+from api.taxonomy.service import TaxonomyService
 from search.data_in_models import Label
 from search.engines.dev_vespa import AttributesCondition, FieldFilter, Filter
 from search.engines.vespa_query.filters import (
@@ -63,6 +64,8 @@ Region = Annotated[
 REGION_IDS = {
     label.value: label.id for label in geographies_taxonomy if label.type == "region"
 }
+# The only categories tagged with response areas.
+RESPONSE_AREA_CATEGORIES = {"Law", "Policy"}
 
 # Passages only see their document's labels as exact `{type}::{id}::{value}`
 # strings, so a label stored under a second name won't match.
@@ -105,7 +108,7 @@ def build_filter(
     :param for_passages: Match countries, regions and categories on the
         passage's document, since passages only carry topics themselves.
     :raises FilterArgError: When a geography or topic isn't a valid id, or
-        the date range is impossible
+        the date range or category and response area combination is impossible
     :return: The filter tree, or `None` when no arg is set
     """
     if (
@@ -116,6 +119,15 @@ def build_filter(
         raise FilterArgError(
             f"published_after ({published_after}) is later than published_before "
             f"({published_before}). Swap them, or drop one."
+        )
+    if (
+        response_areas
+        and categories
+        and RESPONSE_AREA_CATEGORIES.isdisjoint(categories)
+    ):
+        raise FilterArgError(
+            "response_areas only applies to Law and Policy, so it can't match "
+            f"{', '.join(categories)}. Drop response_areas, or use topics instead."
         )
     groups: list[Filter | AttributesCondition | FieldFilter] = []
     if geographies:
@@ -184,6 +196,24 @@ def _topic_id(topic: str) -> str:
             "Use search_topics to look up its id, e.g. 'concept::Q1343'."
         )
     return topic_id
+
+
+def check_topics_exist(topics: list[str] | None, taxonomy: TaxonomyService) -> None:
+    """
+    Raise for a well-formed topic id we don't have, which would match nothing.
+
+    :raises FilterArgError: When a topic isn't in the taxonomy
+    """
+    if not topics:
+        return
+    roots = taxonomy.roots()
+    for topic in topics:
+        topic_id = _topic_id(topic)
+        if not any(root.has_child(topic_id) for root in roots):
+            raise FilterArgError(
+                f"{topic!r} isn't a topic we have. "
+                "Use search_topics to look up its id, e.g. 'concept::Q1343'."
+            )
 
 
 def _any(filters: list[FieldFilter]) -> Filter:

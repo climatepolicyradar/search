@@ -17,6 +17,7 @@ from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools import ToolResult
 
 from api.mcp.filters import FilterArgError
+from api.taxonomy.service import TaxonomyNotLoadedError
 from search.engines import VespaError
 from search.log import get_logger
 
@@ -106,6 +107,10 @@ class ErrorMessageMiddleware(Middleware):
                 raise ToolError(vespa_error_message(cause)) from cause
             if isinstance(cause, FilterArgError):
                 raise ToolError(str(cause)) from cause
+            if isinstance(cause, TaxonomyNotLoadedError):
+                raise ToolError(
+                    "Search is unavailable right now. Try again shortly."
+                ) from cause
             raise
 
 
