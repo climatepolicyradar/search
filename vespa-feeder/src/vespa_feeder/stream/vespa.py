@@ -10,6 +10,7 @@ from typing import IO, Any, cast
 import orjson
 
 from vespa_feeder.s3 import get_ssm_parameter
+from vespa_feeder.stream.progress import VespaFeedStats
 from vespa_feeder.stream.stream import Stream
 
 VESPA_FEED_SETTINGS = [
@@ -128,7 +129,8 @@ def _finish(process: Popen[bytes], progress: IO[bytes]) -> Stream[bytes]:
             cmd=process.args,
             output=output,
         )
-    yield output
+    VespaFeedStats.model_validate_json(output)
+    yield b"\n" + output
 
 
 def _finish_after_failure(

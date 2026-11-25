@@ -4,6 +4,7 @@ from subprocess import CalledProcessError
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from vespa_feeder.stream.progress import VespaFeedStats, parse_stats
 from vespa_feeder.stream.stream import Stream
 from vespa_feeder.stream.vespa import VespaFeed
@@ -40,6 +41,13 @@ def documents(ids: list[str]) -> Stream[dict[str, Any]]:
 def failing_after_one() -> Stream[dict[str, Any]]:
     yield {"id": "a"}
     raise ValueError("upstream broke")
+
+
+def failing_on_started(output: Stream[bytes]) -> Stream[bytes]:
+    for chunk in output:
+        if b"started" in chunk:
+            raise ValueError("pipe broke")
+        yield chunk
 
 
 def failing_on_first_stats(stats: Stream[VespaFeedStats]) -> None:
@@ -111,6 +119,27 @@ def test_vespa_feed_reports_the_exit_code_when_vespa_stops_reading() -> None:
         list(feed.feed(many_documents()))
 
 
+def test_vespa_feed_raises_when_the_summary_is_not_stats() -> None:
+    feed = StandInFeed(args=["sh", "-c", "cat > /dev/null; echo not json at all"])
+    with pytest.raises(ValidationError):
+        list(feed.feed(documents(ids=["a"])))
+
+
+def test_vespa_feed_raises_when_the_summary_is_cut_short() -> None:
+    summary = vespa_stats_json(operations=3, ok=1).decode()[:-3]
+    feed = StandInFeed(args=["sh", "-c", 'cat > /dev/null; printf "%s" "$0"', summary])
+    with pytest.raises(ValidationError):
+        list(feed.feed(documents(ids=["a"])))
+
+
+def test_vespa_feed_summary_survives_unterminated_stderr() -> None:
+    summary = vespa_stats_json(operations=2, ok=2).decode()
+    script = 'printf "Error: something" >&2; cat > /dev/null; printf "%s" "$0"'
+    feed = StandInFeed(args=["sh", "-c", script, summary])
+    stats = list(parse_stats(feed.feed(documents(ids=["a", "b"]))))
+    assert stats == [vespa_stats(operations=2, ok=2)]
+
+
 def test_vespa_feed_kills_the_process_when_the_stream_is_closed(tmp_path: Path) -> None:
     exited_normally = tmp_path / "exited-normally"
     script = 'echo started >&2; sleep 3; touch "$0"'
@@ -132,6 +161,21 @@ def test_vespa_feed_is_killed_when_a_later_stage_fails(tmp_path: Path) -> None:
     source = ListSource(items=[{"id": "a"}])
     with pytest.raises(ValueError) as raised:
         source.chain(feed.feed).chain(parse_stats).run(failing_on_first_stats)
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid_file.read_text()), 0)
+    assert not exited_normally.exists()
+    assert raised.type is ValueError
+
+
+def test_vespa_feed_is_killed_when_the_next_pipe_fails(tmp_path: Path) -> None:
+    pid_file = tmp_path / "pid"
+    exited_normally = tmp_path / "exited-normally"
+    script = 'echo $$ > "$0"; echo started >&2; sleep 3; touch "$1"'
+    feed = StandInFeed(args=["sh", "-c", script, str(pid_file), str(exited_normally)])
+    source = ListSource(items=[{"id": "a"}])
+    drained: list[bytes] = []
+    with pytest.raises(ValueError) as raised:
+        source.chain(feed.feed).chain(failing_on_started).run(drained.extend)
     with pytest.raises(ProcessLookupError):
         os.kill(int(pid_file.read_text()), 0)
     assert not exited_normally.exists()

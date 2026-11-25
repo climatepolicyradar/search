@@ -32,4 +32,5 @@ class Chain[A, B](Source[B]):
 
     def lines(self) -> Stream[B]:
         """Yield every item of the wrapped source, passed through the pipe."""
-        return self._pipe(self._source.lines())
+        with closing(self._source.lines()) as upstream:
+            yield from self._pipe(upstream)

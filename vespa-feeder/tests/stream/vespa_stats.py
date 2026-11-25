@@ -8,6 +8,7 @@ def vespa_stats_json(operations: int, ok: int) -> bytes:
             "feeder.operation.count": operations,
             "feeder.seconds": 1.5,
             "feeder.ok.count": ok,
+            "feeder.ok.rate": ok / 1.5,
             "feeder.error.count": 0,
             "http.response.error.count": operations - ok,
             "http.response.code.counts": {"200": ok, "500": operations - ok},
