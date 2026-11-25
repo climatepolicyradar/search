@@ -5,6 +5,9 @@ schema documents {
             indexing: attribute | summary
             attribute: fast-search
         }
+        field content_hash type long {
+            indexing: attribute
+        }
         field title type string {
             indexing: index | summary
             index: enable-bm25

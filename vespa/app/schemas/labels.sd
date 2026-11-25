@@ -3,6 +3,9 @@
         field id type string {
             indexing: attribute | summary
         }
+        field content_hash type long {
+            indexing: attribute
+        }
         field type type string {
             indexing: attribute | summary
         }
