@@ -459,8 +459,8 @@
             <document type="labels" mode="index" global="true" />
         </documents>
 
-        <nodes deploy:instance="search-production" count="2">
-            <resources vcpu="4" memory="32Gb" disk="256Gb"/>
+        <nodes deploy:instance="search-production" count="4">
+            <resources vcpu="2" memory="32Gb" disk="256Gb"/>
         </nodes>
     </content>
 </services>
