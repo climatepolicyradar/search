@@ -1,7 +1,25 @@
 import pytest
-from vespa_feeder.stream.stream import Stream
+from vespa_feeder.stream.stream import Source, Stream
 
 from tests.stream.list_source import ListSource
+
+
+class ClosureRecordingSource(Source[int]):
+    def __init__(self) -> None:
+        self.closed = False
+
+    def lines(self) -> Stream[int]:
+        """Yield two items, recording when the stream is closed."""
+        try:
+            yield 1
+            yield 2
+        finally:
+            self.closed = True
+
+
+def failing_after_one(items: Stream[int]) -> None:
+    next(items)
+    raise ValueError("sink broke")
 
 
 def doubled(items: Stream[int]) -> Stream[int]:
@@ -41,3 +59,11 @@ def test_run_raises_when_a_pipe_fails_part_way() -> None:
     drained: list[int] = []
     with pytest.raises(ValueError):
         ListSource(items=[1, 2, 3]).chain(failing_on_two).run(drained.extend)
+
+
+def test_run_closes_the_stream_when_the_sink_fails() -> None:
+    source = ClosureRecordingSource()
+    with pytest.raises(ValueError) as raised:
+        source.run(failing_after_one)
+    assert source.closed
+    assert raised.type is ValueError

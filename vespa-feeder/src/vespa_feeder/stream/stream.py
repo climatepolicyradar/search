@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
+from contextlib import closing
 
-type Stream[A] = Iterator[A]
+type Stream[A] = Generator[A]
 type Pipe[A, B] = Callable[[Stream[A]], Stream[B]]
 type Sink[A] = Callable[[Stream[A]], None]
 
@@ -20,7 +21,8 @@ class Source[A](ABC):
 
     def run(self, sink: Sink[A]) -> None:
         """Drain this source into the sink."""
-        sink(self.lines())
+        with closing(self.lines()) as stream:
+            sink(stream)
 
 
 class Chain[A, B](Source[B]):
