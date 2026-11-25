@@ -75,7 +75,7 @@ if __name__ == "__main__":
                 name=image_name,
                 tag="latest",
             ),
-            job_variables=default_job_variables,
+            job_variables={**default_job_variables, "cpu": 256, "memory": 512},
             concurrency_limit=_CONCURRENCY_LIMIT,
             schedule=Cron(feed.cron, slug=flow.name),
             build=False,

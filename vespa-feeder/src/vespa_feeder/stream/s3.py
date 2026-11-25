@@ -1,4 +1,3 @@
-import logging
 import re
 from collections.abc import Generator
 from contextlib import closing
@@ -9,9 +8,8 @@ import orjson
 from mypy_boto3_s3 import S3Client
 from s3transfer.utils import S3_RETRYABLE_DOWNLOAD_ERRORS
 
-from vespa_feeder.stream.stream import Source, Stream
+from vespa_feeder.stream.stream import Source, Stream, run_logger
 
-logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 5
 
 
@@ -67,7 +65,7 @@ class S3Source(Source[dict[str, Any]]):
                 except S3_RETRYABLE_DOWNLOAD_ERRORS:
                     if attempt == MAX_ATTEMPTS:
                         raise
-                    logger.warning(
+                    run_logger().warning(
                         f"Re-reading s3://{self._bucket}/{key} after a broken stream "
                         f"(attempt {attempt}/{MAX_ATTEMPTS})"
                     )

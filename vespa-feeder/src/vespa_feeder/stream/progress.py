@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import logging
-
 from pydantic import BaseModel, ConfigDict, Field
 
-from vespa_feeder.stream.stream import Stream
-
-logger = logging.getLogger(__name__)
+from vespa_feeder.stream.stream import Stream, run_logger
 
 
 class IncompleteStats(Exception):
@@ -77,11 +73,11 @@ def parse_stats(output: Stream[bytes]) -> Stream[VespaFeedStats]:
             snapshot_lines.append(line)
             if line == b"}":
                 stats = VespaFeedStats.model_validate_json(b"".join(snapshot_lines))
-                logger.info(f"vespa feed: {stats.describe()}")
+                run_logger().info(f"vespa feed: {stats.describe()}")
                 snapshot_lines = []
                 yield stats
         elif line.strip():
-            logger.warning(f"vespa feed: {line.decode(errors='replace')}")
+            run_logger().warning(f"vespa feed: {line.decode(errors='replace')}")
 
     if snapshot_lines:
         raise IncompleteStats
