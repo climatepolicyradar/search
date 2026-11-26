@@ -460,7 +460,7 @@
         </documents>
 
         <nodes deploy:instance="search-production" count="4">
-            <resources vcpu="2" memory="32Gb" disk="256Gb"/>
+            <resources vcpu="4" memory="32Gb" disk="256Gb"/>
         </nodes>
     </content>
 </services>
