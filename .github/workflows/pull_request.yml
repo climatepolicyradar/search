@@ -199,8 +199,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-${{ matrix.environment }}-github-actions
-          role-session-name: GitHub_Pulumi_up_${{ matrix.environment }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ci/ci-search-${{ matrix.environment }}
+          role-session-name: search-pull-request-preview-${{ matrix.environment }}
           aws-region: eu-west-1
           # trunk-ignore(actionlint/action): aws-profile is a valid v6 input; actionlint's popular-actions metadata is stale
           aws-profile: ${{ matrix.environment }}

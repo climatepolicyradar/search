@@ -24,8 +24,8 @@ jobs:
       - run: just install
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/search-production-github-actions
-          role-session-name: GithubSearchDeploy
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ci/ci-search-production
+          role-session-name: search-prefect-deploy
           aws-region: eu-west-1
       - uses: aws-actions/amazon-ecr-login@v2
       - run: just prefect-build
