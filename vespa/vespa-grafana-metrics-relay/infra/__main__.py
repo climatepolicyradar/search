@@ -45,15 +45,10 @@ ssm_parameter_vespa_private_key = aws.ssm.Parameter(
 pulumi.export("ssm_parameter_vespa_private_key", ssm_parameter_vespa_private_key.arn)
 
 # The Lambda execution role must carry the CI permissions boundary, which cpr-aws-iam
-# defines in the staging and production accounts and denies the CI role creating a role
-# without. There is no boundary in the sandbox account, so that stack stays as it was.
-# Secret because the ARN holds the account id.
-permissions_boundary = (
-    None
-    if pulumi.get_stack() == "sandbox"
-    else pulumi.Output.secret(
-        f"arn:aws:iam::{aws.get_caller_identity().account_id}:policy/ci-boundary"
-    )
+# defines in every account and denies the CI role creating a role without. Secret because
+# the ARN holds the account id.
+permissions_boundary = pulumi.Output.secret(
+    f"arn:aws:iam::{aws.get_caller_identity().account_id}:policy/ci-boundary"
 )
 
 lambda_role = aws.iam.Role(
