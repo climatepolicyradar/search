@@ -221,6 +221,18 @@ def test_impossible_date_range_is_rejected_not_silently_empty():
         )
 
 
+def test_response_areas_without_law_or_policy_is_rejected_not_silently_empty():
+    with pytest.raises(FilterArgError, match="only applies to Law and Policy"):
+        build_filter(categories=["Litigation"], response_areas=["Adaptation"])
+
+
+def test_response_areas_with_law_among_the_categories_is_allowed():
+    assert (
+        build_filter(categories=["Litigation", "Law"], response_areas=["Adaptation"])
+        is not None
+    )
+
+
 def test_a_single_day_range_is_allowed():
     assert (
         build_filter(

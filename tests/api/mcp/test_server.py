@@ -7,20 +7,30 @@ what reaches the model, not search quality.
 
 import asyncio
 import logging
-from collections.abc import Iterator
+from collections.abc import AsyncGenerator, Iterator
+from contextlib import asynccontextmanager
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx2
 import pytest
-from fastmcp import Client
+from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 
 from api.mcp.middleware import FILTER_ARGS
-from api.mcp.server import build_server, document_titles
+from api.mcp.server import (
+    MAX_FILTER_VALUES,
+    MAX_PAGE,
+    MAX_QUERY_CHARS,
+    build_server,
+    document_titles,
+)
+from api.state import State
 from search.engines import ListResponse, VespaError
 from search.label import LabelSearchResult
 from search.passage import Passage
 from tests.api.mcp.test_models import make_document
+from tests.engines.dev_vespa.stub_labels_search_engine import StubLabelSearchEngine
 from tests.state import stub_state
 
 SEARCH_TOOLS = {
@@ -79,28 +89,40 @@ def passage_engine() -> Iterator[MagicMock]:
         yield engine
 
 
+KNOWN_TOPIC = LabelSearchResult(
+    id="concept::Q1343",
+    type="concept",
+    value="adaptation finance",
+    alternative_labels=["climate adaptation funding"],
+)
+
+
 @pytest.fixture
 def label_engine() -> Iterator[MagicMock]:
     with patch("api.mcp.server.DevVespaLabelSearchEngine") as engine_cls:
         engine = MagicMock()
-        topic = LabelSearchResult(
-            id="concept::Q1343",
-            type="concept",
-            value="adaptation finance",
-            alternative_labels=["climate adaptation funding"],
-        )
         engine.asearch = AsyncMock(
             return_value=ListResponse(
-                results=[topic], total_size=1, next_page_token=None
+                results=[KNOWN_TOPIC], total_size=1, next_page_token=None
             )
         )
         engine_cls.return_value = engine
         yield engine
 
 
+@asynccontextmanager
+async def state_with_taxonomy(_server: FastMCP) -> AsyncGenerator[State]:
+    """Stub state with the taxonomy loaded, so topic ids can be checked."""
+    async with stub_state(httpx=MagicMock()) as state:
+        labels = cast(StubLabelSearchEngine, state.labels)
+        labels.add_all_labels_response([KNOWN_TOPIC])
+        await state.taxonomy._refresh()
+        yield state
+
+
 def server():
     """The MCP with a stand-in client. The engines are mocked, so it's never used."""
-    return build_server(lifespan=lambda _: stub_state(httpx=MagicMock()))
+    return build_server(lifespan=state_with_taxonomy)
 
 
 def call(tool: str, arguments: dict):
@@ -203,7 +225,9 @@ def test_search_passages_without_documents_uses_search(passage_engine: MagicMock
     )
 
 
-def test_search_passages_with_documents_searches_within(passage_engine: MagicMock):
+def test_search_passages_with_documents_searches_within(
+    passage_engine: MagicMock, document_engine: MagicMock
+):
     call(
         "search_passages",
         {"query": "adaptation", "document_ids": ["CCLW.document.1.0"]},
@@ -228,6 +252,114 @@ def test_document_ids_with_filters_is_refused_not_silently_dropped(
             },
         )
     passage_engine.asearch_within.assert_not_awaited()
+
+
+def test_unknown_document_id_is_rejected_not_silently_empty(
+    passage_engine: MagicMock, document_engine: MagicMock
+):
+    # document_engine only finds CCLW.document.1.0.
+    with pytest.raises(ToolError, match="No document with id 'missing', 'gone'"):
+        call(
+            "search_passages",
+            {
+                "query": "adaptation",
+                "document_ids": ["CCLW.document.1.0", "missing", "gone"],
+            },
+        )
+    passage_engine.asearch_within.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "tool", ["search_documents", "search_passages", "search_topics"]
+)
+def test_blank_query_is_rejected(
+    tool: str,
+    document_engine: MagicMock,
+    passage_engine: MagicMock,
+    label_engine: MagicMock,
+):
+    with pytest.raises(ToolError):
+        call(tool, {"query": "   "})
+    for engine in (document_engine, passage_engine, label_engine):
+        engine.asearch.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "tool", ["search_documents", "search_passages", "search_topics"]
+)
+def test_overlong_query_is_rejected(
+    tool: str,
+    document_engine: MagicMock,
+    passage_engine: MagicMock,
+    label_engine: MagicMock,
+):
+    with pytest.raises(ToolError):
+        call(tool, {"query": "a" * (MAX_QUERY_CHARS + 1)})
+    for engine in (document_engine, passage_engine, label_engine):
+        engine.asearch.assert_not_awaited()
+
+
+# Valid values, so only the count can be what's rejected.
+@pytest.mark.parametrize(
+    ("tool", "arg", "value"),
+    [
+        ("search_documents", "geographies", "KEN"),
+        ("search_documents", "regions", "Europe & Central Asia"),
+        ("search_documents", "categories", "Law"),
+        ("search_documents", "response_areas", "Adaptation"),
+        ("search_documents", "topics", "concept::Q1343"),
+        ("search_passages", "document_ids", "CCLW.document.1.0"),
+        ("search_passages", "geographies", "KEN"),
+        ("search_passages", "regions", "Europe & Central Asia"),
+        ("search_passages", "categories", "Law"),
+        ("search_passages", "topics", "concept::Q1343"),
+    ],
+)
+def test_too_many_filter_values_is_rejected(
+    tool: str,
+    arg: str,
+    value: str,
+    document_engine: MagicMock,
+    passage_engine: MagicMock,
+):
+    with pytest.raises(ToolError, match="at most"):
+        call(tool, {"query": "adaptation", arg: [value] * (MAX_FILTER_VALUES + 1)})
+    document_engine.asearch.assert_not_awaited()
+    passage_engine.asearch.assert_not_awaited()
+    passage_engine.asearch_within.assert_not_awaited()
+
+
+def test_page_past_the_max_is_rejected(document_engine: MagicMock):
+    with pytest.raises(ToolError):
+        call("search_documents", {"query": "adaptation", "page": MAX_PAGE + 1})
+    document_engine.asearch.assert_not_awaited()
+
+
+def test_unknown_topic_id_is_rejected_not_silently_empty(document_engine: MagicMock):
+    with pytest.raises(ToolError, match="isn't a topic we have"):
+        call("search_documents", {"query": "adaptation", "topics": ["Q999999"]})
+    document_engine.asearch.assert_not_awaited()
+
+
+def test_topics_before_the_taxonomy_loads_say_try_again(
+    document_engine: MagicMock, caplog: pytest.LogCaptureFixture
+):
+    unloaded = build_server(lifespan=lambda _: stub_state(httpx=MagicMock()))
+
+    async def run():
+        async with Client(unloaded) as client:
+            await client.call_tool(
+                "search_documents",
+                {"query": "adaptation", "topics": ["concept::Q1343"]},
+            )
+
+    with pytest.raises(ToolError, match="Try again shortly"):
+        asyncio.run(run())
+    document_engine.asearch.assert_not_awaited()
+    assert any(
+        record.levelno == logging.ERROR and record.message.startswith("Error:")
+        for record in caplog.records
+    )
 
 
 def test_get_document_returns_one_hit(document_engine: MagicMock):
@@ -533,6 +665,39 @@ def test_document_titles_are_looked_up_once_by_principal(
     assert ids == ["CCLW.family.1.0", "CCLW.document.9.0"]
     assert kwargs["pagination"].page_size == 2
     assert titles == {"CCLW.document.1.0": "Climate Change Act"}
+
+
+def test_known_titles_are_not_looked_up_again(document_engine: MagicMock):
+    known = {"CCLW.family.1.0": "Climate Change Act"}
+
+    titles = asyncio.run(document_titles([make_passage()], MagicMock(), known=known))
+
+    assert titles == known
+    document_engine.asearch.assert_not_awaited()
+
+
+def test_search_within_documents_looks_up_titles_once(
+    document_engine: MagicMock,
+):
+    with patch("api.mcp.server.DevVespaPassageSearchEngine") as engine_cls:
+        engine_cls.return_value.asearch_within = AsyncMock(
+            return_value=ListResponse(
+                results=[make_passage(principal_id="CCLW.document.1.0")],
+                total_size=1,
+                next_page_token=None,
+            )
+        )
+        result = call(
+            "search_passages",
+            {"query": "adaptation", "document_ids": ["CCLW.document.1.0"]},
+        )
+
+    # Once to check the id exists, which also gives the title.
+    document_engine.asearch.assert_awaited_once()
+    assert result.structured_content is not None
+    assert result.structured_content["results"][0]["document_title"] == (
+        "Climate Change Act"
+    )
 
 
 def test_no_passages_need_no_title_lookup(document_engine: MagicMock):

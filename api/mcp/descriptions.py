@@ -58,7 +58,7 @@ GET_DOCUMENT = (
     "versions or filings."
 )
 
-QUERY = "What to search for, in plain words."
+QUERY = "What to search for, in plain words, in English."
 GEOGRAPHIES = "Countries, as ISO 3166-1 alpha-3 codes, e.g. ['KEN', 'GBR']."
 CATEGORIES = "Kinds of document."
 RESPONSE_AREAS = (

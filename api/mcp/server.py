@@ -6,7 +6,7 @@ builds a filter, calls one engine method and trims the result. send_feedback
 logs what the user wants Climate Policy Radar to know.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date
 from typing import Annotated, Literal
 
@@ -24,6 +24,7 @@ from api.mcp.filters import (
     Region,
     ResponseArea,
     build_filter,
+    check_topics_exist,
 )
 from api.mcp.middleware import CallLogMiddleware, ErrorMessageMiddleware
 from api.mcp.models import (
@@ -41,7 +42,7 @@ from api.mcp.models import (
     worth_quoting,
 )
 from api.settings import settings
-from api.state import HttpxDep
+from api.state import HttpxDep, StateDep
 from search.engines import OrderBy, Pagination
 from search.engines.dev_vespa import (
     DevVespaDocumentSearchEngine,
@@ -88,20 +89,49 @@ FeedbackText = Annotated[
         strip_whitespace=True, min_length=1, max_length=MAX_FEEDBACK_CHARS
     ),
 ]
+# Plenty for a search query, and stops anyone sending whole documents to Vespa.
+MAX_QUERY_CHARS = 500
+# A blank query matches loosely and returns unrelated results.
+SearchQuery = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_QUERY_CHARS),
+]
+# Each value adds a clause to the Vespa query, and document ids a title lookup.
+MAX_FILTER_VALUES = 20
+FilterValues = Annotated[list[str], Field(max_length=MAX_FILTER_VALUES)]
+# Deep pages are slow for Vespa, and nobody reads past the first few.
+MAX_PAGE = 40
 
 logger = get_logger(__name__)
 
 
 async def document_titles(
-    passages: Iterable[Passage], httpx: httpx2.AsyncClient
+    passages: Iterable[Passage],
+    httpx: httpx2.AsyncClient,
+    known: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
     """
     Titles for the documents these passages come from, in one query.
 
     Passages don't carry a title, and without one the model needs an extra
     call per document just to say what it's quoting.
+
+    :param known: Titles already looked up, which aren't fetched again.
     """
-    ids = list(dict.fromkeys(title_id(passage) for passage in passages))
+    known = known or {}
+    missing = [
+        document_id
+        for document_id in (title_id(passage) for passage in passages)
+        if document_id not in known
+    ]
+    return {**known, **await titles_by_id(missing, httpx)}
+
+
+async def titles_by_id(
+    document_ids: Iterable[str], httpx: httpx2.AsyncClient
+) -> dict[str, str]:
+    """Titles for these documents in one query, leaving out ids we don't have."""
+    ids = list(dict.fromkeys(document_ids))
     if not ids:
         return {}
     engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
@@ -118,6 +148,25 @@ async def document_titles(
         ),
     )
     return {document.id: document.title for document in results.results}
+
+
+async def check_documents_exist(
+    document_ids: list[str], httpx: httpx2.AsyncClient
+) -> dict[str, str]:
+    """
+    Raise for an id we don't have, which would otherwise just match nothing.
+
+    :raises FilterArgError: When a document id isn't found
+    :return: The documents' titles by id, so they needn't be fetched again
+    """
+    found = await titles_by_id(document_ids, httpx)
+    missing = [document_id for document_id in document_ids if document_id not in found]
+    if missing:
+        raise FilterArgError(
+            f"No document with id {', '.join(map(repr, missing))}. "
+            "Use search_documents to find a document's id."
+        )
+    return found
 
 
 def build_server(lifespan: LifespanCallable) -> FastMCP:
@@ -139,21 +188,27 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
     @mcp.tool(description=descriptions.SEARCH_DOCUMENTS, annotations=READ_ONLY)
     async def search_documents(
         httpx: HttpxDep,
-        query: Annotated[str, Field(description=descriptions.QUERY)],
+        state: StateDep,
+        query: Annotated[SearchQuery, Field(description=descriptions.QUERY)],
         geographies: Annotated[
-            list[str] | None, Field(description=descriptions.GEOGRAPHIES)
+            FilterValues | None, Field(description=descriptions.GEOGRAPHIES)
         ] = None,
         regions: Annotated[
-            list[Region] | None, Field(description=descriptions.REGIONS)
+            list[Region] | None,
+            Field(max_length=MAX_FILTER_VALUES, description=descriptions.REGIONS),
         ] = None,
         categories: Annotated[
-            list[Category] | None, Field(description=descriptions.CATEGORIES)
+            list[Category] | None,
+            Field(max_length=MAX_FILTER_VALUES, description=descriptions.CATEGORIES),
         ] = None,
         response_areas: Annotated[
-            list[ResponseArea] | None, Field(description=descriptions.RESPONSE_AREAS)
+            list[ResponseArea] | None,
+            Field(
+                max_length=MAX_FILTER_VALUES, description=descriptions.RESPONSE_AREAS
+            ),
         ] = None,
         topics: Annotated[
-            list[str] | None, Field(description=descriptions.TOPICS)
+            FilterValues | None, Field(description=descriptions.TOPICS)
         ] = None,
         published_after: Annotated[
             date | None, Field(description=descriptions.PUBLISHED_AFTER)
@@ -164,8 +219,11 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
         limit: Annotated[
             Limit, Field(description=descriptions.DOCUMENT_LIMIT)
         ] = DEFAULT_LIMIT,
-        page: Annotated[int, Field(ge=1, description=descriptions.PAGE)] = 1,
+        page: Annotated[
+            int, Field(ge=1, le=MAX_PAGE, description=descriptions.PAGE)
+        ] = 1,
     ) -> DocumentResults:
+        check_topics_exist(topics, state.taxonomy)
         engine = DevVespaDocumentSearchEngine(settings=settings, httpx=httpx)
         results = await engine.asearch(
             query=query,
@@ -196,21 +254,24 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
     @mcp.tool(description=descriptions.SEARCH_PASSAGES, annotations=READ_ONLY)
     async def search_passages(
         httpx: HttpxDep,
-        query: Annotated[str, Field(description=descriptions.QUERY)],
+        state: StateDep,
+        query: Annotated[SearchQuery, Field(description=descriptions.QUERY)],
         document_ids: Annotated[
-            list[str] | None, Field(description=descriptions.DOCUMENT_IDS)
+            FilterValues | None, Field(description=descriptions.DOCUMENT_IDS)
         ] = None,
         geographies: Annotated[
-            list[str] | None, Field(description=descriptions.GEOGRAPHIES)
+            FilterValues | None, Field(description=descriptions.GEOGRAPHIES)
         ] = None,
         regions: Annotated[
-            list[Region] | None, Field(description=descriptions.REGIONS)
+            list[Region] | None,
+            Field(max_length=MAX_FILTER_VALUES, description=descriptions.REGIONS),
         ] = None,
         categories: Annotated[
-            list[Category] | None, Field(description=descriptions.CATEGORIES)
+            list[Category] | None,
+            Field(max_length=MAX_FILTER_VALUES, description=descriptions.CATEGORIES),
         ] = None,
         topics: Annotated[
-            list[str] | None, Field(description=descriptions.TOPICS)
+            FilterValues | None, Field(description=descriptions.TOPICS)
         ] = None,
         limit: Annotated[
             Limit, Field(description=descriptions.PASSAGE_LIMIT)
@@ -218,6 +279,7 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
     ) -> PassageResults:
         engine = DevVespaPassageSearchEngine(settings=settings, httpx=httpx)
         pagination = Pagination(page_token=1, page_size=limit * PASSAGE_OVERFETCH)
+        known_titles: dict[str, str] = {}
         if document_ids:
             # `asearch_within` ORs filters with the query, so label filters
             # would widen the search. Raise so the model knows they weren't applied.
@@ -227,6 +289,7 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
                     "categories or topics. The documents are already chosen, "
                     "so search within them using just the query."
                 )
+            known_titles = await check_documents_exist(document_ids, httpx)
             results = await engine.asearch_within(
                 document_ids=document_ids,
                 query=query,
@@ -234,6 +297,7 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
                 order_by=BY_RELEVANCE,
             )
         else:
+            check_topics_exist(topics, state.taxonomy)
             results = await engine.asearch(
                 query=query,
                 pagination=pagination,
@@ -248,7 +312,7 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
             )
         quotable = [passage for passage in results.results if worth_quoting(passage)]
         kept = dedupe_passages(quotable)
-        titles = await document_titles(kept[:limit], httpx)
+        titles = await document_titles(kept[:limit], httpx, known=known_titles)
         return PassageResults(
             results=[
                 PassageHit.from_passage(passage, titles) for passage in kept[:limit]
@@ -305,7 +369,7 @@ def build_server(lifespan: LifespanCallable) -> FastMCP:
     @mcp.tool(description=descriptions.SEARCH_TOPICS, annotations=READ_ONLY)
     async def search_topics(
         httpx: HttpxDep,
-        query: Annotated[str, Field(description=descriptions.TOPIC_QUERY)],
+        query: Annotated[SearchQuery, Field(description=descriptions.TOPIC_QUERY)],
         limit: Annotated[
             Limit, Field(description=descriptions.TOPIC_LIMIT)
         ] = DEFAULT_LIMIT,
