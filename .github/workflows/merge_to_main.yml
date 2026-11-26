@@ -173,7 +173,7 @@ jobs:
       environment: production
       working-directory: ./infra
       stack: climatepolicyradar/search
-      aws-role: search-production-github-actions
+      aws-role: ci-search-production
 
   k6-pulumi-up:
     uses: ./.github/workflows/pulumi_up.yml

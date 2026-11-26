@@ -44,6 +44,13 @@ ssm_parameter_vespa_private_key = aws.ssm.Parameter(
 )
 pulumi.export("ssm_parameter_vespa_private_key", ssm_parameter_vespa_private_key.arn)
 
+# The Lambda execution role must carry the CI permissions boundary, which cpr-aws-iam
+# defines in every account and denies the CI role creating a role without. Secret because
+# the ARN holds the account id.
+permissions_boundary = pulumi.Output.secret(
+    f"arn:aws:iam::{aws.get_caller_identity().account_id}:policy/ci-boundary"
+)
+
 lambda_role = aws.iam.Role(
     f"lambda_role-{project}",
     assume_role_policy=json.dumps(
@@ -58,6 +65,7 @@ lambda_role = aws.iam.Role(
             ],
         }
     ),
+    permissions_boundary=permissions_boundary,
 )
 pulumi.export("lambda_role", lambda_role.arn)
 

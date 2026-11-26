@@ -23,6 +23,10 @@ org_name = "climatepolicyradar"
 aws_account = aws.get_caller_identity()
 account_id = aws_account.account_id
 
+# Runtime service roles must carry the CI permissions boundary, which cpr-aws-iam defines
+# and denies the CI role creating a role without. Secret because it holds the account id.
+ci_boundary_arn = pulumi.Output.secret(f"arn:aws:iam::{account_id}:policy/ci-boundary")
+
 # ---------------------------------------------------------------------------
 # OIDC Identity Provider (managed in aws_env, referenced here)
 # ---------------------------------------------------------------------------
@@ -124,6 +128,7 @@ review_ecs_task_role = aws.iam.Role(
         }
     ),
     max_session_duration=3600,
+    permissions_boundary=ci_boundary_arn,
     opts=pulumi.ResourceOptions(additional_secret_outputs=["arn"]),
 )
 
@@ -170,6 +175,7 @@ review_ecs_task_execution_role = aws.iam.Role(
         "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
     ],
     max_session_duration=3600,
+    permissions_boundary=ci_boundary_arn,
     opts=pulumi.ResourceOptions(additional_secret_outputs=["arn"]),
 )
 
@@ -217,6 +223,7 @@ review_ecs_infrastructure_role = aws.iam.Role(
         "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices",
     ],
     max_session_duration=3600,
+    permissions_boundary=ci_boundary_arn,
     opts=pulumi.ResourceOptions(additional_secret_outputs=["arn"]),
 )
 

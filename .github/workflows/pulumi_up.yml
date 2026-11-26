@@ -24,12 +24,14 @@ on:
         required: true
       aws-role:
         description: >-
-          IAM role name to assume for this project's deploy (e.g.
-          search-production-github-actions). Leave empty for a project with no
-          AWS resources (e.g. k6/infra, which only touches Grafana Cloud) — the
-          AWS credentials step is skipped entirely.
+          Name of the CI role (under the /ci/ path) to assume for this project's
+          deploy, e.g. ci-search-production. The role only works in the GitHub
+          environment it was written for, so it has to match the environment
+          input. Leave empty for a project with no AWS resources (e.g. k6/infra,
+          which only touches Grafana Cloud), which skips the AWS credentials
+          step entirely.
         type: string
-        default: search-production-github-actions
+        default: ci-search-production
         required: false
   workflow_call:
     inputs:
@@ -49,10 +51,11 @@ on:
         required: false
       aws-role:
         description: >-
-          IAM role name to assume for this project's deploy. Leave empty for a
-          project with no AWS resources — the AWS credentials step is skipped.
+          Name of the CI role (under the /ci/ path) to assume for this project's
+          deploy, e.g. ci-search-production. Leave empty for a project with no
+          AWS resources, which skips the AWS credentials step.
         type: string
-        default: search-production-github-actions
+        default: ci-search-production
         required: false
 
 permissions:
@@ -69,8 +72,8 @@ jobs:
       - if: inputs.aws-role != ''
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ inputs.aws-role }}
-          role-session-name: GitHub_Pulumi_up_${{ inputs.environment }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ci/${{ inputs.aws-role }}
+          role-session-name: search-pulumi-up-${{ inputs.environment }}
           aws-region: eu-west-1
           # checkov:skip=CKV_GHA_7: this is a deploy workflow, not a build; the environment input selects the target stack and does not affect a build artifact
           # trunk-ignore(actionlint/action): aws-profile is a valid v6 input; actionlint's popular-actions metadata is stale

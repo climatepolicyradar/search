@@ -7,7 +7,6 @@ import components.aws as components_aws
 import pulumi
 import pulumi_docker_build as docker_build
 from pulumi_aws import (
-    arn_build,
     ecr,
     ecs,
     get_caller_identity,
@@ -38,13 +37,11 @@ account_id = caller_identity.account_id
 stack = pulumi.get_stack()
 name = pulumi.get_project()
 
-tags = {
-    "CPR-Created-By": "pulumi",
-    "CPR-Pulumi-Stack-Name": stack,
-    "CPR-Pulumi-Project-Name": pulumi.get_project(),
-    "CPR-Tag": f"{stack}-{name}",
-    "Environment": stack,
-}
+# Runtime service roles must carry the CI permissions boundary, which cpr-aws-iam defines
+# and denies the CI role creating a role without. Secret because it holds the account id.
+ci_boundary_arn = pulumi.Output.secret(
+    f"arn:aws:iam::{account_id}:policy/ci-boundary"
+)
 
 application_name = "search-api"
 dockerfile_path = REPO_ROOT_DIR / "api" / "Dockerfile"
@@ -268,132 +265,6 @@ elif stack != "review":
         ),
     )
 
-    github_assume_role_policy = iam.PolicyDocumentArgs(
-        version=iam.PolicyDocumentVersion.POLICY_DOCUMENT_VERSION_2012_10_17,
-        statement=[
-            iam.PolicyStatementArgs(
-                effect=iam.PolicyStatementEffect.ALLOW,
-                action="sts:AssumeRoleWithWebIdentity",
-                principal=iam.FederatedPrincipalArgs(
-                    federated=f"arn:aws:iam::{account_id}:oidc-provider/token.actions.githubusercontent.com",
-                ),
-                condition={
-                    "StringEquals": {
-                        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                    },
-                    "StringLike": {
-                        "token.actions.githubusercontent.com:sub": "repo:climatepolicyradar/search:*",
-                    },
-                },
-            ),
-        ],
-    )
-
-    relevance_tests_github_actions_role = iam.Role(
-        resource_name=f"{name}-{stack}-github-actions-relevance-tests",
-        name=f"{name}-{stack}-github-actions-relevance-tests",
-        assume_role_policy=github_assume_role_policy,
-        tags=tags,
-    )
-
-    relevance_tests_github_actions_role_policy = iam.RolePolicy(
-        resource_name=f"{name}-{stack}-github-actions-relevance-tests-policy",
-        role=relevance_tests_github_actions_role.name,
-        policy=iam.PolicyDocumentArgs(
-            version=iam.PolicyDocumentVersion.POLICY_DOCUMENT_VERSION_2012_10_17,
-            statement=[
-                iam.PolicyStatementArgs(
-                    resource=arn_build(
-                        service="s3",
-                        partition="aws",
-                        resource="cpr-cache/search/vespa/*",
-                        account_id="",
-                        region="",
-                    ),
-                    effect=iam.PolicyStatementEffect.ALLOW,
-                    action="s3:GetObject",
-                ),
-            ],
-        ),
-    )
-
-    search_api_github_actions_role = iam.Role(
-        resource_name=f"{name}-{stack}-github-actions",
-        assume_role_policy=github_assume_role_policy,
-        inline_policies=[
-            {
-                "name": f"{name}-{stack}-github-actions",
-                "policy": json.dumps(
-                    {
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Action": [
-                                    "ecr:GetAuthorizationToken",
-                                    "ecr:InitiateLayerUpload",
-                                    "ecr:UploadLayerPart",
-                                    "ecr:CompleteLayerUpload",
-                                    "ecr:PutImage",
-                                    "iam:PassRole",
-                                    "ecr:DescribeRepositories",
-                                    "ecr:CreateRepository",
-                                    "ecr:BatchGetImage",
-                                    "ecr:BatchCheckLayerAvailability",
-                                    "ecr:DescribeImages",
-                                    "ecr:GetDownloadUrlForLayer",
-                                    "ecr:ListImages",
-                                    "iam:ListAccountAliases",
-                                    "iam:GetPolicy",
-                                    "iam:GetRole",
-                                    # Tagging via aws:defaultTags. The provider reads
-                                    # existing tags before writing, and Untag* is needed
-                                    # to remove or rename a tag, not just add one.
-                                    "iam:TagRole",
-                                    "iam:UntagRole",
-                                    "iam:TagPolicy",
-                                    "iam:UntagPolicy",
-                                    "ssm:AddTagsToResource",
-                                    "ssm:RemoveTagsFromResource",
-                                    "ssm:ListTagsForResource",
-                                    "ecr:TagResource",
-                                    "ecr:UntagResource",
-                                    "ecr:ListTagsForResource",
-                                    "ecs:TagResource",
-                                    "ecs:UntagResource",
-                                    "s3:GetBucketTagging",
-                                    "s3:PutBucketTagging",
-                                    "acm:DescribeCertificate",
-                                    # used for ECS deployment
-                                    "ecs:DescribeServices",
-                                    "ecs:DescribeExpressGatewayService",
-                                    "ecs:CreateExpressGatewayService",
-                                    "ecs:UpdateExpressGatewayService",
-                                    "ecs:CreateCluster",
-                                    "ecs:RegisterTaskDefinition",
-                                    "ecs:ListServiceDeployments",
-                                    "ecs:DescribeServiceDeployments",
-                                ],
-                                "Effect": "Allow",
-                                "Resource": "*",
-                            },
-                            {
-                                "Effect": "Allow",
-                                "Action": "sts:AssumeRole",
-                                "Resource": [
-                                    f"arn:aws:iam::{account_id}:role/{application_name}-ecs-infrastructure-role",
-                                    f"arn:aws:iam::{account_id}:role/{application_name}-ecs-task-execution-role",
-                                ],
-                            },
-                        ],
-                    }
-                ),
-            }
-        ],
-        name=f"{name}-{stack}-github-actions",
-        tags=tags,
-        opts=pulumi.ResourceOptions(protect=True),
-    )
-
     # -----
     # SSM
     # -----
@@ -441,6 +312,7 @@ elif stack != "review":
                 )
             ]
         ).json,
+        permissions_boundary=ci_boundary_arn,
     )
     iam.RolePolicyAttachment(
         f"{application_name}-ecs-task-reads-s3-policy-attachment",
@@ -464,23 +336,12 @@ elif stack != "review":
                     ],
                     actions=["sts:AssumeRole"],
                 ),
-                iam.GetPolicyDocumentStatementArgs(
-                    effect="Allow",
-                    principals=[
-                        iam.GetPolicyDocumentStatementPrincipalArgs(
-                            type="AWS",
-                            identifiers=[
-                                f"arn:aws:iam::{account_id}:role/{name}-{stack}-github-actions"
-                            ],
-                        )
-                    ],
-                    actions=["sts:AssumeRole"],
-                ),
             ]
         ).json,
         managed_policy_arns=[
             "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
         ],
+        permissions_boundary=ci_boundary_arn,
     )
     ecs_execution_ssm_policy = iam.RolePolicy(
         f"{application_name}-ecs-execution-ssm-policy",
@@ -526,23 +387,12 @@ elif stack != "review":
                     ],
                     actions=["sts:AssumeRole"],
                 ),
-                iam.GetPolicyDocumentStatementArgs(
-                    effect="Allow",
-                    principals=[
-                        iam.GetPolicyDocumentStatementPrincipalArgs(
-                            type="AWS",
-                            identifiers=[
-                                f"arn:aws:iam::{account_id}:role/{name}-{stack}-github-actions"
-                            ],
-                        )
-                    ],
-                    actions=["sts:AssumeRole"],
-                ),
             ]
         ).json,
         managed_policy_arns=[
             "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRoleforExpressGatewayServices",
         ],
+        permissions_boundary=ci_boundary_arn,
     )
 
     ecs_cluster = ecs.Cluster(
