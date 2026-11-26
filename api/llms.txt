@@ -96,7 +96,7 @@ are at `/search/docs`.
 ### `filters`
 
 `filters` is a URL-encoded JSON filter tree, ANDed with `query` and applied to
-any `aggregations`/`facets` requested alongside the results.
+the label counts `GET /search/labels:taxonomy` returns for the same search.
 
 For the format — operators, the typed attribute maps, and the field names each
 endpoint recognises — read the `filters` parameter description in

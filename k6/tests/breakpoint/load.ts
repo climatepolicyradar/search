@@ -229,8 +229,6 @@ const DOCUMENT_IDS = [
 
 // The "combined filters: category + status + published_date range (and)"
 // shape from k6/tests/smoke-load/routes/documents/filter-combinations.ts.
-// Two label types in the filter is what drives the disjunctive-facet
-// fan-out when combined with ?fields= below.
 const DOCUMENT_FILTERS = JSON.stringify({
   op: "and",
   filters: [
@@ -283,21 +281,18 @@ function cacheBuster(): string {
 
 // --- Scenario functions -----------------------------------------------------
 
-// The search page shape: free text plus both facet fields. `fields` is what
-// drives /documents' fan-out — each value adds concurrent Vespa calls on top
-// of the search and the unconditional aggregations query, so with filters
-// carrying two label types this is up to 8 Vespa queries per HTTP request
-// (api/routers.py:100-130). Half the iterations carry filters, so the step's
-// numbers aren't dominated entirely by the worst case.
+// The search page shape: free text, half the iterations carrying filters.
+// /documents is a single Vespa query per HTTP request — the facet and
+// aggregation fan-out it used to drive was removed along with the `fields`
+// read mask.
 export function documents(): void {
   const query = encodeURIComponent(pick(QUERIES));
-  const fields = "fields=facets.labels.value.type&fields=facets.labels.type";
   const filters =
     Math.random() < 0.5
       ? `&filters=${encodeURIComponent(DOCUMENT_FILTERS)}`
       : "";
   const res = http.get(
-    `${BASE_URL}/documents?query=${query}&${fields}${filters}&page_size=10${cacheBuster()}`,
+    `${BASE_URL}/documents?query=${query}${filters}&page_size=10${cacheBuster()}`,
     {
       // Group by route path + the relevant query param *names* (never
       // values) instead of letting k6 default `name`/`url` to the full
@@ -306,8 +301,8 @@ export function documents(): void {
       // http_req_waiting, and http_req_tls_handshaking (flagged by Cloud
       // Insights' Metric Tags audit). Naming convention across this suite:
       // `{path}?{param_names}`, param names only (the cache-buster isn't a
-      // real request param, so it's excluded; `fields` is always sent here,
-      // `filters` only sometimes, so both are listed) — see k6/README.md's
+      // real request param, so it's excluded; `filters` is sent only
+      // sometimes, so it is still listed) — see k6/README.md's
       // Layout section. Distinct from the `route` tag set below, which
       // exists for the step-by-step breakdown, not cardinality control.
       // https://grafana.com/docs/k6/latest/using-k6/http-requests/#url-grouping
@@ -317,8 +312,8 @@ export function documents(): void {
       // unless set explicitly here too, which was the actual source of the
       // reported cardinality.
       tags: {
-        name: "documents?query,fields,filters,page_size",
-        url: "documents?query,fields,filters,page_size",
+        name: "documents?query,filters,page_size",
+        url: "documents?query,filters,page_size",
       },
     },
   );

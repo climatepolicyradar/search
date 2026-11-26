@@ -24,7 +24,6 @@ from search.engines.dev_vespa.documents_search_engine import (
     DevVespaDocumentSearchEngine,
     DevVespaPrincipalDocumentSearchEngine,
 )
-from search.engines.dev_vespa.labels import CountAggregation
 from search.engines.dev_vespa.labels_search_engine import (
     DevVespaLabelSearchEngine,
 )
@@ -44,9 +43,6 @@ from search.engines.vespa_query.filters import (
     FieldFilter,
     Filter,
     _build_filter_yql,
-    _facet_filter_label_type,
-    _get_label_types_from_filters,
-    _prune_filter,
     _topic_ids_from_filters,
     normalise_topic_id,
 )
@@ -61,7 +57,6 @@ from search.engines.vespa_query.sorting import (
 __all__ = [
     "ArrayStructField",
     "AttributesCondition",
-    "CountAggregation",
     "DOCUMENT_SORT_API_FIELDS",
     "DevVespaDocumentSearchEngine",
     "DevVespaLabelSearchEngine",
@@ -77,9 +72,6 @@ __all__ = [
     "_DEFAULT_DOCUMENT_RANK_PROFILE",
     "_DEFAULT_MSM",
     "_build_filter_yql",
-    "_facet_filter_label_type",
-    "_get_label_types_from_filters",
-    "_prune_filter",
     "_ranking_overrides_for_document_order_by",
     "_ranking_overrides_for_passage_order_by",
     "_topic_ids_from_filters",
