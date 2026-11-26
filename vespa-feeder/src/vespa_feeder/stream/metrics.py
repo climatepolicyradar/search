@@ -9,8 +9,7 @@ class RecordsLost(Exception):
 
 
 def _lost(stats: VespaFeedStats) -> int:
-    unchanged = stats.response_codes.get(412, 0)
-    return stats.operation_count - stats.ok_count - unchanged
+    return stats.operation_count - stats.ok_count - stats.skipped_count
 
 
 class MetricsSink:
@@ -48,13 +47,14 @@ class MetricsSink:
         feeder_metrics.record_feed_stats(
             deployment_name=self._deployment_name,
             input_count=change.operation_count,
+            skipped_count=change.skipped_count,
             ok_count=change.ok_count,
             run_name=self._run_name,
             total_errors=0,
         )
 
         feeder_metrics.record_retry_stats(
-            other_http_error_count=change.response_error_count - throttled,
+            other_http_error_count=change.response_error_count - throttled - change.skipped_count,
             feeder_error_count=change.error_count,
             deployment_name=self._deployment_name,
             throttled_count=throttled,
@@ -64,6 +64,7 @@ class MetricsSink:
         set_feed_stats(
             total_errors=_lost(latest),
             input_count=latest.operation_count,
+            skipped_count=latest.skipped_count,
             ok_count=latest.ok_count,
         )
 
@@ -72,6 +73,7 @@ class MetricsSink:
             total_errors=_lost(final),
             deployment_name=self._deployment_name,
             run_name=self._run_name,
+            skipped_count=0,
             input_count=0,
             ok_count=0,
         )

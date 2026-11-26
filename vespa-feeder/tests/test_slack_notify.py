@@ -49,16 +49,16 @@ def crashed_run():
 
 def test_format_feed_stats_renders_the_counts_that_were_set() -> None:
     """Once `set_feed_stats` has run, the real counts reach the Slack block."""
-    telemetry.set_feed_stats(input_count=120, ok_count=118, total_errors=2)
+    telemetry.set_feed_stats(input_count=120, ok_count=110, skipped_count=8, total_errors=2)
 
-    assert "in=120 ok=118 err=2" in SlackNotify._format_feed_stats()
+    assert "in=120 ok=110 skipped=8 err=2" in SlackNotify._format_feed_stats()
 
 
 def test_format_feed_stats_renders_zero_counts_rather_than_the_placeholder() -> None:
     """An all-zero feed is a real result, not a missing one, so it must not fall back to the em-dash."""
-    telemetry.set_feed_stats(input_count=0, ok_count=0, total_errors=0)
+    telemetry.set_feed_stats(input_count=0, ok_count=0, skipped_count=0, total_errors=0)
 
-    assert "in=0 ok=0 err=0" in SlackNotify._format_feed_stats()
+    assert "in=0 ok=0 skipped=0 err=0" in SlackNotify._format_feed_stats()
 
 
 def test_format_feed_stats_says_unknown_rather_than_the_placeholder_on_a_crash(
@@ -91,9 +91,9 @@ def test_format_feed_stats_links_to_the_deployment_dashboard_on_a_crash(
 
 def test_format_feed_stats_prefers_real_counts_to_the_crash_wording() -> None:
     """A crash that somehow has stats reports them rather than a link."""
-    telemetry.set_feed_stats(input_count=120, ok_count=118, total_errors=2)
+    telemetry.set_feed_stats(input_count=120, ok_count=110, skipped_count=8, total_errors=2)
 
-    assert "in=120 ok=118 err=2" in SlackNotify._format_feed_stats(crashed=True)
+    assert "in=120 ok=110 skipped=8 err=2" in SlackNotify._format_feed_stats(crashed=True)
 
 
 def test_non_crash_paths_keep_the_placeholder() -> None:

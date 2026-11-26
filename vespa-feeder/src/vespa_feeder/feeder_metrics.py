@@ -23,6 +23,7 @@ class FeederMetrics:
         self._records_fed: Optional[Counter] = None
         self._records_ok: Optional[Counter] = None
         self._records_error: Optional[Counter] = None
+        self._records_skipped: Optional[Counter] = None
         self._run_duration: Optional[Histogram] = None
         self._last_run_duration: Optional[Gauge] = None
         self._runs_completed: Optional[Counter] = None
@@ -49,6 +50,11 @@ class FeederMetrics:
         self._records_error = self._metrics_service.create_counter(
             name="records.error",
             description="Records that failed to feed to Vespa",
+            unit="1",
+        )
+        self._records_skipped = self._metrics_service.create_counter(
+            name="records.skipped",
+            description="Records Vespa skipped because their content hash was unchanged",
             unit="1",
         )
         self._run_duration = self._metrics_service.create_histogram(
@@ -96,11 +102,12 @@ class FeederMetrics:
         self,
         input_count: int,
         ok_count: int,
+        skipped_count: int,
         total_errors: int,
         deployment_name: str,
         run_name: str = "",
     ) -> None:
-        """Record fed, ok, and error record counts for a deployment run."""
+        """Record fed, ok, skipped, and error record counts for a deployment run."""
         if self._disabled:
             return
         attrs = {"deployment_name": deployment_name, "run_name": run_name}
@@ -108,6 +115,8 @@ class FeederMetrics:
             self._records_fed.add(input_count, attrs)
         if self._records_ok is not None:
             self._records_ok.add(ok_count, attrs)
+        if self._records_skipped is not None:
+            self._records_skipped.add(skipped_count, attrs)
         if self._records_error is not None:
             self._records_error.add(total_errors, attrs)
 

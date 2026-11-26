@@ -38,7 +38,12 @@ def test_parse_stats_reads_a_snapshot_with_no_final_newline() -> None:
 def test_parse_stats_logs_each_snapshot(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.INFO)
     list(parse_stats(chunks(parts=[vespa_stats_json(operations=6, ok=3)])))
-    assert caplog.messages == ["vespa feed: 6 fed, 2 ok/s, 0 errors"]
+    assert caplog.messages == ["vespa feed: 6 fed, 2 ok/s, 0 skipped/s, 0 errors"]
+
+
+def test_describe_reports_skipped_updates_separately() -> None:
+    stats = vespa_stats(operations=3, ok=1).model_copy(update={"response_codes": {200: 1, 412: 2}})
+    assert stats.describe() == "3 fed, 1 ok/s, 1 skipped/s, 0 errors"
 
 
 def test_parse_stats_raises_when_output_ends_inside_a_snapshot() -> None:
