@@ -11,6 +11,7 @@ import httpx2
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
+from api.mcp.filters import build_filter
 from api.settings import settings
 from api.state import HttpxDep
 from api.taxonomy.deps import TaxonomyServiceDep
@@ -26,8 +27,9 @@ from search.log import get_logger
 
 logger = get_logger(__name__)
 
-PROBE_QUERY = "climate"
-PROBE_PAGINATION = Pagination(page_token=1, page_size=5)
+PROBE_QUERY = "carbon tax"
+PROBE_GEOGRAPHIES = ["GBR"]
+PROBE_PAGINATION = Pagination(page_token=1, page_size=1)
 PROBE_ORDER_BY: list[OrderBy] = []
 
 
@@ -74,6 +76,7 @@ async def probe_documents_search(client: httpx2.AsyncClient) -> None:
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
+        filters=build_filter(geographies=PROBE_GEOGRAPHIES),
     )
 
 
@@ -89,6 +92,7 @@ async def probe_documents_get(client: httpx2.AsyncClient) -> None:
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
+        filters=build_filter(geographies=PROBE_GEOGRAPHIES),
     )
     if not results.results:
         raise VespaError(
@@ -122,6 +126,7 @@ async def probe_passages_search(client: httpx2.AsyncClient) -> None:
         query=PROBE_QUERY,
         pagination=PROBE_PAGINATION,
         order_by=PROBE_ORDER_BY,
+        filters=build_filter(geographies=PROBE_GEOGRAPHIES, for_passages=True),
     )
 
 
