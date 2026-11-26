@@ -47,10 +47,20 @@ tracer = _telemetry.get_tracer() or trace.get_tracer("search-vespa-feeder")
 _feed_stats: dict[str, int] = {}
 
 
-def set_feed_stats(input_count: int, ok_count: int, total_errors: int) -> None:
+def set_feed_stats(
+    input_count: int,
+    ok_count: int,
+    skipped_count: int,
+    total_errors: int,
+) -> None:
     """Store feed stats so the Slack hook can include them in the notification."""
     global _feed_stats
-    _feed_stats = {"input": input_count, "ok": ok_count, "errors": total_errors}
+    _feed_stats = {
+        "input": input_count,
+        "ok": ok_count,
+        "skipped": skipped_count,
+        "errors": total_errors,
+    }
 
 
 def get_feed_stats() -> dict[str, int]:

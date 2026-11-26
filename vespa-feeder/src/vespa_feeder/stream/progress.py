@@ -51,9 +51,14 @@ class VespaFeedStats(BaseModel):
             response_codes=code_changes,
         )
 
+    @property
+    def skipped_count(self) -> int:
+        """Return how many updates Vespa skipped because their content was unchanged."""
+        return self.response_codes.get(412, 0)
+
     def describe(self) -> str:
         """Return a one-line summary for the logs."""
-        return f"{self.operation_count} fed, {self.ok_rate:.0f} ok/s, {self.error_count} errors"
+        return f"{self.operation_count} fed, {self.ok_rate:.0f} ok/s, {self.skipped_count / max(self.seconds, 1):.0f} skipped/s, {self.error_count} errors"
 
 
 def _lines(output: Stream[bytes]) -> Stream[bytes]:

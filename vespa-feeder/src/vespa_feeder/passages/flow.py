@@ -17,7 +17,7 @@ from vespa_feeder.stream.metrics import MetricsSink
 from vespa_feeder.stream.progress import parse_stats
 from vespa_feeder.stream.s3 import S3Source
 from vespa_feeder.stream.stream import RUN_TIMEOUT_SECONDS, skip_failures
-from vespa_feeder.stream.vespa import VespaFeed
+from vespa_feeder.stream.vespa import VespaFeed, only_if_changed
 from vespa_feeder.telemetry import force_flush, shutdown, tracer
 
 # `topic["value"]`` arrives as a classifier's repr, e.g. `BertBasedClassifier("procedural` justice")`
@@ -195,7 +195,7 @@ def feed_passages(feed: VespaFeed, metrics: MetricsSink) -> None:
         bucket="cpr-prod-snowflake-data-export",
         prefix="production/published/pipeline_data_in_vespa_passage_updates_v1/",
     )
-    updates = source.chain(skip_failures(passage_update))
+    updates = source.chain(skip_failures(passage_update)).chain(only_if_changed)
     updates.chain(feed.feed).chain(parse_stats).run(metrics.drain)
 
 

@@ -6,7 +6,7 @@ from vespa_feeder.stream.metrics import MetricsSink
 from vespa_feeder.stream.progress import parse_stats
 from vespa_feeder.stream.s3 import S3Source
 from vespa_feeder.stream.stream import RUN_TIMEOUT_SECONDS
-from vespa_feeder.stream.vespa import VespaFeed
+from vespa_feeder.stream.vespa import VespaFeed, only_if_changed
 from vespa_feeder.telemetry import force_flush, shutdown, tracer
 
 
@@ -16,7 +16,8 @@ def feed_labels(feed: VespaFeed, metrics: MetricsSink) -> None:
     # (`update`/`create`/`fields`), including the label -> label relationships,
     # so no transform is needed. Exported by `fusion_run` in the data-lake repo.
     source = S3Source(bucket="cpr-production-data-lake-fusion", prefix="vespa/vespa_labels/")
-    source.chain(feed.feed).chain(parse_stats).run(metrics.drain)
+    updates = source.chain(only_if_changed)
+    updates.chain(feed.feed).chain(parse_stats).run(metrics.drain)
 
 
 @flow(

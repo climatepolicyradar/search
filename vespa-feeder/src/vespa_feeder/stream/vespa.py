@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 from contextlib import suppress
@@ -32,6 +33,20 @@ EXIT_LIMIT_SECONDS = 15 * 60
 def get_ssm_parameter(name: str) -> str:
     response = boto3.client("ssm").get_parameter(Name=name, WithDecryption=True)
     return response["Parameter"]["Value"].strip()  # pyright: ignore[reportTypedDictNotRequiredAccess]
+
+
+def only_if_changed(updates: Stream[dict[str, Any]]) -> Stream[dict[str, Any]]:
+    """Make each update conditional on its content differing from what Vespa holds."""
+    for update in updates:
+        document_type = update["update"].split(":")[2]
+        serialised = orjson.dumps(update, option=orjson.OPT_SORT_KEYS)
+        digest = hashlib.sha1(serialised, usedforsecurity=False).digest()
+        content_hash = int.from_bytes(digest[:8], signed=True)
+        yield {
+            **update,
+            "condition": f"{document_type}.content_hash != {content_hash}",
+            "fields": {**update["fields"], "content_hash": {"assign": content_hash}},
+        }
 
 
 class VespaFeed:

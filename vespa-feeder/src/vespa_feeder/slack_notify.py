@@ -46,7 +46,7 @@ class SlackNotify:
             )
         if not stats:
             return "*Records fed*\n`—`"
-        return f"*Records fed*\n`in={stats['input']} ok={stats['ok']} err={stats['errors']}`"
+        return f"*Records fed*\n`in={stats['input']} ok={stats['ok']} skipped={stats['skipped']} err={stats['errors']}`"
 
     @classmethod
     def _build_blocks(

@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 from vespa_feeder.stream.progress import VespaFeedStats, parse_stats
 from vespa_feeder.stream.stream import Stream
-from vespa_feeder.stream.vespa import VespaFeed
+from vespa_feeder.stream.vespa import VespaFeed, only_if_changed
 
 from tests.stream.list_source import ListSource
 from tests.stream.vespa_stats import vespa_stats, vespa_stats_json
@@ -176,3 +176,34 @@ def test_vespa_feed_is_killed_when_the_next_pipe_fails(tmp_path: Path) -> None:
         os.kill(int(pid_file.read_text()), 0)
     assert not exited_normally.exists()
     assert raised.type is ValueError
+
+
+def passage_updates(contents: list[str]) -> Stream[dict[str, Any]]:
+    for content in contents:
+        yield {
+            "update": "id:passages:passages::a",
+            "create": True,
+            "fields": {"content": {"assign": content}},
+        }
+
+
+def test_only_if_changed_stores_the_hash_it_compares_against() -> None:
+    update = next(only_if_changed(passage_updates(contents=["text"])))
+    stored = update["fields"]["content_hash"]["assign"]
+    assert update["condition"] == f"passages.content_hash != {stored}"
+
+
+def test_only_if_changed_keeps_the_rest_of_the_update() -> None:
+    update = next(only_if_changed(passage_updates(contents=["text"])))
+    assert update["update"] == "id:passages:passages::a"
+    assert update["fields"]["content"] == {"assign": "text"}
+
+
+def test_only_if_changed_gives_identical_updates_the_same_hash() -> None:
+    updates = list(only_if_changed(passage_updates(contents=["text", "text"])))
+    assert updates[0]["condition"] == updates[1]["condition"]
+
+
+def test_only_if_changed_gives_different_content_a_different_hash() -> None:
+    updates = list(only_if_changed(passage_updates(contents=["text", "other"])))
+    assert updates[0]["condition"] != updates[1]["condition"]

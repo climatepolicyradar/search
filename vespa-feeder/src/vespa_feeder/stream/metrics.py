@@ -8,6 +8,10 @@ class RecordsLost(Exception):
         super().__init__(f"{lost} of {operations} records lost")
 
 
+def _lost(stats: VespaFeedStats) -> int:
+    return stats.operation_count - stats.ok_count - stats.skipped_count
+
+
 class MetricsSink:
     def __init__(self, deployment_name: str, run_name: str) -> None:
         self._deployment_name = deployment_name
@@ -26,7 +30,7 @@ class MetricsSink:
             raise
 
         self._record_final(final=final)
-        lost = final.operation_count - final.ok_count
+        lost = _lost(final)
 
         if lost > 0:
             self._record_run_failed()
@@ -43,13 +47,14 @@ class MetricsSink:
         feeder_metrics.record_feed_stats(
             deployment_name=self._deployment_name,
             input_count=change.operation_count,
+            skipped_count=change.skipped_count,
             ok_count=change.ok_count,
             run_name=self._run_name,
             total_errors=0,
         )
 
         feeder_metrics.record_retry_stats(
-            other_http_error_count=change.response_error_count - throttled,
+            other_http_error_count=change.response_error_count - throttled - change.skipped_count,
             feeder_error_count=change.error_count,
             deployment_name=self._deployment_name,
             throttled_count=throttled,
@@ -57,16 +62,18 @@ class MetricsSink:
         )
 
         set_feed_stats(
-            total_errors=latest.operation_count - latest.ok_count,
+            total_errors=_lost(latest),
             input_count=latest.operation_count,
+            skipped_count=latest.skipped_count,
             ok_count=latest.ok_count,
         )
 
     def _record_final(self, final: VespaFeedStats) -> None:
         feeder_metrics.record_feed_stats(
-            total_errors=final.operation_count - final.ok_count,
+            total_errors=_lost(final),
             deployment_name=self._deployment_name,
             run_name=self._run_name,
+            skipped_count=0,
             input_count=0,
             ok_count=0,
         )
