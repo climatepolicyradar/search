@@ -2,5 +2,5 @@ name: vespa_metrics
 runtime:
   name: python
   options:
-    virtualenv: venv
+    toolchain: uv
 description: Infrastructure to support the handling of metrics between vespa cloud and CPR monitoring and alerting infrastructure."

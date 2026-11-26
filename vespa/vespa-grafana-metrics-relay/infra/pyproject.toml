@@ -1,0 +1,6 @@
+[project]
+name = "vespa-metrics-infra"
+version = "0.1.0"
+description = "Pulumi stack that relays Vespa Cloud metrics to CloudWatch"
+requires-python = ">=3.13,<3.14"
+dependencies = ["pulumi>=3.0.0,<4.0.0", "pulumi-aws>=6.0.2,<8.0.0"]
